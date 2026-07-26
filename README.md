@@ -29,7 +29,9 @@ Eine persönliche, digitale Sammlung von Kochrezepten mit KI-Unterstützung, int
 
 6. **Smarte Einkaufsliste in Google Keep**
    - Automatische Übertragung der Zutaten eines Rezeptes auf die Einkaufsliste.
+   - Vorher Skalierung (Menge für x Personen).
    - Intelligentes Filtern: Zutaten, die standardmäßig auf Vorrat sind, werden automatisch ausgeschlossen. Zutaten, die vielleicht auf Vorrat sind, werden abgefragt.
+   - Übertragung aus der Web-App an ein Backend-Modul (z. B. via Python `gkeepapi`), das die "Einkaufsliste" in Google Keep direkt aktualisiert.
 
 7. **Teilen von Rezepten mit Freunden**
    - Einfache Möglichkeit, einzelne Rezepte oder die Sammlung mit Freunden zu teilen.
