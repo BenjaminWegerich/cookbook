@@ -1,43 +1,64 @@
-# Digitales Kochbuch & Rezept-Sammlung
+# Digital Cookbook & Recipe Collection
 
-Eine persönliche, digitale Sammlung von Kochrezepten mit KI-Unterstützung, intelligenter Mengenskalierung, Mehrfach-Einheiten, Optimierung für Smart Displays & Smartphones sowie Anbindung an Google Keep und Gemini for Home.
+A personal, digital collection of cooking recipes with AI assistance, intelligent
+quantity scaling, multi-unit support, optimization for smart displays and
+smartphones, and integration with Google Keep and Gemini for Home.
 
----
+> **Status:** Early planning phase. This repository currently contains the project
+> documentation only; the technical setup is still being defined.
 
-## Funktionen
+## Features
 
-1. **Automatische Erstellung & Bearbeitung durch KI-Agenten**
-   - Unterstützung bei der Eingabe, Erfassung, Ergänzung und Überarbeitung von Rezepten durch KI.
+### 1. Automatic creation & editing by AI agents
 
-2. **Zutatenspezifische Zusatz-Einheiten**
-   - Fest hinterlegte Zusatz-Einheiten (z. B. EL, Packung, Stück) mit Umrechnung in g / ml je Zutat.
-   - Verbesserung der Genauigkeit (z. B.: Wie viel g Schale hat eine Zitrone?) durch Eingabe von Messwerten
-   - Im Rezept: automatisch passende Auswahl je nach Menge (z. B. 50 g Joghurt → 2 EL; 400 g Joghurt → 1 Becher) und Angabe zusätzlich zur Basiseinheit (g / kg / ml / l)
+Support for entering, capturing, supplementing, and revising recipes through AI.
 
-3. **Benutzerdefinierte Mengenskalierung**
-   - Skalierungslogik, die mathematisch genaue Werte auf runde Zahlen oder ganze Packungen rundet.
-   - Deterministisch programmiert (über Tabellen mit Normzahlen), nicht KI-gestützt.
-   - Beispiel: Bei 4 Personen 5 EL Öl -> bei 5 Personen praxisnah 6 EL, statt rechnerisch 6,25.
+### 2. Ingredient-specific additional units
 
-4. **Layout und Design**
-   - Layout optimiert für Smartphone und Smart Display
-   - Eigene visuelle Gestaltung, besonders Typografie
+- Fixed additional units per ingredient (e.g., tbsp, pack, piece) with conversion to g / ml.
+- Accuracy improvements through measured values (e.g., how many grams of peel does a lemon have?).
+- Automatic selection of the fitting unit in recipes depending on quantity
+  (e.g., 50 g yogurt → 2 tbsp; 400 g yogurt → 1 cup), shown in addition to the
+  base unit (g / kg / ml / l).
 
-5. **Vorlesen durch Gemini for Home**
-   - Für KI optimierte Ablage der Rezeptdateien.
-   - Sprachoptimierte Aufbereitung der Rezeptschritte zum einfachen Vorlesen über Smart Speakers und Smart Displays.
+### 3. User-defined quantity scaling
 
-6. **Smarte Einkaufsliste in Google Keep**
-   - Automatische Übertragung der Zutaten eines Rezeptes auf die Einkaufsliste.
-   - Vorher Skalierung (Menge für x Personen).
-   - Intelligentes Filtern: Zutaten, die standardmäßig auf Vorrat sind, werden automatisch ausgeschlossen. Zutaten, die vielleicht auf Vorrat sind, werden abgefragt.
-   - Übertragung aus der Web-App an ein Backend-Modul (z. B. via Python `gkeepapi`), das die "Einkaufsliste" in Google Keep direkt aktualisiert.
+- Scaling logic that rounds mathematically exact values to round numbers or whole packs.
+- Deterministically implemented (via preferred-number tables), not AI-based.
+- Example: 5 tbsp oil for 4 people → a practical 6 tbsp for 5 people, instead of the mathematical 6.25.
 
-7. **Teilen von Rezepten mit Freunden**
-   - Einfache Möglichkeit, einzelne Rezepte oder die Sammlung mit Freunden zu teilen.
+### 4. Layout & design
 
----
+- Layout optimized for smartphone and smart display.
+- Custom visual design, especially typography.
 
-## Erste Schritte
+### 5. Read-aloud via Gemini for Home
 
-Dieses Repository bildet die Basis für das Kochbuch-Projekt. Das konkrete technische Setup (Programmiersprache, Frameworks, Speicherformat, Schnittstellen) wird noch definiert.
+- AI-optimized storage of recipe files.
+- Speech-optimized preparation of recipe steps for easy read-aloud on smart speakers and smart displays.
+
+### 6. Smart shopping list in Google Keep
+
+- Automatic transfer of a recipe's ingredients to the shopping list.
+- Scaling happens first (quantity for x people).
+- Intelligent filtering: ingredients that are always in stock are excluded automatically;
+  ingredients that may be in stock are queried.
+- Transfer from the web app to a backend module (e.g., Python `gkeepapi`) that updates
+  the "shopping list" in Google Keep directly.
+
+### 7. Sharing recipes with friends
+
+- A simple way to share individual recipes or the whole collection with friends.
+
+## Getting Started
+
+This repository forms the basis of the cookbook project. The concrete technical setup
+(programming language, frameworks, storage format, interfaces) has not been decided yet —
+see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the planned components and
+[docs/ROADMAP.md](docs/ROADMAP.md) for the open tasks.
+
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — planned components, dependencies, and design decisions
+- [docs/CODING_CONVENTIONS.md](docs/CODING_CONVENTIONS.md) — binding style guidelines
+- [docs/ROADMAP.md](docs/ROADMAP.md) — open tasks and how they relate
