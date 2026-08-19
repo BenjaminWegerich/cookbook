@@ -31,6 +31,7 @@
 
 - For finished-dish recipes (see "Recipe Type"): Number of people the portion serves. Example: "6 Personen".
 - For ingredient recipes (see "Recipe Type"): The amount of the product the recipe yields, in base units, plus optional additional information about what it is used for. Example: "Salatdressing": "60 ml, für 2 Salatköpfe (700 g)".
+- The number of servings (finished dishes) and the yield (ingredient recipes) must be a standard number (a rounded value on the quantity ladder, see [quantity scaling](quantity_scaling.md)). Example: 6, 10 or 12 people — not 11. This restriction is what makes the ladder-based scaling logic work.
 
 ### Total Time (optional)
 
@@ -55,6 +56,7 @@
   - name (required),
   - base quantity specification (required): the amount in a base unit (g / kg / ml / l).
 - The base quantity is mandatory for every ingredient, without exception. Ingredients without a meaningful quantity (e.g., salt "to taste") are either given a fixed amount or omitted from the recipe.
+- The base quantity must be a standard number (a rounded value on the quantity ladder, see [quantity scaling](quantity_scaling.md)). The author enters 400 or 500 ml, not 450. This restriction is what makes the ladder-based scaling logic work.
 - The author never types a second unit. All additional units (e.g., Becher, EL, Packung, Stück) are computed automatically by the app at display time from the ingredient-specific conversion tables.
 - Display examples:
   - Stored: "400 g Joghurt" → displayed as "1 Becher Joghurt (400 g)", if the conversion table for Joghurt defines 1 Becher = 400 g.
@@ -68,12 +70,12 @@
 - The amount is authored in the parent recipe like any other ingredient, as a base quantity. Example: "500 ml Béchamelsauce" as an ingredient of "Lasagne" for "6 Personen".
 - Ingredient recipes have no portion or serving-size specification; their "Servings" field states the yield in base units, e.g. "500 ml" (see "Servings").
 - The link means:
-  - When the parent recipe is scaled, the sub-recipe's required amount scales with the same factor. Example: Lasagne × 1.5 → "750 ml Béchamelsauce".
-  - When the sub-recipe's ingredients are needed (e.g., for the shopping list), the app scales the sub-recipe so that its yield matches the amount required by the parent. Example: "Béchamelsauce" yields 500 ml from 300 ml Milch; Lasagne requiring "500 ml Béchamelsauce" therefore adds "300 ml Milch" to the shopping list.
+  - When the parent recipe is scaled, the sub-recipe's required amount scales with the same number of ladder steps (see [quantity scaling](quantity_scaling.md)). Example: Lasagne scaled from 6 to 9 people (3 steps) → "800 ml Béchamelsauce".
+  - When the sub-recipe's ingredients are needed (e.g., for the shopping list), the app scales the sub-recipe so that its yield matches the amount required by the parent. Example: "Béchamelsauce" yields 500 ml from 300 ml Milch; Lasagne requiring "500 ml Béchamelsauce" therefore adds "300 ml Milch" to the shopping list. If the parent requires "800 ml Béchamelsauce" (3 steps up from 500 ml), the sub-recipe moves up the same 3 steps: "300 ml Milch" becomes "500 ml Milch".
   - The sub-recipe is displayed as a link so the reader can view its preparation.
 - For finished-dish recipes, 0 to 2 ingredients are defined as reference ingredients. Example: "6 Personen (700 g Nudeln)."
-- A reference ingredient anchors the portion size: it states how much of a key ingredient belongs to the specified number of servings. When the user scales the recipe to a different number of people, the app scales the reference ingredient's amount accordingly and displays the result as a sanity check for the user. Example: scaling the recipe above from 6 to 9 people shows "9 Personen (1050 g Nudeln)".
-- The reference ingredient is a display aid for verification only; the scale factor itself is derived from the serving count (number of people), not from the reference ingredient.
+- A reference ingredient anchors the portion size: it states how much of a key ingredient belongs to the specified number of servings. When the user scales the recipe to a different number of people, the app scales the reference ingredient's amount accordingly and displays the result as a sanity check for the user. Example: scaling the recipe above from 6 to 9 people shows "9 Personen (1000 g Nudeln)".
+- The reference ingredient is a display aid for verification only; the step count itself is derived from the serving count (number of people), not from the reference ingredient.
 - The author chooses 0, 1, or 2 ingredients that best represent the portion size (e.g., the main starch or protein). If no ingredient represents the portion well, none is defined.
 
 ## Preparation
