@@ -19,10 +19,10 @@
 - The additional quantity specification is **always computed from the stored base
   quantity** — it is never stored, never authored, and never scaled directly.
   After scaling, the display is simply recomputed from the scaled base quantity.
-- Every computed additional quantity has a chance to apply: it is first rounded
-  to the nearest standard number, then checked against the additional unit's
-  **number scheme**. If several additional units pass that check, a **priority**
-  decides which one is shown.
+- Every additional unit has a chance to apply: its additional quantity is
+  computed from the base quantity, rounded to the nearest standard number, and
+  checked against the **number scheme**. The mappings are evaluated in order of
+  **priority** (1 = best first), and the first one that applies is used.
 
 ## 2. Terminology
 
@@ -97,16 +97,15 @@ implementation phase.
 For every ingredient, at display time:
 
 1. Take the stored base quantity BQ and base unit BU.
-2. For every AU mapped to the ingredient (mapping: conversion factor c,
-   priority p):
+2. Iterate over the ingredient's AU mappings in **ascending order of priority
+   value** (1 = best first; see §7). For each mapping (conversion factor c):
    1. compute `raw = BQ ÷ c`;
    2. **round `raw` to the nearest standard number** → AQ (see §6.1);
-   3. if AQ is **not** allowed by the AU's number scheme, this AU does **not**
-      apply.
-3. If several AUs apply, select the one with the **lowest priority value**
-   (1 = best; see §7). Priority ties must not occur in master data; if they do,
-   the resolution is implementation-defined but must be deterministic.
-4. Render the display line using the selected AU's arrangement (§4). If no AU
+   3. if AQ **is allowed** by the AU's number scheme, **select this AU and
+      stop**; otherwise continue with the next mapping.
+   Priority ties must not occur in master data; if they do, the order between
+   them is implementation-defined but must be deterministic.
+3. Render the display line using the selected AU's arrangement (§4). If no AU
    applies, render the base form (§4).
 
 ### 6.1 Rounding to the Nearest Standard Number
@@ -134,18 +133,20 @@ For every ingredient, at display time:
 | Joghurt | 600 g (scaled) | Becher (400) | 1.5 | 1.5 | ✗ (not integer) | "600 g Joghurt" |
 | Öl | 50 ml | EL (10) | 5 | 5 | ✓ | "5 EL Öl (50 ml)" |
 | Zitronensaft | 15 ml | Zitrone (30) | 0.5 | 0.5 | halves ✓ | "15 ml Zitronensaft (½ Zitrone)" |
-| (e.g. a spice) | 15 ml | EL (15), TL (5) | 1, 3 | 1, 3 | both ✓ | priority decides (§7) |
+| (e.g. a spice) | 15 ml | EL (15) p1, TL (5) p2 | 1 | 1 | ✓ | "1 EL …" (TL never evaluated, §7) |
 
 ## 7. Priority
 
 - Every ingredient–AU mapping has a **priority**: a positive integer where
   **1 = most preferred**.
-- Priority is used **only as a tiebreaker**: first the number scheme filters out
-  inapplicable AUs, and only if several AUs remain does the lowest priority
-  value win. Priority alone never makes an AQS apply.
+- Priority defines the **evaluation order**: the mappings are tried in ascending
+  order of priority value, and the first one whose additional quantity passes
+  its number scheme is used. Mappings with a higher priority value are therefore
+  never evaluated once a better one has applied — no separate selection step is
+  needed.
 - Example: 15 ml of an ingredient with mappings EL (priority 1, 15 ml) and
-  TL (priority 2, 5 ml): both compute to integers (1 EL, 3 TL) and both pass the
-  scheme, so the app shows "1 EL …" (priority 1 beats priority 2).
+  TL (priority 2, 5 ml): EL is tried first, its AQ (1) passes the scheme, so the
+  app shows "1 EL …" and TL is never evaluated.
 
 ## 8. Consequences and Rules
 
