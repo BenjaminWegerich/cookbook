@@ -2,8 +2,10 @@
 
 > Defines how ingredient quantities change when a recipe is scaled to a different
 > number of servings / yield. Related documents:
-> [standard_numbers.csv](standard_numbers.csv) (the ladder table) and
-> [recipe_structure.md](recipe_structure.md) (recipe structure).
+> [standard_numbers.csv](standard_numbers.csv) (the ladder table),
+> [recipe_structure.md](recipe_structure.md) (recipe structure), and
+> [additional_quantity_specifications.md](additional_quantity_specifications.md)
+> (display of quantities with additional units).
 
 ## 1. Core Idea
 
@@ -136,9 +138,10 @@
   changes the unit or the base-unit semantics.
 - Display conversions (kg ↔ g, l ↔ ml, and ingredient-specific additional units
   such as Becher, EL, Packung, Stück) happen afterwards at display time and are
-  outside this specification (see [recipe_structure.md](recipe_structure.md)).
+  outside this specification (see
+  [additional_quantity_specifications.md](additional_quantity_specifications.md)).
   Example: a scaled 1000 g may be displayed as "1 kg" or "1 Packung", depending
-  on the ingredient's conversion table.
+  on the ingredient's additional-unit mappings.
 
 ## 8. Implementation Notes (Deterministic, Table-Driven)
 

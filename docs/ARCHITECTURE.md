@@ -36,8 +36,10 @@
 
 - **Deterministic scaling:** scaling uses preferred-number tables, not AI — results must be
   reproducible and practical (e.g., 5 tbsp oil for 4 people → 6 tbsp for 5 people, not 6.25).
-- **Ingredient-specific unit tables:** additional units (e.g., tbsp, pack, piece) are converted
-  to g / ml per ingredient; measured values improve accuracy.
+- **Additional-unit master data:** additional units (e.g., tbsp, pack, piece) are converted
+  to g / ml per ingredient; measured values improve accuracy. Each additional unit also defines
+  its display arrangement and number scheme; the selection logic is specified in
+  [additional_quantity_specifications.md](additional_quantity_specifications.md).
 - **AI-optimized storage:** recipe files are stored in a format that is easy for AI agents to
   read and edit.
 

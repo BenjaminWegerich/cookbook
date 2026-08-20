@@ -62,3 +62,6 @@ see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the planned components and
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — planned components, dependencies, and design decisions
 - [docs/CODING_CONVENTIONS.md](docs/CODING_CONVENTIONS.md) — binding style guidelines
 - [docs/ROADMAP.md](docs/ROADMAP.md) — open tasks and how they relate
+- [docs/quantity_scaling.md](docs/quantity_scaling.md) — how quantities change when a recipe is scaled (ladder logic)
+- [docs/additional_quantity_specifications.md](docs/additional_quantity_specifications.md) — how quantities are displayed (base + additional units)
+- [docs/recipe_structure.md](docs/recipe_structure.md) — recipe structure

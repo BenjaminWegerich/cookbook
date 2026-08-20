@@ -16,7 +16,7 @@ the storage format.
 
 ## Core functionality (depends on: foundations)
 
-- [ ] Implement ingredient-specific unit tables (conversion of additional units to g / ml per ingredient).
+- [ ] Implement the additional-unit master data (conversion factors, priorities, number schemes, display arrangements) and the quantity-specification selection logic (see [docs/additional_quantity_specifications.md](additional_quantity_specifications.md)).
 - [ ] Implement the deterministic scaling logic using preferred-number tables.
 - [ ] Implement the web app UI, optimized for smartphone and smart display, with custom typography.
 
