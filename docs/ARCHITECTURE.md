@@ -1,39 +1,73 @@
 # Architecture
 
-> **Status:** Early planning phase. No code exists yet; this document describes the
-> planned components and their dependencies. It will be updated as decisions are made.
+> **Status:** Early planning phase. No code exists yet; this document describes the planned
+> components and their dependencies. The technology stack and the recipe storage format are
+> decided (see [user_stories.md](user_stories.md)); implementation has not started.
 
 ## Components
 
 ### Web app (frontend)
 
-- UI optimized for smartphone and smart display.
-- Custom visual design, especially typography.
-- Quantity scaling and unit display (base unit + additional unit).
+- React + TypeScript, built with Vite, styled with plain CSS (custom typography system).
+- Static site, hosted on GitHub Pages.
+- One responsive UI for smartphone and smart display.
+- Talks to Google Drive directly from the browser (OAuth): reads and writes recipe files,
+  regenerates HTML exports in place.
 - Entry point for the shopping-list transfer and recipe sharing.
+
+### Core logic module (framework-free TypeScript)
+
+- Quantity-scaling logic on the ladder of standard numbers
+  (see [quantity_scaling.md](quantity_scaling.md)).
+- Additional-unit selection and display logic
+  (see [additional_quantity_specifications.md](additional_quantity_specifications.md)).
+- Recipe format parsing and validation
+  (see [storage_format.md](storage_format.md)).
+- No React, no DOM — a plain TypeScript module, unit-tested with Vitest.
+- Consumed by the web app and by the export generator (which pre-computes the display values
+  for the share file).
 
 ### Recipe storage
 
-- AI-optimized file format for recipes (format not yet decided).
-- Single source of truth, read by the web app, the backend module, and the Gemini for Home preparation.
+- Markdown + YAML files, one per recipe, in Google Drive
+  (see [storage_format.md](storage_format.md)).
+- Single source of truth, read by the web app, the HTML export, and (later) the backend
+  module and the Gemini for Home preparation.
 
-### Backend module
+### HTML share export
+
+- Self-contained HTML file with the recipe and pre-computed display values for each allowed
+  serving option (integer ladder values 1–30); no logic or master data embedded.
+- Generated from the core logic and a recipe file.
+- Stored in Drive, regenerated automatically on every recipe save (updated in place, so
+  shared links stay valid).
+- Friends open it in any browser and pick a serving count — no app, no server.
+
+### Backend module (later)
 
 - Synchronizes ingredients to the Google Keep "shopping list" (e.g., via Python `gkeepapi`).
-- Receives scaling requests from the web app (quantity for x people) and applies the
-  intelligent filtering (always-in-stock vs. may-be-in-stock ingredients).
+- Isolated behind a clean HTTP boundary; language decided when it is built.
+- Applies the intelligent shopping-list filtering (always-in-stock vs. may-be-in-stock).
 
-### Gemini for Home integration
+### Gemini for Home integration (later)
 
-- Speech-optimized preparation of recipe steps for read-aloud on smart speakers and smart displays.
+- Speech-optimized preparation of recipe steps for read-aloud on smart speakers and smart
+  displays.
 - Consumes the AI-optimized recipe files.
 
 ### AI agents
 
 - Support entering, capturing, supplementing, and revising recipes.
+- Read and write the canonical Markdown + YAML files.
 
 ## Design decisions
 
+- **Static architecture:** the app is a static site; the browser reads and writes the recipe
+  files in Google Drive directly. Nothing to run or maintain in v1; later server-side pieces
+  (Google Keep, Gemini) are added behind a clean HTTP boundary.
+- **One source of truth, derived presentations:** the canonical recipe files are the only
+  data; the web app is a live renderer, and the HTML export and the speech preparation are
+  generated artifacts.
 - **Deterministic scaling:** scaling uses preferred-number tables, not AI — results must be
   reproducible and practical (e.g., 5 tbsp oil for 4 people → 6 tbsp for 5 people, not 6.25).
 - **Additional-unit master data:** additional units (e.g., tbsp, pack, piece) are converted
@@ -41,11 +75,13 @@
   its display arrangement and number scheme; the selection logic is specified in
   [additional_quantity_specifications.md](additional_quantity_specifications.md).
 - **AI-optimized storage:** recipe files are stored in a format that is easy for AI agents to
-  read and edit.
+  read and edit (Markdown + YAML, see [storage_format.md](storage_format.md)).
+- **Framework-free core:** all deterministic logic lives outside the UI framework so it can be
+  unit-tested and reused (web app, HTML export, future backend).
 
 ## Open questions
 
-- Technology stack (programming language, frameworks) — undecided.
-- Recipe storage format — undecided.
-- Backend implementation (Python `gkeepapi` is a candidate, not a decision).
-- How sharing with friends should work technically.
+- Backend implementation for Google Keep (Python `gkeepapi` is a candidate, not a decision);
+  language and hosting decided when it is built.
+- Gemini integration details (which API/product for recipe editing vs. read-aloud).
+- Google Cloud project + OAuth client setup for Drive access (operational step, done at build time).

@@ -4,15 +4,13 @@ Open tasks for the cookbook project. Completed tasks are removed from this file.
 
 ## How the tasks relate
 
-Decisions on the technology stack and the recipe storage format are prerequisites for almost
-everything else (foundation). Scaling logic and unit tables are core functionality used by the
-web app. The integrations (Google Keep, Gemini for Home) and sharing build on the web app and
-the storage format.
+The foundations (technology stack, recipe storage format) are decided. Scaling logic and
+unit tables are core functionality used by the web app. The integrations (Google Keep,
+Gemini for Home) and sharing build on the web app and the storage format.
 
 ## Foundations (blocks: everything)
 
-- [ ] Decide the technology stack (programming language, frameworks).
-- [ ] Define the recipe storage format (AI-optimized for agents and voice preparation).
+- [ ] Set up the v1 project: Vite + React + TypeScript scaffold, GitHub Pages deploy, Google Drive OAuth client.
 
 ## Core functionality (depends on: foundations)
 
