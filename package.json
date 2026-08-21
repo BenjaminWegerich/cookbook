@@ -1,0 +1,19 @@
+{
+  "name": "cookbook",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Digital Cookbook & Recipe Collection — monorepo with web app and core logic module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces --if-present",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  }
+}

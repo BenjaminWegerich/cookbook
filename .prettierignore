@@ -1,0 +1,7 @@
+# User-crafted prose documents — kept out of Prettier's scope
+README.md
+docs/
+
+# Config files Prettier has no parser for
+.editorconfig
+.gitignore

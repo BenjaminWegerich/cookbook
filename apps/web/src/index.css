@@ -1,0 +1,23 @@
+/**
+ * Global styles.
+ *
+ * Deliberately minimal: only a neutral reset for the scaffold. The custom
+ * typography system and the visual design are defined in a later roadmap
+ * task (web app UI) together with the user.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100svh;
+}
+
+body {
+  margin: 0;
+}
