@@ -18,7 +18,11 @@
 ### Core logic module (framework-free TypeScript)
 
 - Quantity-scaling logic on the ladder of standard numbers
-  (see [quantity_scaling.md](quantity_scaling.md)).
+  (see [quantity_scaling.md](quantity_scaling.md)); the ladder master data in
+  [standard_numbers.csv](standard_numbers.csv) is the single source of truth and
+  is compiled into a generated TypeScript module
+  (`packages/core/src/ladderData.ts`) via `npm run generate:ladder`
+  (packages/core/scripts/generate-ladder.mjs).
 - Additional-unit selection and display logic
   (see [additional_quantity_specifications.md](additional_quantity_specifications.md)).
 - Recipe format parsing and validation
