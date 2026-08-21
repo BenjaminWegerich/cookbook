@@ -25,56 +25,71 @@
     multiplies the quantity by 10^(1/16) ≈ 1.155 (≈ +15.5 %);
   - **round, practical numbers** that coincide with common packaging sizes
     for ingredients.
+- Every rung carries two practical forms — a decimal (for base quantities and
+  serving counts) and a fraction (for additional-unit display); see §2.
 
 ## 2. The Ladder (Standard Numbers)
 
 - For every integer step index x the ladder has:
   - **exact(x) = 10^(x/16)** (i.e. 1 · 10^(x/16)) — the geometric basis;
     x = 0 → 1, x = 16 → 10, x = 32 → 100, x = −16 → 0.1;
-  - **rounded(x)** — a hand-picked round, practical number per rung
-    (chosen to match common packaging sizes).
-- The **rounded value is the only value used in the app**: storage, display, and
-  scaling all operate on rounded ladder values. The exact column exists solely to
-  define the geometric spacing.
-- The reference table (rounded values for x = −16 … 48, i.e. 0.1 … 1000) lives in
+  - **rounded_BQ(x)** — a hand-picked round, practical decimal number per rung
+    (chosen to match common packaging sizes); used for the base quantity
+    (g / kg / ml / l) and for serving counts;
+  - **rounded_AQ(x)** — a hand-picked fraction per rung; used only to display
+    additional quantities (Becher, Packung, Stück, …).
+- The **rounded BQ value is the value that is stored, scaled, and used as base
+  quantity**; the rounded AQ value exists only for display (§7) and is never
+  stored or scaled. The exact column exists solely to define the geometric
+  spacing.
+- The reference table (x = −16 … 48, i.e. 0.1 … 1000) lives in
   [docs/standard_numbers.csv](standard_numbers.csv), with columns
-  `Exact Number; Rounded Number`.
-- The ladder is **scale-invariant**: the same relative pattern repeats every
-  16 steps, scaled by 10:
-  - rounded(x + 16) = 10 · rounded(x)
-  - rounded(x − 16) = rounded(x) / 10
-- The table therefore defines the entire (infinite) ladder in both directions;
-  any rung can be generated on demand (e.g. x = 49 → exact 1154.8 → rounded 1200;
-  x = −17 → exact 0.0866 → rounded 0.09).
+  `Exact Number; Rounded Number for BQ; Rounded Number for AQ`.
+- The ladder is **scale-invariant** in its exact and rounded BQ forms: the same
+  relative pattern repeats every 16 steps, scaled by 10:
+  - exact(x + 16) = 10 · exact(x)
+  - rounded_BQ(x + 16) = 10 · rounded_BQ(x)
+  - rounded_BQ(x − 16) = rounded_BQ(x) / 10
+- The table therefore defines the entire (infinite) ladder in both directions for
+  the exact and BQ forms; any rung can be generated on demand (e.g. x = 49 →
+  exact 1154.8 → rounded_BQ 1200; x = −17 → exact 0.0866 → rounded_BQ 0.09).
+- **The AQ fraction forms are NOT scale-invariant.** They are hand-picked for the
+  human scale (0.1 … 10) and defined only for x = −16 … 48; from x = 16 up they
+  coincide with the BQ integers (10, 12, 15, …). AQ is therefore a pure table
+  lookup (§8) — no decade rule applies to it.
 - Rounded values of one decade (x = 0 … 16):
 
-  | x  | exact | rounded |
-  |----|-------|---------|
-  | 0  | 1     | 1       |
-  | 1  | 1.15  | 1.2     |
-  | 2  | 1.33  | 1.5     |
-  | 3  | 1.54  | 1.8     |
-  | 4  | 1.78  | 2       |
-  | 5  | 2.05  | 2.2     |
-  | 6  | 2.37  | 2.5     |
-  | 7  | 2.74  | 2.8     |
-  | 8  | 3.16  | 3       |
-  | 9  | 3.65  | 3.5     |
-  | 10 | 4.22  | 4       |
-  | 11 | 4.87  | 5       |
-  | 12 | 5.62  | 6       |
-  | 13 | 6.49  | 7       |
-  | 14 | 7.50  | 8       |
-  | 15 | 8.66  | 9       |
-  | 16 | 10    | 10      |
+  | x  | exact | rounded BQ | rounded AQ |
+  |----|-------|------------|------------|
+  | 0  | 1     | 1          | 1          |
+  | 1  | 1.15  | 1.2        | 1+1/4      |
+  | 2  | 1.33  | 1.5        | 1+1/2      |
+  | 3  | 1.54  | 1.8        | 1+3/4      |
+  | 4  | 1.78  | 2          | 2          |
+  | 5  | 2.05  | 2.2        | 2+1/4      |
+  | 6  | 2.37  | 2.5        | 2+1/2      |
+  | 7  | 2.74  | 2.8        | 2+3/4      |
+  | 8  | 3.16  | 3          | 3          |
+  | 9  | 3.65  | 3.5        | 3+1/2      |
+  | 10 | 4.22  | 4          | 4          |
+  | 11 | 4.87  | 5          | 5          |
+  | 12 | 5.62  | 6          | 6          |
+  | 13 | 6.49  | 7          | 7          |
+  | 14 | 7.5   | 8          | 8          |
+  | 15 | 8.66  | 9          | 9          |
+  | 16 | 10    | 10         | 10         |
 
-  Each decade above or below multiplies / divides these values by 10
+  Below 1 the AQ forms are proper fractions: 1/10, 1/9, 1/8, 1/6, 1/6, 1/5, 1/4,
+  1/4, 1/3, 3/8, 2/5, 1/2, 3/5, 2/3, 3/4, 7/8 (see the CSV for all rungs).
+
+  Each decade above or below multiplies / divides the exact and BQ values by 10
   (1, 1.2, 1.5, 1.8, 2, …, 10, 12, 15, 18, 20, …, 100, 120, 150, 180, 200, …).
+  The AQ fractions do not repeat this way (see above).
 
 ## 3. Standard Numbers Only (Restriction)
 
 - **Non-standard numbers do not exist in the app.** Every value that is authored
-  or chosen must be a rounded ladder value:
+  or chosen must be a rounded BQ ladder value:
   - ingredient quantities: the author enters 400 or 500 ml — 450 is not allowed;
   - serving counts: the author / scaler chooses 10 or 12 servings — 11 is not allowed;
   - yields of ingredient recipes: same rule.
@@ -142,21 +157,25 @@
   [additional_quantity_specifications.md](additional_quantity_specifications.md)).
   Example: a scaled 1000 g may be displayed as "1 kg" or "1 Packung", depending
   on the ingredient's additional-unit mappings.
+- When an additional unit applies, its quantity is displayed in the AQ fraction
+  form of the scaled rung (e.g. "1+1/2 Becher"), never as a decimal.
 
 ## 8. Implementation Notes (Deterministic, Table-Driven)
 
 - No AI and no floating-point rounding of results: the step count is an integer,
   positions are table lookups, and results are table values.
 - Represent the ladder as a lookup keyed by x. Because of the periodicity rule
-  (§2), one decade of rounded values plus the formula exact(x) = 10^(x/16) is
-  sufficient; the CSV is the authoritative source for x = −16 … 48.
+  (§2), the exact and BQ forms can be generated beyond the table; the AQ
+  fraction forms exist only for x = −16 … 48 and are a plain table lookup.
+  The CSV is the authoritative source for x = −16 … 48.
 
 ```
-# exact(x)   = 10^(x/16)
-# rounded(x) = table lookup; outside the table via rounded(x+16) = 10·rounded(x)
+# exact(x)      = 10^(x/16)
+# rounded_BQ(x) = table lookup; outside the table via rounded_BQ(x+16) = 10·rounded_BQ(x)
+# rounded_AQ(x) = table lookup; defined only for x = −16 … 48
 
-def pos(v):                       # v is a standard number (rounded ladder value)
-    return x such that rounded(x) == v   # normalize decades first if v < 0.1 or v > 1000
+def pos(v):                       # v is a standard number (rounded BQ ladder value)
+    return x such that rounded_BQ(x) == v   # normalize decades first if v < 0.1 or v > 1000
 
 def scale(amount, delta_x):       # amount is a standard number
     return rounded(pos(amount) + delta_x)
@@ -173,7 +192,8 @@ def scale_recipe(recipe, new_target):
 ## 9. Relationship to Other Documents
 
 - [standard_numbers.csv](standard_numbers.csv) — the ladder table; the rounded
-  column is binding.
+  BQ column is binding for storage and scaling, the rounded AQ column for
+  additional-unit display.
 - [recipe_structure.md](recipe_structure.md) — recipe structure; its examples are
   ladder-consistent ("× 1.5 → 750 ml" is now "6 → 9 people → 800 ml";
   "1050 g Nudeln" is now "1000 g Nudeln").

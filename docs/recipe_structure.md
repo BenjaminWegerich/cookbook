@@ -61,7 +61,7 @@
 - Display examples:
   - Stored: "400 g Joghurt" → displayed as "1 Becher Joghurt (400 g)", if the additional-unit master data maps Joghurt to Becher with 1 Becher = 400 g.
   - Stored: "800 ml Wasser" → displayed as "800 ml Wasser" (no fitting additional unit for water).
-  - Stored: "15 ml Zitronensaft" → displayed as "15 ml Zitronensaft (½ Zitrone)", if the additional-unit master data maps Zitronensaft to Zitrone with 1 Zitrone = 30 ml and a number scheme that allows halves.
+  - Stored: "15 ml Zitronensaft" → displayed as "15 ml Zitronensaft (1/2 Zitrone)", if the additional-unit master data maps Zitronensaft to Zitrone with 1 Zitrone = 30 ml and a number scheme that allows halves.
 - Display conventions:
   - The additional quantity specification is shown only if it passes the number-scheme check for that ingredient and quantity; otherwise the base amount alone is shown (see [additional_quantity_specifications.md](additional_quantity_specifications.md)).
   - The order, as well as punctuation (e.g., parentheses), is defined by each additional unit's display arrangement.
