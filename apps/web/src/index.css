@@ -21,3 +21,10 @@ body,
 body {
   margin: 0;
 }
+
+/* Minimal neutral layout for the placeholder — not a design decision. */
+.app {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}

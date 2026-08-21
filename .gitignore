@@ -23,5 +23,8 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 
+# Reasonix internal state
+.reasonix/
+
 # Coverage
 coverage/
