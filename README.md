@@ -4,8 +4,9 @@ A personal, digital collection of cooking recipes with AI assistance, intelligen
 quantity scaling, multi-unit support, optimization for smart displays and
 smartphones, and integration with Google Keep and Gemini for Home.
 
-> **Status:** Early planning phase. This repository currently contains the project
-> documentation only; the technical setup is still being defined.
+> **Status:** v1 foundation in place. The web app (Vite + React + TypeScript) runs on
+> GitHub Pages and is connected to Google Drive via OAuth. Core functionality (scaling,
+> additional units, recipe storage) is implemented in the upcoming roadmap tasks.
 
 ## Features
 

@@ -1,8 +1,8 @@
 # Architecture
 
-> **Status:** Early planning phase. No code exists yet; this document describes the planned
-> components and their dependencies. The technology stack and the recipe storage format are
-> decided (see [user_stories.md](user_stories.md)); implementation has not started.
+> **Status:** v1 foundation implemented. The web app (React + TypeScript on Vite, hosted on
+> GitHub Pages) and the core logic module scaffold exist; the Google Drive OAuth connection
+> works. Core functionality and integrations follow in the upcoming roadmap tasks.
 
 ## Components
 
@@ -84,4 +84,3 @@
 - Backend implementation for Google Keep (Python `gkeepapi` is a candidate, not a decision);
   language and hosting decided when it is built.
 - Gemini integration details (which API/product for recipe editing vs. read-aloud).
-- Google Cloud project + OAuth client setup for Drive access (operational step, done at build time).

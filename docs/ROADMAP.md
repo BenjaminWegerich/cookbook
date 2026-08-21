@@ -8,10 +8,6 @@ The foundations (technology stack, recipe storage format) are decided. Scaling l
 unit tables are core functionality used by the web app. The integrations (Google Keep,
 Gemini for Home) and sharing build on the web app and the storage format.
 
-## Foundations (blocks: everything)
-
-- [ ] Set up the v1 project: Vite + React + TypeScript scaffold, GitHub Pages deploy, Google Drive OAuth client.
-
 ## Core functionality (depends on: foundations)
 
 - [ ] Implement the additional-unit master data (conversion factors, priorities, number schemes, display arrangements) and the quantity-specification selection logic (see [docs/additional_quantity_specifications.md](additional_quantity_specifications.md)).
