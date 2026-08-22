@@ -14,7 +14,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "generate:ladder": "node scripts/generate-ladder.mjs"
+    "generate:ladder": "node scripts/generate-ladder.mjs",
+    "generate:additional": "node scripts/generate-additional-data.mjs"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

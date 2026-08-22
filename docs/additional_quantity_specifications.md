@@ -47,9 +47,13 @@ they belong to the implementation phase.
 
 ## 3. Master Data (Conceptual)
 
-The logic is driven by three master-data entities. Their concrete storage design
-(tables, columns, format) is out of scope for this document and decided in the
-implementation phase.
+The logic is driven by three master-data entities. Their concrete storage design is decided:
+the master data lives in three CSV tables in the repository — `docs/number_schemes.csv` (scheme
+matrix), `docs/additional_units.csv` (units with arrangement and scheme),
+`docs/ingredient_unit_mappings.csv` (mappings with factor and priority) — and is compiled into a
+TypeScript module by `scripts/generate-additional-data.mjs`, which validates cross-references and
+guards the scheme matrix against drift from the ladder's AQ column (see
+[ARCHITECTURE.md](ARCHITECTURE.md)).
 
 1. **Additional units** — each AU has:
    - a **name** ("Becher"),
@@ -137,15 +141,17 @@ For every ingredient, at display time:
 
 ### 6.2 Worked Examples
 
-| Ingredient | Stored BQ | AU (factor c) | raw | rounded AQ | scheme allows? | Displayed |
+The examples use the seed master data that ships with the implementation (see the CSV tables
+in §3); further examples arrive with more ingredient mappings.
+
+| Ingredient | Stored BQ | AU (factor) | raw | rounded AQ | scheme allows? | Displayed |
 |---|---|---|---|---|---|---|
-| Joghurt | 400 g | Becher (400) | 1 | 1 | `only_integers` ✓ | "1 Becher Joghurt (400 g)" |
-| Joghurt | 200 g | Becher (400) | 0.5 | 1/2 | ✗ (not integer) | "200 g Joghurt" |
-| Joghurt | 500 g | Becher (400) | 1.25 | 1+1/4 | ✗ (not integer) | "500 g Joghurt" |
-| Joghurt | 600 g (scaled) | Becher (400) | 1.5 | 1+1/2 | ✗ (not integer) | "600 g Joghurt" |
-| Öl | 50 ml | EL (10) | 5 | 5 | ✓ | "5 EL Öl (50 ml)" |
-| Zitronensaft | 15 ml | Zitrone (30) | 0.5 | 1/2 | halves ✓ | "15 ml Zitronensaft (1/2 Zitrone)" |
-| (e.g. a spice) | 15 ml | EL (15) p1, TL (5) p2 | 1 | 1 | ✓ | "1 EL …" (TL never evaluated, §7) |
+| Joghurt | 400 g | Becher (400 g), p1 | 1 | 1 | `halves_and_integers_up_to_30` ✓ | "1 Becher Joghurt (400 g)" |
+| Joghurt | 200 g | Becher (400 g), p1 | 0.5 | 1/2 | ✓ (half) | "1/2 Becher Joghurt (200 g)" |
+| Joghurt | 600 g (scaled) | Becher (400 g), p1 | 1.5 | 1+1/2 | ✓ (half) | "1+1/2 Becher Joghurt (600 g)" |
+| Joghurt | 500 g | Becher p1 → EL (24 g) p2 → TL (7.5 g) p3 | 1.25 → 20.83 → 66.67 | 1+1/4 → 20 → 70 | ✗ (not half/integer) → ✗ (20 > 10) → ✗ (70 > 10) | "500 g Joghurt" |
+| Joghurt | 25 g | Becher p1 → EL p2 → TL p3 | 0.0625 → 1.04 | — → 1 | ✗ (< 1/10) → ✓ | "1 EL Joghurt (25 g)" |
+| Joghurt | 8 g | Becher p1 → EL p2 → TL p3 | 0.02 → 0.33 → 1.07 | — → 1/3 → 1 | ✗ (< 1/10) → ✗ (not integer) → ✓ | "1 TL Joghurt (8 g)" |
 
 ## 7. Priority
 

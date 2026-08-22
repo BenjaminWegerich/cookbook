@@ -10,7 +10,6 @@ Gemini for Home) and sharing build on the web app and the storage format.
 
 ## Core functionality (depends on: foundations)
 
-- [ ] Implement the additional-unit master data (conversion factors, priorities, number schemes, display arrangements) and the quantity-specification selection logic (see [docs/additional_quantity_specifications.md](additional_quantity_specifications.md)).
 - [ ] Implement the web app UI, optimized for smartphone and smart display, with custom typography.
 
 ## Integrations (depends on: web app, storage)

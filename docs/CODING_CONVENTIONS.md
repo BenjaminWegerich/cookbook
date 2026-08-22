@@ -15,6 +15,12 @@
   Recipe content is German data.
 - **Naming Conventions and Casing:** camelCase for variables and functions, PascalCase for
   React components and types, kebab-case for file names, UPPER_SNAKE_CASE for constants.
+- **Quantity-domain abbreviations:** identifiers for the quantity-domain terms use the
+  abbreviations defined in [additional_quantity_specifications.md](additional_quantity_specifications.md)
+  §2 — `aq` (additional quantity), `au` (additional unit), `bq` (base quantity), `bu` (base
+  unit) — consistently in function names, parameters, and properties (e.g. `roundToAQ`,
+  `selectAQ`, `renderAQS`). Entity/type names and master-data collections keep descriptive
+  forms (`AdditionalUnit`, `INGREDIENT_MAPPINGS`). The full terms are used in prose and docs.
 - **Indentation and Brace Placement:** 2 spaces, no tabs; braces on the same line (1TBS),
   matching Prettier defaults.
 - **Git Activities**: *Document branch conventions here when decided.* Use conventional commits.

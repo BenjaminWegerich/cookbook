@@ -1,8 +1,9 @@
 # Architecture
 
 > **Status:** v1 foundation implemented. The web app (React + TypeScript on Vite, hosted on
-> GitHub Pages) and the core logic module scaffold exist; the Google Drive OAuth connection
-> works. Core functionality and integrations follow in the upcoming roadmap tasks.
+> GitHub Pages) and the core logic module (deterministic scaling, additional-unit display) exist;
+> the Google Drive OAuth connection works. The web app UI and integrations follow in the
+> upcoming roadmap tasks.
 
 ## Components
 
@@ -24,7 +25,12 @@
   (`packages/core/src/ladderData.ts`) via `npm run generate:ladder`
   (packages/core/scripts/generate-ladder.mjs).
 - Additional-unit selection and display logic
-  (see [additional_quantity_specifications.md](additional_quantity_specifications.md)).
+  (see [additional_quantity_specifications.md](additional_quantity_specifications.md)); the
+  master data (number schemes, additional units, ingredient mappings) lives in
+  `docs/number_schemes.csv`, `docs/additional_units.csv` and
+  `docs/ingredient_unit_mappings.csv`, is validated against the ladder's AQ column and
+  compiled into a generated TypeScript module (`packages/core/src/additionalUnitsData.ts`)
+  via `npm run generate:additional` (packages/core/scripts/generate-additional-data.mjs).
 - Recipe format parsing and validation
   (see [storage_format.md](storage_format.md)).
 - No React, no DOM — a plain TypeScript module, unit-tested with Vitest.
