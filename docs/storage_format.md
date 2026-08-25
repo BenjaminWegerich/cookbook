@@ -51,7 +51,7 @@ The app writes YAML through a serializer; hand-written files are validated on re
 | `type` | enum | yes | `finished_dish` or `ingredient_recipe` — never derived, set by the author. |
 | `subtitle` | string | no | Display-only extension of the title. |
 | `description` | string | no | A single paragraph; may suggest side dishes or other uses. |
-| `prep_time` | string | no | Free-text display value, e.g. `25 min`, `1 h 30 min`. |
+| `prep_time` | string | yes | Free-text display value, e.g. `25 min`, `1 h 30 min`. |
 | `total_time` | string | no | Only if it differs from `prep_time`. |
 | `ingredients` | list | yes | See §4. |
 
@@ -71,7 +71,7 @@ Each ingredient entry in the `ingredients` list has exactly these fields:
 |---|---|---|---|
 | `name` | string | yes | German ingredient name. Example: `Joghurt`. |
 | `quantity` | number | yes | The base quantity; must be a standard number (ladder value). Example: `400` — not `450`. |
-| `unit` | enum | yes | The base unit: `g`, `kg`, `ml`, or `l`. Counted items are stored via their mass/volume equivalent (e.g., `240` `g` for 6 Tortillas); the "6 Stück" form is displayed via the additional-unit master data. |
+| `unit` | enum | yes | The base unit: `g`, `kg`, `ml`, or `l`. Counted items are stored via their mass/volume equivalent (e.g., `250` `g` for 6 Tortillas); the "6 Stück" form is displayed via the additional-unit master data. |
 | `reference` | boolean | no | `true` on 0–2 ingredients per finished-dish recipe (the portion anchor). Default `false`. |
 | `recipe` | string | no | The title of a linked sub-recipe (ingredient recipe). Example: `recipe: Béchamelsauce`. |
 
@@ -160,7 +160,7 @@ ingredients:
     quantity: 400
     unit: g
   - name: Tortillas
-    quantity: 240
+    quantity: 250
     unit: g
     reference: true
   - name: Zitronensaft
@@ -186,6 +186,7 @@ title: Béchamelsauce
 type: ingredient_recipe
 yield: 500
 yield_unit: ml
+prep_time: 15 min
 ingredients:
   - name: Milch
     quantity: 300

@@ -8,13 +8,18 @@
  * - additional-unit selection and display — implemented
  *   (docs/additional_quantity_specifications.md, src/additionalUnits.ts;
  *   master data in docs/*.csv, compiled by scripts/generate-additional-data.mjs)
- * - recipe format parsing and validation — roadmap task
- *   (docs/storage_format.md)
+ * - recipe format parsing and validation — implemented
+ *   (docs/storage_format.md, src/recipe/parse.ts + src/recipe/validate.ts)
  */
 
 export * from './additionalUnits.js';
 export * from './additionalUnitsData.js';
 export * from './ladder.js';
+export * from './recipe/parse.js';
+export * from './recipe/rename.js';
+export * from './recipe/serialize.js';
+export * from './recipe/types.js';
+export * from './recipe/validate.js';
 
 /** Version of the core module, kept in sync with packages/core/package.json. */
 export const VERSION = '0.1.0';

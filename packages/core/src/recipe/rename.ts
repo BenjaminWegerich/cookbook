@@ -1,0 +1,68 @@
+/**
+ * Title-rename support (docs/storage_format.md §6).
+ *
+ * Renaming a recipe means, as one operation: change `title` in the file, rename
+ * the file (and its image), and update every `recipe:` reference to the old
+ * title in all other recipe files. The Drive-side file and image renames are
+ * the caller's job (web-app storage layer); this module provides the pure
+ * content transformation on a collection of parsed recipes.
+ *
+ * The target recipe itself is excluded from the reference update (§6: "in all
+ * other recipe files"). A self-reference inside the target would therefore not
+ * be rewritten — such a recipe is invalid anyway (rejected by the cycle check
+ * in ./validate.ts, §7.2 extension).
+ */
+
+import type { Recipe } from './types.js';
+
+/** Result of a rename: the renamed recipe plus every other recipe that changed. */
+export interface RenameResult {
+  /** The renamed recipe with its new title (same ingredients, steps, etc.). */
+  renamed: Recipe;
+  /**
+   * Every other recipe whose `recipe:` references pointed at the old title,
+   * with those references updated. Recipes that did not change are omitted.
+   */
+  updated: readonly Recipe[];
+}
+
+/**
+ * Rewrites a collection for a title rename (§6).
+ *
+ * @param recipes the whole collection (titles unique, per §7.2)
+ * @param oldTitle the current title of the recipe to rename
+ * @param newTitle the new title
+ * @returns the renamed recipe and the other recipes with updated references
+ * @throws {Error} when `oldTitle` is not present in the collection
+ */
+export function renameRecipeInCollection(
+  recipes: readonly Recipe[],
+  oldTitle: string,
+  newTitle: string,
+): RenameResult {
+  const target = recipes.find((recipe) => recipe.title === oldTitle);
+  if (target === undefined) {
+    throw new Error(`renameRecipeInCollection: "${oldTitle}" is not in the collection`);
+  }
+  if (oldTitle === newTitle) {
+    return { renamed: target, updated: [] };
+  }
+
+  const renamed: Recipe = { ...target, title: newTitle };
+
+  const updated: Recipe[] = [];
+  for (const recipe of recipes) {
+    if (recipe === target) continue;
+    let changed = false;
+    const ingredients = recipe.ingredients.map((ingredient) => {
+      if (ingredient.recipe !== oldTitle) return ingredient;
+      changed = true;
+      return { ...ingredient, recipe: newTitle };
+    });
+    if (changed) {
+      updated.push({ ...recipe, ingredients });
+    }
+  }
+
+  return { renamed, updated };
+}

@@ -1,20 +1,20 @@
 import { useState } from 'react';
 
 import { getAccessToken, requestAccessToken, revokeAccessToken } from './auth/googleAuth';
-import { listFiles, type DriveFile } from './drive/driveClient';
+import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
 
 /**
  * Root component of the web app.
  *
- * Neutral placeholder: it proves the Google Drive connection (OAuth login →
- * token → first Drive API call) end to end. The actual UI (smartphone +
+ * Neutral placeholder: it proves the storage layer (OAuth login → token →
+ * recipe folder → recipe list) end to end. The actual UI (smartphone +
  * smart display layout, custom typography) is designed in a later roadmap
  * task together with the user. The UI language is German
  * (see docs/CODING_CONVENTIONS.md).
  */
 function App() {
   const [token, setToken] = useState<string | null>(() => getAccessToken());
-  const [files, setFiles] = useState<DriveFile[] | null>(null);
+  const [recipes, setRecipes] = useState<StoredRecipe[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /** Logs in and immediately checks the Drive connection. */
@@ -23,7 +23,7 @@ function App() {
     try {
       const newToken = await requestAccessToken();
       setToken(newToken);
-      await refreshFiles(newToken);
+      await refreshRecipes(newToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -34,14 +34,14 @@ function App() {
     setError(null);
     await revokeAccessToken();
     setToken(null);
-    setFiles(null);
+    setRecipes(null);
   };
 
-  /** Refreshes the file list via the Drive API. */
-  const refreshFiles = async (activeToken: string): Promise<void> => {
+  /** Refreshes the recipe list from the Google Drive recipe folder. */
+  const refreshRecipes = async (activeToken: string): Promise<void> => {
     setError(null);
     try {
-      setFiles(await listFiles(activeToken));
+      setRecipes(await listRecipes(activeToken));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -56,19 +56,22 @@ function App() {
         {token ? (
           <>
             <p>Mit Google Drive verbunden.</p>
-            <button type="button" onClick={() => refreshFiles(token)}>
-              Dateien aktualisieren
+            <button type="button" onClick={() => refreshRecipes(token)}>
+              Rezepte aktualisieren
             </button>
             <button type="button" onClick={handleDisconnect}>
               Trennen
             </button>
-            {files &&
-              (files.length === 0 ? (
-                <p>Noch keine Dateien in der App.</p>
+            {recipes &&
+              (recipes.length === 0 ? (
+                <p>Noch keine Rezepte im Cookbook-Ordner.</p>
               ) : (
                 <ul>
-                  {files.map((file) => (
-                    <li key={file.id}>{file.name}</li>
+                  {recipes.map((recipe) => (
+                    <li key={recipe.fileId}>
+                      {recipe.title}
+                      {recipe.image !== undefined ? ' 📷' : ''}
+                    </li>
                   ))}
                 </ul>
               ))}

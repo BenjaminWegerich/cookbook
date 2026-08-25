@@ -235,7 +235,10 @@ constraints.
    Sharing works by exporting a recipe as a self-contained HTML file stored in Google Drive.
    The file contains the recipe plus a pre-computed table: for each allowed serving option
    (integer ladder values 1–30, i.e. 18 options) and each ingredient, the final display
-   strings — no master data and no logic are embedded. The app regenerates the export
+   strings — no master data is embedded and no scaling/display logic runs at runtime.
+   A small embedded script is permitted for step-by-step navigation (serving picker, step
+   forward/back), so the exported file also serves as the cooking view (ROADMAP, Phase 1).
+   The app regenerates the export
    automatically whenever the canonical recipe is saved, updating the file in place (same
    Drive file ID), so a shared link always shows the current version and never breaks.
    Friends need no app install; they open the HTML in any browser and pick a serving count.
