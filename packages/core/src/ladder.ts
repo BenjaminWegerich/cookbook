@@ -162,6 +162,27 @@ export function difference(from: number, to: number): number {
 }
 
 /**
+ * Returns all integer ladder values within `[min, max]`, ascending.
+ *
+ * Used for the serving options of the HTML export: the allowed serving counts
+ * are the integer standard numbers 1–30, i.e. 18 options
+ * (docs/user_stories.md, decision 7 / D2).
+ */
+export function integerLadderValues(min: number, max: number): number[] {
+  const result: number[] = [];
+  for (let x = pos(min); ; x++) {
+    const bq = roundedBQ(x);
+    if (bq > max) {
+      break;
+    }
+    if (Number.isInteger(bq)) {
+      result.push(bq);
+    }
+  }
+  return result;
+}
+
+/**
  * Scales a BQ ladder value `amount` by `deltaX` rungs up (positive) or down
  * (negative) the ladder. The result is always another ladder value (the ladder
  * is closed under scaling, docs/quantity_scaling.md §3).

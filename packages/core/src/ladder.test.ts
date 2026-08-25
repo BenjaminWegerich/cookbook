@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LADDER_RUNGS } from './ladderData.js';
-import { difference, getRung, pos, roundedBQ, scale } from './ladder.js';
+import { difference, getRung, integerLadderValues, pos, roundedBQ, scale } from './ladder.js';
 
 describe('ladder data', () => {
   it('covers x = −16 … 48 exactly once', () => {
@@ -157,5 +157,25 @@ describe('ladder closedness (docs/quantity_scaling.md §3)', () => {
         expect(pos(scaled)).toBe(rung.x + deltaX);
       }
     }
+  });
+});
+
+describe('integerLadderValues', () => {
+  it('returns the 18 serving options 1–30 (user_stories.md D2)', () => {
+    expect(integerLadderValues(1, 30)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 22, 25, 28, 30,
+    ]);
+  });
+
+  it('works on other ranges and excludes non-integer rungs', () => {
+    // 0.5–1: only the integer 1 qualifies (0.6, 0.7, 0.8, 0.9 are not integers).
+    expect(integerLadderValues(0.5, 1)).toEqual([1]);
+    expect(integerLadderValues(10, 100)).toEqual([
+      10, 12, 15, 18, 20, 22, 25, 28, 30, 35, 40, 50, 60, 70, 80, 90, 100,
+    ]);
+  });
+
+  it('returns an empty array when no integer rung lies in the range', () => {
+    expect(integerLadderValues(1.2, 1.5)).toEqual([]);
   });
 });

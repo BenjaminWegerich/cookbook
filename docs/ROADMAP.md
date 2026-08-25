@@ -11,13 +11,6 @@ management (design, list, editor), and AI-assisted create/edit. The exported HTM
 the cooking experience (scaling + step navigation); the web app manages recipes. The Google
 Keep integration is a follow-up milestone. Sharing builds on the web app and the export.
 
-## Web app — Phase 1: Foundations (depends on: core)
-
-- [ ] HTML export generator (Node script on core): self-contained HTML with pre-computed
-      display values for all serving options and step-by-step navigation; regenerated in
-      place on every save. This file is the cooking view (decision 7 in user_stories.md is
-      extended: the "no logic embedded" rule permits a small navigation script).
-
 ## Web app — Phase 2: Recipe management (depends on: Phase 1)
 
 - [ ] Design discussion with the user → design tokens + base stylesheet (custom typography,

@@ -15,6 +15,7 @@
 export * from './additionalUnits.js';
 export * from './additionalUnitsData.js';
 export * from './ladder.js';
+export * from './recipe/exportHtml.js';
 export * from './recipe/parse.js';
 export * from './recipe/rename.js';
 export * from './recipe/serialize.js';
