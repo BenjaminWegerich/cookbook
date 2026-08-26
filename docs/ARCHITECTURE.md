@@ -11,7 +11,8 @@
 
 - React + TypeScript, built with Vite, styled with plain CSS (custom typography system).
 - Static site, hosted on GitHub Pages.
-- One responsive UI for smartphone and smart display.
+- Smartphone-only UI (portrait, thumb-reachable); the exported `.html` file is the
+  cooking experience.
 - Talks to Google Drive directly from the browser (OAuth): reads and writes recipe files,
   regenerates HTML exports in place.
 - Entry point for the shopping-list transfer and recipe sharing.

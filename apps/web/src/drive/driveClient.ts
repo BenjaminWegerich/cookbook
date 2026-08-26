@@ -113,6 +113,15 @@ export async function getFileContent(token: string, fileId: string): Promise<str
   return response.text();
 }
 
+/**
+ * Download URL for a file's content (Drive API `alt=media`). Requires the
+ * `Authorization: Bearer <token>` header, so it is only usable via `fetch`
+ * (e.g. to show a recipe photo as an object URL), not as an `<img src>`.
+ */
+export function getFileDownloadUrl(fileId: string): string {
+  return `${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media`;
+}
+
 /** A file to write: metadata plus text content. */
 export interface FileUpload {
   name: string;

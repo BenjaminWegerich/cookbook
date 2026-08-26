@@ -1,10 +1,12 @@
 /**
- * Global styles.
+ * Base stylesheet — global reset, typography, and element defaults.
  *
- * Deliberately minimal: only a neutral reset for the scaffold. The custom
- * typography system and the visual design are defined in a later roadmap
- * task (web app UI) together with the user.
+ * Design decisions live in styles/tokens.css; this file applies them to
+ * semantic elements and base controls. Component styles (recipe list,
+ * editor) follow in later roadmap tasks. UI copy is German.
  */
+
+@import './styles/tokens.css';
 
 *,
 *::before,
@@ -20,11 +22,60 @@ body,
 
 body {
   margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Minimal neutral layout for the placeholder — not a design decision. */
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.3;
+}
+
+h1 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+h2 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+h3 {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+/* Base control: warm primary button. */
+button {
+  font: inherit;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  padding: var(--space-4) var(--space-6);
+  cursor: pointer;
+}
+
+button:active {
+  background: var(--color-accent-press);
+}
+
+/* Visible, warm focus ring for keyboard users. */
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline-offset: 3px;
+}
+
+/* Phone-first app shell; full width, no desktop layout. */
 .app {
-  max-width: 40rem;
-  margin: 0 auto;
-  padding: 1.5rem;
+  width: 100%;
+  padding: var(--app-padding);
 }

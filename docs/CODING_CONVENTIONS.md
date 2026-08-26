@@ -24,3 +24,21 @@
 - **Indentation and Brace Placement:** 2 spaces, no tabs; braces on the same line (1TBS),
   matching Prettier defaults.
 - **Git Activities**: *Document branch conventions here when decided.* Use conventional commits.
+
+## Design Conventions
+
+- **Smartphone only:** the web app targets smartphones (portrait, thumb-reachable). There is
+  no smart display layout for the app; the cooking experience lives in the exported `.html`
+  file, not the web app.
+- **Pixel ladder:** every pixel value (spacing, radius, font size, icon/thumbnail size,
+  shadow offset) must come from the preferred-number ladder
+  `1 / 2 / 3 / 4 / 6 / 8 / 10 / 14 / 18 / 24 / 32 / 42 / 56 / 74 / 100`. No other pixel
+  value may be introduced without revisiting this scale. The only structural exception is
+  `100%` radii (circles, e.g. the floating action button).
+- **Single source of truth:** design tokens live in `apps/web/src/styles/tokens.css` as CSS
+  custom properties; components reference the tokens, never raw values.
+- **Warm palette:** warm, appetizing colors ("kitchen / durable surfaces"); no cold or blue
+  hues. Primary text is espresso ink, accents are clay/terracotta and olive.
+- **Typography:** readability first; body text is `18px` (the ladder has no `16px`). One
+  self-hosted typeface, Source Sans 3 (variable), bundled at build time via `@fontsource` —
+  no runtime font fetch and no server.

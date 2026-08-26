@@ -1,0 +1,77 @@
+/**
+ * Design tokens — the single source of truth for the web app's visual design.
+ *
+ * Geometry (spacing, radius, font size, icon/thumbnail sizes, shadow offsets)
+ * is restricted to the preferred-number ladder agreed with the user:
+ *
+ *   1 / 2 / 3 / 4 / 6 / 8 / 10 / 14 / 18 / 24 / 32 / 42 / 56 / 74 / 100   (in px)
+ *
+ * No other pixel value may be introduced without revisiting this scale.
+ * Structural exception, not part of the ladder: 100 % radii (circles, e.g.
+ * the floating action button).
+ *
+ * The palette is warm ("kitchen / durable surfaces") with no cold or blue
+ * hues. UI copy is German (see docs/CODING_CONVENTIONS.md).
+ */
+
+:root {
+  /* ---- Color: warm paper kitchen palette ------------------------------- */
+  --color-bg: #faf5ec; /* page background */
+  --color-surface: #fffcf6; /* cards / panels */
+  --color-ink: #2b241d; /* primary text */
+  --color-ink-muted: #6e6255; /* secondary text */
+  --color-line: #e6dbc8; /* hairlines / dividers */
+  --color-accent: #b85c38; /* primary clay/terracotta */
+  --color-accent-press: #9d4a2c; /* pressed state */
+  --color-olive: #6b7a4a; /* secondary "herb" accent */
+  --color-danger: #a63b2c; /* delete / errors */
+  --color-on-accent: #fffcf6; /* text on accent surfaces */
+
+  /* ---- Typography ------------------------------------------------------- */
+  /* Self-hosted via @fontsource (bundled at build, no runtime fetch). */
+  --font-sans: 'Source Sans 3 Variable', 'Source Sans 3', system-ui, sans-serif;
+
+  --text-sm: 14px; /* captions, meta */
+  --text-md: 18px; /* body — base size, readability first */
+  --text-lg: 24px; /* card / section titles */
+  --text-xl: 32px; /* screen title */
+
+  /* ---- Spacing ladder --------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 14px;
+  --space-6: 18px;
+  --space-7: 24px;
+  --space-8: 32px;
+  --space-9: 42px;
+  --space-10: 56px;
+
+  /* ---- Radius ----------------------------------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* ---- Elevation (warm, low-contrast shadows) --------------------------- */
+  --shadow-sm: 0 3px 8px rgba(43, 36, 29, 0.06);
+  --shadow-md: 0 6px 18px rgba(43, 36, 29, 0.08);
+
+  /* ---- Layout constants -------------------------------------------------- */
+  --app-padding: 18px; /* screen gutters */
+  --fab-size: 56px; /* floating action button */
+  --thumb-size: 56px; /* recipe thumbnail in the list */
+  --icon-size: 24px; /* inline icons */
+
+  /* ---- Letter-avatar palette --------------------------------------------- */
+  /* Warm, deterministic background colors for recipe thumbnails without a
+     photo (§2). The initial letter is rendered in the matching -fg color. */
+  --avatar-0: #b85c38; /* clay */
+  --avatar-0-fg: #fffcf6;
+  --avatar-1: #6b7a4a; /* olive */
+  --avatar-1-fg: #fffcf6;
+  --avatar-2: #c08a3e; /* ochre */
+  --avatar-2-fg: #fffcf6;
+  --avatar-3: #8a6d4f; /* walnut */
+  --avatar-3-fg: #fffcf6;
+}

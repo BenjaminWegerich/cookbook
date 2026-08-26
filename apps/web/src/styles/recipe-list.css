@@ -1,0 +1,175 @@
+/**
+ * Recipe-list home screen — component styles.
+ *
+ * All pixel values come from the design ladder (docs/CODING_CONVENTIONS.md);
+ * colors and sizes reference the tokens in styles/tokens.css.
+ */
+
+/* ---- Screen header ------------------------------------------------------ */
+
+.app-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-block-end: var(--space-7);
+}
+
+.app-subtitle {
+  margin-block-start: var(--space-1);
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.header-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-3);
+}
+
+/* Small quiet text buttons (Aktualisieren / Trennen / Zurück). */
+.text-button {
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.text-button:active {
+  color: var(--color-ink);
+}
+
+/* ---- Recipe list -------------------------------------------------------- */
+
+.recipe-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr; /* single column */
+  gap: var(--space-2);
+}
+
+.recipe-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  text-align: start;
+  box-shadow: var(--shadow-sm);
+}
+
+.recipe-row:active {
+  background: var(--color-bg);
+}
+
+.recipe-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.recipe-thumb {
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  background: var(--avatar-0); /* fallback until the inline variant applies */
+  color: var(--avatar-0-fg);
+}
+
+.recipe-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---- Floating action button (new recipe) -------------------------------- */
+
+.fab {
+  position: fixed;
+  right: var(--space-6);
+  bottom: calc(var(--space-7) + env(safe-area-inset-bottom, 0px));
+  width: var(--fab-size);
+  height: var(--fab-size);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%; /* structural exception to the ladder: full circle */
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  box-shadow: var(--shadow-md);
+}
+
+.fab:active {
+  background: var(--color-accent-press);
+}
+
+.fab-icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* ---- Login / empty / error states --------------------------------------- */
+
+.login-panel {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-8);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.login-note {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.empty-state {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-8);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink-muted);
+  text-align: center;
+}
+
+.loading-message {
+  color: var(--color-ink-muted);
+}
+
+.error-message {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+}
+
+/* ---- Editor placeholder (replaced by the editor task) ------------------- */
+
+.editor-placeholder {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.editor-placeholder .text-button {
+  justify-self: start;
+}

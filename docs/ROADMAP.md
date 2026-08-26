@@ -13,9 +13,6 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 
 ## Web app — Phase 2: Recipe management (depends on: Phase 1)
 
-- [ ] Design discussion with the user → design tokens + base stylesheet (custom typography,
-      smartphone + smart display layout).
-- [ ] Recipe list as home screen (search can follow later).
 - [ ] Recipe editor: create and edit all fields, validation feedback per storage_format.md
       §7, save to Drive, rename flow (§6). UI in German.
 
