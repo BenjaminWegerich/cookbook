@@ -30,18 +30,19 @@
 ### Servings (required)
 
 - For finished-dish recipes (see "Recipe Type"): Number of people the portion serves. Example: "6 Personen".
-- For ingredient recipes (see "Recipe Type"): The amount of the product the recipe yields, in base units, plus optional additional information about what it is used for. Example: "Salatdressing": "60 ml, für 2 Salatköpfe (700 g)".
+- For ingredient recipes (see "Recipe Type"): The amount of the product the recipe yields, in base units. Example: "Salatdressing": "60 ml".
 - The number of servings (finished dishes) and the yield (ingredient recipes) must be a standard number (a rounded value on the quantity ladder, see [quantity scaling](quantity_scaling.md)). Example: 6, 10 or 12 people — not 11. This restriction is what makes the ladder-based scaling logic work.
 
 ### Total Time (optional)
 
 - The time from the start of the first preparation step until serving. Includes passive time such as resting, simmering, or oven time.
-- Only specify if this is not the same as the preparation time, e.g., if the dish needs to rest or simmer.
+- Only specify if it is larger than the preparation time, e.g., if the dish needs to rest or simmer.
 
 ### Prep Time (required)
 
 - The amount of time spent actively preparing the dish.
 - Assumption: one person is cooking alone.
+- The editor offers only standard values (1/3/5/10/15/20/30/45 min, then 1/1.5/2/3/6/12/24/48 h), so hand-typed odd values like "25 min" are replaced over time — the stored value stays free text (see [storage_format.md](storage_format.md) §3).
 
 ### Image (optional)
 
@@ -54,7 +55,7 @@
 - If an ingredient is used in multiple places, it is listed only once, with the total amount and in the position of its first occurrence.
 - Each ingredient is stored with exactly two parts:
   - name (required),
-  - base quantity specification (required): the amount in a base unit (g / kg / ml / l).
+  - base quantity specification (required): the amount in the family base unit (g or ml — kg/l exist only in display, see [storage_format.md](storage_format.md) §4).
 - The base quantity is mandatory for every ingredient, without exception. Ingredients without a meaningful quantity (e.g., salt "to taste") are either given a fixed amount or omitted from the recipe.
 - The base quantity must be a standard number (a rounded value on the quantity ladder, see [quantity scaling](quantity_scaling.md)). The author enters 400 or 500 ml, not 450. This restriction is what makes the ladder-based scaling logic work.
 - The author never types a second unit. All additional quantity specifications (e.g., Becher, EL, Packung, Stück) are computed automatically by the app at display time from the additional-unit master data (conversion factors, number schemes, priorities, and arrangements — see [additional_quantity_specifications.md](additional_quantity_specifications.md)).

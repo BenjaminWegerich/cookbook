@@ -20,6 +20,7 @@
 import { parseDocument } from 'yaml';
 
 import { pos } from '../ladder.js';
+import { deriveIngredients, extractMarkers } from './markers.js';
 import { RecipeParseError } from './types.js';
 import type { Ingredient, Recipe, RecipeType, Unit, ValidationIssue } from './types.js';
 
@@ -46,26 +47,23 @@ const COMMON_FIELDS: ReadonlySet<string> = new Set([
   'description',
   'prep_time',
   'total_time',
-  'ingredients',
 ]);
 /** Fields allowed only on finished_dish (§3). */
 const FINISHED_DISH_ONLY: ReadonlySet<string> = new Set(['servings']);
 /** Fields allowed only on ingredient_recipe (§3). */
-const INGREDIENT_RECIPE_ONLY: ReadonlySet<string> = new Set(['yield', 'yield_unit', 'yield_note']);
+const INGREDIENT_RECIPE_ONLY: ReadonlySet<string> = new Set(['yield', 'yield_unit']);
 /** The union of all allowed top-level fields (unknown fields are rejected). */
 const ALL_TOP_LEVEL_FIELDS: ReadonlySet<string> = new Set([
   ...COMMON_FIELDS,
   ...FINISHED_DISH_ONLY,
   ...INGREDIENT_RECIPE_ONLY,
 ]);
-/** Fields allowed per ingredient entry (§4). */
-const INGREDIENT_FIELDS: ReadonlySet<string> = new Set([
-  'name',
-  'quantity',
-  'unit',
-  'reference',
-  'recipe',
-]);
+
+/** The marker grammar (see markers.ts) — strict form for malformed detection. */
+const STRICT_MARKER_RE =
+  /^\{\{ingredient\|[^|}]+\|[0-9]+(?:\.[0-9]+)?\|(?:g|kg|ml|l)(?:\|ref)?(?:\|recipe:[^|}]+)?\}\}$/;
+/** Any `{{ … }}` block in a step — candidates for malformed markers. */
+const CURLY_BLOCK_RE = /\{\{([^{}]*)\}\}/g;
 
 /** Type guard for plain YAML mappings (objects). */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -102,22 +100,6 @@ function readOptionalString(
   if (value === undefined) return undefined;
   if (typeof value !== 'string') {
     issues.push({ path, message: `"${key}" muss ein String sein.` });
-    return undefined;
-  }
-  return value;
-}
-
-/** Returns the optional boolean value of `key`; undefined when absent or wrong. */
-function readOptionalBoolean(
-  obj: Record<string, unknown>,
-  key: string,
-  issues: ValidationIssue[],
-  path: string,
-): boolean | undefined {
-  const value = obj[key];
-  if (value === undefined) return undefined;
-  if (typeof value !== 'boolean') {
-    issues.push({ path, message: `"${key}" muss true oder false sein.` });
     return undefined;
   }
   return value;
@@ -180,82 +162,6 @@ function checkTitle(title: string, issues: ValidationIssue[]): void {
   }
 }
 
-/** Validates the `ingredients` list (§4) and builds the typed entries. */
-function readIngredients(value: unknown, issues: ValidationIssue[]): Ingredient[] | undefined {
-  if (value === undefined) {
-    issues.push({ path: 'ingredients', message: 'Pflichtfeld "ingredients" fehlt.' });
-    return undefined;
-  }
-  if (!Array.isArray(value)) {
-    issues.push({ path: 'ingredients', message: '"ingredients" muss eine Liste sein.' });
-    return undefined;
-  }
-
-  const result: Ingredient[] = [];
-  value.forEach((item, index) => {
-    const path = `ingredients[${index}]`;
-    if (!isPlainObject(item)) {
-      issues.push({ path, message: 'Jeder Zutaten-Eintrag muss eine YAML-Map sein.' });
-      return;
-    }
-    for (const key of Object.keys(item)) {
-      if (!INGREDIENT_FIELDS.has(key)) {
-        issues.push({ path: `${path}.${key}`, message: `Unbekanntes Feld "${key}".` });
-      }
-    }
-
-    const name = readString(item, 'name', issues, `${path}.name`);
-    if (name !== undefined && name.trim() === '') {
-      issues.push({ path: `${path}.name`, message: 'Der Name darf nicht leer sein.' });
-    }
-
-    const quantity = item['quantity'];
-    if (quantity === undefined) {
-      issues.push({ path: `${path}.quantity`, message: 'Pflichtfeld "quantity" fehlt.' });
-    } else if (typeof quantity !== 'number') {
-      issues.push({ path: `${path}.quantity`, message: '"quantity" muss eine Zahl sein.' });
-    } else {
-      checkLadderValue(quantity, `${path}.quantity`, issues, false);
-    }
-
-    const unitValue = item['unit'];
-    let unit: Unit | undefined;
-    if (unitValue === undefined) {
-      issues.push({ path: `${path}.unit`, message: 'Pflichtfeld "unit" fehlt.' });
-    } else if (typeof unitValue !== 'string' || !UNITS.includes(unitValue as Unit)) {
-      issues.push({
-        path: `${path}.unit`,
-        message: `"unit" muss eine der Einheiten g, kg, ml oder l sein (gefunden: ${JSON.stringify(unitValue)}).`,
-      });
-    } else {
-      unit = unitValue as Unit;
-    }
-
-    const reference = readOptionalBoolean(item, 'reference', issues, `${path}.reference`);
-    const recipe = readOptionalString(item, 'recipe', issues, `${path}.recipe`);
-    if (recipe !== undefined && recipe.trim() === '') {
-      issues.push({ path: `${path}.recipe`, message: 'Der Rezept-Link darf nicht leer sein.' });
-    }
-
-    // Only include fully valid entries; problems were already reported above.
-    if (
-      name !== undefined &&
-      quantity !== undefined &&
-      typeof quantity === 'number' &&
-      unit !== undefined
-    ) {
-      result.push({
-        name,
-        quantity,
-        unit,
-        ...(reference !== undefined ? { reference } : {}),
-        ...(recipe !== undefined ? { recipe } : {}),
-      });
-    }
-  });
-  return result;
-}
-
 /**
  * Validates the raw YAML front matter against the schema of §3/§4 and the
  * value rules of §7.1. Returns the typed recipe (steps filled by the caller)
@@ -285,10 +191,19 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     });
   }
 
-  // Field-level schema: reject unknown fields, reject fields forbidden for the
+  // Field-level schema: reject unknown fields (incl. the removed `ingredients`
+  // — it is derived from the body now, §4), reject fields forbidden for the
   // declared type. With an invalid type the per-type checks are skipped (the
   // type problem above is the precise error; the union still rejects unknowns).
   for (const key of Object.keys(data)) {
+    if (key === 'ingredients') {
+      issues.push({
+        path: key,
+        message:
+          'Feld "ingredients" wird aus dem Zubereitungstext abgeleitet und darf nicht mehr im Front Matter stehen.',
+      });
+      continue;
+    }
     if (!ALL_TOP_LEVEL_FIELDS.has(key)) {
       issues.push({ path: key, message: `Unbekanntes Feld "${key}".` });
       continue;
@@ -308,9 +223,10 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   const description = readOptionalString(data, 'description', issues, 'description');
   const prepTime = readString(data, 'prep_time', issues, 'prep_time');
   const totalTime = readOptionalString(data, 'total_time', issues, 'total_time');
-  const yieldNote = readOptionalString(data, 'yield_note', issues, 'yield_note');
 
-  const ingredients = readIngredients(data['ingredients'], issues);
+  // The ingredient list is derived from the body markers (§4); the typed
+  // recipe returned here carries a placeholder that the caller replaces.
+  const ingredients: Ingredient[] = [];
 
   // Per-type required fields (§3) and their value rules (§7.1).
   let servings: number | undefined;
@@ -353,31 +269,10 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   }
 
   // Reference rules (§4): at most 2 per recipe and only for finished_dish.
-  if (type === 'finished_dish') {
-    const referenceCount = ingredients?.filter((ingredient) => ingredient.reference).length ?? 0;
-    if (referenceCount > 2) {
-      issues.push({
-        path: 'ingredients',
-        message: 'Höchstens 2 Zutaten dürfen reference: true haben.',
-      });
-    }
-  } else if (type === 'ingredient_recipe') {
-    const references = ingredients?.filter((ingredient) => ingredient.reference) ?? [];
-    for (const ingredient of references) {
-      const index = ingredients!.indexOf(ingredient);
-      issues.push({
-        path: `ingredients[${index}].reference`,
-        message: 'reference: true ist nur für finished_dish erlaubt.',
-      });
-    }
-  }
+  // Validated against the body markers (validateMarkers); the placeholder
+  // list is empty here, so nothing to check at this stage.
 
-  if (
-    title === undefined ||
-    type === undefined ||
-    ingredients === undefined ||
-    prepTime === undefined
-  ) {
+  if (title === undefined || type === undefined || prepTime === undefined) {
     // The problems are already recorded; the recipe cannot be built.
     return undefined;
   }
@@ -393,7 +288,6 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     ...(servings !== undefined ? { servings } : {}),
     ...(yieldValue !== undefined ? { yield: yieldValue } : {}),
     ...(yieldUnit !== undefined ? { yield_unit: yieldUnit } : {}),
-    ...(yieldNote !== undefined ? { yield_note: yieldNote } : {}),
     steps: [],
   };
   return recipe;
@@ -516,10 +410,66 @@ function parseYaml(frontMatter: string, issues: ValidationIssue[]): unknown {
 }
 
 /**
+ * Validates the ingredient markers of the steps (§4, decided with the user:
+ * the step text is the source of truth for the ingredient list).
+ *
+ * Reports malformed markers and invalid marker values with the step index as
+ * the issue path. The reference rules depend on the recipe type and are only
+ * enforced when the type is known (an invalid type is reported separately).
+ */
+function validateMarkers(
+  steps: readonly string[],
+  type: RecipeType | undefined,
+  issues: ValidationIssue[],
+): void {
+  let referenceCount = 0;
+  steps.forEach((step, index) => {
+    const path = `steps[${index}]`;
+    // Any `{{ … }}` block that does not match the marker grammar is a
+    // malformed marker — never silently treated as prose.
+    for (const match of step.matchAll(CURLY_BLOCK_RE)) {
+      if (!STRICT_MARKER_RE.test(match[0])) {
+        issues.push({
+          path,
+          message: `Ungültiger Zutaten-Marker: ${JSON.stringify(match[0])} (erwartet z. B. {{ingredient|Joghurt|400|g}}).`,
+        });
+      }
+    }
+    for (const marker of extractMarkers(step)) {
+      if (marker.name.trim() === '') {
+        issues.push({ path, message: 'Der Zutatenname in einem Marker darf nicht leer sein.' });
+      }
+      if (!Number.isFinite(marker.quantity) || marker.quantity <= 0) {
+        issues.push({
+          path,
+          message: `Die Menge für "${marker.name}" muss eine positive Zahl sein.`,
+        });
+      } else {
+        try {
+          pos(marker.quantity);
+        } catch {
+          issues.push({
+            path,
+            message: `Die Menge ${marker.quantity} für "${marker.name}" ist kein Standardwert (Leiterwert).`,
+          });
+        }
+      }
+      if (marker.reference === true) referenceCount++;
+    }
+  });
+
+  if (type === 'finished_dish' && referenceCount > 2) {
+    issues.push({ path: 'body', message: 'Höchstens 2 Zutaten dürfen mit "ref" markiert sein.' });
+  } else if (type === 'ingredient_recipe' && referenceCount > 0) {
+    issues.push({ path: 'body', message: '"ref" ist nur für finished_dish erlaubt.' });
+  }
+}
+
+/**
  * Parses and validates one recipe file (§7.1).
  *
  * @param text the raw file content (UTF-8, Markdown + YAML front matter)
- * @returns the typed recipe
+ * @returns the typed recipe (ingredients derived from the body markers, §4)
  * @throws {RecipeParseError} with every problem found (paths + German messages)
  */
 export function parseRecipe(text: string): Recipe {
@@ -529,6 +479,9 @@ export function parseRecipe(text: string): Recipe {
   const data = frontMatter === undefined ? undefined : parseYaml(frontMatter, issues);
   const recipe = data === undefined ? undefined : validateRecipeData(data, issues);
   const steps = body === undefined ? undefined : parseSteps(body, issues);
+  if (steps !== undefined) {
+    validateMarkers(steps, recipe?.type, issues);
+  }
 
   if (issues.length > 0) {
     throw new RecipeParseError(issues);
@@ -537,5 +490,5 @@ export function parseRecipe(text: string): Recipe {
     // Unreachable: both are only undefined when an issue was recorded above.
     throw new RecipeParseError(issues);
   }
-  return { ...recipe, steps };
+  return { ...recipe, steps, ingredients: deriveIngredients(steps) };
 }

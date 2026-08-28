@@ -1,9 +1,12 @@
 # Architecture
 
-> **Status:** v1 foundation implemented. The web app (React + TypeScript on Vite, hosted on
-> GitHub Pages) and the core logic module (deterministic scaling, additional-unit display) exist;
-> the Google Drive OAuth connection works. The web app UI and integrations follow in the
-> upcoming roadmap tasks.
+> **Status:** v1 foundation and the recipe-management UI (Phase 2) implemented. The web app
+> (React + TypeScript on Vite, hosted on GitHub Pages) reads and writes the canonical
+> Markdown + YAML files (Google Drive OAuth), and the core logic module provides
+> deterministic scaling, the additional-unit display and the recipe format parsing. The
+> recipe editor uses the marker model (the step text is the source of truth for the
+> ingredient list, see [storage_format.md](storage_format.md) §4). AI-assisted create/edit,
+> Google Keep, Gemini and sharing integrations follow in the upcoming roadmap tasks.
 
 ## Components
 

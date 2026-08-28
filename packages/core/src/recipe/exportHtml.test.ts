@@ -34,7 +34,6 @@ const BECHAMEL: Recipe = {
   type: 'ingredient_recipe',
   yield: 500,
   yield_unit: 'ml',
-  yield_note: 'für 2 Salatköpfe (700 g)',
   prep_time: '15 min',
   ingredients: [
     { name: 'Milch', quantity: 300, unit: 'ml' },
@@ -86,6 +85,24 @@ describe('generateRecipeHtml — finished dish', () => {
     expect(html).toContain(expectedHeadline);
   });
 
+  it('substitutes ingredient markers with their display arrangement in steps', () => {
+    const marked: Recipe = {
+      ...WRAPS,
+      ingredients: [
+        { name: 'Joghurt', quantity: 400, unit: 'g' },
+        { name: 'Zitronensaft', quantity: 15, unit: 'ml' },
+      ],
+      steps: [
+        '{{ingredient|Joghurt|400|g}} mit {{ingredient|Zitronensaft|15|ml}} verrühren.',
+        'Ohne Marker servieren.',
+      ],
+    };
+    const html = generateRecipeHtml(marked);
+    const arrangement = renderAQS('Joghurt', 400, 'g');
+    expect(html).toContain(`${arrangement} mit ${renderAQS('Zitronensaft', 15, 'ml')} verrühren.`);
+    expect(html).not.toContain('{{ingredient|');
+  });
+
   it('renders all steps with step-by-step navigation controls', () => {
     expect(html.match(/class="step" data-step="/g)).toHaveLength(3);
     expect(html).toContain('data-step="1"');
@@ -104,7 +121,6 @@ describe('generateRecipeHtml — ingredient recipe', () => {
     // script mentions the selectors, so check for the rendered markup).
     expect(html).not.toContain('class="serving-option"');
     expect(html).not.toContain('class="serving-button"');
-    expect(html).toContain('500 ml (für 2 Salatköpfe (700 g))');
     expect(html).toContain(renderAQS('Milch', 300, 'ml'));
     expect(html).toContain(renderAQS('Butter', 25, 'g'));
   });

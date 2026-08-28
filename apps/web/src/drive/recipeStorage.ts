@@ -19,16 +19,11 @@
  * it is caught here instead of on the next read.
  */
 
-import {
-  generateRecipeHtml,
-  parseRecipe,
-  renameRecipeInCollection,
-  serializeRecipe,
-  type Recipe,
-} from '@cookbook/core';
+import { generateRecipeHtml, parseRecipe, serializeRecipe, type Recipe } from '@cookbook/core';
 import {
   createFileWithContent,
   createFolder,
+  deleteFile,
   findFoldersByName,
   getFile,
   getFileContent,
@@ -240,96 +235,224 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
 }
 
 /**
- * Renames a recipe as one operation (§6): new title inside the file, new file
- * name, renamed photo sibling, and every `recipe:` reference to the old title
- * in all other recipe files updated. The collection is left consistent — no
- * dangling references. The HTML export is renamed and regenerated in place
- * (same Drive file id), so existing shared links keep working.
- *
- * Drive has no transactions, so the writes are best-effort rolled back when a
- * step fails mid-flow (the originals are held in memory): the collection is
- * restored to its pre-rename state, or the error message says so if even the
- * rollback failed.
+ * Derives the recipe title from its Drive file name ("<title>.md" → title).
+ * Falls back to the file name without a trailing extension for robustness.
  */
-export async function renameRecipe(token: string, fileId: string, newTitle: string): Promise<void> {
-  const target = await readRecipe(token, fileId);
-  if (target.title === newTitle) {
+function titleFromFileName(name: string): string {
+  return name.endsWith(RECIPE_EXTENSION)
+    ? name.slice(0, -RECIPE_EXTENSION.length)
+    : name.replace(/\.[^.]*$/, '');
+}
+
+/**
+ * Finds the photo sibling of a recipe title in a folder listing (§2: same
+ * basename, `.jpg` preferred, first match wins — consistent with listRecipes).
+ */
+function findPhotoIn(files: DriveFile[], title: string): DriveFile | undefined {
+  for (const extension of IMAGE_EXTENSIONS) {
+    const fileName = `${title}.${extension}`;
+    const match = files.find((file) => file.name.toLowerCase() === fileName.toLowerCase());
+    if (match !== undefined) {
+      return match;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Deletes one recipe as a unit (§2): the `.md` file, its photo sibling and its
+ * HTML export. A missing photo or export is not an error — only the recipe
+ * file itself must exist. The `.md` delete is the unit's success: siblings
+ * are cleaned up best-effort afterwards, so a partial failure never leaves a
+ * deleted recipe behind with an error that would block a retry.
+ */
+export async function deleteRecipe(token: string, fileId: string): Promise<void> {
+  const folderId = await ensureRecipeFolder(token);
+  const file = await getFile(token, fileId);
+  const title = titleFromFileName(file.name);
+  const files = await listFilesInFolder(token, folderId);
+  const photo = findPhotoIn(files, title);
+  const exportFile = files.find((entry) => entry.name === `${title}${EXPORT_EXTENSION}`);
+
+  // 1. The recipe file itself — this is what "deleted" means.
+  await deleteFile(token, fileId);
+
+  // 2. Best-effort cleanup of the photo and export siblings; a failure here
+  //    must not surface as a failed delete (retrying would 404 on the .md).
+  const siblings = [photo?.id, exportFile?.id].filter((id): id is string => id !== undefined);
+  const results = await Promise.allSettled(siblings.map((id) => deleteFile(token, id)));
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.warn(
+        `Waisen-Datei "${siblings[index]}" konnte nicht gelöscht werden: ${
+          result.reason instanceof Error ? result.reason.message : String(result.reason)
+        }`,
+      );
+    }
+  });
+}
+
+/**
+ * Uploads a photo for a recipe (§2): stored as a sibling file with the same
+ * basename as the recipe and a `.jpg` / `.png` extension. An existing photo
+ * with the same basename is replaced — updated in place when the extension
+ * matches, otherwise deleted and re-created — so a recipe never has two photo
+ * siblings.
+ */
+export async function uploadRecipeImage(
+  token: string,
+  fileId: string,
+  blob: Blob,
+  extension: 'jpg' | 'png',
+): Promise<void> {
+  const folderId = await ensureRecipeFolder(token);
+  const file = await getFile(token, fileId);
+  const title = titleFromFileName(file.name);
+  const fileName = `${title}.${extension}`;
+  const mimeType = extension === 'jpg' ? 'image/jpeg' : 'image/png';
+
+  const files = await listFilesInFolder(token, folderId);
+  const existing = findPhotoIn(files, title);
+  if (existing !== undefined && existing.name.toLowerCase() === fileName.toLowerCase()) {
+    await updateFileWithContent(token, existing.id, { name: fileName, mimeType, content: blob });
+    return;
+  }
+  // Different extension: create the new file first, then remove the old one —
+  // a failure during creation must never leave the recipe without a photo.
+  await createFileWithContent(token, {
+    name: fileName,
+    mimeType,
+    content: blob,
+    parents: [folderId],
+  });
+  if (existing !== undefined) {
+    await deleteFile(token, existing.id);
+  }
+}
+
+/**
+ * Removes the recipe's photo sibling (§2), if one exists. A recipe without a
+ * photo is a no-op.
+ */
+export async function removeRecipeImage(token: string, fileId: string): Promise<void> {
+  const folderId = await ensureRecipeFolder(token);
+  const file = await getFile(token, fileId);
+  const title = titleFromFileName(file.name);
+  const files = await listFilesInFolder(token, folderId);
+  const photo = findPhotoIn(files, title);
+  if (photo !== undefined) {
+    await deleteFile(token, photo.id);
+  }
+}
+
+/**
+ * Saves a recipe, handling a title change as one §6 operation: new title in
+ * the file + new file name, renamed photo sibling, HTML export renamed and
+ * regenerated in place (same Drive file id — shared links survive), and every
+ * `recipe:` reference to the old title in the other recipe files updated. A
+ * plain save (title unchanged) just writes the content and regenerates the
+ * export (decision 7).
+ *
+ * The write steps are best-effort rolled back when one fails mid-flow (the
+ * originals are held in memory): the collection is restored to its pre-save
+ * state, or the error message says so if even the rollback failed.
+ *
+ * @param original the recipe as loaded in the editor, used as the rollback
+ *   target for the edited file (what the user actually saw)
+ */
+export async function saveRecipe(
+  token: string,
+  fileId: string,
+  recipe: Recipe,
+  original: Recipe,
+): Promise<void> {
+  const current = await readRecipe(token, fileId);
+  if (current.title === recipe.title) {
+    // Plain save: content update + export regeneration.
+    await updateRecipe(token, fileId, recipe);
     return;
   }
 
-  // Read the whole collection once (title → file + optional image), keeping
-  // the original content of every file for the rollback.
-  const stored = await listRecipes(token);
-  const storedByTitle = new Map(stored.map((entry) => [entry.title, entry]));
-  const originalByFileId = new Map<string, Recipe>();
-  const allRecipes: Recipe[] = [];
-  for (const entry of stored) {
-    const recipe = await readRecipe(token, entry.fileId);
-    originalByFileId.set(entry.fileId, recipe);
-    allRecipes.push(recipe);
-  }
-
-  const { renamed, updated } = renameRecipeInCollection(allRecipes, target.title, newTitle);
-  const targetImage = storedByTitle.get(target.title)?.image;
-
   // The new title must be free: two files named `<title>.md` (and two exports)
-  // would silently overwrite each other otherwise.
-  if (stored.some((entry) => entry.title === newTitle)) {
+  // would silently overwrite each other otherwise. `stored` contains the target
+  // file with its old title, so this cannot false-positive on itself.
+  const stored = await listRecipes(token);
+  if (stored.some((entry) => entry.title === recipe.title)) {
     throw new Error(
-      `Umbenennen nicht möglich: Es gibt bereits ein Rezept mit dem Titel "${newTitle}".`,
+      `Speichern nicht möglich: Es gibt bereits ein Rezept mit dem Titel "${recipe.title}".`,
     );
   }
+
+  // Read the other recipes once (they may reference the old title), keeping
+  // their original content for the rollback.
+  const storedByTitle = new Map(stored.map((entry) => [entry.title, entry]));
+  const originalByFileId = new Map<string, Recipe>([[fileId, original]]);
+  const others: Recipe[] = [];
+  for (const entry of stored) {
+    if (entry.title === current.title) continue;
+    const other = await readRecipe(token, entry.fileId);
+    originalByFileId.set(entry.fileId, other);
+    others.push(other);
+  }
+  const targetImage = storedByTitle.get(current.title)?.image;
 
   // Undo actions, newest first, for the rollback (each closes over the originals).
   const undoSteps: Array<() => Promise<unknown>> = [];
   try {
     // 1. New title in the file + new file name (same Drive file id). The
-    //    export is regenerated separately in step 3 (regenerateExport: false,
+    //    export is handled separately in steps 3–4 (regenerateExport: false,
     //    so the hook does not create a second export file).
-    await updateRecipe(token, fileId, renamed, { regenerateExport: false });
-    undoSteps.push(() =>
-      updateRecipe(token, fileId, originalByFileId.get(fileId)!, { regenerateExport: false }),
-    );
+    await updateRecipe(token, fileId, recipe, { regenerateExport: false });
+    undoSteps.push(() => updateRecipe(token, fileId, original, { regenerateExport: false }));
 
     // 2. Rename the photo sibling so it stays attached (§2).
     if (targetImage !== undefined) {
-      await renameFile(token, targetImage.fileId, `${newTitle}.${targetImage.extension}`);
+      await renameFile(token, targetImage.fileId, `${recipe.title}.${targetImage.extension}`);
       undoSteps.push(() =>
-        renameFile(token, targetImage.fileId, `${target.title}.${targetImage.extension}`),
+        renameFile(token, targetImage.fileId, `${current.title}.${targetImage.extension}`),
       );
     }
 
-    // 3. The HTML export is renamed and regenerated in place (same Drive file
-    //    id), so shared links survive the rename.
-    const oldExportName = `${target.title}${EXPORT_EXTENSION}`;
+    // 3. Rename the HTML export in place (same Drive file id), so existing
+    //    shared links keep working; the content is regenerated in step 4.
     const folderId = await ensureRecipeFolder(token);
-    const oldExport = (await listFilesInFolder(token, folderId)).find(
-      (file) => file.name === oldExportName,
-    );
+    const files = await listFilesInFolder(token, folderId);
+    const oldExport = files.find((entry) => entry.name === `${current.title}${EXPORT_EXTENSION}`);
     if (oldExport !== undefined) {
       const oldExportContent = await getFileContent(token, oldExport.id);
-      await updateFileWithContent(token, oldExport.id, {
-        name: `${newTitle}${EXPORT_EXTENSION}`,
-        mimeType: EXPORT_MIME_TYPE,
-        content: generateRecipeHtml(renamed),
-      });
+      await renameFile(token, oldExport.id, `${recipe.title}${EXPORT_EXTENSION}`);
       undoSteps.push(() =>
         updateFileWithContent(token, oldExport.id, {
-          name: oldExportName,
+          name: `${current.title}${EXPORT_EXTENSION}`,
           mimeType: EXPORT_MIME_TYPE,
           content: oldExportContent,
         }),
       );
     }
 
-    // 4. Update every recipe that referenced the old title (their ingredient
-    //    names are unchanged, so their exports stay valid — no regeneration).
-    for (const recipe of updated) {
-      const entry = storedByTitle.get(recipe.title);
-      if (entry === undefined) {
-        throw new Error(`renameRecipe: Datei für "${recipe.title}" nicht gefunden`);
+    // 4. Regenerate the export content with the new title (updates the file
+    //    renamed in step 3 in place; creates it when there was none).
+    await writeRecipeExportSafely(token, recipe);
+
+    // 5. Update every other recipe that referenced the old title (their
+    //    ingredient names are unchanged, so their exports stay valid).
+    for (const other of others) {
+      if (!other.ingredients.some((ingredient) => ingredient.recipe === current.title)) {
+        continue;
       }
-      await updateRecipe(token, entry.fileId, recipe, { regenerateExport: false });
+      const updated: Recipe = {
+        ...other,
+        ingredients: other.ingredients.map((ingredient) =>
+          ingredient.recipe === current.title
+            ? { ...ingredient, recipe: recipe.title }
+            : ingredient,
+        ),
+      };
+      const entry = storedByTitle.get(other.title);
+      if (entry === undefined) {
+        throw new Error(`saveRecipe: Datei für "${other.title}" nicht gefunden`);
+      }
+      await updateRecipe(token, entry.fileId, updated, { regenerateExport: false });
       undoSteps.push(() =>
         updateRecipe(token, entry.fileId, originalByFileId.get(entry.fileId)!, {
           regenerateExport: false,
@@ -353,6 +476,23 @@ export async function renameRecipe(token: string, fileId: string, newTitle: stri
         : rollbackFailed
           ? 'Hinweis: das Rückgängigmachen war unvollständig — die Sammlung muss manuell geprüft werden.'
           : 'Änderungen wurden rückgängig gemacht.';
-    throw new Error(`Umbenennen fehlgeschlagen: ${detail} (${suffix})`);
+    throw new Error(`Speichern fehlgeschlagen: ${detail} (${suffix})`);
   }
+}
+
+/**
+ * Renames a recipe as one operation (§6): new title inside the file, new file
+ * name, renamed photo sibling, and every `recipe:` reference to the old title
+ * in all other recipe files updated. The collection is left consistent — no
+ * dangling references. The HTML export is renamed and regenerated in place
+ * (same Drive file id), so existing shared links keep working.
+ *
+ * Delegates to `saveRecipe` with the current content and the new title.
+ */
+export async function renameRecipe(token: string, fileId: string, newTitle: string): Promise<void> {
+  const current = await readRecipe(token, fileId);
+  if (current.title === newTitle) {
+    return;
+  }
+  await saveRecipe(token, fileId, { ...current, title: newTitle }, current);
 }

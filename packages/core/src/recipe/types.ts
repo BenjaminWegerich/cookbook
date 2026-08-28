@@ -38,7 +38,7 @@ export interface Ingredient {
  * A parsed recipe (storage_format.md §3–§5).
  *
  * Which optional fields are allowed depends on `type`: `finished_dish` carries
- * `servings`; `ingredient_recipe` carries `yield` / `yield_unit` / `yield_note`.
+ * `servings`; `ingredient_recipe` carries `yield` / `yield_unit`.
  * `steps` come from the Markdown body (the `## Zubereitung` ordered list).
  */
 export interface Recipe {
@@ -61,8 +61,6 @@ export interface Recipe {
   yield?: number;
   /** ingredient_recipe only: the base unit of `yield`. */
   yield_unit?: Unit;
-  /** ingredient_recipe only: free text about the use. */
-  yield_note?: string;
   /** Preparation steps in order, extracted from the `## Zubereitung` list. */
   steps: string[];
 }

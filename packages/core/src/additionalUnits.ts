@@ -55,6 +55,19 @@ const EMPTY_MAPPINGS: readonly IngredientMapping[] = [];
 const EMPTY_SCHEME: readonly string[] = [];
 
 /**
+ * All ingredient names present in the additional-unit master data
+ * (docs/ingredient_unit_mappings.csv), sorted alphabetically.
+ *
+ * Used by the recipe editor's ingredient autocomplete: as the user types a
+ * name, the matching master-data ingredients are suggested. The list is
+ * currently small (the CSVs are curated over time); anything else is entered
+ * as free text and simply renders in the base form (§4).
+ */
+export function masterIngredientNames(): string[] {
+  return Object.keys(INGREDIENT_MAPPINGS).sort((a, b) => a.localeCompare(b, 'de'));
+}
+
+/**
  * Parses a canonical AQ fraction ("a", "a/b" or "a+b/c") to its numeric value.
  * The strings come from the generated ladder data (validated at generation
  * time), so no error handling is needed here.
@@ -162,22 +175,44 @@ export function selectAQ(ingredient: string, bq: number, bu: string): Additional
 }
 
 /**
+ * Formats a base quantity for display (decided with the user): quantities are
+ * stored in the family unit g or ml, and the display switches to kg / l at
+ * 1000 ("right between 750 and 1000, the unit changes"). Values below 1000
+ * are shown as-is ("400 g", "750 ml"); at and above 1000 the unit steps up
+ * ("1 kg", "1.2 kg", "1 l"). Stored kg/l (legacy files) are shown unchanged.
+ * Number and unit are separated by a narrow no-break space (U+202F), like all
+ * quantity displays in the app (§8).
+ */
+export function formatBQ(bq: number, bu: string): string {
+  if (bu === 'g' && bq >= 1000) {
+    return `${bq / 1000}${NNBSP}kg`;
+  }
+  if (bu === 'ml' && bq >= 1000) {
+    return `${bq / 1000}${NNBSP}l`;
+  }
+  return `${bq}${NNBSP}${bu}`;
+}
+
+/**
  * Renders the full display line for an ingredient (§4): the selected unit's
  * arrangement template with <AQ> <AU> <IN> <BQ> <BU> and <NNBSP> (U+202F)
  * substituted, or the base form "<BQ> <BU> <IN>" when no AQS applies. The base
- * quantity is always shown with its exact stored/scaled value — rounding
- * affects only the additional quantity (§4).
+ * quantity is displayed with the kg/l conversion (`formatBQ`) — the stored
+ * value and the AQ computation are untouched (rounding affects only the
+ * additional quantity, §4).
  */
 export function renderAQS(ingredient: string, bq: number, bu: string): string {
   const selected = selectAQ(ingredient, bq, bu);
   if (selected === null) {
-    return `${bq} ${bu} ${ingredient}`;
+    return `${formatBQ(bq, bu)} ${ingredient}`;
   }
+  // The arrangement binds <BQ> and <BU> together with a narrow no-break
+  // space; substitute that pair with the formatted base quantity first (the
+  // <NNBSP> placeholder is consumed here, before the general substitution).
   return selected.au.arrangement
+    .replace('<BQ><NNBSP><BU>', formatBQ(bq, bu))
     .replaceAll('<AQ>', selected.aq)
     .replaceAll('<AU>', selected.au.name)
     .replaceAll('<IN>', ingredient)
-    .replaceAll('<BQ>', String(bq))
-    .replaceAll('<BU>', bu)
     .replaceAll('<NNBSP>', NNBSP);
 }

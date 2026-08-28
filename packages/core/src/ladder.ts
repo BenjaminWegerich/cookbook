@@ -154,6 +154,43 @@ export function roundedBQ(x: number): number {
 }
 
 /**
+ * Rounds an arbitrary positive number to the nearest ladder rung (BQ value).
+ *
+ * Used where two ladder values are combined and the result would otherwise
+ * fall off the ladder — e.g. summing an ingredient that appears in several
+ * steps (§4: "appears once, with the total amount"): 400 g + 750 g = 1150 g,
+ * which is not a standard number; the nearest rung is 1200 g, so the merged
+ * entry stays a standard number (docs/quantity_scaling.md §3: non-standard
+ * numbers do not exist in the app).
+ *
+ * The hand-picked BQ values deviate slightly from the geometric rung
+ * positions, so the nearest rung is found by searching a small window around
+ * the geometric estimate instead of a closed formula. Exact ladder values
+ * round to themselves (distance 0).
+ */
+export function roundToRung(value: number): number {
+  if (!(value > 0) || !Number.isFinite(value)) {
+    throw new Error(`roundToRung: ${value} is not a positive finite number`);
+  }
+  // Geometric rung estimate: x = 16 · log10(value) (rungs are ~10^(x/16)).
+  const estimate = Math.round(16 * Math.log10(value));
+  let bestX = estimate;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  // ±4 rungs covers the deviation of every hand-picked value from its
+  // geometric position (never more than about half a rung in the table).
+  for (let x = estimate - 4; x <= estimate + 4; x++) {
+    const candidate = roundedBQ(x);
+    const distance = Math.abs(candidate - value);
+    // On an exact tie, prefer the larger rung (consistent with roundToAQ).
+    if (distance < bestDistance || (distance === bestDistance && x > bestX)) {
+      bestDistance = distance;
+      bestX = x;
+    }
+  }
+  return roundedBQ(bestX);
+}
+
+/**
  * Returns the difference between two targets in ladder steps:
  * Δx = pos(to) − pos(from). Negative when scaling down.
  */

@@ -1,5 +1,8 @@
 /**
  * Tests for the cross-recipe validation (docs/storage_format.md §7.2).
+ *
+ * The fixtures carry their ingredients as body markers (§4 — the step text is
+ * the source of truth); the `recipe:` link is the marker's |recipe: flag.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -20,18 +23,9 @@ title: Shredded Tofu Wraps
 type: finished_dish
 servings: 6
 prep_time: 20 min
-ingredients:
-  - name: Tortillas
-    quantity: 250
-    unit: g
-    reference: true
-  - name: Béchamelsauce
-    quantity: 500
-    unit: ml
-    recipe: Béchamelsauce
 ---
 ## Zubereitung
-1. Wraps füllen.
+1. {{ingredient|Tortillas|250|g|ref}} füllen. {{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}} dazureichen.
 `);
 
 /** The linked ingredient recipe. */
@@ -41,13 +35,9 @@ type: ingredient_recipe
 yield: 500
 yield_unit: ml
 prep_time: 15 min
-ingredients:
-  - name: Milch
-    quantity: 300
-    unit: ml
 ---
 ## Zubereitung
-1. Sauce kochen.
+1. {{ingredient|Milch|300|ml}} kochen.
 `);
 
 /** An unrelated finished dish without links. */
@@ -56,14 +46,9 @@ title: Spaghetti
 type: finished_dish
 servings: 4
 prep_time: 10 min
-ingredients:
-  - name: Nudeln
-    quantity: 500
-    unit: g
-    reference: true
 ---
 ## Zubereitung
-1. Nudeln kochen.
+1. {{ingredient|Nudeln|500|g|ref}} kochen.
 `);
 
 /** Asserts that validateCollection throws and returns the issues. */
@@ -94,13 +79,9 @@ type: ingredient_recipe
 yield: 500
 yield_unit: g
 prep_time: 15 min
-ingredients:
-  - name: Mehl
-    quantity: 300
-    unit: g
 ---
 ## Zubereitung
-1. Teig kneten.
+1. {{ingredient|Mehl|300|g}} kneten.
 `);
     expect(() => validateCollection([BECHAMEL, dough])).not.toThrow();
   });
@@ -111,13 +92,9 @@ title: Spaghetti
 type: finished_dish
 servings: 2
 prep_time: 10 min
-ingredients:
-  - name: Nudeln
-    quantity: 250
-    unit: g
 ---
 ## Zubereitung
-1. Kochen.
+1. {{ingredient|Nudeln|250|g}} kochen.
 `);
     const issues = collectionIssues([PASTA, twin]);
     expectIssueAt(issues, 'Spaghetti', 'nicht eindeutig');
@@ -135,14 +112,9 @@ type: ingredient_recipe
 yield: 500
 yield_unit: g
 prep_time: 10 min
-ingredients:
-  - name: Füllung
-    quantity: 400
-    unit: g
-    recipe: Spaghetti
 ---
 ## Zubereitung
-1. Füllen.
+1. {{ingredient|Füllung|400|g|recipe:Spaghetti}} unterheben.
 `);
     const issues = collectionIssues([PASTA, linksDish]);
     expectIssueAt(issues, 'Tofu-Füllung.ingredients[0].recipe', 'ingredient_recipe');
@@ -155,14 +127,9 @@ type: ingredient_recipe
 yield: 100
 yield_unit: g
 prep_time: 5 min
-ingredients:
-  - name: Eigen
-    quantity: 100
-    unit: g
-    recipe: Selbst
 ---
 ## Zubereitung
-1. Mischen.
+1. {{ingredient|Eigen|100|g|recipe:Selbst}} mischen.
 `);
     const selfIssues = collectionIssues([selfRef]);
     expectIssueAt(selfIssues, 'Selbst', 'Zyklus');
@@ -173,14 +140,9 @@ type: ingredient_recipe
 yield: 100
 yield_unit: ml
 prep_time: 5 min
-ingredients:
-  - name: Anteil B
-    quantity: 100
-    unit: ml
-    recipe: Sauce B
 ---
 ## Zubereitung
-1. Mischen.
+1. {{ingredient|Anteil B|100|ml|recipe:Sauce B}} mischen.
 `);
     const b = parse(`---
 title: Sauce B
@@ -188,14 +150,9 @@ type: ingredient_recipe
 yield: 100
 yield_unit: ml
 prep_time: 5 min
-ingredients:
-  - name: Anteil A
-    quantity: 100
-    unit: ml
-    recipe: Sauce A
 ---
 ## Zubereitung
-1. Mischen.
+1. {{ingredient|Anteil A|100|ml|recipe:Sauce A}} mischen.
 `);
     const cycleIssues = collectionIssues([a, b]);
     expectIssueAt(cycleIssues, 'Sauce A', 'Zyklus');

@@ -7,15 +7,16 @@ interface RecipeListProps {
   recipes: StoredRecipe[];
   /** Drive access token, forwarded to the thumbnails for photo downloads. */
   token: string;
-  /** Called when the user taps a recipe row. */
-  onOpenRecipe: (title: string) => void;
+  /** Called when the user taps a recipe row (opens the recipe editor). */
+  onOpenRecipe: (recipe: StoredRecipe) => void;
 }
 
 /**
  * Home-screen recipe list (single column, smartphone layout): a sticky search
  * field above the list, one row per recipe with a small thumbnail and the
- * title. The search filters recipes by title as you type (case-insensitive).
- * UI language is German (see docs/CODING_CONVENTIONS.md).
+ * title. The search filters recipes by title as you type (case-insensitive);
+ * tapping a row opens the recipe editor. UI language is German
+ * (see docs/CODING_CONVENTIONS.md).
  */
 function RecipeList({ recipes, token, onOpenRecipe }: RecipeListProps) {
   const [query, setQuery] = useState('');
@@ -65,11 +66,7 @@ function RecipeList({ recipes, token, onOpenRecipe }: RecipeListProps) {
         <ul className="recipe-list">
           {filtered.map((recipe) => (
             <li key={recipe.fileId}>
-              <button
-                type="button"
-                className="recipe-row"
-                onClick={() => onOpenRecipe(recipe.title)}
-              >
+              <button type="button" className="recipe-row" onClick={() => onOpenRecipe(recipe)}>
                 <RecipeThumb recipe={recipe} token={token} />
                 <span className="recipe-title">{recipe.title}</span>
               </button>

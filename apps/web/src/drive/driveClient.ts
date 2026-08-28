@@ -122,11 +122,14 @@ export function getFileDownloadUrl(fileId: string): string {
   return `${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media`;
 }
 
-/** A file to write: metadata plus text content. */
+/**
+ * A file to write: metadata plus content. Content is a string for text files
+ * (recipes) or a Blob for binary files (recipe photos).
+ */
 export interface FileUpload {
   name: string;
   mimeType: string;
-  content: string;
+  content: string | Blob;
   /** Parent folder; omitted to write to the root. */
   parents?: string[];
 }
@@ -134,19 +137,23 @@ export interface FileUpload {
 /**
  * Builds a multipart/related body: one JSON metadata part plus one content
  * part. The boundary is random so recipe content can never collide with it.
+ * Binary content (Blob) is concatenated into a Blob body — the string parts
+ * and the blob keep their exact bytes.
  */
 function buildMultipartBody(
   metadata: Record<string, unknown>,
-  content: string,
+  content: string | Blob,
   contentType: string,
-): { body: string; boundary: string } {
+): { body: string | Blob; boundary: string } {
   const boundary = `cookbookBoundary${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
-  const parts = [
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
-    `--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n${content}\r\n`,
-    `--${boundary}--\r\n`,
-  ];
-  return { body: parts.join(''), boundary };
+  const head = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
+  const middle = `--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n`;
+  const tail = `\r\n--${boundary}--\r\n`;
+  const body =
+    typeof content === 'string'
+      ? `${head}${middle}${content}${tail}`
+      : new Blob([head, middle, content, tail]);
+  return { body, boundary };
 }
 
 /** Sends one multipart upload (create or update) and returns the file resource. */
@@ -155,7 +162,7 @@ async function uploadFile(
   method: 'POST' | 'PATCH',
   path: string,
   metadata: Record<string, unknown>,
-  content: string,
+  content: string | Blob,
   contentType: string,
 ): Promise<DriveFile> {
   const { body, boundary } = buildMultipartBody(metadata, content, contentType);
@@ -205,4 +212,19 @@ export async function renameFile(token: string, fileId: string, name: string): P
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   });
+}
+
+/**
+ * Moves a file to the trash (Drive's DELETE). Used to remove a recipe's photo
+ * sibling or the whole recipe unit (file + photo + export).
+ */
+export async function deleteFile(token: string, fileId: string): Promise<void> {
+  const response = await fetch(`${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`Drive API ${response.status}: ${detail || 'unbekannter Fehler'}`);
+  }
 }

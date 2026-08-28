@@ -21,6 +21,7 @@
  */
 
 import { renderAQS } from '../additionalUnits.js';
+import { renderMarkers } from './markers.js';
 import { difference, integerLadderValues, scale } from '../ladder.js';
 import type { Ingredient, Recipe } from './types.js';
 
@@ -98,7 +99,7 @@ function renderDishIngredients(recipe: Recipe, baseServings: number): string {
 
 /** Renders the ingredient-recipe ingredients section (unscaled, no picker). */
 function renderIngredientRecipeIngredients(recipe: Recipe): string {
-  const yieldLine = `${recipe.yield} ${recipe.yield_unit}${recipe.yield_note ? ` (${recipe.yield_note})` : ''}`;
+  const yieldLine = `${recipe.yield} ${recipe.yield_unit}`;
   const lines = recipe.ingredients.map((ingredient) =>
     ingredientLine(ingredient, ingredient.quantity),
   );
@@ -116,7 +117,12 @@ function renderSteps(recipe: Recipe): string {
   const items = recipe.steps
     .map((step, index) => {
       const hidden = index === 0 ? '' : ' hidden';
-      return `    <li class="step" data-step="${index + 1}"${hidden}>${escapeHtml(step)}</li>`;
+      // The ingredient markers are substituted with their display arrangement
+      // (the cooking view shows "1 Becher Joghurt (400 g)", never the marker).
+      const rendered = renderMarkers(step, (marker) =>
+        renderAQS(marker.name, marker.quantity, marker.unit),
+      );
+      return `    <li class="step" data-step="${index + 1}"${hidden}>${escapeHtml(rendered)}</li>`;
     })
     .join('\n');
   return (

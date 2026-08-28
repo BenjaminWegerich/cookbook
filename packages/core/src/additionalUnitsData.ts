@@ -81,4 +81,28 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, readonly IngredientMap
     { bu: 'g', au: 'EL', factor: 24, priority: 2 },
     { bu: 'g', au: 'TL', factor: 7.5, priority: 3 },
   ],
+  Zucker: [
+    { bu: 'g', au: 'EL', factor: 12, priority: 1 },
+    { bu: 'g', au: 'TL', factor: 4, priority: 2 },
+  ],
+  Mehl: [
+    { bu: 'g', au: 'Becher', factor: 150, priority: 1 },
+    { bu: 'g', au: 'EL', factor: 10, priority: 2 },
+  ],
+  Butter: [{ bu: 'g', au: 'EL', factor: 10, priority: 1 }],
+  Milch: [
+    { bu: 'ml', au: 'Becher', factor: 250, priority: 1 },
+    { bu: 'ml', au: 'EL', factor: 15, priority: 2 },
+  ],
+  Sahne: [{ bu: 'ml', au: 'Becher', factor: 200, priority: 1 }],
+  Olivenöl: [
+    { bu: 'ml', au: 'EL', factor: 10, priority: 1 },
+    { bu: 'ml', au: 'TL', factor: 3, priority: 2 },
+  ],
+  Zitronensaft: [{ bu: 'ml', au: 'EL', factor: 15, priority: 1 }],
+  Honig: [{ bu: 'g', au: 'EL', factor: 21, priority: 1 }],
+  Haferflocken: [
+    { bu: 'g', au: 'Becher', factor: 100, priority: 1 },
+    { bu: 'g', au: 'EL', factor: 10, priority: 2 },
+  ],
 };

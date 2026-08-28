@@ -174,6 +174,11 @@ in §3); further examples arrive with more ingredient mappings.
   sub-recipe ingredients, and reference ingredients alike.
 - The conversion factor of a mapping is expressed in the ingredient's base unit
   (e.g. 400 g per Becher for Joghurt); an ingredient's base unit is fixed.
+- **Display conversion of the base quantity (decided with the user):** quantities
+  are *stored* in the ingredient's family unit `g` or `ml` (see
+  [storage_format.md](storage_format.md) §4); from 1000 up, the display switches
+  to `kg` / `l` ("1 kg", "1.2 kg") — also inside the AQS arrangement
+  ("3 Becher Joghurt (1.2 kg)"). The stored value is never changed by this.
 - This spec fixes only the canonical AQ value (e.g. 1+1/4; the "+" marks a mixed
   number — one and a quarter). The display typography — Unicode fraction glyphs
   (⅒ ⅑ ⅛ ⅙ ⅕ ¼ ⅓ ⅜ ⅖ ½ ⅗ ⅔ ¾ ⅞) and mixed numbers as integer + narrow no-break

@@ -13,8 +13,16 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 
 ## Web app — Phase 2: Recipe management (depends on: Phase 1)
 
-- [ ] Recipe editor: create and edit all fields, validation feedback per storage_format.md
+- [x] Recipe editor: create and edit all fields, validation feedback per storage_format.md
       §7, save to Drive, rename flow (§6). UI in German.
+
+### Open follow-ups (not urgent)
+
+- [ ] Sub-recipe function: resolve linked Zutaten-Rezepte (the `|recipe:` marker) in the
+      cooking view and when scaling (currently only the link itself is stored/edited).
+- [ ] Introduce new ingredients into the master data (extend
+      `docs/ingredient_unit_mappings.csv` with name → base unit → additional units +
+      factors; today the list is a small starter set).
 
 ## Web app — Phase 3: AI-assisted create/edit (depends on: Phase 2)
 

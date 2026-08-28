@@ -1,0 +1,604 @@
+/**
+ * Recipe editor screen — component styles.
+ *
+ * All pixel values come from the design ladder (docs/CODING_CONVENTIONS.md);
+ * colors and sizes reference the tokens in styles/tokens.css. Layout follows
+ * the agreed editor design: sticky header (Zurück · Titel · Speichern), one
+ * scrolling page of cards, bottom sheet for ingredients.
+ */
+
+/* ---- Screen header ------------------------------------------------------ */
+
+.editor {
+  display: grid;
+  gap: var(--space-6);
+  padding-block-end: var(--space-10);
+}
+
+.editor-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  margin-inline: calc(-1 * var(--app-padding));
+  padding: var(--space-4) var(--app-padding);
+  background: var(--color-bg);
+}
+
+.editor-header h2 {
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-spacer {
+  justify-self: end;
+}
+
+.save-button {
+  justify-self: end;
+}
+
+/* ---- Cards -------------------------------------------------------------- */
+
+.editor-card {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.editor-card-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* ---- Form fields -------------------------------------------------------- */
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.field-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+}
+
+.field-hint {
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+}
+
+.field input[type='text'],
+.field textarea {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  line-height: 1.4;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 74px;
+}
+
+.field input[type='text']:focus,
+.field textarea:focus,
+.step-card textarea:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* Segmented control (Typ, Einheit). */
+.segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  justify-self: start;
+}
+
+.segmented button {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+  background: none;
+  border: none;
+}
+
+.segmented .segmented-active {
+  background: var(--color-olive);
+  color: var(--color-on-accent);
+}
+
+/* ---- Chips (times, servings, quantities) -------------------------------- */
+
+.quantity-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: 100px; /* pill — structural exception to the ladder */
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+
+.chip:active {
+  background: var(--color-line);
+}
+
+.chip-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* ---- QuantityPicker (suggested chips + stepper) ---------------------------- */
+
+.quantity-picker {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Horizontally scrollable chip strip (suggestions and decade rows). */
+.suggested-chips {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-block-end: var(--space-1);
+  scrollbar-width: none;
+}
+
+.suggested-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.suggested-chips .chip {
+  flex-shrink: 0;
+}
+
+/* − / + stepper row (one ladder rung per tap). */
+.quantity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.step-button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 50%; /* structural exception to the ladder: full circle */
+  font-size: var(--text-lg);
+  color: var(--color-ink);
+}
+
+.step-button:active:not(:disabled) {
+  background: var(--color-line);
+}
+
+.step-button:disabled {
+  opacity: 0.4;
+}
+
+.quantity-value {
+  min-width: 74px;
+  text-align: center;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+/* ---- Step editor (contenteditable with artifacts) -------------------------- */
+
+.step-editor {
+  width: 100%;
+  min-height: 74px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.step-editor:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.step-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-ink-muted);
+}
+
+/* An ingredient artifact: not plain text, but a token (like inline code). */
+.step-artifact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  margin-inline: var(--space-1);
+  background: var(--color-bg);
+  border: 1px solid var(--color-olive);
+  border-radius: var(--radius-sm);
+  color: var(--color-olive);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.artifact-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%; /* structural exception to the ladder: full circle */
+  color: var(--color-olive);
+  font-size: var(--text-sm);
+  line-height: 1;
+}
+
+.artifact-remove:active {
+  background: var(--color-line);
+}
+
+/* ---- Validation feedback ------------------------------------------------ */
+
+.validation-banner {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.validation-banner ul {
+  list-style: disc;
+  padding-inline-start: var(--space-6);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.field-error {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+/* ---- Photo -------------------------------------------------------------- */
+
+.photo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.photo-preview {
+  width: 74px;
+  height: 74px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line);
+}
+
+.photo-placeholder {
+  width: 74px;
+  height: 74px;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg);
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.photo-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* ---- Steps (Zubereitung) ------------------------------------------------ */
+
+.step-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.step-number {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.step-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.step-card textarea {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.add-ingredient {
+  justify-self: start;
+  padding: var(--space-2) var(--space-4);
+  border: 1px dashed var(--color-olive);
+  border-radius: 100px; /* pill — structural exception to the ladder */
+  color: var(--color-olive);
+  font-size: var(--text-sm);
+  background: none;
+}
+
+/* ---- Computed ingredient list ------------------------------------------- */
+
+.empty-hint {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.ingredient-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ingredient-row {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.ingredient-row.has-error {
+  border-color: var(--color-danger);
+}
+
+.ingredient-row-button {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  text-align: start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-ink);
+}
+
+.ingredient-line {
+  font-size: var(--text-md);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ingredient-hint {
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+}
+
+.badge {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-accent);
+  border-radius: 100px; /* pill — structural exception to the ladder */
+  color: var(--color-on-accent);
+  font-size: var(--text-sm);
+}
+
+.badge.olive {
+  background: var(--color-olive);
+}
+
+/* ---- Danger zone (delete) ------------------------------------------------ */
+
+.danger-zone {
+  justify-items: start;
+  align-content: start;
+  border-color: var(--color-danger);
+}
+
+.danger-text-button {
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  font-size: var(--text-md);
+  text-decoration: underline;
+}
+
+.danger-button {
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-danger);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-on-accent);
+  font-size: var(--text-md);
+}
+
+.danger-text {
+  color: var(--color-danger);
+}
+
+/* ---- Bottom sheet (ingredient form) -------------------------------------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(43, 36, 29, 0.4);
+}
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: grid;
+  gap: var(--space-5);
+  max-height: 85%;
+  overflow-y: auto;
+  padding: var(--space-7) var(--app-padding) calc(var(--space-7) + env(safe-area-inset-bottom, 0px));
+  background: var(--color-surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-md);
+}
+
+.sheet-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.suggestions button {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  text-align: start;
+  font-size: var(--text-md);
+}
+
+.suggestions button:active {
+  background: var(--color-line);
+}
+
+.aqs-preview {
+  padding: var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.checkbox-field input {
+  margin-block-start: var(--space-1);
+  accent-color: var(--color-accent);
+  width: 24px;
+  height: 24px;
+}
+
+.checkbox-field small {
+  display: block;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.sheet-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.sheet-actions .danger-button {
+  margin-inline-end: auto;
+}
+
+/* ---- Primary button (Speichern / Hinzufügen) ----------------------------- */
+
+.primary-button {
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-on-accent);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.primary-button:active:not(:disabled) {
+  background: var(--color-accent-press);
+}
+
+.primary-button:disabled {
+  opacity: 0.5;
+}

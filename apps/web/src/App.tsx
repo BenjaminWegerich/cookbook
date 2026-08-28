@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { getAccessToken, requestAccessToken, revokeAccessToken } from './auth/googleAuth';
+import RecipeEditor from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
 import './styles/recipe-list.css';
+import './styles/editor.css';
 
 /**
- * Root component of the web app — the recipe-list home screen.
+ * Root component of the web app — the recipe-list home screen plus the recipe
+ * editor (Phase 2).
  *
  * States: login (not connected), loading, error, empty collection, and the
  * recipe list (single column, small thumbnails). The floating action button
- * opens the recipe editor — currently a placeholder screen that the next
- * roadmap task (recipe editor) replaces. UI language is German
+ * and a tap on a recipe row open the recipe editor. UI language is German
  * (see docs/CODING_CONVENTIONS.md).
  */
 function App() {
@@ -19,10 +21,10 @@ function App() {
   const [recipes, setRecipes] = useState<StoredRecipe[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** Editor state: `editorOpen` switches the screen, `editorTitle` is the
-   *  opened recipe or null for a new recipe (placeholder until the editor task). */
+  /** Editor state: `editorOpen` switches the screen, `editorTarget` is the
+   *  opened recipe or null for a new recipe. */
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editorTitle, setEditorTitle] = useState<string | null>(null);
+  const [editorTarget, setEditorTarget] = useState<StoredRecipe | null>(null);
 
   /** Refreshes the recipe list from the Google Drive recipe folder. */
   const refreshRecipes = useCallback(async (activeToken: string): Promise<void> => {
@@ -88,15 +90,21 @@ function App() {
     setRecipes(null);
   }, []);
 
-  /** Opens the editor placeholder for a recipe title (null = new recipe). */
-  const openEditor = useCallback((title: string | null): void => {
-    setEditorTitle(title);
+  /** Opens the editor for a recipe (null = new recipe). */
+  const openEditor = useCallback((recipe: StoredRecipe | null): void => {
+    setEditorTarget(recipe);
     setEditorOpen(true);
   }, []);
 
   const closeEditor = useCallback((): void => {
     setEditorOpen(false);
   }, []);
+
+  /** After a save/delete: refresh the list and return to it. */
+  const handleEditorSaved = useCallback((): void => {
+    if (token !== null) void refreshRecipes(token);
+    setEditorOpen(false);
+  }, [token, refreshRecipes]);
 
   /** Status line under the header, German. */
   const subtitle = !token
@@ -110,13 +118,13 @@ function App() {
   return (
     <main className="app">
       {editorOpen ? (
-        <section className="editor-placeholder" aria-label="Rezept-Editor">
-          <button type="button" className="text-button" onClick={closeEditor}>
-            ← Zurück
-          </button>
-          <h2>{editorTitle ?? 'Neues Rezept'}</h2>
-          <p>Der Rezept-Editor folgt im nächsten Schritt.</p>
-        </section>
+        <RecipeEditor
+          token={token ?? ''}
+          target={editorTarget}
+          recipes={recipes ?? []}
+          onClose={closeEditor}
+          onSaved={handleEditorSaved}
+        />
       ) : (
         <>
           <header className="app-header">

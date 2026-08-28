@@ -13,6 +13,7 @@
  * in ./validate.ts, §7.2 extension).
  */
 
+import { deriveIngredients, replaceMarkers } from './markers.js';
 import type { Recipe } from './types.js';
 
 /** Result of a rename: the renamed recipe plus every other recipe that changed. */
@@ -20,7 +21,7 @@ export interface RenameResult {
   /** The renamed recipe with its new title (same ingredients, steps, etc.). */
   renamed: Recipe;
   /**
-   * Every other recipe whose `recipe:` references pointed at the old title,
+   * Every other recipe whose `|recipe:` markers pointed at the old title,
    * with those references updated. Recipes that did not change are omitted.
    */
   updated: readonly Recipe[];
@@ -50,17 +51,22 @@ export function renameRecipeInCollection(
 
   const renamed: Recipe = { ...target, title: newTitle };
 
+  // The recipe: references live in the body markers (§4: the step text is the
+  // source of truth); update them in every other recipe and recompute the
+  // derived ingredient list from the changed steps.
   const updated: Recipe[] = [];
   for (const recipe of recipes) {
     if (recipe === target) continue;
     let changed = false;
-    const ingredients = recipe.ingredients.map((ingredient) => {
-      if (ingredient.recipe !== oldTitle) return ingredient;
-      changed = true;
-      return { ...ingredient, recipe: newTitle };
-    });
+    const steps = recipe.steps.map((step) =>
+      replaceMarkers(step, (marker) => {
+        if (marker.recipe !== oldTitle) return marker;
+        changed = true;
+        return { ...marker, recipe: newTitle };
+      }),
+    );
     if (changed) {
-      updated.push({ ...recipe, ingredients });
+      updated.push({ ...recipe, steps, ingredients: deriveIngredients(steps) });
     }
   }
 

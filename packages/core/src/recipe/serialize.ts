@@ -32,20 +32,11 @@ function buildFrontMatter(recipe: Recipe): Record<string, unknown> {
   } else {
     frontMatter.yield = recipe.yield;
     frontMatter.yield_unit = recipe.yield_unit;
-    if (recipe.yield_note !== undefined) frontMatter.yield_note = recipe.yield_note;
   }
   frontMatter.prep_time = recipe.prep_time;
   if (recipe.total_time !== undefined) frontMatter.total_time = recipe.total_time;
-  frontMatter.ingredients = recipe.ingredients.map((ingredient) => {
-    const entry: Record<string, unknown> = {
-      name: ingredient.name,
-      quantity: ingredient.quantity,
-      unit: ingredient.unit,
-    };
-    if (ingredient.reference !== undefined) entry.reference = ingredient.reference;
-    if (ingredient.recipe !== undefined) entry.recipe = ingredient.recipe;
-    return entry;
-  });
+  // The ingredient list is derived from the body markers (§4) — it is never
+  // written to the front matter.
   return frontMatter;
 }
 
@@ -58,7 +49,7 @@ function buildFrontMatter(recipe: Recipe): Record<string, unknown> {
  *   faithfully: line breaks or edge whitespace inside steps (the parser trims
  *   steps on read, §5, so these would silently corrupt the file), line breaks
  *   inside titles or ingredient names, non-finite numbers, or an empty step
- *   list. Multi-line free-text fields (subtitle, description, times, yield_note)
+ *   list. Multi-line free-text fields (subtitle, description, times)
  *   are written as YAML block scalars and round-trip approximately (whitespace
  *   folding) — acceptable for display-only fields.
  */
@@ -84,18 +75,6 @@ export function serializeRecipe(recipe: Recipe): string {
     throw new Error(
       `serializeRecipe: the title must be a single line, got: ${JSON.stringify(recipe.title)}`,
     );
-  }
-  for (const ingredient of recipe.ingredients) {
-    if (/[\r\n]/.test(ingredient.name)) {
-      throw new Error(
-        `serializeRecipe: an ingredient name must be a single line, got: ${JSON.stringify(ingredient.name)}`,
-      );
-    }
-    if (!Number.isFinite(ingredient.quantity)) {
-      throw new Error(
-        `serializeRecipe: quantity of "${ingredient.name}" must be finite, got ${ingredient.quantity}`,
-      );
-    }
   }
   if (recipe.servings !== undefined && !Number.isFinite(recipe.servings)) {
     throw new Error(`serializeRecipe: servings must be finite, got ${recipe.servings}`);

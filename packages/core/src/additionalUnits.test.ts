@@ -1,13 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import { ADDITIONAL_UNITS, INGREDIENT_MAPPINGS, NUMBER_SCHEMES } from './additionalUnitsData.js';
-import { roundToAQ, selectAQ, renderAQS } from './additionalUnits.js';
+import {
+  formatBQ,
+  roundToAQ,
+  selectAQ,
+  renderAQS,
+  masterIngredientNames,
+} from './additionalUnits.js';
 import { LADDER_RUNGS } from './ladderData.js';
 
 /** Narrow no-break space (U+202F), compiled from <NNBSP> in the arrangements. */
 const NNBSP = '\u202F';
 
 describe('generated additional-unit master data', () => {
+  it('exposes the mapped ingredient names for the editor autocomplete', () => {
+    expect(masterIngredientNames()).toEqual(Object.keys(INGREDIENT_MAPPINGS).sort());
+    expect(masterIngredientNames()).toContain('Joghurt');
+  });
+
   it('defines the three units with the shared arrangement', () => {
     expect(ADDITIONAL_UNITS.map((unit) => unit.name)).toEqual(['Becher', 'EL', 'TL']);
     for (const unit of ADDITIONAL_UNITS) {
@@ -165,22 +176,44 @@ describe('renderAQS (§4)', () => {
   });
 
   it('renders the base form when no AQS applies', () => {
-    expect(renderAQS('Joghurt', 500, 'g')).toBe('500 g Joghurt');
-    expect(renderAQS('Joghurt', 12, 'g')).toBe('12 g Joghurt');
-    expect(renderAQS('Joghurt', 700, 'g')).toBe('700 g Joghurt');
+    expect(renderAQS('Joghurt', 500, 'g')).toBe(`500${NNBSP}g Joghurt`);
+    expect(renderAQS('Joghurt', 12, 'g')).toBe(`12${NNBSP}g Joghurt`);
+    expect(renderAQS('Joghurt', 700, 'g')).toBe(`700${NNBSP}g Joghurt`);
   });
 
   it('renders the base form for unknown ingredients and foreign base units', () => {
-    expect(renderAQS('Zucker', 400, 'g')).toBe('400 g Zucker');
-    expect(renderAQS('Joghurt', 0.4, 'kg')).toBe('0.4 kg Joghurt');
+    expect(renderAQS('Zucker', 400, 'g')).toBe(`400${NNBSP}g Zucker`);
+    expect(renderAQS('Joghurt', 0.4, 'kg')).toBe(`0.4${NNBSP}kg Joghurt`);
   });
 
-  it('shows the exact stored base quantity, never a rounded value', () => {
-    // 1000 g stays "1000 g" inside the AQS, even though 2+1/2 Becher applies.
-    expect(renderAQS('Joghurt', 1000, 'g')).toBe(`2+1/2${NNBSP}Becher Joghurt (1000${NNBSP}g)`);
+  it('shows the exact stored base quantity with the kg conversion at 1000', () => {
+    // The AQS applies (2+1/2 Becher), and the base quantity is displayed in kg
+    // from 1000 up (decided with the user: g/ml stored, kg/l for display).
+    expect(renderAQS('Joghurt', 1000, 'g')).toBe(`2+1/2${NNBSP}Becher Joghurt (1${NNBSP}kg)`);
+    expect(renderAQS('Joghurt', 1200, 'g')).toBe(`3${NNBSP}Becher Joghurt (1.2${NNBSP}kg)`);
   });
 
   it('rejects non-standard base quantities', () => {
     expect(() => renderAQS('Joghurt', 450, 'g')).toThrow();
+  });
+});
+
+describe('formatBQ (§2 — g/ml stored, kg/l displayed from 1000)', () => {
+  it('keeps g and ml below 1000', () => {
+    expect(formatBQ(400, 'g')).toBe(`400${NNBSP}g`);
+    expect(formatBQ(750, 'ml')).toBe(`750${NNBSP}ml`);
+    expect(formatBQ(5, 'g')).toBe(`5${NNBSP}g`);
+  });
+
+  it('converts g to kg and ml to l from 1000 up', () => {
+    expect(formatBQ(1000, 'g')).toBe(`1${NNBSP}kg`);
+    expect(formatBQ(1200, 'g')).toBe(`1.2${NNBSP}kg`);
+    expect(formatBQ(1000, 'ml')).toBe(`1${NNBSP}l`);
+    expect(formatBQ(2500, 'ml')).toBe(`2.5${NNBSP}l`);
+  });
+
+  it('shows stored kg/l unchanged (legacy files)', () => {
+    expect(formatBQ(1.5, 'kg')).toBe(`1.5${NNBSP}kg`);
+    expect(formatBQ(2, 'l')).toBe(`2${NNBSP}l`);
   });
 });

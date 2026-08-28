@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { LADDER_RUNGS } from './ladderData.js';
-import { difference, getRung, integerLadderValues, pos, roundedBQ, scale } from './ladder.js';
+import {
+  difference,
+  getRung,
+  integerLadderValues,
+  pos,
+  roundToRung,
+  roundedBQ,
+  scale,
+} from './ladder.js';
 
 describe('ladder data', () => {
   it('covers x = −16 … 48 exactly once', () => {
@@ -177,5 +185,35 @@ describe('integerLadderValues', () => {
 
   it('returns an empty array when no integer rung lies in the range', () => {
     expect(integerLadderValues(1.2, 1.5)).toEqual([]);
+  });
+});
+
+describe('roundToRung', () => {
+  it('maps exact ladder values to themselves', () => {
+    for (const value of [
+      1, 1.2, 1.5, 1.8, 2, 2.5, 4, 6, 10, 15, 25, 80, 100, 250, 400, 500, 800, 1000,
+    ]) {
+      expect(roundToRung(value)).toBe(value);
+    }
+  });
+
+  it('rounds off-ladder sums to the nearest rung (400 + 750 = 1150 → 1200)', () => {
+    expect(roundToRung(1150)).toBe(1200);
+    expect(roundToRung(1100)).toBe(1200); // halfway 1000/1200 — tie prefers the larger rung
+    expect(roundToRung(450)).toBe(500); // halfway 400/500 — tie prefers the larger rung
+    expect(roundToRung(350)).toBe(350); // a ladder value, unchanged
+  });
+
+  it('always returns a valid ladder value (pos succeeds)', () => {
+    for (const value of [0.3, 0.9, 7, 33, 1150, 2300, 0.15]) {
+      const rounded = roundToRung(value);
+      expect(() => pos(rounded)).not.toThrow();
+    }
+  });
+
+  it('rejects non-positive or non-finite input', () => {
+    expect(() => roundToRung(0)).toThrow();
+    expect(() => roundToRung(-5)).toThrow();
+    expect(() => roundToRung(Number.NaN)).toThrow();
   });
 });

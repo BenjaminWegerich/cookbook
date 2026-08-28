@@ -13,9 +13,11 @@
   read-aloud, and the shopping-list logic all read this file. There is no second,
   hand-maintained copy of the data.
 - **Two parts in one file:**
-  - **YAML front matter** (between the leading `---` lines) — the structured data:
-    metadata and the ingredient list;
-  - **Markdown body** — the preparation steps.
+  - **YAML front matter** (between the leading `---` lines) — the structured
+    metadata (title, type, times, servings/yield);
+  - **Markdown body** — the preparation steps, which carry the **ingredient
+    markers** (see §4): the step text is the source of truth for the
+    ingredient list, which is *derived* from the markers on read.
 - **What is NOT stored in the recipe file:**
   - additional quantity specifications (e.g., "1 Becher", "½ Zitrone") — these are
     computed at display time from the additional-unit master data
@@ -51,36 +53,52 @@ The app writes YAML through a serializer; hand-written files are validated on re
 | `type` | enum | yes | `finished_dish` or `ingredient_recipe` — never derived, set by the author. |
 | `subtitle` | string | no | Display-only extension of the title. |
 | `description` | string | no | A single paragraph; may suggest side dishes or other uses. |
-| `prep_time` | string | yes | Free-text display value, e.g. `25 min`, `1 h 30 min`. |
-| `total_time` | string | no | Only if it differs from `prep_time`. |
-| `ingredients` | list | yes | See §4. |
+| `prep_time` | string | yes | Free-text display value, e.g. `25 min`, `1 h 30 min`. The editor offers the standard values 1/3/5/10/15/20/30/45 min and 1/1.5/2/3/6/12/24/48 h as chips. |
+| `total_time` | string | no | Only if it is larger than `prep_time`. |
 
 ### Type-specific fields
 
 | `type` | Required fields | Forbidden | Notes |
 |---|---|---|---|
-| `finished_dish` | `servings` | `yield`, `yield_unit`, `yield_note` | `servings`: integer, a standard number (ladder value). Example: `6` — not `11`. |
-| `ingredient_recipe` | `yield`, `yield_unit` | `servings` | `yield`: number, a standard number in the base unit; `yield_unit`: base unit (g / kg / ml / l). Example: `yield: 500`, `yield_unit: ml`. |
-| any | `yield_note` (only for `ingredient_recipe`) | for `finished_dish` | Optional free text about the use, e.g. `für 2 Salatköpfe (700 g)`. |
+| `finished_dish` | `servings` | `yield`, `yield_unit` | `servings`: integer, a standard number (ladder value). Example: `6` — not `11`. |
+| `ingredient_recipe` | `yield`, `yield_unit` | `servings` | `yield`: number, a standard number; `yield_unit`: `g` or `ml` (the authorable family units). Example: `yield: 500`, `yield_unit: ml`. |
 
-## 4. Ingredient Entries
+A front-matter `ingredients` field is **rejected**: the ingredient list is derived
+from the body markers (§4). The editor's quantity pool is bounded to 1 … 10000
+(g/ml); values are stored in the family unit, `kg`/`l` appear only in display
+(see [additional_quantity_specifications.md](additional_quantity_specifications.md) §2).
 
-Each ingredient entry in the `ingredients` list has exactly these fields:
+## 4. Ingredients — Markers in the Body
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `name` | string | yes | German ingredient name. Example: `Joghurt`. |
-| `quantity` | number | yes | The base quantity; must be a standard number (ladder value). Example: `400` — not `450`. |
-| `unit` | enum | yes | The base unit: `g`, `kg`, `ml`, or `l`. Counted items are stored via their mass/volume equivalent (e.g., `250` `g` for 6 Tortillas); the "6 Stück" form is displayed via the additional-unit master data. |
-| `reference` | boolean | no | `true` on 0–2 ingredients per finished-dish recipe (the portion anchor). Default `false`. |
-| `recipe` | string | no | The title of a linked sub-recipe (ingredient recipe). Example: `recipe: Béchamelsauce`. |
+Decided with the user: **the step text is the source of truth for the
+ingredient list.** An ingredient is written inline into the step that uses it
+as a machine-readable **marker**:
 
-- Ingredients are listed in the order of their first use in the preparation; an
-  ingredient used in several places appears once, with the total amount.
-- A linked ingredient (`recipe` set) still carries its own `quantity`/`unit` — the
-  amount required by the parent recipe (e.g., `500` `ml` Béchamelsauce).
-- The additional-unit selection, display arrangement, and punctuation are never
-  stored here; they come from the master data at display time.
+```
+{{ingredient|Joghurt|400|g}}
+{{ingredient|Joghurt|200|g|ref}}
+{{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}}
+```
+
+- **Grammar:** `{{ingredient|NAME|MENGE|EINHEIT}}` with two optional flags:
+  `|ref` (portion anchor, max 2 per finished-dish recipe) and
+  `|recipe:TITEL` (linked ingredient recipe). Field names are English (code);
+  `NAME` and `TITEL` are German (data).
+- **Menge** is a standard number (ladder value); **Einheit** is the stored base
+  unit — authored as `g` or `ml` (the ingredient's family unit). `kg`/`l`
+  markers from hand-written files are accepted on read and normalized to the
+  family unit (`×1000`) when the editor loads the file.
+- The **ingredient list is derived** from the markers on read (§7.1):
+  - order = order of first appearance in the steps;
+  - an ingredient used several times appears **once, with the total amount**
+    (sum rounded to the nearest ladder rung — the sum of two standard numbers
+    is not necessarily a standard number);
+  - `reference` is kept when any marker of that ingredient carries `|ref`;
+  - the `|recipe:` link is kept from the first marker that carries one.
+- A malformed `{{…}}` block (wrong fields, non-standard quantity, unknown
+  unit) is a validation error — never silently treated as prose.
+- The additional-unit display ("1 Becher Joghurt (400 g)") is never stored; it
+  is computed at display time from the master data.
 
 ## 5. Markdown Body — Preparation Steps
 
@@ -100,19 +118,20 @@ Each ingredient entry in the `ingredients` list has exactly these fields:
   authoritative, even where it does not matter.
 - There is no summary section; the recipe ends with the last step, which may include
   serving suggestions.
-- Steps may contain arbitrary prose; links to sub-recipes are displayed as links by
-  the app, not typed inline.
+- Steps are single-line prose (the editor collapses line breaks on save). They may
+  contain arbitrary text plus the ingredient markers of §4; sub-recipe links are
+  carried by the marker's `|recipe:` flag, not typed as prose.
 
 ## 6. Title as Identifier — Renames
 
-- The `title` is the stable identifier: sub-recipe links (`recipe:` fields) and the
-  file name both reference it.
+- The `title` is the stable identifier: sub-recipe links (the markers' `|recipe:`
+  flags) and the file name both reference it.
 - **Renaming a recipe** therefore means, as one operation:
   1. change `title` in the file,
   2. rename the file (and its image),
-  3. update every `recipe:` reference to the old title in all other recipe files.
+  3. update every `|recipe:` marker to the old title in all other recipe files.
 - The app provides a rename tool that performs all three steps; it must never leave a
-  dangling `recipe:` reference (see §7).
+  dangling `|recipe:` reference (see §7).
 - The `subtitle` is display-only and plays no role in identification.
 
 ## 7. Validation
@@ -122,21 +141,23 @@ the file. Two levels:
 
 ### 7.1 Schema validation (per file)
 
-- Front matter parses as valid YAML and matches the schema of §3/§4 (field names,
-  types, required/forbidden fields per `type`).
+- Front matter parses as valid YAML and matches the schema of §3 (field names,
+  types, required/forbidden fields per `type`); an `ingredients` field is rejected
+  (it is derived from the markers, §4).
 - `title` is non-empty and file-name-safe.
-- `servings` / `yield` / `quantity` values are standard numbers: `pos(v)` on the
+- `servings` / `yield` / every marker `Menge` is a standard number: `pos(v)` on the
   quantity ladder must succeed (see [quantity_scaling.md](quantity_scaling.md) §3);
   a non-ladder value is rejected.
-- `unit` is one of `g`, `kg`, `ml`, `l`.
-- At most 2 ingredients have `reference: true`, and only in `finished_dish` recipes.
+- Marker units are `g`/`ml` (authored) or `kg`/`l` (legacy, accepted); marker
+  syntax is validated per step (issue path `steps[i]`).
+- At most 2 markers carry `|ref`, and only in `finished_dish` recipes.
 - The body contains exactly one `## Zubereitung` heading followed by an ordered list.
 
 ### 7.2 Cross-recipe validation (per collection)
 
 - `title` is unique across the collection (file names are unique by construction;
   the titles inside must be too).
-- Every `recipe:` reference points to an existing recipe whose `type` is
+- Every `|recipe:` marker points to an existing recipe whose `type` is
   `ingredient_recipe`.
 
 A file that fails validation is shown to the user with a precise error (never
@@ -155,27 +176,12 @@ description: Knusprige Wraps mit mariniertem Tofu und frischem Gemüse.
 servings: 6
 prep_time: 25 min
 total_time: 40 min
-ingredients:
-  - name: Joghurt
-    quantity: 400
-    unit: g
-  - name: Tortillas
-    quantity: 250
-    unit: g
-    reference: true
-  - name: Zitronensaft
-    quantity: 15
-    unit: ml
-  - name: Béchamelsauce
-    quantity: 500
-    unit: ml
-    recipe: Béchamelsauce
 ---
 ## Zubereitung
-1. Tortillas im Ofen erwärmen und warm halten.
+1. {{ingredient|Tortillas|250|g|ref}} im Ofen erwärmen und warm halten.
 2. Tofu marinieren und scharf anbraten.
-3. Joghurt mit Zitronensaft verrühren und würzen.
-4. Wraps mit Tofu, Joghurt-Dip und Gemüse füllen und servieren.
+3. {{ingredient|Joghurt|400|g}} mit {{ingredient|Zitronensaft|15|ml}} verrühren und würzen.
+4. Wraps mit Tofu, Joghurt-Dip und Gemüse füllen. {{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}} dazureichen.
 ```
 
 Ingredient recipe:
@@ -187,16 +193,9 @@ type: ingredient_recipe
 yield: 500
 yield_unit: ml
 prep_time: 15 min
-ingredients:
-  - name: Milch
-    quantity: 300
-    unit: ml
-  - name: Butter
-    quantity: 25
-    unit: g
 ---
 ## Zubereitung
-1. Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.
+1. {{ingredient|Butter|25|g}} schmelzen, Mehl anschwitzen und mit {{ingredient|Milch|300|ml}} aufgießen.
 2. Unter Rühren köcheln, bis die Sauce bindet.
 ```
 
