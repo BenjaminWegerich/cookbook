@@ -58,6 +58,15 @@ This repository forms the basis of the cookbook project. The concrete technical 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the planned components and
 [docs/ROADMAP.md](docs/ROADMAP.md) for the open tasks.
 
+## Example recipes
+
+The `examples/` folder contains sample recipes in the canonical file format
+(docs/storage_format.md). They are manual test data you can copy into the
+Google Drive "Cookbook" folder — useful while developing features that act on
+a populated collection (e.g. the recipe-list search). Every example is
+validated by the core module's test suite, so the folder always stays in a
+loadable state.
+
 ## Documentation
 
 - [docs/user_stories.md](docs/user_stories.md) — user stories, non-functional requirements, and open questions (basis for the tech-stack decision)

@@ -18,6 +18,7 @@
     "generate:additional": "node scripts/generate-additional-data.mjs"
   },
   "devDependencies": {
+    "@types/node": "^24.13.3",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },

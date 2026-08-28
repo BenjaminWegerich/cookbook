@@ -42,6 +42,9 @@
 
 - Markdown + YAML files, one per recipe, in Google Drive
   (see [storage_format.md](storage_format.md)).
+- Sample recipes live in the repository's `examples/` folder (canonical
+  format, validated by the core test suite); they can be copied into the
+  Drive "Cookbook" folder to develop against a populated collection.
 - Single source of truth, read by the web app, the HTML export, and (later) the backend
   module and the Gemini for Home preparation.
 

@@ -41,6 +41,69 @@
   color: var(--color-ink);
 }
 
+/* ---- Recipe search (sticky above the list) ------------------------------ */
+
+.recipe-search {
+  position: sticky;
+  top: var(--app-padding);
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-end: var(--space-7);
+  padding-block: var(--space-2);
+  background: var(--color-bg);
+}
+
+.recipe-search-input {
+  font: inherit;
+  width: 100%;
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-sm);
+  /* Hide the native webkit search cancel button — we render our own clear
+     button inside the search wrapper. */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.recipe-search-input:focus-visible {
+  outline-offset: 0;
+}
+
+.recipe-search-input::-webkit-search-cancel-button,
+.recipe-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Match the input's vertical rhythm and padding on the clear button. */
+.recipe-search-clear {
+  display: grid;
+  place-items: center;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-ink-muted);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.recipe-search-clear:active {
+  color: var(--color-ink);
+}
+
+.recipe-search-empty {
+  color: var(--color-ink-muted);
+}
+
 /* ---- Recipe list -------------------------------------------------------- */
 
 .recipe-list {
