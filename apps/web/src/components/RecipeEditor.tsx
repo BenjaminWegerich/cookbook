@@ -45,7 +45,7 @@ import {
   uploadRecipeImage,
   type StoredRecipe,
 } from '../drive/recipeStorage';
-import IngredientSheet from './IngredientSheet';
+import IngredientSheet, { type IngredientRecipeOption } from './IngredientSheet';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityPicker from './QuantityPicker';
 
@@ -120,6 +120,8 @@ interface RecipeEditorProps {
   onClose: () => void;
   /** After a successful save/delete: the list was changed. */
   onSaved: () => void;
+  /** Opens another recipe in the editor (jump to a linked sub-recipe). */
+  onOpenRecipe?: (recipe: StoredRecipe) => void;
 }
 
 /** One sheet session: adding into a step or editing an ingredient. */
@@ -272,7 +274,7 @@ function TimeChips({
  * The editor screen (see file header). Owns the draft, the validation
  * feedback and all Drive interactions.
  */
-function RecipeEditor({ token, target, recipes, onClose, onSaved }: RecipeEditorProps) {
+function RecipeEditor({ token, target, recipes, onClose, onSaved, onOpenRecipe }: RecipeEditorProps) {
   /** The working draft; null while the recipe + collection are loading. */
   const [draft, setDraft] = useState<EditorDraft | null>(null);
   /** The recipe as loaded from Drive — rollback target and dirty check. */
@@ -400,13 +402,20 @@ function RecipeEditor({ token, target, recipes, onClose, onSaved }: RecipeEditor
   /** The computed ingredient list: exactly the rows that will be saved. */
   const computedIngredients = saved?.ingredients ?? [];
 
-  /** Titles of all ingredient recipes (for the Verknüpftes Rezept picker). */
-  const ingredientRecipeTitles = useMemo(
+  /** Ingredient recipes of the collection, offered in the sheet's name
+   *  autofill (title + yield, so a sub-recipe is picked like an ingredient). */
+  const ingredientRecipes = useMemo<IngredientRecipeOption[]>(
     () =>
       collection
         .filter((recipe) => recipe.type === 'ingredient_recipe')
-        .map((recipe) => recipe.title)
-        .sort((a, b) => a.localeCompare(b, 'de')),
+        .map((recipe) => ({
+          title: recipe.title,
+          // yield/yield_unit are required for ingredient_recipe (§3); the
+          // fallbacks only satisfy the type checker for hand-built recipes.
+          yield: recipe.yield ?? 0,
+          yieldUnit: recipe.yield_unit ?? 'g',
+        }))
+        .sort((a, b) => a.title.localeCompare(b.title, 'de')),
     [collection],
   );
 
@@ -575,6 +584,20 @@ function RecipeEditor({ token, target, recipes, onClose, onSaved }: RecipeEditor
   };
 
   // ---- Sheet handlers -----------------------------------------------------
+
+  /**
+   * Jump to a linked sub-recipe (editor Zutaten list). Unsaved changes are
+   * guarded by the same two-step "verwerfen" confirmation as the back button:
+   * the first tap arms it, the second tap (label "Wirklich verwerfen?") jumps.
+   */
+  const requestJump = (recipe: StoredRecipe): void => {
+    if (dirty && !confirmDiscard) {
+      setConfirmDiscard(true);
+      return;
+    }
+    setConfirmDiscard(false);
+    onOpenRecipe?.(recipe);
+  };
 
   const handleSheetConfirm = (
     ingredient: Ingredient,
@@ -1036,24 +1059,38 @@ function RecipeEditor({ token, target, recipes, onClose, onSaved }: RecipeEditor
             </p>
           ) : (
             <ul className="ingredient-list">
-              {computedIngredients.map((ingredient) => (
-                <li key={ingredient.name} className="ingredient-row">
-                  <button
-                    type="button"
-                    className="ingredient-row-button"
-                    onClick={() => setSheet({ mode: 'edit', name: ingredient.name })}
-                  >
-                    <span className="ingredient-line">
-                      {safeRenderAQS(ingredient.name, ingredient.quantity, ingredient.unit)}
-                      {ingredient.reference === true && <span className="badge">Referenz</span>}
-                      {ingredient.recipe !== undefined && (
-                        <span className="badge olive">Verknüpft</span>
-                      )}
-                    </span>
-                    <span className="ingredient-hint">Antippen zum Bearbeiten</span>
-                  </button>
-                </li>
-              ))}
+              {computedIngredients.map((ingredient) => {
+                // The stored recipe behind a |recipe: link, for the jump.
+                const jumpTarget =
+                  ingredient.recipe !== undefined
+                    ? recipes.find((recipe) => recipe.title === ingredient.recipe)
+                    : undefined;
+                return (
+                  <li key={ingredient.name} className="ingredient-row">
+                    <button
+                      type="button"
+                      className="ingredient-row-button"
+                      onClick={() => setSheet({ mode: 'edit', name: ingredient.name })}
+                    >
+                      <span className="ingredient-line">
+                        {safeRenderAQS(ingredient.name, ingredient.quantity, ingredient.unit)}
+                        {ingredient.reference === true && <span className="badge">Referenz</span>}
+                      </span>
+                      <span className="ingredient-hint">Antippen zum Bearbeiten</span>
+                    </button>
+                    {ingredient.recipe !== undefined && jumpTarget !== undefined && (
+                      <button
+                        type="button"
+                        className="badge olive link-badge"
+                        onClick={() => requestJump(jumpTarget)}
+                        title={`Zutaten-Rezept „${ingredient.recipe}“ öffnen`}
+                      >
+                        Verknüpft
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -1108,7 +1145,7 @@ function RecipeEditor({ token, target, recipes, onClose, onSaved }: RecipeEditor
                   : 0)
               : referenceUsed
           }
-          ingredientRecipeTitles={ingredientRecipeTitles}
+          ingredientRecipes={ingredientRecipes}
           onConfirm={handleSheetConfirm}
           onClose={() => setSheet(null)}
         />

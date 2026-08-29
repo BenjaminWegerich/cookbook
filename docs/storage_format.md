@@ -88,6 +88,13 @@ as a machine-readable **marker**:
   unit — authored as `g` or `ml` (the ingredient's family unit). `kg`/`l`
   markers from hand-written files are accepted on read and normalized to the
   family unit (`×1000`) when the editor loads the file.
+- A `|recipe:TITEL` marker links the ingredient to the ingredient recipe with
+  that title. **The ingredient name equals the recipe title** (`NAME == TITEL`,
+  decided with the user): the sub-recipe is chosen in the editor like any other
+  ingredient by its name — there is no separate link field — and renaming the
+  recipe updates `NAME` and `TITEL` of every reference together (§6). The HTML
+  export renders sub-recipe ingredients as links to the sub-recipe's own export
+  file (see the HTML share export in ARCHITECTURE.md).
 - The **ingredient list is derived** from the markers on read (§7.1):
   - order = order of first appearance in the steps;
   - an ingredient used several times appears **once, with the total amount**

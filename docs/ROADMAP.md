@@ -18,8 +18,6 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 
 ### Open follow-ups (not urgent)
 
-- [ ] Sub-recipe function: resolve linked Zutaten-Rezepte (the `|recipe:` marker) in the
-      cooking view and when scaling (currently only the link itself is stored/edited).
 - [ ] Introduce new ingredients into the master data (extend
       `docs/ingredient_unit_mappings.csv` with name → base unit → additional units +
       factors; today the list is a small starter set).
@@ -37,7 +35,9 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 - [ ] Backend module (candidate: Python `gkeepapi`) behind a clean HTTP boundary, with its
       own Google auth and secret handling.
 - [ ] Add a dish to the meal plan (the "Essen" list in Google Keep).
-- [ ] Add the scaled ingredient list of a recipe to the shopping list.
+- [ ] Add the scaled ingredient list of a recipe to the shopping list, including linked
+      Zutaten-Rezepte: a sub-recipe is scaled by the ladder-rung difference to its yield
+      so its own ingredients join the list (recipe_structure.md "The link means…").
 - [ ] Sort the shopping list by category/aisle (needs ingredient category master data).
 
 ## Integrations (depends on: web app, storage)

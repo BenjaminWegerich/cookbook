@@ -131,6 +131,60 @@ describe('generateRecipeHtml — ingredient recipe', () => {
   });
 });
 
+describe('generateRecipeHtml — sub-recipe links', () => {
+  /** A recipe whose Béchamelsauce is a linked ingredient recipe. */
+  const withSubRecipe: Recipe = {
+    ...WRAPS,
+    ingredients: [
+      { name: 'Joghurt', quantity: 400, unit: 'g' },
+      { name: 'Béchamelsauce', quantity: 500, unit: 'ml', recipe: 'Béchamelsauce' },
+    ],
+    steps: [
+      'Tortillas erwärmen.',
+      'Mit {{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}} servieren.',
+    ],
+  };
+  const LINKS = { Béchamelsauce: 'https://drive.google.com/file/d/abc123/view' };
+
+  it('links sub-recipe ingredients and step markers when a URL is known', () => {
+    const html = generateRecipeHtml(withSubRecipe, LINKS);
+    // The ingredient list row of the sub-recipe is a link to its own export.
+    const display = renderAQS('Béchamelsauce', 500, 'ml');
+    expect(html).toContain(
+      `<a href="https://drive.google.com/file/d/abc123/view" class="sub-recipe-link" target="_blank" rel="noopener">${display}</a>`,
+    );
+    // The step marker is a link too, inside the surrounding step text.
+    expect(html).toContain(
+      `Mit <a href="https://drive.google.com/file/d/abc123/view" class="sub-recipe-link" target="_blank" rel="noopener">${display}</a> servieren.`,
+    );
+    // Plain ingredients stay plain text.
+    expect(html).toContain(renderAQS('Joghurt', 400, 'g'));
+  });
+
+  it('falls back to plain text when no URL is known for the title', () => {
+    const html = generateRecipeHtml(withSubRecipe);
+    expect(html).not.toContain('class="sub-recipe-link"');
+    expect(html).toContain(renderAQS('Béchamelsauce', 500, 'ml'));
+  });
+
+  it('renders a linked reference sub-recipe inside the serving headline', () => {
+    // A sub-recipe may be a reference ingredient (§4) — its headline entry
+    // ("N Personen (…)") must contain the link markup, not escaped text.
+    const referenceSubRecipe: Recipe = {
+      ...withSubRecipe,
+      ingredients: [
+        { name: 'Béchamelsauce', quantity: 500, unit: 'ml', recipe: 'Béchamelsauce', reference: true },
+      ],
+    };
+    const html = generateRecipeHtml(referenceSubRecipe, LINKS);
+    const display = renderAQS('Béchamelsauce', 500, 'ml');
+    expect(html).toContain(
+      `6 Personen (<a href="https://drive.google.com/file/d/abc123/view" class="sub-recipe-link" target="_blank" rel="noopener">${display}</a>)`,
+    );
+    expect(html).not.toContain('&lt;a href=');
+  });
+});
+
 describe('generateRecipeHtml — safety', () => {
   it('escapes all recipe content (no markup injection from data)', () => {
     const evil: Recipe = {

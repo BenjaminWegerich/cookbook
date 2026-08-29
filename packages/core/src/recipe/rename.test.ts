@@ -78,7 +78,9 @@ describe('renameRecipeInCollection', () => {
     }
     const lasagne = result.updated.find((recipe) => recipe.title === 'Lasagne')!;
     expect(lasagne.steps[0]).toContain('recipe:Käsesauce');
-    expect(lasagne.ingredients.find((i) => i.name === 'Béchamelsauce')!.recipe).toBe('Käsesauce');
+    // Name follows rename: the ingredient that IS the sub-recipe carries the
+    // recipe's title as its name too (name == title invariant, §4).
+    expect(lasagne.ingredients.find((i) => i.name === 'Käsesauce')!.recipe).toBe('Käsesauce');
   });
 
   it('leaves unrelated recipes untouched and out of the result', () => {

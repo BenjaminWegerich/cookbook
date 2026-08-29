@@ -127,13 +127,33 @@ export function replaceMarkers(
 }
 
 /**
- * Replaces every marker in a step with the string produced by `render` (used
- * by the HTML export to substitute the display arrangement). Non-marker text
- * is passed through unchanged.
+ * HTML-escapes a text value for safe insertion into HTML content or
+ * attributes (shared by the HTML export and the marker renderer).
+ */
+export function escapeHtml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+/**
+ * Substitutes every marker in a step with the string produced by `render`
+ * (used by the HTML export to embed the display arrangement). All non-marker
+ * text is HTML-escaped here; `render` must therefore return already-escaped
+ * HTML — this is what lets a marker be rendered as a link (e.g. a sub-recipe
+ * reference) without the surrounding text being able to inject markup.
  */
 export function renderMarkers(step: string, render: (marker: IngredientMarker) => string): string {
-  return step.replace(MARKER_RE, (_match, ...args) => {
-    const [name, quantity, unit, ref, , recipe] = args as [
+  let result = '';
+  let lastIndex = 0;
+  for (const match of step.matchAll(MARKER_RE)) {
+    result += escapeHtml(step.slice(lastIndex, match.index));
+    // match[0] is the full match; the groups follow (markers.ts MARKER_RE).
+    const [, name, quantity, unit, ref, , recipe] = match as unknown as [
+      string,
       string,
       string,
       string,
@@ -141,14 +161,17 @@ export function renderMarkers(step: string, render: (marker: IngredientMarker) =
       string | undefined,
       string | undefined,
     ];
-    return render({
+    result += render({
       name: name.trim(),
       quantity: Number(quantity),
       unit: unit as Unit,
       ...(ref !== undefined ? { reference: true } : {}),
       ...(recipe !== undefined ? { recipe: recipe.trim() } : {}),
     });
-  });
+    lastIndex = match.index + match[0].length;
+  }
+  result += escapeHtml(step.slice(lastIndex));
+  return result;
 }
 
 /**

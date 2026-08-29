@@ -19,7 +19,13 @@
  * it is caught here instead of on the next read.
  */
 
-import { generateRecipeHtml, parseRecipe, serializeRecipe, type Recipe } from '@cookbook/core';
+import {
+  generateRecipeHtml,
+  parseRecipe,
+  renameRecipeInCollection,
+  serializeRecipe,
+  type Recipe,
+} from '@cookbook/core';
 import {
   createFileWithContent,
   createFolder,
@@ -218,7 +224,21 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
   const fileName = `${recipe.title}${EXPORT_EXTENSION}`;
   const files = await listFilesInFolder(token, folderId);
   const existing = files.find((file) => file.name === fileName);
-  const content = generateRecipeHtml(recipe);
+  // Sub-recipe links (recipe_structure.md "The link means"): every export file
+  // in the folder gets a title → Drive-link entry, so ingredients and step
+  // markers that reference an ingredient recipe render as a link to its own
+  // export. The `<title>.html` file name is the key (file name = title, §2);
+  // a recipe whose export is missing simply renders without a link. The map
+  // is prototype-less so a title like "__proto__" cannot collide with
+  // Object.prototype.
+  const links: Record<string, string> = Object.create(null) as Record<string, string>;
+  for (const file of files) {
+    if (!file.name.endsWith(EXPORT_EXTENSION)) continue;
+    const title = file.name.slice(0, -EXPORT_EXTENSION.length);
+    if (title === '') continue;
+    links[title] = `https://drive.google.com/file/d/${file.id}/view`;
+  }
+  const content = generateRecipeHtml(recipe, links);
   if (existing !== undefined) {
     return updateFileWithContent(token, existing.id, {
       name: fileName,
@@ -349,7 +369,9 @@ export async function removeRecipeImage(token: string, fileId: string): Promise<
  * Saves a recipe, handling a title change as one §6 operation: new title in
  * the file + new file name, renamed photo sibling, HTML export renamed and
  * regenerated in place (same Drive file id — shared links survive), and every
- * `recipe:` reference to the old title in the other recipe files updated. A
+ * `recipe:` reference to the old title in the other recipe files updated. The
+ * referencing ingredients' names follow the new title too (name == title
+ * invariant, decided with the user), and their exports are regenerated. A
  * plain save (title unchanged) just writes the content and regenerates the
  * export (decision 7).
  *
@@ -434,30 +456,46 @@ export async function saveRecipe(
     //    renamed in step 3 in place; creates it when there was none).
     await writeRecipeExportSafely(token, recipe);
 
-    // 5. Update every other recipe that referenced the old title (their
-    //    ingredient names are unchanged, so their exports stay valid).
-    for (const other of others) {
-      if (!other.ingredients.some((ingredient) => ingredient.recipe === current.title)) {
-        continue;
-      }
-      const updated: Recipe = {
-        ...other,
-        ingredients: other.ingredients.map((ingredient) =>
-          ingredient.recipe === current.title
-            ? { ...ingredient, recipe: recipe.title }
-            : ingredient,
-        ),
-      };
-      const entry = storedByTitle.get(other.title);
+    // 5. Update every other recipe that referenced the old title: the markers'
+    //    |recipe: link AND the ingredient name follow the new title (name ==
+    //    title invariant, decided with the user). The pure transformation
+    //    lives in core (renameRecipeInCollection, §6) — rewriting only the
+    //    derived ingredient list would be a no-op, because the serializer
+    //    derives the list from the step markers and it is the marker text
+    //    that is stored. Their exports are regenerated too (the step text
+    //    they bake in changed); the old export is captured for the rollback.
+    const renameResult = renameRecipeInCollection(
+      [current, ...others],
+      current.title,
+      recipe.title,
+    );
+    for (const updated of renameResult.updated) {
+      const entry = storedByTitle.get(updated.title);
       if (entry === undefined) {
-        throw new Error(`saveRecipe: Datei für "${other.title}" nicht gefunden`);
+        throw new Error(`saveRecipe: Datei für "${updated.title}" nicht gefunden`);
       }
-      await updateRecipe(token, entry.fileId, updated, { regenerateExport: false });
+      // Capture the old export (name + content) before regenerating it, so a
+      // rollback can restore it in place (same pattern as step 3 for the
+      // renamed recipe's own export). A recipe without an export yet leaves a
+      // regenerated export behind on rollback — cosmetic only, links work.
+      const oldExport = files.find((file) => file.name === `${updated.title}${EXPORT_EXTENSION}`);
+      const oldExportContent =
+        oldExport !== undefined ? await getFileContent(token, oldExport.id) : undefined;
+      await updateRecipe(token, entry.fileId, updated);
       undoSteps.push(() =>
         updateRecipe(token, entry.fileId, originalByFileId.get(entry.fileId)!, {
           regenerateExport: false,
         }),
       );
+      if (oldExport !== undefined && oldExportContent !== undefined) {
+        undoSteps.push(() =>
+          updateFileWithContent(token, oldExport.id, {
+            name: `${updated.title}${EXPORT_EXTENSION}`,
+            mimeType: EXPORT_MIME_TYPE,
+            content: oldExportContent,
+          }),
+        );
+      }
     }
   } catch (error) {
     // Best-effort rollback: revert every step that already succeeded.

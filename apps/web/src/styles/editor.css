@@ -467,6 +467,21 @@
   background: var(--color-olive);
 }
 
+/* Tag on recipe-title suggestions in the ingredient sheet ("Zutaten-Rezept"). */
+.suggestion-tag {
+  margin-left: var(--space-3);
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* Jump button for a linked sub-recipe in the Zutaten list (below the row). */
+.link-badge {
+  justify-self: start;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
 /* ---- Danger zone (delete) ------------------------------------------------ */
 
 .danger-zone {

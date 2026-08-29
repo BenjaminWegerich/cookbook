@@ -7,6 +7,11 @@
  * the caller's job (web-app storage layer); this module provides the pure
  * content transformation on a collection of parsed recipes.
  *
+ * Decided with the user: a sub-recipe ingredient carries the recipe's title as
+ * its ingredient name too (name == title invariant, storage_format.md §4), so
+ * renaming the sub-recipe also renames the ingredient marker in the parent
+ * recipes — the reference follows the recipe in both fields.
+ *
  * The target recipe itself is excluded from the reference update (§6: "in all
  * other recipe files"). A self-reference inside the target would therefore not
  * be rewritten — such a recipe is invalid anyway (rejected by the cycle check
@@ -53,7 +58,9 @@ export function renameRecipeInCollection(
 
   // The recipe: references live in the body markers (§4: the step text is the
   // source of truth); update them in every other recipe and recompute the
-  // derived ingredient list from the changed steps.
+  // derived ingredient list from the changed steps. The marker's name is
+  // renamed with it (name == title invariant), so parents read "Käsesauce"
+  // after a rename of Béchamelsauce.
   const updated: Recipe[] = [];
   for (const recipe of recipes) {
     if (recipe === target) continue;
@@ -62,7 +69,7 @@ export function renameRecipeInCollection(
       replaceMarkers(step, (marker) => {
         if (marker.recipe !== oldTitle) return marker;
         changed = true;
-        return { ...marker, recipe: newTitle };
+        return { ...marker, name: newTitle, recipe: newTitle };
       }),
     );
     if (changed) {

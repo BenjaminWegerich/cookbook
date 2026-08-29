@@ -124,6 +124,7 @@ function App() {
           recipes={recipes ?? []}
           onClose={closeEditor}
           onSaved={handleEditorSaved}
+          onOpenRecipe={openEditor}
         />
       ) : (
         <>

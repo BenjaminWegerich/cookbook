@@ -16,12 +16,18 @@
  * Ingredient recipes have no serving count; their export shows the ingredients
  * at the stored quantities (no picker). Step navigation works for both types.
  *
+ * Sub-recipe links: when the caller passes a `links` map (recipe title → URL,
+ * e.g. the Drive link of the sub-recipe's own `<title>.html`), every ingredient
+ * or step marker that references an ingredient recipe is rendered as a link to
+ * that export (recipe_structure.md "The link means … displayed as a link").
+ * Without a URL for a title the display line stays plain text.
+ *
  * All recipe content is HTML-escaped: recipe data is user/AI-authored text and
  * must never be able to inject markup into the exported file.
  */
 
 import { renderAQS } from '../additionalUnits.js';
-import { renderMarkers } from './markers.js';
+import { escapeHtml, renderMarkers } from './markers.js';
 import { difference, integerLadderValues, scale } from '../ladder.js';
 import type { Ingredient, Recipe } from './types.js';
 
@@ -29,39 +35,48 @@ import type { Ingredient, Recipe } from './types.js';
 const SERVING_MIN = 1;
 const SERVING_MAX = 30;
 
-/** Escapes a text value for safe insertion into HTML content or attributes. */
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
 /**
  * Returns the display line of an ingredient at the given base quantity —
  * base + additional-unit form via the deterministic selection logic (§4).
+ *
+ * Sub-recipe ingredients (recipe_structure.md "The link means") are wrapped
+ * in a link to their own export when `links` provides a URL for the referenced
+ * title; without a URL the plain display line is returned. The result is
+ * already HTML-escaped and safe to embed.
  */
-function ingredientLine(ingredient: Ingredient, bq: number): string {
-  return renderAQS(ingredient.name, bq, ingredient.unit);
+function ingredientLine(
+  ingredient: Ingredient,
+  bq: number,
+  links: Readonly<Record<string, string>>,
+): string {
+  const line = renderAQS(ingredient.name, bq, ingredient.unit);
+  const url = ingredient.recipe !== undefined ? links[ingredient.recipe] : undefined;
+  if (url === undefined) return escapeHtml(line);
+  return (
+    `<a href="${escapeHtml(url)}" class="sub-recipe-link" target="_blank" rel="noopener">` +
+    `${escapeHtml(line)}</a>`
+  );
 }
 
 /**
  * Computes the scaled ingredient lines and the "N Personen (…)" headline for
  * one serving option of a finished dish.
  */
-function servingOption(recipe: Recipe, servings: number): { headline: string; lines: string[] } {
+function servingOption(
+  recipe: Recipe,
+  servings: number,
+  links: Readonly<Record<string, string>>,
+): { headline: string; lines: string[] } {
   const deltaX = difference(recipe.servings!, servings);
   const references = recipe.ingredients
     .filter((ingredient) => ingredient.reference)
-    .map((ingredient) => ingredientLine(ingredient, scale(ingredient.quantity, deltaX)));
+    .map((ingredient) => ingredientLine(ingredient, scale(ingredient.quantity, deltaX), links));
   const headline =
     references.length > 0
       ? `${servings} Personen (${references.join(', ')})`
       : `${servings} Personen`;
   const lines = recipe.ingredients.map((ingredient) =>
-    ingredientLine(ingredient, scale(ingredient.quantity, deltaX)),
+    ingredientLine(ingredient, scale(ingredient.quantity, deltaX), links),
   );
   return { headline, lines };
 }
@@ -70,14 +85,20 @@ function servingOption(recipe: Recipe, servings: number): { headline: string; li
  * Renders the finished-dish ingredients section: a serving picker plus one
  * pre-computed ingredient list per serving option (the base option visible).
  */
-function renderDishIngredients(recipe: Recipe, baseServings: number): string {
+function renderDishIngredients(
+  recipe: Recipe,
+  baseServings: number,
+  links: Readonly<Record<string, string>>,
+): string {
   const options = integerLadderValues(SERVING_MIN, SERVING_MAX).map((servings) => {
-    const { headline, lines } = servingOption(recipe, servings);
+    const { headline, lines } = servingOption(recipe, servings, links);
     const hidden = servings === baseServings ? '' : ' hidden';
     return (
       `<ul class="serving-option" data-servings="${servings}"${hidden}>\n` +
-      `  <li class="serving-headline">${escapeHtml(headline)}</li>\n` +
-      lines.map((line) => `  <li>${escapeHtml(line)}</li>`).join('\n') +
+      // The headline and lines are already escaped HTML (ingredientLine),
+      // including sub-recipe links — do not escape again.
+      `  <li class="serving-headline">${headline}</li>\n` +
+      lines.map((line) => `  <li>${line}</li>`).join('\n') +
       '\n</ul>'
     );
   });
@@ -98,31 +119,45 @@ function renderDishIngredients(recipe: Recipe, baseServings: number): string {
 }
 
 /** Renders the ingredient-recipe ingredients section (unscaled, no picker). */
-function renderIngredientRecipeIngredients(recipe: Recipe): string {
+function renderIngredientRecipeIngredients(
+  recipe: Recipe,
+  links: Readonly<Record<string, string>>,
+): string {
   const yieldLine = `${recipe.yield} ${recipe.yield_unit}`;
   const lines = recipe.ingredients.map((ingredient) =>
-    ingredientLine(ingredient, ingredient.quantity),
+    ingredientLine(ingredient, ingredient.quantity, links),
   );
   return (
     `<section aria-label="Zutaten">\n` +
     `  <p class="serving-headline">${escapeHtml(yieldLine)}</p>\n` +
     `  <ul class="ingredients">\n` +
-    lines.map((line) => `    <li>${escapeHtml(line)}</li>`).join('\n') +
+    lines.map((line) => `    <li>${line}</li>`).join('\n') +
     `\n  </ul>\n</section>`
   );
 }
 
 /** Renders the preparation steps and the step-by-step navigation controls. */
-function renderSteps(recipe: Recipe): string {
+function renderSteps(
+  recipe: Recipe,
+  links: Readonly<Record<string, string>>,
+): string {
   const items = recipe.steps
     .map((step, index) => {
       const hidden = index === 0 ? '' : ' hidden';
       // The ingredient markers are substituted with their display arrangement
-      // (the cooking view shows "1 Becher Joghurt (400 g)", never the marker).
-      const rendered = renderMarkers(step, (marker) =>
-        renderAQS(marker.name, marker.quantity, marker.unit),
-      );
-      return `    <li class="step" data-step="${index + 1}"${hidden}>${escapeHtml(rendered)}</li>`;
+      // (the cooking view shows "1 Becher Joghurt (400 g)", never the marker);
+      // renderMarkers escapes the surrounding text, so a marker may become a
+      // sub-recipe link without breaking the rest of the step.
+      const rendered = renderMarkers(step, (marker) => {
+        const line = renderAQS(marker.name, marker.quantity, marker.unit);
+        const url = marker.recipe !== undefined ? links[marker.recipe] : undefined;
+        if (url === undefined) return escapeHtml(line);
+        return (
+          `<a href="${escapeHtml(url)}" class="sub-recipe-link" target="_blank" rel="noopener">` +
+          `${escapeHtml(line)}</a>`
+        );
+      });
+      return `    <li class="step" data-step="${index + 1}"${hidden}>${rendered}</li>`;
     })
     .join('\n');
   return (
@@ -187,6 +222,7 @@ const STYLES = `
                     border: 1px solid #888; background: transparent; }
   .serving-button.active { background: #1a73e8; border-color: #1a73e8; color: #fff; }
   .serving-headline { font-weight: 600; margin: 0.6rem 0; }
+  .sub-recipe-link { color: #1a73e8; text-decoration: underline; }
   .ingredients, .steps { padding-left: 1.3rem; }
   .ingredients li { margin: 0.35rem 0; }
   .step { font-size: 1.35rem; line-height: 1.45; margin: 0.6rem 0; }
@@ -202,9 +238,16 @@ const STYLES = `
  * Generates the self-contained HTML export of a recipe (decision 7).
  *
  * @param recipe a parsed recipe (validated by the caller)
+ * @param links optional map of recipe title → URL (e.g. the Drive link of the
+ *   recipe's own `<title>.html` export). Whenever a sub-recipe ingredient or
+ *   step marker references a title present in this map, its display line is
+ *   rendered as a link (recipe_structure.md "The link means").
  * @returns the complete HTML document as a string
  */
-export function generateRecipeHtml(recipe: Recipe): string {
+export function generateRecipeHtml(
+  recipe: Recipe,
+  links: Readonly<Record<string, string>> = {},
+): string {
   const header =
     `<header>\n` +
     `  <h1>${escapeHtml(recipe.title)}</h1>\n` +
@@ -219,8 +262,8 @@ export function generateRecipeHtml(recipe: Recipe): string {
 
   const ingredientsSection =
     recipe.type === 'finished_dish'
-      ? renderDishIngredients(recipe, recipe.servings!)
-      : renderIngredientRecipeIngredients(recipe);
+      ? renderDishIngredients(recipe, recipe.servings!, links)
+      : renderIngredientRecipeIngredients(recipe, links);
 
   return (
     `<!doctype html>\n` +
@@ -234,7 +277,7 @@ export function generateRecipeHtml(recipe: Recipe): string {
     `<body>\n` +
     `${header}\n` +
     `${ingredientsSection}\n` +
-    `${renderSteps(recipe)}\n` +
+    `${renderSteps(recipe, links)}\n` +
     `  <footer>Erstellt mit Cookbook</footer>\n` +
     `  <script>${NAVIGATION_SCRIPT}\n  </script>\n` +
     `</body>\n` +
