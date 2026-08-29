@@ -211,15 +211,18 @@ function safeRenderAQS(name: string, quantity: number, unit: Unit): string {
  * the input — no stepper. A stored value that is not on the list (e.g. "25 min"
  * from a hand-written file) is shown as a highlighted "bestehend" chip — the
  * user replaces it with a standard value. `minMinutes` restricts the offered
- * values (Gesamtzeit must exceed Vorbereitungszeit).
+ * values (Gesamtzeit must exceed Vorbereitungszeit). When `allowClear` is set
+ * (optional fields like Gesamtzeit), a selected value can be removed again.
  */
 function TimeChips({
   value,
   minMinutes,
+  allowClear = false,
   onChange,
 }: {
   value: string;
   minMinutes?: number;
+  allowClear?: boolean;
   onChange: (label: string) => void;
 }) {
   const options =
@@ -251,6 +254,16 @@ function TimeChips({
           {entry.label}
         </button>
       ))}
+      {allowClear && value !== '' && (
+        <button
+          type="button"
+          className="chip chip-clear"
+          onClick={() => onChange('')}
+          aria-label="Gewählte Zeit entfernen"
+        >
+          → entfernen
+        </button>
+      )}
     </div>
   );
 }
@@ -825,6 +838,7 @@ function RecipeEditor({ token, target, recipes, onClose, onSaved }: RecipeEditor
             <TimeChips
               value={draft.total_time ?? ''}
               minMinutes={prepMinutes}
+              allowClear
               onChange={(label) => patchDraft({ total_time: label })}
             />
           </div>

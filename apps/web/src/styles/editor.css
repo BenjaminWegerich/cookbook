@@ -165,6 +165,13 @@
   color: var(--color-on-accent);
 }
 
+/* Remove/clear chip for optional fields (e.g. Gesamtzeit). */
+.chip-clear {
+  background: none;
+  border-style: dashed;
+  color: var(--color-ink-muted);
+}
+
 /* ---- QuantityPicker (suggested chips + stepper) ---------------------------- */
 
 .quantity-picker {
