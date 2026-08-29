@@ -1,8 +1,8 @@
 # Digital Cookbook & Recipe Collection
 
 A personal, digital collection of cooking recipes with AI assistance, intelligent
-quantity scaling, multi-unit support, optimization for smart displays and
-smartphones, and integration with Google Keep and Gemini for Home.
+quantity scaling, multi-unit support, optimization for smartphones, laptops
+and smart displays, and integration with Google Keep and Gemini for Home.
 
 > **Status:** v1 foundation in place. The web app (Vite + React + TypeScript) runs on
 > GitHub Pages and is connected to Google Drive via OAuth. Core functionality (scaling,
@@ -30,7 +30,7 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
 
 ### 4. Layout & design
 
-- Layout optimized for smartphone and smart display.
+- Layout optimized for smartphone, laptop, and smart display.
 - Custom visual design, especially typography.
 
 ### 5. Read-aloud via Gemini for Home

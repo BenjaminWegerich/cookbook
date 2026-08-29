@@ -12,7 +12,8 @@ interface RecipeListProps {
 }
 
 /**
- * Home-screen recipe list (single column, smartphone layout): a sticky search
+ * Home-screen recipe list (single column, phone-first layout that scales to
+ * desktop widths): a sticky search
  * field above the list, one row per recipe with a small thumbnail and the
  * title. The search filters recipes by title as you type (case-insensitive);
  * tapping a row opens the recipe editor. UI language is German

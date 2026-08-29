@@ -20,7 +20,7 @@
 
 | Actor | Description |
 |---|---|
-| **Cook** | Primary user (Ben), household members. Uses the app on smartphone and smart display in the kitchen. |
+| **Cook** | Primary user (Ben), household members. Uses the app on smartphone, laptop, and smart display in the kitchen. |
 | **Friend** | Receives shared recipes. Reads them on their own device without an account or app install. |
 | *(AI agents / Gemini)* | Implementation and runtime assistants, not actors of the system. |
 
@@ -166,17 +166,17 @@ that I can use it immediately.
 **Goal:** The app feels tailored, the data is available everywhere, and the user owns it.
 
 ### E1. Custom design on phone and smart display
-As a user, I want custom typography and layout that work on both my smartphone and my smart
+As a user, I want custom typography and layout that work on my smartphone, laptop, and smart
 display, so that reading recipes is pleasant and clear.
 
 - **Context:** Design is a stated strong interest; the visual design is custom, especially typography.
 - **Acceptance criteria:**
-  - The design is consistent across smartphone and smart display.
+  - The design is consistent across smartphone, laptop, and smart display.
   - Typography is custom (not a stock theme).
 
 ### E2. Collection on all devices
 As a cook, I want my collection available on all my devices without manual copying, so that
-phone, smart display, and backend always agree.
+phone, laptop, smart display, and backend always agree.
 
 - **Context:** This is the biggest technology driver in this document.
 - **Acceptance criteria:**
@@ -214,7 +214,7 @@ constraints.
    Google Drive); all devices access them there. Data leaves the home; availability anywhere
    is prioritized over local data residency.
 2. **Smart display — same responsive web app.** One codebase with a responsive layout serves
-   both smartphone and smart display. No separate frontend.
+   smartphone, laptop, and smart display. No separate frontend.
 3. **Friends' capabilities — read + scale without an app.** A friend may read a shared recipe
    and scale it to their own serving count, provided this works in a normal mobile browser
    without registration or app install. If that is not feasible, read-only sharing is

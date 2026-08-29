@@ -74,7 +74,8 @@ button:active {
   outline-offset: 3px;
 }
 
-/* Phone-first app shell; full width, no desktop layout. */
+/* App shell: phone-first, fluid full width — the same responsive layout
+   serves desktop widths (no separate desktop design). */
 .app {
   width: 100%;
   padding: var(--app-padding);

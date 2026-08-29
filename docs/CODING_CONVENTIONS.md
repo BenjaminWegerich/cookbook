@@ -27,9 +27,10 @@
 
 ## Design Conventions
 
-- **Smartphone only:** the web app targets smartphones (portrait, thumb-reachable). There is
-  no smart display layout for the app; the cooking experience lives in the exported `.html`
-  file, not the web app.
+- **Smartphone + laptop/desktop:** the web app targets smartphones (portrait, thumb-reachable)
+  and laptops/desktops with the same responsive layout — no separate desktop design. There
+  is no smart display layout for the app; the cooking experience lives in the exported
+  `.html` file, not the web app.
 - **Pixel ladder:** every pixel value (spacing, radius, font size, icon/thumbnail size,
   shadow offset) must come from the preferred-number ladder
   `1 / 2 / 3 / 4 / 6 / 8 / 10 / 14 / 18 / 24 / 32 / 42 / 56 / 74 / 100`. No other pixel
