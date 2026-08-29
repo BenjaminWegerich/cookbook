@@ -206,7 +206,23 @@ prep_time: 15 min
 2. Unter Rühren köcheln, bis die Sauce bindet.
 ```
 
-## 9. Relationship to Other Documents
+## 9. Ingredient Master Data File
+
+The collection's ingredient master data (name → base unit → additional units with
+factors) lives in `zutaten-stammdaten.csv` inside the recipe folder, in the same
+canonical format as `docs/ingredient_unit_mappings.csv`:
+
+    Ingredient;Base Unit;Additional Unit;Conversion Factor;Priority
+    Joghurt;g;Becher;400;1
+
+The file is created on the first user addition („Neue Zutat anlegen“ in the recipe
+editor), seeded with the built-in repo mappings, and is the authoritative master data
+once it exists: the app loads it into the runtime registry at startup and renders/
+exports every ingredient through it. Dot decimals; the parser tolerates German commas
+from spreadsheet edits. The file is user data like the recipes themselves — the repo
+CSV is only the seed.
+
+## 10. Relationship to Other Documents
 
 - [recipe_structure.md](recipe_structure.md) — logical model this encoding implements.
 - [quantity_scaling.md](quantity_scaling.md) — why quantities/servings/yields must be

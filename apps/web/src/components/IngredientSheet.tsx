@@ -27,8 +27,8 @@
 import { useMemo, useState } from 'react';
 
 import {
-  INGREDIENT_MAPPINGS,
   masterIngredientNames,
+  mappingsFor,
   renderAQS,
   type Ingredient,
   type Unit,
@@ -49,7 +49,7 @@ export interface IngredientRecipeOption {
 
 /** The base unit of an ingredient from the master data (family g or ml). */
 function familyOf(name: string): QuantityFamily | null {
-  const mappings = INGREDIENT_MAPPINGS[name];
+  const mappings = mappingsFor(name);
   if (mappings === undefined || mappings.length === 0) {
     return null;
   }
@@ -59,7 +59,9 @@ function familyOf(name: string): QuantityFamily | null {
 
 interface IngredientSheetProps {
   mode: 'add' | 'edit';
-  /** The existing (derived, merged) entry when editing. */
+  /** The existing (derived, merged) entry when editing; after the
+   *  create-master-data flow (add mode) a synthetic entry carrying the
+   *  name+quantity to restore. */
   initial?: Ingredient;
   /** finished_dish recipes allow the reference flag (§4: at most 2 per recipe). */
   referenceAllowed: boolean;
@@ -70,6 +72,9 @@ interface IngredientSheetProps {
   /** Called with the resulting entry; action 'remove' only in edit mode. */
   onConfirm: (ingredient: Ingredient, action: 'add' | 'update' | 'remove') => void;
   onClose: () => void;
+  /** Opens the create-master-data sheet for an unregistered name; the current
+   *  name+quantity are passed along so the sheet can be restored on return. */
+  onCreateNewIngredient: (name: string, quantity: number) => void;
 }
 
 /**
@@ -84,6 +89,7 @@ function IngredientSheet({
   ingredientRecipes,
   onConfirm,
   onClose,
+  onCreateNewIngredient,
 }: IngredientSheetProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [quantity, setQuantity] = useState(initial?.quantity ?? 100);
@@ -99,8 +105,11 @@ function IngredientSheet({
   const trimmedName = name.trim();
   /** A chosen ingredient-recipe title IS a sub-recipe (name == title, §4). */
   const isRecipeTitle = recipeTitles.has(trimmedName);
+  /** Master names are read on every render: the runtime registry changes when
+   *  the create sheet saves a new ingredient (see ingredientRegistry.ts). */
+  const masterNames = masterIngredientNames();
   /** The ingredient is only valid when its name exists in the master data. */
-  const isMasterName = useMemo(() => masterIngredientNames().includes(trimmedName), [trimmedName]);
+  const isMasterName = masterNames.includes(trimmedName);
   const validName = isMasterName || isRecipeTitle;
 
   /**
@@ -121,9 +130,9 @@ function IngredientSheet({
    * wins over a master-data collision: the entry IS the sub-recipe).
    */
   const family: QuantityFamily | null = isRecipeTitle
-    ? (ingredientRecipes.find((recipe) => recipe.title === trimmedName)?.yieldUnit === 'ml'
-        ? 'ml'
-        : 'g')
+    ? ingredientRecipes.find((recipe) => recipe.title === trimmedName)?.yieldUnit === 'ml'
+      ? 'ml'
+      : 'g'
     : familyOf(trimmedName);
   /** Stored unit of this ingredient: the family unit, or the legacy unit when editing. */
   const unit: Unit = family ?? initial?.unit ?? 'g';
@@ -131,25 +140,24 @@ function IngredientSheet({
   /**
    * Suggestions: master-data ingredient names plus ingredient-recipe titles
    * matching the typed name (prefix + substring). A title that is also a
-   * master name appears once — the sub-recipe interpretation wins.
+   * master name appears once — the sub-recipe interpretation wins. Computed
+   * per render so newly created master data shows up immediately.
    */
-  const suggestions = useMemo(() => {
-    const needle = trimmedName.toLowerCase();
-    if (needle === '') return [];
-    const master = masterIngredientNames().filter((candidate) =>
-      candidate.toLowerCase().includes(needle),
-    );
+  const needle = trimmedName.toLowerCase();
+  let suggestions: string[] = [];
+  if (needle !== '') {
+    const master = masterNames.filter((candidate) => candidate.toLowerCase().includes(needle));
     const titles = ingredientRecipes
       .map((recipe) => recipe.title)
       .filter((title) => title.toLowerCase().includes(needle));
-    const merged = [...master];
+    suggestions = [...master];
     for (const title of titles) {
-      if (!merged.some((candidate) => candidate.toLowerCase() === title.toLowerCase())) {
-        merged.push(title);
+      if (!suggestions.some((candidate) => candidate.toLowerCase() === title.toLowerCase())) {
+        suggestions.push(title);
       }
     }
-    return merged.slice(0, 6);
-  }, [trimmedName, ingredientRecipes]);
+    suggestions = suggestions.slice(0, 6);
+  }
 
   /**
    * Adopts a suggestion: exact name, plus the quantity base (the master data's
@@ -164,7 +172,7 @@ function IngredientSheet({
       setQuantity(recipe.yield);
       return;
     }
-    const mappings = INGREDIENT_MAPPINGS[candidate];
+    const mappings = mappingsFor(candidate);
     if (mappings !== undefined && mappings.length > 0) {
       setQuantity(mappings[0].factor);
     }
@@ -176,7 +184,9 @@ function IngredientSheet({
       return;
     }
     if (!validName) {
-      setError(`„${trimmedName}" ist weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept.`);
+      setError(
+        `„${trimmedName}" ist weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept.`,
+      );
       return;
     }
     const ingredient: Ingredient = {
@@ -228,10 +238,23 @@ function IngredientSheet({
           </ul>
         )}
         {trimmedName !== '' && !validName && (
-          <p className="field-error" role="alert">
-            Weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept — bitte einen
-            Vorschlag wählen.
-          </p>
+          <div className="not-in-master">
+            <p className="field-error" role="alert">
+              Weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept — bitte einen Vorschlag
+              wählen oder die Zutat neu anlegen.
+            </p>
+            <button
+              type="button"
+              className="create-ingredient-button"
+              onClick={() => onCreateNewIngredient(trimmedName, quantity)}
+            >
+              Neue Zutat anlegen
+            </button>
+            <p className="create-ingredient-hint">
+              Legt „{trimmedName}“ mit Stammdaten an (Basis-Einheit + Umrechnungen) — danach kannst
+              du sie zum Rezept hinzufügen.
+            </p>
+          </div>
         )}
 
         <div className="field">

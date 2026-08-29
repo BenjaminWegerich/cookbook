@@ -226,6 +226,18 @@
   color: var(--color-danger);
 }
 
+/* Non-fatal warning under the header when the Drive master data is corrupt
+   or unreadable — the built-in seed keeps the app functional. */
+.master-data-warning {
+  margin-block-end: var(--space-5);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
 /* ---- Editor placeholder (replaced by the editor task) ------------------- */
 
 .editor-placeholder {

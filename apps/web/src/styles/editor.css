@@ -624,3 +624,66 @@
 .primary-button:disabled {
   opacity: 0.5;
 }
+
+/* ---- Create master-data ingredient (from the ingredient sheet) ----------- */
+
+.not-in-master {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.create-ingredient-button {
+  justify-self: start;
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-surface);
+  border: 2px solid var(--color-olive);
+  border-radius: var(--radius-md);
+  color: var(--color-olive);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.create-ingredient-button:active {
+  background: var(--color-olive);
+  color: var(--color-on-accent);
+}
+
+.create-ingredient-hint {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.sheet-subtitle {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.factor-row {
+  display: grid;
+  grid-template-columns: var(--space-10) 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.factor-row input {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+}
+
+.factor-row input:focus {
+  outline: 2px solid var(--color-accent);
+}
+
+.factor-unit {
+  font-weight: 600;
+}
+
+.factor-base {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}

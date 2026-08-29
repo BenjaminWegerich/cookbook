@@ -25,13 +25,13 @@
 
 import {
   ADDITIONAL_UNITS,
-  INGREDIENT_MAPPINGS,
   NUMBER_SCHEMES,
   type AdditionalUnit,
   type IngredientMapping,
 } from './additionalUnitsData.js';
 import { LADDER_RUNGS } from './ladderData.js';
 import { pos } from './ladder.js';
+import { allIngredientMappings, mappingsFor } from './ingredientRegistry.js';
 
 /** Smallest AQ ladder value (1/10); below it no additional quantity exists (§6.1). */
 const MIN_AQ = 0.1;
@@ -59,12 +59,12 @@ const EMPTY_SCHEME: readonly string[] = [];
  * (docs/ingredient_unit_mappings.csv), sorted alphabetically.
  *
  * Used by the recipe editor's ingredient autocomplete: as the user types a
- * name, the matching master-data ingredients are suggested. The list is
- * currently small (the CSVs are curated over time); anything else is entered
- * as free text and simply renders in the base form (§4).
+ * name, the matching master-data ingredients are suggested. Reads the runtime
+ * registry (ingredientRegistry.ts), so user-added ingredients from the Drive
+ * master data appear too; anything unregistered renders in the base form (§4).
  */
 export function masterIngredientNames(): string[] {
-  return Object.keys(INGREDIENT_MAPPINGS).sort((a, b) => a.localeCompare(b, 'de'));
+  return Object.keys(allIngredientMappings()).sort((a, b) => a.localeCompare(b, 'de'));
 }
 
 /**
@@ -153,7 +153,7 @@ export interface AdditionalQuantity {
 export function selectAQ(ingredient: string, bq: number, bu: string): AdditionalQuantity | null {
   // Rejects non-standard base quantities (§3): they do not exist in the app.
   pos(bq);
-  for (const mapping of INGREDIENT_MAPPINGS[ingredient] ?? EMPTY_MAPPINGS) {
+  for (const mapping of mappingsFor(ingredient) ?? EMPTY_MAPPINGS) {
     if (mapping.bu !== bu) {
       continue;
     }

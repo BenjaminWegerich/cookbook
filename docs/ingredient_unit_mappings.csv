@@ -1,7 +1,7 @@
 Ingredient;Base Unit;Additional Unit;Conversion Factor;Priority
 Joghurt;g;Becher;400;1
 Joghurt;g;EL;24;2
-Joghurt;g;TL;7,5;3
+Joghurt;g;TL;7.5;3
 Zucker;g;EL;12;1
 Zucker;g;TL;4;2
 Mehl;g;Becher;150;1

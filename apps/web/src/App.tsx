@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { resetIngredientMappings } from '@cookbook/core';
+
 import { getAccessToken, requestAccessToken, revokeAccessToken } from './auth/googleAuth';
 import RecipeEditor from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
+import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
 import './styles/recipe-list.css';
 import './styles/editor.css';
@@ -21,6 +24,9 @@ function App() {
   const [recipes, setRecipes] = useState<StoredRecipe[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Non-fatal warning when the Drive master data could not be loaded; the
+   *  built-in seed keeps the app functional (see ingredientMasterData.ts). */
+  const [masterDataWarning, setMasterDataWarning] = useState<string | null>(null);
   /** Editor state: `editorOpen` switches the screen, `editorTarget` is the
    *  opened recipe or null for a new recipe. */
   const [editorOpen, setEditorOpen] = useState(false);
@@ -51,7 +57,9 @@ function App() {
 
   // Reload the list automatically on startup when a session is still active.
   // State is only updated in promise callbacks (never synchronously), so the
-  // rule "set-state-in-effect" stays satisfied.
+  // rule "set-state-in-effect" stays satisfied. The master data is loaded in
+  // parallel: a corrupt file only warns (built-in seed stays active), it must
+  // never block the recipe list.
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
@@ -62,7 +70,16 @@ function App() {
         setError(null);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+      });
+    void loadIngredientMasterData(token)
+      .then(() => {
+        if (!cancelled) setMasterDataWarning(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setMasterDataWarning(err instanceof Error ? err.message : String(err));
       });
     return () => {
       cancelled = true;
@@ -85,7 +102,10 @@ function App() {
   /** Logs out and clears the session state. */
   const handleDisconnect = useCallback(async (): Promise<void> => {
     setError(null);
+    setMasterDataWarning(null);
     await revokeAccessToken();
+    // Drop the loaded master data so the next account starts from the seed.
+    resetIngredientMappings();
     setToken(null);
     setRecipes(null);
   }, []);
@@ -154,6 +174,13 @@ function App() {
               </div>
             )}
           </header>
+
+          {token && masterDataWarning !== null && (
+            <p className="master-data-warning" role="alert">
+              Zutaten-Stammdaten konnten nicht geladen werden — es wird die eingebaute Liste
+              verwendet. ({masterDataWarning})
+            </p>
+          )}
 
           {!token ? (
             <section className="login-panel" aria-label="Anmeldung">

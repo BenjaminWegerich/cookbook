@@ -14,6 +14,8 @@
 
 export * from './additionalUnits.js';
 export * from './additionalUnitsData.js';
+export * from './ingredientCsv.js';
+export * from './ingredientRegistry.js';
 export * from './ladder.js';
 export * from './recipe/exportHtml.js';
 export * from './recipe/ingredientList.js';

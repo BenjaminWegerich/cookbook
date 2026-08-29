@@ -45,7 +45,9 @@ import {
   uploadRecipeImage,
   type StoredRecipe,
 } from '../drive/recipeStorage';
+import { appendIngredientMasterData } from '../drive/ingredientMasterData';
 import IngredientSheet, { type IngredientRecipeOption } from './IngredientSheet';
+import NewIngredientSheet from './NewIngredientSheet';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityPicker from './QuantityPicker';
 
@@ -274,7 +276,14 @@ function TimeChips({
  * The editor screen (see file header). Owns the draft, the validation
  * feedback and all Drive interactions.
  */
-function RecipeEditor({ token, target, recipes, onClose, onSaved, onOpenRecipe }: RecipeEditorProps) {
+function RecipeEditor({
+  token,
+  target,
+  recipes,
+  onClose,
+  onSaved,
+  onOpenRecipe,
+}: RecipeEditorProps) {
   /** The working draft; null while the recipe + collection are loading. */
   const [draft, setDraft] = useState<EditorDraft | null>(null);
   /** The recipe as loaded from Drive — rollback target and dirty check. */
@@ -295,6 +304,22 @@ function RecipeEditor({ token, target, recipes, onClose, onSaved, onOpenRecipe }
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<SheetState | null>(null);
+  /** Create-master-data sheet (opened from the ingredient sheet). */
+  const [createSheet, setCreateSheet] = useState<{ name: string } | null>(null);
+  const [createSaving, setCreateSaving] = useState(false);
+  /** Drive error of the last create attempt (German, from the storage layer). */
+  const [createError, setCreateError] = useState<string | null>(null);
+  /** The ingredient sheet's context while the create sheet is open — the
+   *  restore target when the create sheet closes (cancel or save). */
+  const [sheetContext, setSheetContext] = useState<{
+    sheet: SheetState;
+    name: string;
+    quantity: number;
+  } | null>(null);
+  /** Prefill for a reopened ingredient sheet (add mode): name + quantity.
+   *  The unit is derived from the master data by the sheet anyway, so the
+   *  synthetic entry only carries name and quantity. */
+  const [sheetPrefill, setSheetPrefill] = useState<Ingredient | null>(null);
 
   const photoUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -621,6 +646,55 @@ function RecipeEditor({ token, target, recipes, onClose, onSaved, onOpenRecipe }
       }));
     }
     setSheet(null);
+    setSheetPrefill(null);
+  };
+
+  /**
+   * Persists a new ingredient to the Drive master data. On success the create
+   * sheet closes and the ingredient sheet re-opens (restore target) — in add
+   * mode with the saved name and the quantity the user had typed, where they
+   * confirm the actual recipe addition (decided with the user).
+   */
+  const handleCreateIngredient = async (
+    name: string,
+    bu: string,
+    entries: Array<{ au: string; factor: number }>,
+  ): Promise<void> => {
+    setCreateSaving(true);
+    setCreateError(null);
+    try {
+      await appendIngredientMasterData(token, name, bu, entries);
+      setCreateSheet(null);
+      if (sheetContext !== null) {
+        setSheet(sheetContext.sheet);
+        // Add mode: restore with the saved name (the create form is editable
+        // there) plus the typed quantity. Edit mode: keep the original sheet
+        // — the recipe markers still reference the original name.
+        setSheetPrefill(
+          sheetContext.sheet.mode === 'add'
+            ? { name, quantity: sheetContext.quantity, unit: 'g' }
+            : null,
+        );
+      }
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
+  /** Closes the create sheet without saving — restore the ingredient sheet.
+   *  Guarded against closing while a save runs: the backdrop stays disabled
+   *  then (NewIngredientSheet), so a late error is never reported into an
+   *  unmounted sheet (the restore would swallow it). */
+  const handleCreateClose = (): void => {
+    if (createSaving) return;
+    setCreateSheet(null);
+    if (sheetContext !== null) {
+      setSheet(sheetContext.sheet);
+      // Restore the typed name+quantity so nothing is lost on cancel.
+      setSheetPrefill({ name: sheetContext.name, quantity: sheetContext.quantity, unit: 'g' });
+    }
   };
 
   // ---- Photo handlers -----------------------------------------------------
@@ -1132,7 +1206,7 @@ function RecipeEditor({ token, target, recipes, onClose, onSaved, onOpenRecipe }
           initial={
             sheet.mode === 'edit'
               ? computedIngredients.find((ingredient) => ingredient.name === sheet.name)
-              : undefined
+              : (sheetPrefill ?? undefined)
           }
           referenceAllowed={draft.type === 'finished_dish'}
           referenceUsed={
@@ -1147,7 +1221,26 @@ function RecipeEditor({ token, target, recipes, onClose, onSaved, onOpenRecipe }
           }
           ingredientRecipes={ingredientRecipes}
           onConfirm={handleSheetConfirm}
-          onClose={() => setSheet(null)}
+          onClose={() => {
+            setSheet(null);
+            setSheetPrefill(null);
+          }}
+          onCreateNewIngredient={(name, quantity) => {
+            if (sheet === null) return;
+            setSheetContext({ sheet, name, quantity });
+            setSheet(null);
+            setCreateSheet({ name });
+          }}
+        />
+      )}
+
+      {createSheet !== null && (
+        <NewIngredientSheet
+          initialName={createSheet.name}
+          saving={createSaving}
+          error={createError}
+          onSave={(name, bu, entries) => void handleCreateIngredient(name, bu, entries)}
+          onClose={handleCreateClose}
         />
       )}
     </main>

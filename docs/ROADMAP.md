@@ -18,9 +18,10 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 
 ### Open follow-ups (not urgent)
 
-- [ ] Introduce new ingredients into the master data (extend
-      `docs/ingredient_unit_mappings.csv` with name → base unit → additional units +
-      factors; today the list is a small starter set).
+- [ ] Extend the built-in seed list in `docs/ingredient_unit_mappings.csv` with more
+      ingredients. New ingredients are added through the web app („Neue Zutat anlegen“)
+      and land in the Drive `zutaten-stammdaten.csv`; the repo CSV is the seed that
+      initializes that file on first use.
 
 ## Web app — Phase 3: AI-assisted create/edit (depends on: Phase 2)
 

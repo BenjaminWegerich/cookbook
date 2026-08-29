@@ -51,6 +51,11 @@
   Drive "Cookbook" folder to develop against a populated collection.
 - Single source of truth, read by the web app, the HTML export, and (later) the backend
   module and the Gemini for Home preparation.
+- Ingredient master data lives in `zutaten-stammdaten.csv` in the same Drive folder
+  (canonical CSV format, see docs/ingredient_unit_mappings.csv): the app loads it into
+  the core ingredient registry at startup, and the file is authoritative once it exists
+  — the repo CSVs are the built-in seed used on first run. New ingredients are created
+  from the recipe editor („Neue Zutat anlegen“), which appends rows and re-registers them.
 
 ### HTML share export
 
