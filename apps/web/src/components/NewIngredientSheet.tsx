@@ -3,9 +3,10 @@
  *
  * Opened from the ingredient sheet ("Neue Zutat anlegen") when the typed name
  * is neither in the master data nor an ingredient recipe. It collects the
- * master-data fields (name, base unit g/ml, one factor per known additional
- * unit — Becher / EL / TL) and hands them to the parent, which persists them
- * to the Drive master data (ingredientMasterData.ts). After saving, the
+ * master-data fields (name, base unit g/ml, and an optional factor per known
+ * additional unit — Becher / EL / TL; all optional: an ingredient without
+ * additional units is valid) and hands them to the parent, which persists
+ * them to the Drive master data (ingredientMasterData.ts). After saving, the
  * ingredient sheet re-appears with the name now valid; the recipe addition is
  * confirmed there separately (decided with the user).
  *
@@ -90,10 +91,6 @@ function NewIngredientSheet({
       setLocalError(`„${trimmedName}“ existiert bereits in der Stammdatenliste.`);
       return;
     }
-    if (entries.length === 0) {
-      setLocalError('Bitte mindestens eine Umrechnung angeben.');
-      return;
-    }
     for (const entry of entries) {
       if (!Number.isFinite(entry.factor) || entry.factor <= 0) {
         setLocalError(`Der Faktor für „${entry.au}“ muss eine positive Zahl sein.`);
@@ -115,8 +112,8 @@ function NewIngredientSheet({
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Neue Zutat anlegen">
         <h3 className="sheet-title">Neue Zutat anlegen</h3>
         <p className="sheet-subtitle">
-          Legt die Zutat in der Stammdatenliste an (zutaten-stammdaten.csv in deinem
-          Cookbook-Ordner). Danach kannst du sie zum Rezept hinzufügen.
+          Legt die Zutat in der Stammdatenliste an (zutaten.csv + zutaten-umrechnungen.csv in
+          deinem Cookbook-Ordner). Danach kannst du sie zum Rezept hinzufügen.
         </p>
 
         <label className="field">
@@ -148,7 +145,7 @@ function NewIngredientSheet({
         </div>
 
         <div className="field">
-          <span className="field-label">Umrechnungen — Menge pro Einheit (mindestens eine)</span>
+          <span className="field-label">Umrechnungen — Menge pro Einheit (optional)</span>
           {ADDITIONAL_UNITS.map((unit) => (
             <label className="factor-row" key={unit.name}>
               <span className="factor-unit">{unit.name}</span>

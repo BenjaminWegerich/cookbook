@@ -79,13 +79,16 @@ describe('generated additional-unit master data', () => {
 
   it('maps Joghurt with factors 400/24/7.5 and ascending priorities', () => {
     // The mapping list exists by construction (generator-validated master data).
-    const mappings = INGREDIENT_MAPPINGS.Joghurt!;
-    expect(mappings.map((mapping) => mapping.au)).toEqual(['Becher', 'EL', 'TL']);
-    expect(mappings.map((mapping) => mapping.factor)).toEqual([400, 24, 7.5]);
-    expect(mappings.map((mapping) => mapping.priority)).toEqual([1, 2, 3]);
-    for (const mapping of mappings) {
-      expect(mapping.bu).toBe('g');
-    }
+    const entry = INGREDIENT_MAPPINGS.Joghurt!;
+    expect(entry.bu).toBe('g');
+    expect(entry.entries.map((mapping) => mapping.au)).toEqual(['Becher', 'EL', 'TL']);
+    expect(entry.entries.map((mapping) => mapping.factor)).toEqual([400, 24, 7.5]);
+    expect(entry.entries.map((mapping) => mapping.priority)).toEqual([1, 2, 3]);
+  });
+
+  it('includes a bare ingredient (Cashews) without additional units in the seed', () => {
+    expect(INGREDIENT_MAPPINGS.Cashews).toEqual({ bu: 'g', entries: [] });
+    expect(masterIngredientNames()).toContain('Cashews');
   });
 
   it('only references AQ ladder values in the schemes (no drift)', () => {

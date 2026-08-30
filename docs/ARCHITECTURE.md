@@ -31,8 +31,8 @@
   (packages/core/scripts/generate-ladder.mjs).
 - Additional-unit selection and display logic
   (see [additional_quantity_specifications.md](additional_quantity_specifications.md)); the
-  master data (number schemes, additional units, ingredient mappings) lives in
-  `docs/number_schemes.csv`, `docs/additional_units.csv` and
+  master data (number schemes, additional units, ingredient list, ingredient mappings) lives in
+  `docs/number_schemes.csv`, `docs/additional_units.csv`, `docs/ingredients.csv` and
   `docs/ingredient_unit_mappings.csv`, is validated against the ladder's AQ column and
   compiled into a generated TypeScript module (`packages/core/src/additionalUnitsData.ts`)
   via `npm run generate:additional` (packages/core/scripts/generate-additional-data.mjs).
@@ -51,11 +51,14 @@
   Drive "Cookbook" folder to develop against a populated collection.
 - Single source of truth, read by the web app, the HTML export, and (later) the backend
   module and the Gemini for Home preparation.
-- Ingredient master data lives in `zutaten-stammdaten.csv` in the same Drive folder
-  (canonical CSV format, see docs/ingredient_unit_mappings.csv): the app loads it into
-  the core ingredient registry at startup, and the file is authoritative once it exists
-  — the repo CSVs are the built-in seed used on first run. New ingredients are created
-  from the recipe editor („Neue Zutat anlegen“), which appends rows and re-registers them.
+- Ingredient master data lives in two CSV files in the same Drive folder — `zutaten.csv`
+  (ingredient list: name + base unit) and `zutaten-umrechnungen.csv` (AU mappings), in the
+  canonical formats of docs/ingredients.csv + docs/ingredient_unit_mappings.csv: the app
+  loads both into the core ingredient registry at startup, and they are authoritative once
+  they exist — the repo CSVs are the built-in seed used on first run. New ingredients are
+  created from the recipe editor („Neue Zutat anlegen“), which appends to both files and
+  re-registers them. The split keeps ingredient-level fields (name, base unit, later e.g.
+  category) in one row per ingredient, separate from the AU mappings.
 
 ### HTML share export
 

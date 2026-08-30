@@ -49,12 +49,11 @@ export interface IngredientRecipeOption {
 
 /** The base unit of an ingredient from the master data (family g or ml). */
 function familyOf(name: string): QuantityFamily | null {
-  const mappings = mappingsFor(name);
-  if (mappings === undefined || mappings.length === 0) {
+  const entry = mappingsFor(name);
+  if (entry === undefined) {
     return null;
   }
-  const bu = mappings[0].bu;
-  return bu === 'ml' ? 'ml' : 'g';
+  return entry.bu === 'ml' ? 'ml' : 'g';
 }
 
 interface IngredientSheetProps {
@@ -172,9 +171,9 @@ function IngredientSheet({
       setQuantity(recipe.yield);
       return;
     }
-    const mappings = mappingsFor(candidate);
-    if (mappings !== undefined && mappings.length > 0) {
-      setQuantity(mappings[0].factor);
+    const entry = mappingsFor(candidate);
+    if (entry !== undefined && entry.entries.length > 0) {
+      setQuantity(entry.entries[0].factor);
     }
   };
 
@@ -251,8 +250,8 @@ function IngredientSheet({
               Neue Zutat anlegen
             </button>
             <p className="create-ingredient-hint">
-              Legt „{trimmedName}“ mit Stammdaten an (Basis-Einheit + Umrechnungen) — danach kannst
-              du sie zum Rezept hinzufügen.
+              Legt „{trimmedName}“ mit Stammdaten an (Basis-Einheit + optionale Umrechnungen) —
+              danach kannst du sie zum Rezept hinzufügen.
             </p>
           </div>
         )}

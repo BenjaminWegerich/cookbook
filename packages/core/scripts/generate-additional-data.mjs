@@ -3,6 +3,7 @@
  * Generates `src/additionalUnitsData.ts` from the additional-unit master data:
  *   - docs/number_schemes.csv            (AQ value × number scheme matrix)
  *   - docs/additional_units.csv          (units: name, arrangement, scheme)
+ *   - docs/ingredients.csv               (ingredient list: name, base unit)
  *   - docs/ingredient_unit_mappings.csv  (ingredient → AU: factor, priority)
  *
  * The AQ values in number_schemes.csv must exactly match the AQ column of the
@@ -32,6 +33,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const LADDER_CSV = resolve(ROOT, 'docs/standard_numbers.csv');
 const SCHEMES_CSV = resolve(ROOT, 'docs/number_schemes.csv');
 const UNITS_CSV = resolve(ROOT, 'docs/additional_units.csv');
+const INGREDIENTS_CSV = resolve(ROOT, 'docs/ingredients.csv');
 const MAPPINGS_CSV = resolve(ROOT, 'docs/ingredient_unit_mappings.csv');
 const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/additionalUnitsData.ts');
 
@@ -194,17 +196,56 @@ function buildUnits(schemeNames) {
   return units;
 }
 
-/** Parses the ingredient mappings; validates references, factors and priorities. */
-function buildMappings(unitNames) {
+/** Parses the ingredient list; validates base units and unique names. */
+function buildIngredientList() {
+  const { header, rows } = parseCsv(INGREDIENTS_CSV);
+  if (header.join(';') !== 'Ingredient;Base Unit') {
+    throw new Error(`${INGREDIENTS_CSV}: unexpected header ${JSON.stringify(header)}`);
+  }
+  const byName = new Map();
+  for (const row of rows) {
+    const [ingredient, bu] = row;
+    if (ingredient === '' || bu === '') {
+      throw new Error(`${INGREDIENTS_CSV}: empty ingredient or base unit in line: ${row.join(';')}`);
+    }
+    if (bu !== 'g' && bu !== 'ml') {
+      throw new Error(
+        `${INGREDIENTS_CSV}: invalid base unit '${bu}' for '${ingredient}' (allowed: g, ml)`,
+      );
+    }
+    if (byName.has(ingredient)) {
+      throw new Error(`${INGREDIENTS_CSV}: duplicate ingredient '${ingredient}'`);
+    }
+    byName.set(ingredient, bu);
+  }
+  if (byName.size === 0) {
+    throw new Error(`${INGREDIENTS_CSV}: no ingredients defined`);
+  }
+  return byName;
+}
+
+/**
+ * Parses the ingredient–AU mappings; validates references, factors and
+ * priorities. The base unit is not part of this file — it comes from the
+ * ingredient list, which is also the authoritative set of ingredient names: a
+ * mapping for an unknown ingredient is an error, and an ingredient without
+ * mappings (e.g. Cashews) is simply absent here.
+ */
+function buildMappings(unitNames, ingredientNames) {
   const { header, rows } = parseCsv(MAPPINGS_CSV);
-  if (header.join(';') !== 'Ingredient;Base Unit;Additional Unit;Conversion Factor;Priority') {
+  if (header.join(';') !== 'Ingredient;Additional Unit;Conversion Factor;Priority') {
     throw new Error(`${MAPPINGS_CSV}: unexpected header ${JSON.stringify(header)}`);
   }
   const byIngredient = new Map();
   for (const row of rows) {
-    const [ingredient, bu, au, factorCell, priorityCell] = row;
-    if (ingredient === '' || bu === '') {
-      throw new Error(`${MAPPINGS_CSV}: empty ingredient or base unit in line: ${row.join(';')}`);
+    const [ingredient, au, factorCell, priorityCell] = row;
+    if (ingredient === '') {
+      throw new Error(`${MAPPINGS_CSV}: empty ingredient in line: ${row.join(';')}`);
+    }
+    if (!ingredientNames.has(ingredient)) {
+      throw new Error(
+        `${MAPPINGS_CSV}: mapping for '${ingredient}' is not in the ingredient list (${INGREDIENTS_CSV})`,
+      );
     }
     if (!unitNames.includes(au)) {
       throw new Error(
@@ -224,10 +265,7 @@ function buildMappings(unitNames) {
         `${MAPPINGS_CSV}: priority must be a positive integer, got '${priorityCell}' for '${ingredient}' → '${au}'`,
       );
     }
-    if (!byIngredient.has(ingredient)) {
-      byIngredient.set(ingredient, []);
-    }
-    const list = byIngredient.get(ingredient);
+    const list = byIngredient.get(ingredient) ?? [];
     if (list.some((mapping) => mapping.au === au)) {
       throw new Error(`${MAPPINGS_CSV}: duplicate mapping for '${ingredient}' → '${au}'`);
     }
@@ -236,21 +274,23 @@ function buildMappings(unitNames) {
         `${MAPPINGS_CSV}: duplicate priority ${priority} for '${ingredient}' (each mapping needs a unique priority)`,
       );
     }
-    list.push({ ingredient, bu, au, factor, priority });
+    list.push({ au, factor, priority });
+    byIngredient.set(ingredient, list);
   }
   // Evaluation order is ascending priority (1 = most preferred, §7); sorting
   // here keeps the runtime selection loop a plain first-hit-wins scan.
   for (const list of byIngredient.values()) {
     list.sort((a, b) => a.priority - b.priority);
   }
-  return [...byIngredient.entries()];
+  return byIngredient;
 }
 
-function render(units, schemes, mappings) {
+function render(units, schemes, ingredientList, mappings) {
   const lines = [];
   lines.push('/**');
-  lines.push(' * AUTO-GENERATED from docs/number_schemes.csv, docs/additional_units.csv and');
-  lines.push(' * docs/ingredient_unit_mappings.csv by scripts/generate-additional-data.mjs.');
+  lines.push(' * AUTO-GENERATED from docs/number_schemes.csv, docs/additional_units.csv,');
+  lines.push(' * docs/ingredients.csv and docs/ingredient_unit_mappings.csv by');
+  lines.push(' * scripts/generate-additional-data.mjs.');
   lines.push(
     " * Do not edit by hand — re-run 'npm run generate:additional' (packages/core) after a CSV change.",
   );
@@ -270,14 +310,24 @@ function render(units, schemes, mappings) {
   lines.push('');
   lines.push('/** One ingredient–additional-unit mapping (conversion factor + priority). */');
   lines.push('export interface IngredientMapping {');
-  lines.push('  /** Fixed base unit of the ingredient; the factor is expressed in this unit. */');
-  lines.push('  readonly bu: string;');
   lines.push('  /** Referenced additional unit name (see ADDITIONAL_UNITS). */');
   lines.push('  readonly au: string;');
   lines.push('  /** Amount of base unit per one additional unit. */');
   lines.push('  readonly factor: number;');
   lines.push('  /** Positive integer, 1 = most preferred; unique per ingredient. */');
   lines.push('  readonly priority: number;');
+  lines.push('}');
+  lines.push('');
+  lines.push('/** One ingredient in the master data: its fixed base unit plus the AU mappings. */');
+  lines.push('export interface IngredientEntry {');
+  lines.push(
+    '  /** Fixed base unit family of the ingredient ("g" or "ml"); the conversion factors are expressed in this unit. */',
+  );
+  lines.push('  readonly bu: string;');
+  lines.push(
+    '  /** The ingredient\'s additional-unit mappings, ascending priority; empty = bare ingredient without additional units. */',
+  );
+  lines.push('  readonly entries: readonly IngredientMapping[];');
   lines.push('}');
   lines.push('');
   lines.push('/** All additional units, in table order. */');
@@ -299,20 +349,22 @@ function render(units, schemes, mappings) {
   lines.push('};');
   lines.push('');
   lines.push(
-    '/** Ingredient mappings keyed by ingredient, each list sorted by ascending priority. */',
+    '/** Ingredient master data keyed by ingredient name (entries sorted by ascending priority). */',
   );
-  lines.push(
-    'export const INGREDIENT_MAPPINGS: Readonly<Record<string, readonly IngredientMapping[]>> = {',
-  );
-  for (const [ingredient, list] of mappings) {
-    lines.push(`  ${JSON.stringify(ingredient)}: [`);
-    for (const mapping of list) {
+  lines.push('export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {');
+  for (const [ingredient, bu] of ingredientList) {
+    const entries = mappings.get(ingredient) ?? [];
+    lines.push(`  ${JSON.stringify(ingredient)}: {`);
+    lines.push(`    bu: ${JSON.stringify(bu)},`);
+    lines.push('    entries: [');
+    for (const mapping of entries) {
       lines.push(
-        `    { bu: ${JSON.stringify(mapping.bu)}, au: ${JSON.stringify(mapping.au)}, ` +
-          `factor: ${mapping.factor}, priority: ${mapping.priority} },`,
+        `      { au: ${JSON.stringify(mapping.au)}, factor: ${mapping.factor}, ` +
+          `priority: ${mapping.priority} },`,
       );
     }
-    lines.push('  ],');
+    lines.push('    ],');
+    lines.push('  },');
   }
   lines.push('};');
   lines.push('');
@@ -322,8 +374,9 @@ function render(units, schemes, mappings) {
 const ladderAq = ladderAqValues();
 const schemes = buildSchemes(ladderAq);
 const units = buildUnits(schemes.map((scheme) => scheme.name));
-const mappings = buildMappings(units.map((unit) => unit.name));
-let output = render(units, schemes, mappings);
+const ingredientList = buildIngredientList();
+const mappings = buildMappings(units.map((unit) => unit.name), ingredientList);
+let output = render(units, schemes, ingredientList, mappings);
 try {
   // Format with Prettier (root devDependency, used by `npm run format`) so the
   // committed generated module is prettier-clean and regeneration is
@@ -340,5 +393,5 @@ writeFileSync(OUT_PATH, output, 'utf8');
 const memberships = schemes.reduce((sum, scheme) => sum + scheme.values.length, 0);
 console.log(
   `Wrote ${units.length} units, ${schemes.length} schemes (${memberships} memberships), ` +
-    `${mappings.length} ingredient(s) to ${OUT_PATH}`,
+    `${ingredientList.size} ingredient(s) to ${OUT_PATH}`,
 );

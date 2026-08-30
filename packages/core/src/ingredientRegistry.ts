@@ -3,12 +3,13 @@
  * mappings while the app runs.
  *
  * The built-in mappings (INGREDIENT_MAPPINGS, generated from
- * docs/ingredient_unit_mappings.csv) are the default seed. The web app loads
- * the user's authoritative master data (zutaten-stammdaten.csv in the Drive
- * Cookbook folder) at startup and replaces the whole set with
- * setIngredientMappings — the Drive file wins once it exists. Until then, and
- * whenever the file is missing or unreadable, the built-in seed keeps the app
- * fully functional (autofill, scaling, export).
+ * docs/ingredients.csv + docs/ingredient_unit_mappings.csv) are the default
+ * seed. The web app loads the user's authoritative master data (zutaten.csv +
+ * zutaten-umrechnungen.csv in the Drive Cookbook folder) at startup and
+ * replaces the whole set with setIngredientMappings — the Drive files win
+ * once they exist. Until then, and whenever the files are missing or
+ * unreadable, the built-in seed keeps the app fully functional (autofill,
+ * scaling, export).
  *
  * The registry is module-level state on purpose: the recipe editor's
  * autofill, the quantity display and the HTML export generator (all in the
@@ -16,10 +17,10 @@
  * everywhere. Unit tests use resetIngredientMappings() to restore the seed.
  */
 
-import { INGREDIENT_MAPPINGS, type IngredientMapping } from './additionalUnitsData.js';
+import { INGREDIENT_MAPPINGS, type IngredientEntry } from './additionalUnitsData.js';
 
-/** All ingredient mappings keyed by ingredient name (lists sorted by ascending priority). */
-export type IngredientMappings = Readonly<Record<string, readonly IngredientMapping[]>>;
+/** All ingredient master data keyed by ingredient name. */
+export type IngredientMappings = Readonly<Record<string, IngredientEntry>>;
 
 /** The current registry content; starts as the built-in seed. */
 let registry: IngredientMappings = INGREDIENT_MAPPINGS;
@@ -41,8 +42,8 @@ export function allIngredientMappings(): IngredientMappings {
   return registry;
 }
 
-/** The mappings of one ingredient, or undefined when the name is not registered. */
-export function mappingsFor(name: string): readonly IngredientMapping[] | undefined {
+/** The master-data entry of one ingredient, or undefined when the name is not registered. */
+export function mappingsFor(name: string): IngredientEntry | undefined {
   return registry[name];
 }
 

@@ -48,8 +48,9 @@ they belong to the implementation phase.
 ## 3. Master Data (Conceptual)
 
 The logic is driven by three master-data entities. Their concrete storage design is decided:
-the master data lives in three CSV tables in the repository — `docs/number_schemes.csv` (scheme
+the master data lives in four CSV tables in the repository — `docs/number_schemes.csv` (scheme
 matrix), `docs/additional_units.csv` (units with arrangement and scheme),
+`docs/ingredients.csv` (ingredient list with base unit),
 `docs/ingredient_unit_mappings.csv` (mappings with factor and priority) — and is compiled into a
 TypeScript module by `scripts/generate-additional-data.mjs`, which validates cross-references and
 guards the scheme matrix against drift from the ladder's AQ column (see
@@ -64,6 +65,9 @@ guards the scheme matrix against drift from the ladder's AQ column (see
    - a **conversion factor**: the amount of base unit per one additional unit
      (e.g. 400 g per Becher for Joghurt),
    - a **priority**: a positive integer, where **1 = most preferred** (see §7).
+   The ingredient list is the authoritative set of ingredient names and base
+   units. An ingredient may have **no additional units** at all (e.g. Cashews)
+   and then always renders in the base form (§4).
 3. **Number schemes** — named subsets of the AQ ladder values (see §5).
 
 ## 4. Display Arrangement

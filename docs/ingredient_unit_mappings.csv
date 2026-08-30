@@ -1,18 +1,18 @@
-Ingredient;Base Unit;Additional Unit;Conversion Factor;Priority
-Joghurt;g;Becher;400;1
-Joghurt;g;EL;24;2
-Joghurt;g;TL;7.5;3
-Zucker;g;EL;12;1
-Zucker;g;TL;4;2
-Mehl;g;Becher;150;1
-Mehl;g;EL;10;2
-Butter;g;EL;10;1
-Milch;ml;Becher;250;1
-Milch;ml;EL;15;2
-Sahne;ml;Becher;200;1
-Olivenöl;ml;EL;10;1
-Olivenöl;ml;TL;3;2
-Zitronensaft;ml;EL;15;1
-Honig;g;EL;21;1
-Haferflocken;g;Becher;100;1
-Haferflocken;g;EL;10;2
+Ingredient;Additional Unit;Conversion Factor;Priority
+Joghurt;Becher;400;1
+Joghurt;EL;24;2
+Joghurt;TL;7.5;3
+Zucker;EL;12;1
+Zucker;TL;4;2
+Mehl;Becher;150;1
+Mehl;EL;10;2
+Butter;EL;10;1
+Milch;Becher;250;1
+Milch;EL;15;2
+Sahne;Becher;200;1
+Olivenöl;EL;10;1
+Olivenöl;TL;3;2
+Zitronensaft;EL;15;1
+Honig;EL;21;1
+Haferflocken;Becher;100;1
+Haferflocken;EL;10;2

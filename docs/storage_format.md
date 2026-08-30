@@ -206,21 +206,33 @@ prep_time: 15 min
 2. Unter Rühren köcheln, bis die Sauce bindet.
 ```
 
-## 9. Ingredient Master Data File
+## 9. Ingredient Master Data Files
 
 The collection's ingredient master data (name → base unit → additional units with
-factors) lives in `zutaten-stammdaten.csv` inside the recipe folder, in the same
-canonical format as `docs/ingredient_unit_mappings.csv`:
+factors) lives in two CSV files inside the recipe folder, in the same canonical formats
+as the repo seeds (`docs/ingredients.csv` + `docs/ingredient_unit_mappings.csv`):
 
-    Ingredient;Base Unit;Additional Unit;Conversion Factor;Priority
-    Joghurt;g;Becher;400;1
+    zutaten.csv                  (ingredient list)
+    Ingredient;Base Unit
+    Joghurt;g
+    Cashews;g
 
-The file is created on the first user addition („Neue Zutat anlegen“ in the recipe
-editor), seeded with the built-in repo mappings, and is the authoritative master data
-once it exists: the app loads it into the runtime registry at startup and renders/
-exports every ingredient through it. Dot decimals; the parser tolerates German commas
-from spreadsheet edits. The file is user data like the recipes themselves — the repo
-CSV is only the seed.
+    zutaten-umrechnungen.csv     (AU mappings; an ingredient without additional
+    Ingredient;Additional Unit;Conversion Factor;Priority   units has no rows here)
+    Joghurt;Becher;400;1
+
+The ingredient list is the authoritative source of ingredient names and their fixed
+base unit — one row per ingredient, so ingredient-level fields (e.g. a category) can be
+added as further columns later. The mappings file is a pure overlay; an ingredient
+without additional units (e.g. Cashews) exists only in the list and always renders in
+the base form (see additional_quantity_specifications.md §4).
+
+The files are created on the first user addition („Neue Zutat anlegen“ in the recipe
+editor), seeded with the built-in repo data, and are the authoritative master data once
+they exist: the app loads both into the runtime registry at startup and renders/exports
+every ingredient through them. Dot decimals; the parser tolerates German commas from
+spreadsheet edits. The files are user data like the recipes themselves — the repo CSVs
+are only the seed.
 
 ## 10. Relationship to Other Documents
 

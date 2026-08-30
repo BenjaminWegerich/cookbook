@@ -27,7 +27,6 @@ import {
   ADDITIONAL_UNITS,
   NUMBER_SCHEMES,
   type AdditionalUnit,
-  type IngredientMapping,
 } from './additionalUnitsData.js';
 import { LADDER_RUNGS } from './ladderData.js';
 import { pos } from './ladder.js';
@@ -51,7 +50,6 @@ const AU_BY_NAME: ReadonlyMap<string, AdditionalUnit> = new Map(
   ADDITIONAL_UNITS.map((au) => [au.name, au]),
 );
 
-const EMPTY_MAPPINGS: readonly IngredientMapping[] = [];
 const EMPTY_SCHEME: readonly string[] = [];
 
 /**
@@ -142,8 +140,9 @@ export interface AdditionalQuantity {
  *
  * Mappings are evaluated in ascending priority order (the generated data is
  * pre-sorted); the first mapping whose rounded AQ passes its number scheme
- * wins. Mappings whose base unit differs from `bu` are skipped — the
- * conversion factor is expressed in the ingredient's fixed base unit (§7).
+ * wins. An ingredient whose master-data base unit differs from `bu` has no
+ * applicable AQS (§7) — the conversion factor is expressed in the
+ * ingredient's fixed base unit.
  *
  * @param ingredient ingredient name (key into INGREDIENT_MAPPINGS)
  * @param bq stored base quantity — must be a standard ladder value (§3, else throws)
@@ -153,10 +152,13 @@ export interface AdditionalQuantity {
 export function selectAQ(ingredient: string, bq: number, bu: string): AdditionalQuantity | null {
   // Rejects non-standard base quantities (§3): they do not exist in the app.
   pos(bq);
-  for (const mapping of mappingsFor(ingredient) ?? EMPTY_MAPPINGS) {
-    if (mapping.bu !== bu) {
-      continue;
-    }
+  const entry = mappingsFor(ingredient);
+  // No master-data entry (unregistered name) or a mismatched base unit — and
+  // bare ingredients (empty entries) — have no AQS (§7): base form only.
+  if (entry === undefined || entry.bu !== bu) {
+    return null;
+  }
+  for (const mapping of entry.entries) {
     const aq = roundToAQ(bq / mapping.factor);
     if (aq === null) {
       continue;
