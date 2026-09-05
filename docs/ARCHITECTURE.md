@@ -111,4 +111,6 @@
 
 - Backend implementation for Google Keep (Python `gkeepapi` is a candidate, not a decision);
   language and hosting decided when it is built.
-- Gemini integration details (which API/product for recipe editing vs. read-aloud).
+- Gemini Home / read-aloud integration details (product/API chosen when that milestone is built).
+- Recipe-editing AI is decided: Google Gemini via browser-direct REST (`generateContent`), key
+  pasted per session; see the ROADMAP Phase 3 note and `apps/web/src/ai/`.

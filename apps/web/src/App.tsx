@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { resetIngredientMappings } from '@cookbook/core';
+import type { Recipe } from '@cookbook/core';
 
 import { clearAiApiKey } from './ai/sessionKey';
 import { getAccessToken, requestAccessToken, revokeAccessToken } from './auth/googleAuth';
+import AiCreateSheet from './components/AiCreateSheet';
 import RecipeEditor from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
+import './styles/ai-create.css';
 import './styles/recipe-list.css';
 import './styles/editor.css';
 
@@ -32,6 +35,12 @@ function App() {
    *  opened recipe or null for a new recipe. */
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorTarget, setEditorTarget] = useState<StoredRecipe | null>(null);
+  /** An already-valid draft (AI create) that opens the editor prefilled. */
+  const [editorDraft, setEditorDraft] = useState<Recipe | null>(null);
+  /** The FAB action sheet (manually create vs. AI create). */
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  /** The AI-create conversation screen. */
+  const [aiCreateOpen, setAiCreateOpen] = useState(false);
 
   /** Refreshes the recipe list from the Google Drive recipe folder. */
   const refreshRecipes = useCallback(async (activeToken: string): Promise<void> => {
@@ -111,12 +120,30 @@ function App() {
     clearAiApiKey();
     setToken(null);
     setRecipes(null);
+    setCreateMenuOpen(false);
+    setAiCreateOpen(false);
+    setEditorOpen(false);
   }, []);
 
   /** Opens the editor for a recipe (null = new recipe). */
   const openEditor = useCallback((recipe: StoredRecipe | null): void => {
     setEditorTarget(recipe);
+    setEditorDraft(null);
     setEditorOpen(true);
+  }, []);
+
+  /** Opens the editor prefilled with an AI-created draft (new recipe). */
+  const openEditorWithDraft = useCallback((recipe: Recipe): void => {
+    setEditorTarget(null);
+    setEditorDraft(recipe);
+    setEditorOpen(true);
+    setAiCreateOpen(false);
+  }, []);
+
+  /** Opens the AI-create conversation screen. */
+  const openAiCreate = useCallback((): void => {
+    setCreateMenuOpen(false);
+    setAiCreateOpen(true);
   }, []);
 
   const closeEditor = useCallback((): void => {
@@ -144,10 +171,18 @@ function App() {
         <RecipeEditor
           token={token ?? ''}
           target={editorTarget}
+          initialDraft={editorDraft ?? undefined}
           recipes={recipes ?? []}
           onClose={closeEditor}
           onSaved={handleEditorSaved}
           onOpenRecipe={openEditor}
+        />
+      ) : aiCreateOpen ? (
+        <AiCreateSheet
+          token={token ?? ''}
+          recipes={recipes ?? []}
+          onClose={() => setAiCreateOpen(false)}
+          onOpenDraft={openEditorWithDraft}
         />
       ) : (
         <>
@@ -219,12 +254,35 @@ function App() {
               type="button"
               className="fab"
               aria-label="Neues Rezept"
-              onClick={() => openEditor(null)}
+              aria-expanded={createMenuOpen}
+              onClick={() => setCreateMenuOpen((open) => !open)}
             >
               <svg className="fab-icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor" />
               </svg>
             </button>
+          )}
+
+          {createMenuOpen && token && (
+            <>
+              <button
+                type="button"
+                className="sheet-backdrop"
+                aria-label="Schließen"
+                onClick={() => setCreateMenuOpen(false)}
+              />
+              <div className="sheet create-menu" role="dialog" aria-modal="true" aria-label="Neues Rezept">
+                <p className="sheet-title">Neues Rezept</p>
+                <div className="suggestions">
+                  <button type="button" onClick={() => openEditor(null)}>
+                    Manuell erfassen
+                  </button>
+                  <button type="button" onClick={openAiCreate}>
+                    Aus Beschreibung erstellen (KI)
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </>
       )}

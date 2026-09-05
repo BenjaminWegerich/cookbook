@@ -26,8 +26,10 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 
 ## Web app — Phase 3: AI-assisted create/edit (depends on: Phase 2)
 
-- [ ] Provider-agnostic AI abstraction (provider decision deferred; Deepseek/Gemini candidates).
-- [ ] AI key handling: pasted per session, never stored (N6).
+- [x] Provider-agnostic AI abstraction — provider decision: Google Gemini, called browser-direct
+      via its REST API (no relay); the seam keeps DeepSeek possible later behind a CORS relay.
+      Implemented in `apps/web/src/ai/` (types, Gemini adapter, factory, session key store).
+- [x] AI key handling: pasted per session, never stored (N6).
 - [ ] AI create: natural-language description → draft recipe in the canonical format,
       reviewable and editable before saving.
 - [ ] AI edit: fill gaps / correct units, preview + accept or reject (user story A3).

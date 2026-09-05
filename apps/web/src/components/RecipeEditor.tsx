@@ -26,10 +26,12 @@ import {
   RecipeParseError,
   deriveIngredients,
   integerLadderValues,
+  masterIngredientNames,
   parseRecipe,
   parseTimeValue,
   renderAQS,
   serializeRecipe,
+  splitArtifacts,
   STANDARD_TIME_VALUES,
   type Ingredient,
   type Recipe,
@@ -83,6 +85,34 @@ function withIngredients(draft: EditorDraft): Recipe {
   return { ...draft, ingredients: deriveIngredients(draft.steps, draft.reference ?? []) };
 }
 
+/**
+ * Collects the ingredient names used by the steps (rows and named inline
+ * {{…}} mentions) that `isKnown` does not accept — the names highlighted as
+ * new ingredients and rejected on save. Predicate-based so the caller decides
+ * the known set (registry accessors are read fresh at call time).
+ */
+function unknownIngredientNames(
+  steps: readonly Step[],
+  isKnown: (name: string) => boolean,
+): Set<string> {
+  const names = new Set<string>();
+  for (const step of steps) {
+    for (const ingredient of step.ingredients) {
+      if (!isKnown(ingredient.name)) names.add(ingredient.name.trim());
+    }
+    for (const segment of splitArtifacts(step.text).segments) {
+      if (
+        segment.type === 'artifact' &&
+        segment.artifact.name !== undefined &&
+        !isKnown(segment.artifact.name)
+      ) {
+        names.add(segment.artifact.name.trim());
+      }
+    }
+  }
+  return names;
+}
+
 /** Integer standard numbers 1–30 — the allowed serving counts (decision 7). */
 const SERVING_OPTIONS = integerLadderValues(1, 30);
 
@@ -91,6 +121,12 @@ interface RecipeEditorProps {
   token: string;
   /** The recipe to edit (from the list); null creates a new recipe. */
   target: StoredRecipe | null;
+  /**
+   * When `target` is null, an optional already-valid draft to open the editor
+   * with (e.g. an AI-created draft, Phase 3) instead of an empty new recipe.
+   * Ignored when `target` is set.
+   */
+  initialDraft?: Recipe;
   /** All recipes of the collection, for the cross-recipe checks (§7.2). */
   recipes: StoredRecipe[];
   /** Back without saving (list stays as-is). */
@@ -278,6 +314,7 @@ function TimeChips({
 function RecipeEditor({
   token,
   target,
+  initialDraft,
   recipes,
   onClose,
   onSaved,
@@ -331,7 +368,11 @@ function RecipeEditor({
     void (async () => {
       try {
         const loaded =
-          target !== null ? toDraft(await readRecipe(token, target.fileId)) : newRecipeDraft();
+          target !== null
+            ? toDraft(await readRecipe(token, target.fileId))
+            : initialDraft !== undefined
+              ? toDraft(initialDraft)
+              : newRecipeDraft();
         const others: Recipe[] = [];
         for (const entry of recipes) {
           if (entry.fileId === target?.fileId) continue;
@@ -356,7 +397,7 @@ function RecipeEditor({
     return () => {
       cancelled = true;
     };
-  }, [token, target, recipes]);
+  }, [token, target, initialDraft, recipes]);
 
   // Load the photo preview (edit mode) and revoke object URLs on unmount.
   useEffect(() => {
@@ -457,6 +498,32 @@ function RecipeEditor({
   /** How many reference slots are already taken (max 2, §4). */
   const referenceUsed = referenceNames.size;
 
+  /**
+   * A name a row or named inline mention may reference: it exists in the
+   * ingredient master data (runtime registry, incl. entries created during
+   * this session) or it is the title of an ingredient_recipe of the
+   * collection (implicit sub-recipe link). Read fresh on every call — the
+   * registry updates when the create-master-data flow saves (see
+   * ingredientRegistry.ts), and newly saved sub-recipes appear in
+   * `ingredientRecipes`.
+   */
+  const isKnownIngredientName = (name: string): boolean =>
+    masterIngredientNames().includes(name.trim()) ||
+    ingredientRecipes.some((recipe) => recipe.title === name.trim());
+
+  /**
+   * Names used by the draft (rows + named inline mentions) that are not known
+   * to the master data / collection — these rows are highlighted as new
+   * ingredients and block the save (see collectIssues). Computed on every
+   * render (not memoized): the master registry is module state that updates
+   * when the create-master-data flow saves, and only a fresh read reflects
+   * that new ingredient immediately.
+   */
+  const unknownUsedNames = unknownIngredientNames(
+    draft?.steps ?? [],
+    (name) => isKnownIngredientName(name),
+  );
+
   /** All issues for the saved form (core per-file + editor + §7.2 cross checks). */
   const collectIssues = (savedRecipe: Recipe): ValidationIssue[] => {
     const list: ValidationIssue[] = [];
@@ -466,6 +533,11 @@ function RecipeEditor({
     if (savedRecipe.steps.every((step) => step.text === '')) {
       list.push({ path: 'body', message: 'Bitte mindestens einen Zubereitungsschritt angeben.' });
     }
+    // Per-step checks come out in step order so the first issue (the focus
+    // target) points at the earliest problem: text rules, then the
+    // ingredient-name gate (rows AND named inline {{…}} mentions must resolve
+    // to the master data or an ingredient_recipe title — decided with the
+    // user; unknown names block the save and their rows are highlighted).
     savedRecipe.steps.forEach((step, index) => {
       if (step.text === '' && step.ingredients.length > 0) {
         list.push({
@@ -478,6 +550,20 @@ function RecipeEditor({
           path: `steps[${index}].text`,
           message:
             'Der Schritt-Text darf nicht mit "- " beginnen (das ist Zutaten-Zeilen vorbehalten).',
+        });
+      }
+      const unknownInStep = unknownIngredientNames([step], (name) => isKnownIngredientName(name));
+      if (unknownInStep.size > 0) {
+        const names = [...unknownInStep].map((name) => `„${name}“`).join(', ');
+        const predicate =
+          unknownInStep.size === 1
+            ? 'ist weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept'
+            : 'sind weder in der Zutaten-Stammdatenliste noch Zutaten-Rezepte';
+        list.push({
+          path: `steps[${index}]`,
+          message:
+            `${names} ${predicate}. ` +
+            'Tippe die Zeile an, um die Zutat als neue Zutat anzulegen oder durch eine vorhandene zu ersetzen.',
         });
       }
     });
@@ -882,12 +968,12 @@ function RecipeEditor({
           </button>
         </div>
 
-        {issues.length > 0 && (
+        {bannerIssues.length > 0 && (
           <div className="validation-banner" id="editor-banner" role="alert">
             <p>
-              {issues.length === 1
+              {bannerIssues.length === 1
                 ? 'Ein Punkt muss korrigiert werden:'
-                : `${issues.length} Punkte müssen korrigiert werden:`}
+                : `${bannerIssues.length} Punkte müssen korrigiert werden:`}
             </p>
             <ul>
               {bannerIssues.map((issue, index) => (
@@ -1185,8 +1271,12 @@ function RecipeEditor({
                     <ul className="ingredient-list">
                       {step.ingredients.map((ingredient, rowIndex) => {
                         const jumpTarget = subRecipeTarget(ingredient.name);
+                        const isNewName = unknownUsedNames.has(ingredient.name.trim());
                         return (
-                          <li key={`${stepIndex}-${rowIndex}`} className="step-row">
+                          <li
+                            key={`${stepIndex}-${rowIndex}`}
+                            className={isNewName ? 'step-row is-new-ingredient' : 'step-row'}
+                          >
                             <button
                               type="button"
                               className="ingredient-row-button"
@@ -1204,8 +1294,15 @@ function RecipeEditor({
                                   ingredient.quantity,
                                   ingredient.unit,
                                 )}
+                                {isNewName && (
+                                  <span className="new-ingredient-tag">Neu</span>
+                                )}
                               </span>
-                              <span className="ingredient-hint">Antippen zum Bearbeiten</span>
+                              <span className="ingredient-hint">
+                                {isNewName
+                                  ? 'Nicht in Stammdaten — antippen zum Anlegen'
+                                  : 'Antippen zum Bearbeiten'}
+                              </span>
                             </button>
                             <div className="step-row-actions">
                               {jumpTarget !== undefined && (
@@ -1297,10 +1394,17 @@ function RecipeEditor({
                 {computedIngredients.map((ingredient) => {
                   const jumpTarget = subRecipeTarget(ingredient.name);
                   const isReference = ingredient.reference === true;
+                  const isNewName = unknownUsedNames.has(ingredient.name.trim());
                   return (
                     <li
                       key={ingredient.name}
-                      className={isReference ? 'ingredient-row is-reference' : 'ingredient-row'}
+                      className={
+                        isNewName
+                          ? 'ingredient-row is-new-ingredient'
+                          : isReference
+                            ? 'ingredient-row is-reference'
+                            : 'ingredient-row'
+                      }
                     >
                       <span className="ingredient-line">
                         {safeRenderAQS(ingredient.name, ingredient.quantity, ingredient.unit)}

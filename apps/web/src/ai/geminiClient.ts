@@ -20,7 +20,7 @@ import type { AiClient, AiMessage } from './types';
 /** REST base URL of the Gemini API. */
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 /** Default text model; override via the factory options. */
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'gemini-3.6-flash';
 
 /** Options for {@link createGeminiClient}. */
 export interface GeminiClientOptions {

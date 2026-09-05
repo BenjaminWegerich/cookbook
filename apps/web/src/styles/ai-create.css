@@ -1,0 +1,107 @@
+/**
+ * AI-assisted create screen (AiCreateSheet, Phase 3).
+ * German UI. Uses the shared design tokens (tokens.css) and the common
+ * .app / .app-header / .editor-card / .text-button / .primary-button /
+ * .error-message / .loading-message patterns.
+ */
+
+.ai-screen {
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  min-height: 100dvh;
+}
+
+/* ---- Key entry card (N6: pasted per session, never stored) -------------- */
+
+.ai-key-card {
+  max-width: 560px;
+}
+
+.ai-key-card input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+}
+
+/* ---- Chat transcript ------------------------------------------------------ */
+
+.ai-transcript {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  padding: var(--space-2) 0;
+}
+
+.ai-hint {
+  color: var(--color-ink-muted);
+  font-size: var(--text-md);
+  line-height: 1.45;
+}
+
+.ai-bubble {
+  max-width: 92%;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-md);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-user {
+  justify-self: end;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  border-end-end-radius: var(--radius-sm);
+}
+
+.ai-assistant {
+  justify-self: start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  color: var(--color-ink);
+  border-end-start-radius: var(--radius-sm);
+}
+
+/* ---- Draft-ready card ------------------------------------------------------ */
+
+.ai-draft-card {
+  border-color: var(--color-olive);
+}
+
+.ai-draft-note {
+  color: var(--color-ink-muted);
+  font-size: var(--text-md);
+  line-height: 1.4;
+}
+
+/* ---- Composer ------------------------------------------------------------- */
+
+.ai-composer {
+  display: grid;
+  gap: var(--space-4);
+  margin-block-start: auto;
+  padding-top: var(--space-5);
+}
+
+.ai-composer textarea {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.ai-composer textarea::placeholder {
+  color: var(--color-ink-muted);
+}
