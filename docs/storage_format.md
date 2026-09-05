@@ -14,10 +14,10 @@
   hand-maintained copy of the data.
 - **Two parts in one file:**
   - **YAML front matter** (between the leading `---` lines) — the structured
-    metadata (title, type, times, servings/yield);
-  - **Markdown body** — the preparation steps, which carry the **ingredient
-    markers** (see §4): the step text is the source of truth for the
-    ingredient list, which is *derived* from the markers on read.
+    metadata (title, type, times, servings/yield, the `reference` name list);
+  - **Markdown body** — the preparation steps (§5). Each step carries its own
+    **ingredient rows** (§4), which are the source of truth for the ingredient
+    list; the master list is *derived* from the rows on read.
 - **What is NOT stored in the recipe file:**
   - additional quantity specifications (e.g., "1 Becher", "½ Zitrone") — these are
     computed at display time from the additional-unit master data
@@ -63,47 +63,67 @@ The app writes YAML through a serializer; hand-written files are validated on re
 | `finished_dish` | `servings` | `yield`, `yield_unit` | `servings`: integer, a standard number (ladder value). Example: `6` — not `11`. |
 | `ingredient_recipe` | `yield`, `yield_unit` | `servings` | `yield`: number, a standard number; `yield_unit`: `g` or `ml` (the authorable family units). Example: `yield: 500`, `yield_unit: ml`. |
 
-A front-matter `ingredients` field is **rejected**: the ingredient list is derived
-from the body markers (§4). The editor's quantity pool is bounded to 1 … 10000
-(g/ml); values are stored in the family unit, `kg`/`l` appear only in display
-(see [additional_quantity_specifications.md](additional_quantity_specifications.md) §2).
+Additional fields:
 
-## 4. Ingredients — Markers in the Body
+| Field | Type | Allowed on | Notes |
+|---|---|---|---|
+| `reference` | list of strings | `finished_dish` only | Names of 0–2 ingredients anchored to the portion size (§4); names must occur in the recipe rows. |
 
-Decided with the user: **the step text is the source of truth for the
-ingredient list.** An ingredient is written inline into the step that uses it
-as a machine-readable **marker**:
+A front-matter `ingredients` field is **rejected**: the master list is derived
+from the step rows (§4), never typed. The editor's quantity pool is bounded to
+1 … 10000 (g/ml); values are stored in the family unit, `kg`/`l` appear only in
+display (see [additional_quantity_specifications.md](additional_quantity_specifications.md) §2).
+
+## 4. Ingredients — Step Rows and Inline Artifacts
+
+Every step carries its own **counted ingredient list** (see §5 for the physical
+layout). The rows are written in a natural, amount-first phrase:
 
 ```
-{{ingredient|Joghurt|400|g}}
-{{ingredient|Joghurt|200|g|ref}}
-{{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}}
+1. - 250 g Tortillas
+   - 15 ml Zitronensaft
+   Tortillas im Ofen erwärmen.
 ```
 
-- **Grammar:** `{{ingredient|NAME|MENGE|EINHEIT}}` with two optional flags:
-  `|ref` (portion anchor, max 2 per finished-dish recipe) and
-  `|recipe:TITEL` (linked ingredient recipe). Field names are English (code);
-  `NAME` and `TITEL` are German (data).
-- **Menge** is a standard number (ladder value); **Einheit** is the stored base
-  unit — authored as `g` or `ml` (the ingredient's family unit). `kg`/`l`
-  markers from hand-written files are accepted on read and normalized to the
-  family unit (`×1000`) when the editor loads the file.
-- A `|recipe:TITEL` marker links the ingredient to the ingredient recipe with
-  that title. **The ingredient name equals the recipe title** (`NAME == TITEL`,
-  decided with the user): the sub-recipe is chosen in the editor like any other
-  ingredient by its name — there is no separate link field — and renaming the
-  recipe updates `NAME` and `TITEL` of every reference together (§6). The HTML
-  export renders sub-recipe ingredients as links to the sub-recipe's own export
-  file (see the HTML share export in ARCHITECTURE.md).
-- The **ingredient list is derived** from the markers on read (§7.1):
-  - order = order of first appearance in the steps;
+- **Row grammar:** `- MENGE EINHEIT NAME` (e.g. `- 250 g Reis`,
+  `- 400 ml Kokosmilch`). The quantity must be a standard number (ladder value)
+  in the ingredient's family unit; the row is the only way an ingredient enters
+  the recipe's lists.
+- The **master ingredient list is derived** from the rows of all steps (§7.1):
+  - order = order of first use across the steps (each step's rows in their order);
   - an ingredient used several times appears **once, with the total amount**
     (sum rounded to the nearest ladder rung — the sum of two standard numbers
     is not necessarily a standard number);
-  - `reference` is kept when any marker of that ingredient carries `|ref`;
-  - the `|recipe:` link is kept from the first marker that carries one.
-- A malformed `{{…}}` block (wrong fields, non-standard quantity, unknown
-  unit) is a validation error — never silently treated as prose.
+  - rows with the same name but different base units stay separate.
+- **Inline artifacts** are display-only quantity mentions *inside the step text*
+  (never counted toward any list, but scaled with the serving count at display
+  time and rendered code-styled):
+  ```
+  Nudeln in {{1500 ml Wasser}} kochen.         ingredient mention
+  {{100 g}} Teig flach ausrollen.              quantity-only mention
+  ```
+  - Grammar: `{{ MENGE EINHEIT [NAME] }}`. With a name the artifact is an
+    ingredient mention (name = everything after the unit, e.g. `Wasser`); without
+    a name it is a quantity-only mention (`100 g`). A quantity-only mention may
+    also omit the unit entirely (`{{100}}` — a unitless count, e.g. a number of
+    pieces); an ingredient mention always carries a unit. All variants scale with
+    the number of servings and render code-styled, with the l/kg display form
+    where a unit is present.
+  - **Canonical values are g/ml with `.` decimals.** Hand-written files may use
+    German comma decimals and `kg`/`l` (`{{1,5 l Wasser}}`, `- 0,2 kg Reis`); the
+    parser normalizes them on read (comma → dot, kg/l → g/ml ×1000). Non-standard
+    numbers remain validation errors.
+  - A malformed `{{…}}` block is a validation error — never silently treated as prose.
+- **Reference role** (portion anchor, `finished_dish` only): stored as a
+  front-matter list of ingredient names, `reference: [Tortillas]` (0–2 entries).
+  It is a property of the *master* list — the editor shows it only there; rows and
+  artifacts never carry it. A name must match a merged ingredient of the recipe.
+- **Sub-recipe links are implicit**: an ingredient use — step row, master row or
+  inline artifact — whose name equals the title of an `ingredient_recipe` in the
+  collection *is* that sub-recipe (there is no link field; the editor picks the
+  title like any ingredient). The HTML export renders such uses as links to the
+  sub-recipe's own export file (see the HTML share export in ARCHITECTURE.md);
+  renaming the recipe updates them together (§6).
 - The additional-unit display ("1 Becher Joghurt (400 g)") is never stored; it
   is computed at display time from the master data.
 
@@ -114,31 +134,42 @@ as a machine-readable **marker**:
 
   ```markdown
   ## Zubereitung
-  1. Erste Anweisung …
-  2. Zweite Anweisung …
+  1. - 250 g Tortillas
+     Tortillas im Ofen erwärmen.
+  2. - 400 g Joghurt
+     - 15 ml Zitronensaft
+     Joghurt mit Zitronensaft verrühren.
+  3. Mit frischen Kräutern servieren.
   ```
 
 - **`## Zubereitung` is a fixed structural heading** (not a section the author may
-  rename). No other headings or sub-sections may appear in the body; steps are a
-  single ordered list.
-- Step numbers are explicit in the file (Markdown ordered list); the order is
-  authoritative, even where it does not matter.
+  rename). No other headings or sub-sections may appear in the body.
+- Each step is a numbered block:
+  - **With rows:** the numbered line starts with the first row (`1. - 250 g
+    Tortillas`); further rows follow as `- ` lines (indented for readability), and
+    then exactly one prose line ends the block. A row line is the only place
+    `- ` may start a line.
+  - **Without rows:** the step is a single prose line (`3. Mit frischen Kräutern
+    servieren.`).
+  - The prose may contain the inline artifacts of §4. The editor collapses line
+    breaks on save; prose must not start with `- `.
+- Blank lines separate steps. Step numbers are explicit in the file (Markdown
+  ordered list); the order is authoritative, even where it does not matter.
 - There is no summary section; the recipe ends with the last step, which may include
   serving suggestions.
-- Steps are single-line prose (the editor collapses line breaks on save). They may
-  contain arbitrary text plus the ingredient markers of §4; sub-recipe links are
-  carried by the marker's `|recipe:` flag, not typed as prose.
 
 ## 6. Title as Identifier — Renames
 
-- The `title` is the stable identifier: sub-recipe links (the markers' `|recipe:`
-  flags) and the file name both reference it.
+- The `title` is the stable identifier: sub-recipe uses (step rows, inline
+  artifacts and `reference` entries whose name is the title) and the file name
+  both reference it.
 - **Renaming a recipe** therefore means, as one operation:
   1. change `title` in the file,
   2. rename the file (and its image),
-  3. update every `|recipe:` marker to the old title in all other recipe files.
-- The app provides a rename tool that performs all three steps; it must never leave a
-  dangling `|recipe:` reference (see §7).
+  3. update every implicit use of the old title in all other recipe files — only
+     `ingredient_recipe` titles are referenced this way, and only those trigger
+     updates (finished-dish titles never are).
+- The app provides a rename tool that performs all three steps.
 - The `subtitle` is display-only and plays no role in identification.
 
 ## 7. Validation
@@ -150,22 +181,26 @@ the file. Two levels:
 
 - Front matter parses as valid YAML and matches the schema of §3 (field names,
   types, required/forbidden fields per `type`); an `ingredients` field is rejected
-  (it is derived from the markers, §4).
+  (it is derived from the step rows, §4).
 - `title` is non-empty and file-name-safe.
-- `servings` / `yield` / every marker `Menge` is a standard number: `pos(v)` on the
-  quantity ladder must succeed (see [quantity_scaling.md](quantity_scaling.md) §3);
-  a non-ladder value is rejected.
-- Marker units are `g`/`ml` (authored) or `kg`/`l` (legacy, accepted); marker
-  syntax is validated per step (issue path `steps[i]`).
-- At most 2 markers carry `|ref`, and only in `finished_dish` recipes.
-- The body contains exactly one `## Zubereitung` heading followed by an ordered list.
+- `servings` / `yield` / every row and artifact `Menge` is a standard number:
+  `pos(v)` on the quantity ladder must succeed
+  (see [quantity_scaling.md](quantity_scaling.md) §3); a non-ladder value is rejected.
+- Row syntax, step structure and the artifacts of each step are validated (issue
+  paths `steps[i].ingredients[j]…` and `steps[i].text`). A row without a name or
+  quantity, a step whose prose is missing, and prose starting with `- ` are errors.
+- `reference` lists at most 2 names, only on `finished_dish`, and every name must
+  occur among the recipe's merged ingredients.
+- The body contains exactly one `## Zubereitung` heading followed by the numbered
+  step blocks of §5.
 
 ### 7.2 Cross-recipe validation (per collection)
 
 - `title` is unique across the collection (file names are unique by construction;
   the titles inside must be too).
-- Every `|recipe:` marker points to an existing recipe whose `type` is
-  `ingredient_recipe`.
+- The implicit sub-recipe link graph is acyclic (a cycle would recurse forever in
+  the scaling / shopping-list logic that walks the sub-recipe links); a
+  `finished_dish` title is never a link target.
 
 A file that fails validation is shown to the user with a precise error (never
 silently ignored, never auto-corrected).
@@ -183,15 +218,21 @@ description: Knusprige Wraps mit mariniertem Tofu und frischem Gemüse.
 servings: 6
 prep_time: 25 min
 total_time: 40 min
+reference:
+  - Tortillas
 ---
 ## Zubereitung
-1. {{ingredient|Tortillas|250|g|ref}} im Ofen erwärmen und warm halten.
+1. - 250 g Tortillas
+   Tortillas im Ofen erwärmen und warm halten.
 2. Tofu marinieren und scharf anbraten.
-3. {{ingredient|Joghurt|400|g}} mit {{ingredient|Zitronensaft|15|ml}} verrühren und würzen.
-4. Wraps mit Tofu, Joghurt-Dip und Gemüse füllen. {{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}} dazureichen.
+3. - 400 g Joghurt
+   - 15 ml Zitronensaft
+   Joghurt mit Zitronensaft verrühren und würzen.
+4. - 500 ml Béchamelsauce
+   Wraps mit Tofu, Joghurt-Dip und Gemüse füllen und mit Béchamelsauce servieren.
 ```
 
-Ingredient recipe:
+Ingredient recipe (with an inline quantity-only artifact):
 
 ```markdown
 ---
@@ -202,8 +243,10 @@ yield_unit: ml
 prep_time: 15 min
 ---
 ## Zubereitung
-1. {{ingredient|Butter|25|g}} schmelzen, Mehl anschwitzen und mit {{ingredient|Milch|300|ml}} aufgießen.
-2. Unter Rühren köcheln, bis die Sauce bindet.
+1. - 25 g Butter
+   - 300 ml Milch
+   Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.
+2. In {{50 ml Milch}} auflösen und unter Rühren köcheln, bis die Sauce bindet.
 ```
 
 ## 9. Ingredient Master Data Files

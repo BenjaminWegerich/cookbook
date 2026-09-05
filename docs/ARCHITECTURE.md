@@ -4,8 +4,10 @@
 > (React + TypeScript on Vite, hosted on GitHub Pages) reads and writes the canonical
 > Markdown + YAML files (Google Drive OAuth), and the core logic module provides
 > deterministic scaling, the additional-unit display and the recipe format parsing. The
-> recipe editor uses the marker model (the step text is the source of truth for the
-> ingredient list, see [storage_format.md](storage_format.md) §4). AI-assisted create/edit,
+> recipe editor uses the per-step ingredient model: every step has its own counted
+> ingredient rows above a free-prose text, and the master ingredient list is derived from
+> the rows (the step text may contain display-only inline artifacts for scaled
+> quantities, see [storage_format.md](storage_format.md) §4/§5). AI-assisted create/edit,
 > Google Keep, Gemini and sharing integrations follow in the upcoming roadmap tasks.
 
 ## Components

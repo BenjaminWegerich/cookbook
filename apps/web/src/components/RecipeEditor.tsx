@@ -1,14 +1,17 @@
 /**
- * Recipe editor screen (ROADMAP, web app Phase 2) — marker model.
+ * Recipe editor screen (ROADMAP, web app Phase 2) — per-step ingredient model.
  *
- * Decided with the user (round 2):
- * - the step text is the source of truth for the ingredient list: ingredients
- *   are inserted as {{ingredient|…}} markers into the steps and rendered as
- *   artifacts in the step editor; the Zutaten list is *derived* from the
- *   markers (order of first appearance, duplicates merged with the total);
- * - ingredients are only added from the master data, during the steps
- *   ("+ Zutat") — never directly to the list; deleting an artifact from the
- *   text deletes the ingredient;
+ * Decided with the user:
+ * - every step carries its own counted ingredient list (rows) that appears
+ *   above the step text; rows are added/edited per step ("+ Zutat") and feed
+ *   the derived master list (order of first use, duplicates merged with the
+ *   total, storage_format.md §4);
+ * - the step text is free prose; display-only inline artifacts ("+ Menge im
+ *   Text") scale with the serving count but are never counted;
+ * - the master list (Zutaten section) is read-only except for the reference
+ *   role, which can only be set there (finished_dish, max 2);
+ * - sub-recipes are implicit (name == ingredient-recipe title) and clickable
+ *   wherever they appear (step rows, master list, text artifacts);
  * - quantities are stored in the family unit g/ml; the display switches to
  *   kg/l at 1000 (chips carry base quantity AND base unit, no steppers);
  * - sections: Kopfdaten (Foto, Titel, Details, Zeiten, Typ, Portionen/
@@ -26,12 +29,12 @@ import {
   parseRecipe,
   parseTimeValue,
   renderAQS,
-  replaceMarkers,
   serializeRecipe,
   STANDARD_TIME_VALUES,
-  updateMarkersByName,
   type Ingredient,
   type Recipe,
+  type Step,
+  type TextArtifact,
   type Unit,
   type ValidationIssue,
 } from '@cookbook/core';
@@ -46,12 +49,16 @@ import {
   type StoredRecipe,
 } from '../drive/recipeStorage';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
-import IngredientSheet, { type IngredientRecipeOption } from './IngredientSheet';
+import IngredientSheet, {
+  type IngredientRecipeOption,
+  type IngredientSheetMode,
+  type SheetResult,
+} from './IngredientSheet';
 import NewIngredientSheet from './NewIngredientSheet';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityPicker from './QuantityPicker';
 
-/** The draft holds every field except the derived ingredient list. */
+/** The draft holds every field except the derived master ingredient list. */
 type EditorDraft = Omit<Recipe, 'ingredients'>;
 
 /** A fresh draft for a new recipe (all optional fields unset). */
@@ -60,52 +67,20 @@ function newRecipeDraft(): EditorDraft {
     title: '',
     type: 'finished_dish',
     prep_time: '',
-    steps: [''],
+    steps: [{ ingredients: [], text: '' }],
   };
 }
 
-/** Strips the derived ingredients from a loaded recipe (they live in steps). */
+/** Strips the derived master list from a loaded recipe (it lives in rows). */
 function toDraft(recipe: Recipe): EditorDraft {
   const draft: Record<string, unknown> = { ...recipe };
   delete draft.ingredients;
-  return normalizeStoredUnits(draft as unknown as EditorDraft);
+  return draft as unknown as EditorDraft;
 }
 
-/**
- * Normalizes legacy kg/l values into the g/ml family (decided with the user:
- * quantities are stored in g or ml; kg/l exist only in display). A hand-written
- * file with `yield: 2, yield_unit: kg` or a `{{ingredient|Mehl|2|kg}}` marker
- * is migrated in place (×1000) when the editor loads it — the file is the
- * canonical stored form, and the picker can then always work in the family
- * unit. ×1000 of a ladder rung is a ladder rung (+3 decades), so values stay
- * standard; the conversion cannot double-apply (after one pass the unit is
- * g/ml and never matches again).
- */
-function normalizeStoredUnits(draft: EditorDraft): EditorDraft {
-  const steps = draft.steps.map((step) =>
-    replaceMarkers(step, (marker) => {
-      if (marker.unit === 'kg') {
-        return { ...marker, quantity: marker.quantity * 1000, unit: 'g' };
-      }
-      if (marker.unit === 'l') {
-        return { ...marker, quantity: marker.quantity * 1000, unit: 'ml' };
-      }
-      return marker;
-    }),
-  );
-  const yieldIsKg = draft.yield_unit === 'kg';
-  const yieldIsL = draft.yield_unit === 'l';
-  return {
-    ...draft,
-    steps,
-    yield: yieldIsKg || yieldIsL ? (draft.yield ?? 0) * 1000 : draft.yield,
-    yield_unit: yieldIsKg ? 'g' : yieldIsL ? 'ml' : draft.yield_unit,
-  };
-}
-
-/** Rebuilds a full Recipe from a draft (the list is derived from the steps). */
+/** Rebuilds a full Recipe from a draft (the master list is derived, §4). */
 function withIngredients(draft: EditorDraft): Recipe {
-  return { ...draft, ingredients: deriveIngredients(draft.steps) };
+  return { ...draft, ingredients: deriveIngredients(draft.steps, draft.reference ?? []) };
 }
 
 /** Integer standard numbers 1–30 — the allowed serving counts (decision 7). */
@@ -126,9 +101,11 @@ interface RecipeEditorProps {
   onOpenRecipe?: (recipe: StoredRecipe) => void;
 }
 
-/** One sheet session: adding into a step or editing an ingredient. */
+/** One sheet session: add/edit a step row, or insert an inline artifact. */
 type SheetState =
-  { mode: 'add'; stepIndex: number; insertAt: number } | { mode: 'edit'; name: string };
+  | { kind: 'row-add'; stepIndex: number }
+  | { kind: 'row-edit'; stepIndex: number; rowIndex: number }
+  | { kind: 'inline'; stepIndex: number; insertAt: number };
 
 /** A queued photo change, applied on Speichern (§2). */
 type PhotoChange = { kind: 'set'; blob: Blob; extension: 'jpg' | 'png' } | { kind: 'remove' };
@@ -144,7 +121,7 @@ type IssueTarget =
 
 /**
  * Maps a core issue path (storage_format.md §7) to the editor element that
- * shows it. Marker issues use the step index as their path (§4).
+ * shows it. Step issues (rows and text) use the step index as their path (§4).
  */
 function mapIssue(issue: ValidationIssue): IssueTarget {
   const path = issue.path;
@@ -158,21 +135,38 @@ function mapIssue(issue: ValidationIssue): IssueTarget {
   if (stepMatch !== null) {
     return { kind: 'step', index: Number(stepMatch[1]) };
   }
-  if (path === 'ingredients') return { kind: 'section', section: 'ingredients' };
+  if (path === 'reference' || /^reference\[/.test(path)) {
+    return { kind: 'section', section: 'ingredients' };
+  }
   if (path === 'body' || path === 'frontMatter') return { kind: 'section', section: 'body' };
   return { kind: 'section', section: 'global' };
 }
 
 /**
  * Normalizes the draft into the form that is written to Drive (§7 round-trip):
- * trimmed single-line steps (internal line breaks collapse to spaces — steps
- * are ordered-list items, §5), empty optional fields dropped, and the
- * ingredient list derived from the markers (§4).
+ * trimmed single-line step prose (internal line breaks collapse to spaces),
+ * empty optional fields dropped, the reference list kept for finished dishes
+ * only, and the master list derived from the step rows (§4).
  */
 function normalizeRecipe(draft: EditorDraft): Recipe {
+  // A step is kept when it has prose OR counted rows — a row-only step stays
+  // visible so the editor can report the missing text instead of silently
+  // dropping the rows. Purely empty placeholder steps are removed.
   const steps = draft.steps
-    .map((step) => step.replace(/\s*\n\s*/g, ' ').trim())
-    .filter((step) => step !== '');
+    .map((step) => ({
+      ingredients: step.ingredients.map((ingredient) => ({
+        name: ingredient.name.trim(),
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+      })),
+      text: step.text.replace(/\s*\n\s*/g, ' ').trim(),
+    }))
+    .filter((step) => step.text !== '' || step.ingredients.length > 0);
+  const reference =
+    draft.type === 'finished_dish' && draft.reference !== undefined && draft.reference.length > 0
+      ? draft.reference
+      : undefined;
+  const ingredients = deriveIngredients(steps, reference ?? []);
   const base = {
     title: draft.title.trim(),
     type: draft.type,
@@ -183,14 +177,19 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
       draft.total_time !== undefined && draft.total_time.trim() !== ''
         ? draft.total_time.trim()
         : undefined,
-    ingredients: deriveIngredients(steps),
-    steps: steps.length > 0 ? steps : [''],
+    steps: steps.length > 0 ? steps : [{ ingredients: [], text: '' }],
   };
   if (draft.type === 'finished_dish') {
-    return { ...base, servings: draft.servings };
+    return {
+      ...base,
+      ingredients,
+      servings: draft.servings,
+      ...(reference !== undefined ? { reference } : {}),
+    };
   }
   return {
     ...base,
+    ingredients,
     yield: draft.yield,
     yield_unit: draft.yield_unit,
   };
@@ -313,13 +312,14 @@ function RecipeEditor({
    *  restore target when the create sheet closes (cancel or save). */
   const [sheetContext, setSheetContext] = useState<{
     sheet: SheetState;
+    mode: IngredientSheetMode;
     name: string;
     quantity: number;
   } | null>(null);
-  /** Prefill for a reopened ingredient sheet (add mode): name + quantity.
-   *  The unit is derived from the master data by the sheet anyway, so the
-   *  synthetic entry only carries name and quantity. */
-  const [sheetPrefill, setSheetPrefill] = useState<Ingredient | null>(null);
+  /** Prefill for a reopened ingredient sheet (add modes). */
+  const [sheetPrefill, setSheetPrefill] = useState<{ name: string; quantity: number } | null>(
+    null,
+  );
 
   const photoUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -424,7 +424,7 @@ function RecipeEditor({
   /** The normalized recipe — what is written to Drive (derived list, §4). */
   const saved = useMemo(() => (draft === null ? null : normalizeRecipe(draft)), [draft]);
 
-  /** The computed ingredient list: exactly the rows that will be saved. */
+  /** The derived master list: exactly the rows that will be saved. */
   const computedIngredients = saved?.ingredients ?? [];
 
   /** Ingredient recipes of the collection, offered in the sheet's name
@@ -444,10 +444,18 @@ function RecipeEditor({
     [collection],
   );
 
+  /** Reference names currently flagged on the master list (§4). */
+  const referenceNames = useMemo(() => {
+    const names = new Set(draft?.reference ?? []);
+    // Only names that exist in the derived list are meaningful to show.
+    for (const entry of computedIngredients) {
+      if (entry.reference === true) names.add(entry.name);
+    }
+    return names;
+  }, [draft?.reference, computedIngredients]);
+
   /** How many reference slots are already taken (max 2, §4). */
-  const referenceUsed = computedIngredients.filter(
-    (ingredient) => ingredient.reference === true,
-  ).length;
+  const referenceUsed = referenceNames.size;
 
   /** All issues for the saved form (core per-file + editor + §7.2 cross checks). */
   const collectIssues = (savedRecipe: Recipe): ValidationIssue[] => {
@@ -455,14 +463,35 @@ function RecipeEditor({
     if (savedRecipe.prep_time === '') {
       list.push({ path: 'prep_time', message: 'Bitte die Vorbereitungszeit angeben.' });
     }
-    if (savedRecipe.steps.every((step) => step === '')) {
+    if (savedRecipe.steps.every((step) => step.text === '')) {
       list.push({ path: 'body', message: 'Bitte mindestens einen Zubereitungsschritt angeben.' });
     }
-    try {
-      parseRecipe(serializeRecipe(savedRecipe));
-    } catch (err) {
-      if (err instanceof RecipeParseError) list.push(...err.issues);
-      else throw err;
+    savedRecipe.steps.forEach((step, index) => {
+      if (step.text === '' && step.ingredients.length > 0) {
+        list.push({
+          path: `steps[${index}]`,
+          message: 'Jeder Schritt braucht nach seinen Zutaten einen Text.',
+        });
+      }
+      if (step.text.startsWith('- ')) {
+        list.push({
+          path: `steps[${index}].text`,
+          message:
+            'Der Schritt-Text darf nicht mit "- " beginnen (das ist Zutaten-Zeilen vorbehalten).',
+        });
+      }
+    });
+    // The core round-trip only runs when the editor-level checks above are
+    // clean — serializeRecipe refuses values the canonical format cannot
+    // represent (e.g. a row-only step), and those have a precise German
+    // message already.
+    if (list.length === 0) {
+      try {
+        parseRecipe(serializeRecipe(savedRecipe));
+      } catch (err) {
+        if (err instanceof RecipeParseError) list.push(...err.issues);
+        else throw err;
+      }
     }
     // §7.2: title unique across the collection (collection excludes this file).
     if (
@@ -474,39 +503,27 @@ function RecipeEditor({
         message: `Der Titel "${savedRecipe.title}" ist bereits vergeben.`,
       });
     }
-    // §7.2: every |recipe: marker must point to an existing ingredient recipe.
-    savedRecipe.ingredients.forEach((ingredient, index) => {
-      if (ingredient.recipe === undefined) return;
-      const linkTarget = collection.find((recipe) => recipe.title === ingredient.recipe);
-      if (linkTarget === undefined) {
-        list.push({
-          path: `ingredients[${index}].recipe`,
-          message: `Das verlinkte Rezept "${ingredient.recipe}" existiert nicht.`,
-        });
-      } else if (linkTarget.type !== 'ingredient_recipe') {
-        list.push({
-          path: `ingredients[${index}].recipe`,
-          message: `Das verlinkte Rezept "${ingredient.recipe}" muss ein Zutaten-Rezept sein.`,
-        });
-      }
-    });
     return list;
   };
 
   /** Focuses / scrolls to the element for the first issue of a save attempt. */
   const focusFirstIssue = (list: ValidationIssue[], draftNow: EditorDraft): void => {
     if (list.length === 0) return;
-    const target = mapIssue(list[0]);
+    const targetIssue = mapIssue(list[0]);
     let id = 'editor-banner';
-    if (target.kind === 'field') {
-      id = `editor-field-${target.field}`;
-    } else if (target.kind === 'step') {
+    if (targetIssue.kind === 'field') {
+      id = `editor-field-${targetIssue.field}`;
+    } else if (targetIssue.kind === 'step') {
       // The issue index refers to the normalized steps (empty steps are dropped
       // before validation) — map back to the draft step index for the DOM id.
       const normalizedIndices = draftNow.steps
-        .map((step, index) => (step.trim() !== '' ? index : -1))
+        .map((step, index) =>
+          step.text.trim() !== '' || step.ingredients.length > 0 ? index : -1,
+        )
         .filter((index) => index !== -1);
-      id = `editor-step-${normalizedIndices[target.index] ?? target.index}`;
+      id = `editor-step-${normalizedIndices[targetIssue.index] ?? targetIssue.index}`;
+    } else if (targetIssue.section === 'ingredients') {
+      id = 'editor-master-list';
     }
     requestAnimationFrame(() => {
       const element = document.getElementById(id);
@@ -608,12 +625,28 @@ function RecipeEditor({
     updateDraft((current) => ({ ...current, ...patch }) as EditorDraft);
   };
 
+  /** Applies an updater to the rows of one step. */
+  const updateStep = (stepIndex: number, updater: (step: Step) => Step): void => {
+    updateDraft((current) => {
+      const steps = [...current.steps];
+      steps[stepIndex] = updater(steps[stepIndex]!);
+      return { ...current, steps };
+    });
+  };
+
   // ---- Sheet handlers -----------------------------------------------------
 
+  /** The sheet mode for a SheetState (used when the create sheet reopens it). */
+  const sheetMode = (state: SheetState): IngredientSheetMode => {
+    if (state.kind === 'inline') return 'inline-add';
+    return state.kind === 'row-add' ? 'row-add' : 'row-edit';
+  };
+
   /**
-   * Jump to a linked sub-recipe (editor Zutaten list). Unsaved changes are
-   * guarded by the same two-step "verwerfen" confirmation as the back button:
-   * the first tap arms it, the second tap (label "Wirklich verwerfen?") jumps.
+   * Jump to a linked sub-recipe (a step row, the master list or an artifact).
+   * Unsaved changes are guarded by the same two-step "verwerfen" confirmation
+   * as the back button: the first tap arms it, the second tap (label "Wirklich
+   * verwerfen?") jumps.
    */
   const requestJump = (recipe: StoredRecipe): void => {
     if (dirty && !confirmDiscard) {
@@ -624,26 +657,43 @@ function RecipeEditor({
     onOpenRecipe?.(recipe);
   };
 
-  const handleSheetConfirm = (
-    ingredient: Ingredient,
-    action: 'add' | 'update' | 'remove',
-  ): void => {
+  /** The StoredRecipe of a sub-recipe title, when it is an ingredient recipe. */
+  const subRecipeTarget = (name: string): StoredRecipe | undefined => {
+    const isSub = collection.some(
+      (recipe) => recipe.type === 'ingredient_recipe' && recipe.title === name,
+    );
+    if (!isSub) return undefined;
+    return recipes.find((recipe) => recipe.title === name);
+  };
+
+  const handleSheetConfirm = (value: SheetResult, action: 'add' | 'update' | 'remove'): void => {
     if (sheet === null) return;
-    if (action === 'add' && sheet.mode === 'add') {
-      // Insert the marker at the caret of the step (the StepEditor handles the
-      // string insertion and caret placement; the derived list updates via the
-      // value change).
-      stepEditorRefs.current[sheet.stepIndex]?.insertMarker(ingredient, sheet.insertAt);
-    } else if (action === 'remove' && sheet.mode === 'edit') {
-      updateDraft((current) => ({
-        ...current,
-        steps: updateMarkersByName(current.steps, sheet.name, () => null),
+    if (sheet.kind === 'row-add' && 'name' in value) {
+      updateStep(sheet.stepIndex, (step) => ({
+        ...step,
+        ingredients: [...step.ingredients, value as Ingredient],
       }));
-    } else if (sheet.mode === 'edit') {
-      updateDraft((current) => ({
-        ...current,
-        steps: updateMarkersByName(current.steps, sheet.name, () => ingredient),
-      }));
+    } else if (sheet.kind === 'row-edit') {
+      if (action === 'remove') {
+        updateStep(sheet.stepIndex, (step) => ({
+          ...step,
+          ingredients: step.ingredients.filter((_, index) => index !== sheet.rowIndex),
+        }));
+      } else if ('name' in value) {
+        updateStep(sheet.stepIndex, (step) => {
+          const ingredients = [...step.ingredients];
+          ingredients[sheet.rowIndex] = value as Ingredient;
+          return { ...step, ingredients };
+        });
+      }
+    } else if (sheet.kind === 'inline') {
+      // Insert the display-only artifact at the caret of the step (the
+      // StepEditor handles the string insertion and caret placement).
+      const artifact: TextArtifact =
+        'name' in value
+          ? { name: value.name, quantity: value.quantity, unit: value.unit ?? 'g' }
+          : { quantity: value.quantity, ...(value.unit !== undefined ? { unit: value.unit } : {}) };
+      stepEditorRefs.current[sheet.stepIndex]?.insertArtifact(artifact, sheet.insertAt);
     }
     setSheet(null);
     setSheetPrefill(null);
@@ -651,9 +701,9 @@ function RecipeEditor({
 
   /**
    * Persists a new ingredient to the Drive master data. On success the create
-   * sheet closes and the ingredient sheet re-opens (restore target) — in add
-   * mode with the saved name and the quantity the user had typed, where they
-   * confirm the actual recipe addition (decided with the user).
+   * sheet closes and the ingredient sheet re-opens (restore target) — with
+   * the saved name and the quantity the user had typed, where they confirm
+   * the actual recipe addition (decided with the user).
    */
   const handleCreateIngredient = async (
     name: string,
@@ -667,14 +717,10 @@ function RecipeEditor({
       setCreateSheet(null);
       if (sheetContext !== null) {
         setSheet(sheetContext.sheet);
-        // Add mode: restore with the saved name (the create form is editable
-        // there) plus the typed quantity. Edit mode: keep the original sheet
-        // — the recipe markers still reference the original name.
-        setSheetPrefill(
-          sheetContext.sheet.mode === 'add'
-            ? { name, quantity: sheetContext.quantity, unit: 'g' }
-            : null,
-        );
+        // Restore the typed name + quantity so the flow continues where it
+        // was interrupted (quantity-only inline mentions without a name keep
+        // the empty name and just the quantity).
+        setSheetPrefill({ name: sheetContext.name, quantity: sheetContext.quantity });
       }
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : String(err));
@@ -693,8 +739,24 @@ function RecipeEditor({
     if (sheetContext !== null) {
       setSheet(sheetContext.sheet);
       // Restore the typed name+quantity so nothing is lost on cancel.
-      setSheetPrefill({ name: sheetContext.name, quantity: sheetContext.quantity, unit: 'g' });
+      setSheetPrefill({ name: sheetContext.name, quantity: sheetContext.quantity });
     }
+  };
+
+  /** Toggles the reference role of a master-list row (§4, finished_dish only). */
+  const toggleReference = (name: string): void => {
+    if (draft === null || draft.type !== 'finished_dish') return;
+    const flagged = referenceNames.has(name);
+    if (!flagged && referenceUsed >= 2) return;
+    updateDraft((current) => {
+      const reference = new Set(current.reference ?? []);
+      if (flagged) {
+        reference.delete(name);
+      } else {
+        reference.add(name);
+      }
+      return { ...current, reference: [...reference] };
+    });
   };
 
   // ---- Photo handlers -----------------------------------------------------
@@ -776,7 +838,9 @@ function RecipeEditor({
   // normalizeRecipe drops empty steps before validation, so the issue paths
   // refer to the normalized steps; map them back to the draft's step indices.
   const normalizedIndices = draft.steps
-    .map((step, index) => (step.trim() !== '' ? index : -1))
+    .map((step, index) =>
+      step.text.trim() !== '' || step.ingredients.length > 0 ? index : -1,
+    )
     .filter((index) => index !== -1);
   const stepIssues = (index: number): ValidationIssue[] =>
     mappedIssues
@@ -952,7 +1016,13 @@ function RecipeEditor({
               <button
                 type="button"
                 className={draft.type === 'finished_dish' ? 'segmented-active' : ''}
-                onClick={() => patchDraft({ type: 'finished_dish' })}
+                onClick={() =>
+                  patchDraft({
+                    type: 'finished_dish',
+                    // A finished dish may again define references.
+                    reference: draft.reference ?? [],
+                  })
+                }
               >
                 Gericht
               </button>
@@ -962,6 +1032,8 @@ function RecipeEditor({
                 onClick={() =>
                   patchDraft({
                     type: 'ingredient_recipe',
+                    // References are finished_dish-only (§4): drop them.
+                    reference: undefined,
                     // Defaults for a fresh ingredient recipe: Gewicht, 1000 (1 kg).
                     yield: draft.yield ?? 1000,
                     yield_unit: draft.yield_unit ?? 'g',
@@ -993,8 +1065,6 @@ function RecipeEditor({
             <>
               <div className="field" id="editor-field-yield">
                 <span className="field-label">Ergiebigkeit</span>
-                {/* Einheit (Gewicht/Volumen) sits directly under the caption,
-                    above the amount picker. */}
                 <div className="segmented" role="group" aria-label="Einheit der Ergiebigkeit">
                   <button
                     type="button"
@@ -1028,7 +1098,7 @@ function RecipeEditor({
             ))}
         </section>
 
-        {/* Zubereitung — steps; ingredients are added here ("+ Zutat") */}
+        {/* Zubereitung — steps with their own ingredient lists + prose */}
         <section className="editor-card" id="editor-steps-section" aria-label="Zubereitung">
           <div className="card-head">
             <h3 className="editor-card-title">Zubereitung</h3>
@@ -1036,136 +1106,241 @@ function RecipeEditor({
               type="button"
               className="text-button"
               onClick={() =>
-                updateDraft((current) => ({ ...current, steps: [...current.steps, ''] }))
+                updateDraft((current) => ({
+                  ...current,
+                  steps: [...current.steps, { ingredients: [], text: '' }],
+                }))
               }
             >
               + Schritt
             </button>
           </div>
-          {draft.steps.map((step, index) => (
-            <div className="step-card" id={`editor-step-${index}`} key={index}>
-              <div className="step-head">
-                <span className="step-number">{index + 1}.</span>
-                <div className="step-actions">
-                  <button
-                    type="button"
-                    className="text-button"
-                    disabled={index === 0}
-                    onClick={() =>
-                      updateDraft((current) => {
-                        const steps = [...current.steps];
-                        [steps[index - 1], steps[index]] = [steps[index], steps[index - 1]];
-                        return { ...current, steps };
-                      })
-                    }
-                    aria-label="Schritt nach oben"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="text-button"
-                    disabled={index === draft.steps.length - 1}
-                    onClick={() =>
-                      updateDraft((current) => {
-                        const steps = [...current.steps];
-                        [steps[index + 1], steps[index]] = [steps[index], steps[index + 1]];
-                        return { ...current, steps };
-                      })
-                    }
-                    aria-label="Schritt nach unten"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() =>
-                      updateDraft((current) => ({
-                        ...current,
-                        steps: current.steps.filter((_, i) => i !== index),
-                      }))
-                    }
-                    aria-label="Schritt entfernen"
-                  >
-                    ✕
-                  </button>
+          {draft.steps.map((step, stepIndex) => {
+            const stepError = stepIssues(stepIndex)[0]?.message;
+            return (
+              <div className="step-card" id={`editor-step-${stepIndex}`} key={stepIndex}>
+                <div className="step-head">
+                  <span className="step-number">{stepIndex + 1}.</span>
+                  <div className="step-actions">
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={stepIndex === 0}
+                      onClick={() =>
+                        updateDraft((current) => {
+                          const steps = [...current.steps];
+                          [steps[stepIndex - 1], steps[stepIndex]] = [
+                            steps[stepIndex],
+                            steps[stepIndex - 1],
+                          ];
+                          return { ...current, steps };
+                        })
+                      }
+                      aria-label="Schritt nach oben"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={stepIndex === draft.steps.length - 1}
+                      onClick={() =>
+                        updateDraft((current) => {
+                          const steps = [...current.steps];
+                          [steps[stepIndex + 1], steps[stepIndex]] = [
+                            steps[stepIndex],
+                            steps[stepIndex + 1],
+                          ];
+                          return { ...current, steps };
+                        })
+                      }
+                      aria-label="Schritt nach unten"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() =>
+                        updateDraft((current) => ({
+                          ...current,
+                          steps: current.steps.filter((_, i) => i !== stepIndex),
+                        }))
+                      }
+                      aria-label="Schritt entfernen"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
+
+                {/* The step's own counted ingredient list (appears above the text). */}
+                <div className="field">
+                  <span className="field-label">Zutaten dieses Schritts</span>
+                  {step.ingredients.length === 0 ? (
+                    <p className="empty-hint">
+                      Keine — die Mengen stehen nur im Text oder kommen später dazu.
+                    </p>
+                  ) : (
+                    <ul className="ingredient-list">
+                      {step.ingredients.map((ingredient, rowIndex) => {
+                        const jumpTarget = subRecipeTarget(ingredient.name);
+                        return (
+                          <li key={`${stepIndex}-${rowIndex}`} className="step-row">
+                            <button
+                              type="button"
+                              className="ingredient-row-button"
+                              onClick={() =>
+                                setSheet({
+                                  kind: 'row-edit',
+                                  stepIndex,
+                                  rowIndex,
+                                })
+                              }
+                            >
+                              <span className="ingredient-line">
+                                {safeRenderAQS(
+                                  ingredient.name,
+                                  ingredient.quantity,
+                                  ingredient.unit,
+                                )}
+                              </span>
+                              <span className="ingredient-hint">Antippen zum Bearbeiten</span>
+                            </button>
+                            <div className="step-row-actions">
+                              {jumpTarget !== undefined && (
+                                <button
+                                  type="button"
+                                  className="badge olive link-badge"
+                                  onClick={() => requestJump(jumpTarget)}
+                                  title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
+                                >
+                                  Verknüpft
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="text-button danger-text"
+                                onClick={() =>
+                                  updateStep(stepIndex, (current) => ({
+                                    ...current,
+                                    ingredients: current.ingredients.filter(
+                                      (_, index) => index !== rowIndex,
+                                    ),
+                                  }))
+                                }
+                                aria-label={`${ingredient.name} aus dem Schritt entfernen`}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <div className="step-add-row">
+                    <button
+                      type="button"
+                      className="add-ingredient"
+                      onClick={() => setSheet({ kind: 'row-add', stepIndex })}
+                    >
+                      + Zutat
+                    </button>
+                  </div>
+                </div>
+
+                <StepEditor
+                  ref={(element) => {
+                    stepEditorRefs.current[stepIndex] = element;
+                  }}
+                  value={step.text}
+                  onChange={(next) =>
+                    updateStep(stepIndex, (current) => ({ ...current, text: next }))
+                  }
+                  error={stepError}
+                />
+                <button
+                  type="button"
+                  className="add-ingredient"
+                  onClick={() =>
+                    setSheet({
+                      kind: 'inline',
+                      stepIndex,
+                      insertAt:
+                        stepEditorRefs.current[stepIndex]?.caretOffset() ?? step.text.length,
+                    })
+                  }
+                >
+                  + Menge im Text
+                </button>
               </div>
-              <StepEditor
-                ref={(element) => {
-                  stepEditorRefs.current[index] = element;
-                }}
-                value={step}
-                onChange={(next) =>
-                  updateDraft((current) => {
-                    const steps = [...current.steps];
-                    steps[index] = next;
-                    return { ...current, steps };
-                  })
-                }
-                error={stepIssues(index)[0]?.message}
-              />
-              <button
-                type="button"
-                className="add-ingredient"
-                onClick={() =>
-                  setSheet({
-                    mode: 'add',
-                    stepIndex: index,
-                    insertAt: stepEditorRefs.current[index]?.caretOffset() ?? step.length,
-                  })
-                }
-              >
-                + Zutat
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </section>
 
-        {/* Zutaten — derived from the step markers, never typed directly (§4) */}
-        <section className="editor-card" aria-label="Zutaten">
+        {/* Zutaten — the read-only master list (reference role only, §4) */}
+        <section className="editor-card" aria-label="Zutaten" id="editor-master-list">
           <h3 className="editor-card-title">Zutaten</h3>
           {computedIngredients.length === 0 ? (
             <p className="empty-hint">
-              Zutaten werden über „+ Zutat“ in den Schritten hinzugefügt und hier automatisch
-              geordnet und zusammengefasst.
+              Die Zutatenliste wird aus den Listen der Zubereitungsschritte zusammengestellt —
+              füge Zutaten über „+ Zutat“ in den Schritten hinzu.
             </p>
           ) : (
-            <ul className="ingredient-list">
-              {computedIngredients.map((ingredient) => {
-                // The stored recipe behind a |recipe: link, for the jump.
-                const jumpTarget =
-                  ingredient.recipe !== undefined
-                    ? recipes.find((recipe) => recipe.title === ingredient.recipe)
-                    : undefined;
-                return (
-                  <li key={ingredient.name} className="ingredient-row">
-                    <button
-                      type="button"
-                      className="ingredient-row-button"
-                      onClick={() => setSheet({ mode: 'edit', name: ingredient.name })}
+            <>
+              <p className="empty-hint">
+                Gesamtliste (aus den Schritten zusammengefasst) — nur lesbar. Die Referenz-Menge
+                (★) wird hier pro Zeile gesetzt; Mengen bearbeitest du im jeweiligen Schritt.
+              </p>
+              <ul className="ingredient-list">
+                {computedIngredients.map((ingredient) => {
+                  const jumpTarget = subRecipeTarget(ingredient.name);
+                  const isReference = ingredient.reference === true;
+                  return (
+                    <li
+                      key={ingredient.name}
+                      className={isReference ? 'ingredient-row is-reference' : 'ingredient-row'}
                     >
                       <span className="ingredient-line">
                         {safeRenderAQS(ingredient.name, ingredient.quantity, ingredient.unit)}
-                        {ingredient.reference === true && <span className="badge">Referenz</span>}
+                        {jumpTarget !== undefined && (
+                          <button
+                            type="button"
+                            className="badge olive link-badge"
+                            onClick={() => requestJump(jumpTarget)}
+                            title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
+                          >
+                            Verknüpft
+                          </button>
+                        )}
                       </span>
-                      <span className="ingredient-hint">Antippen zum Bearbeiten</span>
-                    </button>
-                    {ingredient.recipe !== undefined && jumpTarget !== undefined && (
-                      <button
-                        type="button"
-                        className="badge olive link-badge"
-                        onClick={() => requestJump(jumpTarget)}
-                        title={`Zutaten-Rezept „${ingredient.recipe}“ öffnen`}
-                      >
-                        Verknüpft
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                      {draft.type === 'finished_dish' && (
+                        <button
+                          type="button"
+                          className={isReference ? 'ref-toggle on' : 'ref-toggle'}
+                          disabled={!isReference && referenceUsed >= 2}
+                          aria-pressed={isReference}
+                          title={
+                            isReference
+                              ? 'Referenz-Menge entfernen'
+                              : 'Als Referenz-Menge markieren'
+                          }
+                          aria-label={
+                            isReference
+                              ? `„${ingredient.name}“ als Referenz-Menge entfernen`
+                              : `„${ingredient.name}“ als Referenz-Menge markieren`
+                          }
+                          onClick={() => toggleReference(ingredient.name)}
+                        >
+                          {isReference ? '★' : '☆'}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
         </section>
 
@@ -1202,23 +1377,13 @@ function RecipeEditor({
 
       {sheet !== null && (
         <IngredientSheet
-          mode={sheet.mode}
+          mode={sheetMode(sheet)}
           initial={
-            sheet.mode === 'edit'
-              ? computedIngredients.find((ingredient) => ingredient.name === sheet.name)
-              : (sheetPrefill ?? undefined)
+            sheet.kind === 'row-edit'
+              ? draft.steps[sheet.stepIndex]!.ingredients[sheet.rowIndex]
+              : undefined
           }
-          referenceAllowed={draft.type === 'finished_dish'}
-          referenceUsed={
-            sheet.mode === 'edit'
-              ? referenceUsed -
-                (computedIngredients.some(
-                  (ingredient) => ingredient.name === sheet.name && ingredient.reference === true,
-                )
-                  ? 1
-                  : 0)
-              : referenceUsed
-          }
+          prefill={sheetPrefill ?? undefined}
           ingredientRecipes={ingredientRecipes}
           onConfirm={handleSheetConfirm}
           onClose={() => {
@@ -1227,7 +1392,7 @@ function RecipeEditor({
           }}
           onCreateNewIngredient={(name, quantity) => {
             if (sheet === null) return;
-            setSheetContext({ sheet, name, quantity });
+            setSheetContext({ sheet, mode: sheetMode(sheet), name, quantity });
             setSheet(null);
             setCreateSheet({ name });
           }}

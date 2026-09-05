@@ -1,14 +1,18 @@
 /**
- * Ingredient merging for the marker model (storage_format.md §4).
+ * Ingredient merging and master-list derivation (storage_format.md §4).
  *
- * The ingredient list of a recipe is *derived* from the step markers
- * (markers.ts): `deriveIngredients` collects the markers and then merges
- * repeated entries of the same name with `mergeIngredientUses` — "an
- * ingredient used in several places appears once, with the total amount".
+ * The step rows are the source of truth for the ingredient list: the master
+ * list of a recipe is *derived* from the rows of all steps
+ * (`deriveIngredients`), with repeated entries of the same name merged by
+ * `mergeIngredientUses` — "an ingredient used in several places appears once,
+ * with the total amount, at the position of its first use".
+ *
+ * The `reference` role is recipe-level (the front-matter name list) and is
+ * resolved onto the merged entries here; rows never carry it.
  */
 
 import { roundToRung } from '../ladder.js';
-import type { Ingredient } from './types.js';
+import type { Ingredient, MasterIngredient, Step } from './types.js';
 
 /**
  * Merges repeated entries of the same ingredient name into one entry with the
@@ -20,11 +24,10 @@ import type { Ingredient } from './types.js';
  * (`roundToRung`) — non-standard numbers do not exist in the app
  * (docs/quantity_scaling.md §3).
  *
- * Entries are grouped by exact name (trimmed). The first entry's unit is kept;
- * `reference` is kept when any entry sets it; the `recipe` link is taken from
- * the first entry that has one. Entries whose quantity cannot be summed
- * meaningfully (different base units for the same name) are kept as separate
- * entries instead of being merged.
+ * Entries are grouped by exact name (trimmed). The first entry's unit is kept.
+ * Entries whose quantity cannot be summed meaningfully (different base units
+ * for the same name, e.g. g vs ml) are kept as separate entries instead of
+ * being merged.
  */
 export function mergeIngredientUses(ingredients: readonly Ingredient[]): Ingredient[] {
   const byName = new Map<string, Ingredient[]>();
@@ -43,16 +46,12 @@ export function mergeIngredientUses(ingredients: readonly Ingredient[]): Ingredi
     // A group always has at least one entry (it was created by a push above).
     const first = entries[0]!;
     // Only sum when every entry shares the first entry's unit — otherwise the
-    // amounts are not comparable (e.g. 200 g + 0.2 kg) and stay separate.
+    // amounts are not comparable and stay separate.
     if (entries.every((entry) => entry.unit === first.unit)) {
       merged.push({
         name,
         quantity: roundToRung(entries.reduce((sum, entry) => sum + entry.quantity, 0)),
         unit: first.unit,
-        ...(entries.some((entry) => entry.reference === true) ? { reference: true } : {}),
-        ...(entries.find((entry) => entry.recipe !== undefined)?.recipe !== undefined
-          ? { recipe: entries.find((entry) => entry.recipe !== undefined)!.recipe }
-          : {}),
       });
     } else {
       // Mixed units: keep each entry as-is (still trimmed).
@@ -60,4 +59,26 @@ export function mergeIngredientUses(ingredients: readonly Ingredient[]): Ingredi
     }
   }
   return merged;
+}
+
+/**
+ * Derives the master ingredient list of a recipe from its step rows
+ * (storage_format.md §4): the rows of all steps in order of first use, merged
+ * by exact name with the total amount (sum rounded to the nearest ladder rung).
+ *
+ * The `reference` role is resolved from the recipe-level `reference` name list
+ * (front matter): a merged entry is a reference entry when its name is listed.
+ */
+export function deriveIngredients(
+  steps: readonly Step[],
+  reference: readonly string[] = [],
+): MasterIngredient[] {
+  const entries: Ingredient[] = [];
+  for (const step of steps) {
+    entries.push(...step.ingredients);
+  }
+  const referenceNames = new Set(reference.map((name) => name.trim()));
+  return mergeIngredientUses(entries).map((entry) =>
+    referenceNames.has(entry.name) ? { ...entry, reference: true } : entry,
+  );
 }

@@ -3,17 +3,39 @@
  *
  * Runs per collection, on top of the per-file validation of ./parse.ts:
  * - `title` is unique across the collection;
- * - every `recipe:` reference points to an existing recipe whose `type` is
- *   `ingredient_recipe`;
- * - the link graph is acyclic (a cycle would recurse forever in the
+ * - the sub-recipe link graph is acyclic (a cycle would recurse forever in the
  *   scaling / shopping-list logic that walks the sub-recipe links).
+ *
+ * Sub-recipe links are implicit (storage_format.md §4): an ingredient use
+ * whose name equals the title of an `ingredient_recipe` *is* that sub-recipe.
+ * A use counts wherever it appears — as a step row or as an inline text
+ * artifact of a step (display-only mentions still render as links).
  *
  * Recipe titles locate the problems (titles are unique after this check), so
  * the issue paths use the title instead of a collection index.
  */
 
+import { splitArtifacts } from './artifacts.js';
 import { RecipeCollectionError } from './types.js';
 import type { Recipe, ValidationIssue } from './types.js';
+
+/**
+ * Every distinct name an ingredient use in this recipe can carry (step rows
+ * and inline text artifacts). Text artifacts are parsed from the prose; only
+ * their (optional) name is relevant here.
+ */
+function usedIngredientNames(recipe: Recipe): Set<string> {
+  const names = new Set<string>();
+  for (const step of recipe.steps) {
+    for (const ingredient of step.ingredients) {
+      names.add(ingredient.name);
+    }
+    for (const span of splitArtifacts(step.text).spans) {
+      if (span.artifact.name !== undefined) names.add(span.artifact.name);
+    }
+  }
+  return names;
+}
 
 /**
  * Validates a whole collection of already-parsed recipes (§7.2).
@@ -38,31 +60,12 @@ export function validateCollection(recipes: readonly Recipe[]): void {
     }
   });
 
-  // §7.2: every recipe: reference points to an existing ingredient_recipe.
+  // §7.2 extension: the link graph must be acyclic. An ingredient use that
+  // names an `ingredient_recipe` links to it (implicit, §4); a cycle (A → B →
+  // A) would otherwise recurse forever in the scaling / shopping-list logic
+  // that walks the sub-recipe links (recipe_structure.md "The link means…");
+  // chains of ingredient recipes are allowed and stay valid.
   const recipeByTitle = new Map(recipes.map((recipe) => [recipe.title, recipe]));
-  for (const recipe of recipes) {
-    recipe.ingredients.forEach((ingredient, index) => {
-      if (ingredient.recipe === undefined) return;
-      const target = recipeByTitle.get(ingredient.recipe);
-      const path = `${recipe.title}.ingredients[${index}].recipe`;
-      if (target === undefined) {
-        issues.push({
-          path,
-          message: `Das verlinkte Rezept "${ingredient.recipe}" existiert nicht.`,
-        });
-      } else if (target.type !== 'ingredient_recipe') {
-        issues.push({
-          path,
-          message: `Das verlinkte Rezept "${ingredient.recipe}" muss den Typ ingredient_recipe haben.`,
-        });
-      }
-    });
-  }
-
-  // §7.2 extension: the link graph must be acyclic. A cycle (A → B → A) would
-  // otherwise recurse forever in the scaling / shopping-list logic that walks
-  // the sub-recipe links (recipe_structure.md "The link means…"); chains of
-  // ingredient recipes are allowed and stay valid.
   const state = new Map<string, 'visiting' | 'done'>();
   const stack: string[] = [];
   const visit = (title: string): void => {
@@ -75,8 +78,14 @@ export function validateCollection(recipes: readonly Recipe[]): void {
     }
     state.set(title, 'visiting');
     stack.push(title);
-    for (const ingredient of recipeByTitle.get(title)?.ingredients ?? []) {
-      if (ingredient.recipe !== undefined) visit(ingredient.recipe);
+    const recipe = recipeByTitle.get(title);
+    if (recipe !== undefined) {
+      for (const name of usedIngredientNames(recipe)) {
+        const target = recipeByTitle.get(name);
+        if (target !== undefined && target.type === 'ingredient_recipe') {
+          visit(name);
+        }
+      }
     }
     stack.pop();
     state.set(title, 'done');

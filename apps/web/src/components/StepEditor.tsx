@@ -1,58 +1,45 @@
 /**
- * StepEditor — a contenteditable step field that renders ingredient markers
- * ({{ingredient|…}}) as non-editable artifacts (decided with the user: an
- * artifact "is not plain text, but an artifact — like an inline code
- * snippet").
+ * StepEditor — a contenteditable step field for the step *prose*.
  *
- * Model: the step string (with markers) is the source of truth. The DOM is
- * authoritative while the user types (re-rendering on every keystroke would
- * lose the caret); the component syncs the string upward via onChange and
- * only re-renders the segments when the string changed externally (marker
- * insert/remove). Artifacts carry a small "×" to remove them — removing the
- * artifact from the text also removes the ingredient from the derived list
- * (the list is derived from the markers, storage_format.md §4).
+ * The prose may contain inline display-only artifacts ({{100 g}} /
+ * {{1500 ml Wasser}}, storage_format.md §4). Artifacts render as non-editable
+ * code-like chips ("wie ein Inline-Code-Schnipsel", decided with the user);
+ * they are inserted at the caret from the ingredient sheet and carry a small
+ * "×" to remove them. They never count toward any ingredient list — the
+ * counted ingredients live in the step's own list above this editor.
  *
- * The "+ Zutat" insertion happens at the caret: the editor calls
- * `insertMarker` (via the exposed ref) with the tracked caret offset.
+ * Model: the step text string is the source of truth. The DOM is authoritative
+ * while the user types (re-rendering on every keystroke would lose the caret);
+ * the component syncs the string upward via onChange and only re-renders the
+ * segments when the string changed externally (artifact insert/remove).
+ *
+ * The "+ Menge im Text" insertion happens at the caret: the editor calls
+ * `insertArtifact` (via the exposed ref) with the tracked caret offset.
  */
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 import {
-  extractMarkers,
-  insertMarkerIntoStep,
-  markerToText,
-  type IngredientMarker,
+  artifactToText,
+  formatBQ,
+  insertArtifact,
+  renderAQS,
+  splitArtifacts,
+  type TextArtifact,
 } from '@cookbook/core';
-import { renderAQS } from '@cookbook/core';
 
-/** One renderable segment of the step: plain text or an ingredient marker. */
-type Segment = { type: 'text'; value: string } | { type: 'marker'; marker: IngredientMarker };
+/** One renderable segment of the step: plain prose or an artifact. */
+type Segment =
+  | { type: 'text'; value: string }
+  | { type: 'artifact'; artifact: TextArtifact; stored: string };
 
-/** Splits a step into segments (text / markers), preserving order. */
+/** Splits a step into segments (prose / artifacts), preserving order. */
 function splitSegments(step: string): Segment[] {
-  const segments: Segment[] = [];
-  const markerPattern = /\{\{ingredient\|[^}]*\}\}/g;
-  let lastIndex = 0;
-  for (const match of step.matchAll(markerPattern)) {
-    const index = match.index ?? 0;
-    if (index > lastIndex) {
-      segments.push({ type: 'text', value: step.slice(lastIndex, index) });
-    }
-    const marker = extractMarkers(match[0])[0];
-    if (marker !== undefined) {
-      segments.push({ type: 'marker', marker });
-    } else {
-      // A malformed {{…}} block is shown as plain text (the validator flags
-      // it on save); it must never be dropped from the display.
-      segments.push({ type: 'text', value: match[0] });
-    }
-    lastIndex = index + match[0].length;
-  }
-  if (lastIndex < step.length) {
-    segments.push({ type: 'text', value: step.slice(lastIndex) });
-  }
-  return segments;
+  return splitArtifacts(step).segments.map((segment) =>
+    segment.type === 'text'
+      ? { type: 'text', value: segment.value }
+      : { type: 'artifact', artifact: segment.artifact, stored: artifactToText(segment.artifact) },
+  );
 }
 
 /** Serializes one DOM node back into the step string (recursive). */
@@ -61,9 +48,9 @@ function serializeNode(node: Node): string {
     return node.textContent ?? '';
   }
   if (node instanceof HTMLElement) {
-    if (node.dataset.marker !== undefined) {
-      // Artifact spans contribute their marker text, never their display text.
-      return node.dataset.marker;
+    if (node.dataset.artifact !== undefined) {
+      // Artifact spans contribute their stored text, never their display text.
+      return node.dataset.artifact;
     }
     // Browser-created block elements from Enter (<div>, <br>) carry their
     // inner text; line breaks collapse on save (steps are single-line, §5).
@@ -93,8 +80,8 @@ function caretStringOffset(div: HTMLDivElement): number {
     }
     if (node.nodeType === Node.TEXT_NODE) {
       offset += node.textContent?.length ?? 0;
-    } else if (node instanceof HTMLElement && node.dataset.marker !== undefined) {
-      offset += node.dataset.marker.length;
+    } else if (node instanceof HTMLElement && node.dataset.artifact !== undefined) {
+      offset += node.dataset.artifact.length;
     }
   }
   return offset;
@@ -111,16 +98,16 @@ function placeCaretAfter(span: HTMLElement): void {
 }
 
 export interface StepEditorHandle {
-  /** Inserts a marker at the given offset (or the current caret, else the end). */
-  insertMarker: (marker: IngredientMarker, at?: number) => void;
-  /** The string offset of the current caret (for the "+ Zutat" button). */
+  /** Inserts an artifact at the given offset (or the current caret, else the end). */
+  insertArtifact: (artifact: TextArtifact, at?: number) => void;
+  /** The string offset of the current caret (for the "+ Menge im Text" button). */
   caretOffset: () => number;
 }
 
 interface StepEditorProps {
-  /** The step string with markers (source of truth). */
+  /** The step prose with {{…}} artifacts (source of truth). */
   value: string;
-  /** Called with the new step string whenever it changes. */
+  /** Called with the new prose whenever it changes. */
   onChange: (step: string) => void;
   /** Error text to show under the step (validation feedback, §7). */
   error?: string;
@@ -129,7 +116,7 @@ interface StepEditorProps {
 /**
  * The contenteditable step field (see file header). The DOM is authoritative
  * while typing; the segments are re-rendered only when `value` changes
- * externally (marker insert/remove).
+ * externally (artifact insert/remove).
  */
 const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEditor(
   { value, onChange, error },
@@ -148,40 +135,43 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
       if (segment.type === 'text') {
         div.appendChild(document.createTextNode(segment.value));
       } else {
-        const markerText = markerToText(segment.marker);
         const span = document.createElement('span');
         span.className = 'step-artifact';
         span.contentEditable = 'false';
-        span.dataset.marker = markerText;
-        span.textContent = renderAQS(
-          segment.marker.name,
-          segment.marker.quantity,
-          segment.marker.unit,
-        );
+        span.dataset.artifact = segment.stored;
+        span.textContent =
+          segment.artifact.name === undefined
+            ? segment.artifact.unit === undefined
+              ? String(segment.artifact.quantity)
+              : formatBQ(segment.artifact.quantity, segment.artifact.unit)
+            : renderAQS(
+                segment.artifact.name,
+                segment.artifact.quantity,
+                segment.artifact.unit ?? 'g',
+              );
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'artifact-remove';
-        remove.setAttribute('aria-label', `Zutat ${segment.marker.name} entfernen`);
+        remove.setAttribute('aria-label', 'Menge entfernen');
         remove.textContent = '×';
         span.appendChild(remove);
         div.appendChild(span);
       }
     }
-    // After a marker insert, place the caret after the new artifact: the span
-    // whose accumulated string offset equals the insertion offset (exact even
-    // when an identical marker already exists).
+    // After an artifact insert, place the caret after the new artifact: the
+    // span whose accumulated string offset equals the insertion offset.
     const caretTarget = caretAfterRef.current;
     if (caretTarget !== null) {
       caretAfterRef.current = null;
       let offset = 0;
       let target: HTMLElement | undefined;
       for (const node of Array.from(div.childNodes)) {
-        if (node instanceof HTMLElement && node.dataset.marker !== undefined) {
+        if (node instanceof HTMLElement && node.dataset.artifact !== undefined) {
           if (offset === caretTarget.at) {
             target = node;
             break;
           }
-          offset += node.dataset.marker.length;
+          offset += node.dataset.artifact.length;
         } else {
           offset += node.textContent?.length ?? 0;
         }
@@ -204,11 +194,11 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
   useImperativeHandle(
     ref,
     () => ({
-      insertMarker: (marker: IngredientMarker, at?: number) => {
+      insertArtifact: (artifact: TextArtifact, at?: number) => {
         const div = divRef.current;
         const offset = at ?? (div === null ? value.length : caretStringOffset(div));
         caretAfterRef.current = { at: offset };
-        onChange(insertMarkerIntoStep(value, offset, marker));
+        onChange(insertArtifact(value, offset, artifact));
       },
       caretOffset: () => (divRef.current === null ? 0 : caretStringOffset(divRef.current)),
     }),
@@ -222,27 +212,26 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
     }
   };
 
-  /** Removes the artifact under the × button (removal = list entry disappears). */
+  /** Removes the artifact under the × button (display-only mention). */
   const handleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
     const remove = (event.target as HTMLElement).closest('.artifact-remove');
     if (remove === null) return;
-    const span = remove.closest<HTMLElement>('[data-marker]');
+    const span = remove.closest<HTMLElement>('[data-artifact]');
     const parent = span?.parentElement;
-    const markerText = span?.dataset.marker;
-    if (span === undefined || parent === null || parent === undefined || markerText === undefined)
+    const artifactText = span?.dataset.artifact;
+    if (span === undefined || parent === null || parent === undefined || artifactText === undefined)
       return;
-    // Remove exactly the clicked marker (its string offset within the step).
-    // Artifact siblings count by their marker text length, text by text length.
+    // Remove exactly the clicked artifact (its string offset within the step).
     let at = 0;
     for (const node of Array.from(parent.childNodes)) {
       if (node === span) break;
-      if (node instanceof HTMLElement && node.dataset.marker !== undefined) {
-        at += node.dataset.marker.length;
+      if (node instanceof HTMLElement && node.dataset.artifact !== undefined) {
+        at += node.dataset.artifact.length;
       } else {
         at += node.textContent?.length ?? 0;
       }
     }
-    onChange(`${value.slice(0, at)}${value.slice(at + markerText.length)}`);
+    onChange(`${value.slice(0, at)}${value.slice(at + artifactText.length)}`);
   };
 
   return (

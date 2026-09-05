@@ -7,8 +7,9 @@
  * - an optional real photo lives as a sibling with the same basename and a
  *   `.jpg` / `.png` extension (§2);
  * - the rename flow (§6) is one operation: new title in the file, new file
- *   name, renamed image, and updated `recipe:` references in all other recipes
- *   (pure transformation in @cookbook/core, ./rename).
+ *   name, renamed image, and updated implicit sub-recipe uses (rows, inline
+ *   text artifacts and reference names) in all other recipes (pure
+ *   transformation in @cookbook/core, ./rename).
  *
  * The folder is created on first use and its id is remembered in localStorage
  * (the "drive.file" scope only exposes files the app created itself, so a
@@ -224,13 +225,13 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
   const fileName = `${recipe.title}${EXPORT_EXTENSION}`;
   const files = await listFilesInFolder(token, folderId);
   const existing = files.find((file) => file.name === fileName);
-  // Sub-recipe links (recipe_structure.md "The link means"): every export file
-  // in the folder gets a title → Drive-link entry, so ingredients and step
-  // markers that reference an ingredient recipe render as a link to its own
-  // export. The `<title>.html` file name is the key (file name = title, §2);
-  // a recipe whose export is missing simply renders without a link. The map
-  // is prototype-less so a title like "__proto__" cannot collide with
-  // Object.prototype.
+  // Sub-recipe links (recipe_structure.md "The link means"): sub-recipes are
+  // implicit (storage_format.md §4) — an ingredient use whose name is the
+  // title of another recipe renders as a link to that recipe's own export.
+  // Every `<title>.html` export file in the folder becomes such a title →
+  // Drive-link entry; a recipe whose export is missing simply renders without
+  // a link. The map is prototype-less so a title like "__proto__" cannot
+  // collide with Object.prototype.
   const links: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const file of files) {
     if (!file.name.endsWith(EXPORT_EXTENSION)) continue;
@@ -369,9 +370,9 @@ export async function removeRecipeImage(token: string, fileId: string): Promise<
  * Saves a recipe, handling a title change as one §6 operation: new title in
  * the file + new file name, renamed photo sibling, HTML export renamed and
  * regenerated in place (same Drive file id — shared links survive), and every
- * `recipe:` reference to the old title in the other recipe files updated. The
- * referencing ingredients' names follow the new title too (name == title
- * invariant, decided with the user), and their exports are regenerated. A
+ * implicit sub-recipe use of the old title (rows, inline text artifacts,
+ * reference names) in the other recipe files updated (name == title
+ * invariant, decided with the user). Their exports are regenerated. A
  * plain save (title unchanged) just writes the content and regenerates the
  * export (decision 7).
  *
@@ -456,14 +457,14 @@ export async function saveRecipe(
     //    renamed in step 3 in place; creates it when there was none).
     await writeRecipeExportSafely(token, recipe);
 
-    // 5. Update every other recipe that referenced the old title: the markers'
-    //    |recipe: link AND the ingredient name follow the new title (name ==
-    //    title invariant, decided with the user). The pure transformation
-    //    lives in core (renameRecipeInCollection, §6) — rewriting only the
-    //    derived ingredient list would be a no-op, because the serializer
-    //    derives the list from the step markers and it is the marker text
-    //    that is stored. Their exports are regenerated too (the step text
-    //    they bake in changed); the old export is captured for the rollback.
+    // 5. Update every other recipe that used the old title as an implicit
+    //    sub-recipe reference (rows, inline artifacts and reference names, in
+    //    name == title semantics, decided with the user). The pure
+    //    transformation lives in core (renameRecipeInCollection, §6) — only
+    //    ingredient_recipe titles are referenced this way, so renaming a
+    //    finished dish never touches the other files. Their exports are
+    //    regenerated too (the step rows/artifacts they bake in changed); the
+    //    old export is captured for the rollback.
     const renameResult = renameRecipeInCollection(
       [current, ...others],
       current.title,
@@ -520,8 +521,9 @@ export async function saveRecipe(
 
 /**
  * Renames a recipe as one operation (§6): new title inside the file, new file
- * name, renamed photo sibling, and every `recipe:` reference to the old title
- * in all other recipe files updated. The collection is left consistent — no
+ * name, renamed photo sibling, and every implicit sub-recipe use of the old
+ * title (rows, inline artifacts, reference names — ingredient recipes only)
+ * in the other recipe files updated. The collection is left consistent — no
  * dangling references. The HTML export is renamed and regenerated in place
  * (same Drive file id), so existing shared links keep working.
  *

@@ -1,23 +1,13 @@
 /**
- * Tests for the ingredient merging used by the marker derivation
- * (storage_format.md §4: an ingredient used in several places appears once,
- * with the total amount).
+ * Tests for the ingredient merging and the master-list derivation
+ * (storage_format.md §4: the step rows are the source of truth; an ingredient
+ * used in several places appears once, with the total amount).
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { mergeIngredientUses } from './ingredientList.js';
-import type { Ingredient } from './types.js';
-
-const JOGHURT: Ingredient = { name: 'Joghurt', quantity: 400, unit: 'g' };
-const TORTILLAS: Ingredient = { name: 'Tortillas', quantity: 250, unit: 'g', reference: true };
-const ZITRONENSAFT: Ingredient = { name: 'Zitronensaft', quantity: 15, unit: 'ml' };
-const BECHAMEL: Ingredient = {
-  name: 'Béchamelsauce',
-  quantity: 500,
-  unit: 'ml',
-  recipe: 'Béchamelsauce',
-};
+import { deriveIngredients, mergeIngredientUses } from './ingredientList.js';
+import type { Step } from './types.js';
 
 describe('mergeIngredientUses', () => {
   it('merges repeated entries of the same name with the summed quantity', () => {
@@ -36,37 +26,75 @@ describe('mergeIngredientUses', () => {
     expect(result).toEqual([{ name: 'Joghurt', quantity: 1200, unit: 'g' }]);
   });
 
-  it('keeps reference when any entry sets it', () => {
-    const result = mergeIngredientUses([
-      { name: 'Tortillas', quantity: 100, unit: 'g' },
-      { name: 'Tortillas', quantity: 150, unit: 'g', reference: true },
-    ]);
-    expect(result).toEqual([{ name: 'Tortillas', quantity: 250, unit: 'g', reference: true }]);
-  });
-
-  it('takes the recipe link from the first entry that has one', () => {
-    const result = mergeIngredientUses([
-      { name: 'Béchamelsauce', quantity: 300, unit: 'ml' },
-      { name: 'Béchamelsauce', quantity: 200, unit: 'ml', recipe: 'Béchamelsauce' },
-    ]);
-    expect(result).toEqual([
-      { name: 'Béchamelsauce', quantity: 500, unit: 'ml', recipe: 'Béchamelsauce' },
-    ]);
-  });
-
   it('keeps same-name entries with different units separate', () => {
     const result = mergeIngredientUses([
       { name: 'Mehl', quantity: 200, unit: 'g' },
-      { name: 'Mehl', quantity: 0.2, unit: 'kg' },
+      { name: 'Mehl', quantity: 300, unit: 'ml' },
     ]);
     expect(result).toEqual([
       { name: 'Mehl', quantity: 200, unit: 'g' },
-      { name: 'Mehl', quantity: 0.2, unit: 'kg' },
+      { name: 'Mehl', quantity: 300, unit: 'ml' },
+    ]);
+  });
+
+  it('keeps the order of first appearance', () => {
+    const result = mergeIngredientUses([
+      { name: 'Reis', quantity: 300, unit: 'g' },
+      { name: 'Joghurt', quantity: 200, unit: 'g' },
+      { name: 'Reis', quantity: 100, unit: 'g' },
+    ]);
+    expect(result).toEqual([
+      { name: 'Reis', quantity: 400, unit: 'g' },
+      { name: 'Joghurt', quantity: 200, unit: 'g' },
     ]);
   });
 
   it('trims names', () => {
     const result = mergeIngredientUses([{ name: '  Joghurt ', quantity: 400, unit: 'g' }]);
     expect(result).toEqual([{ name: 'Joghurt', quantity: 400, unit: 'g' }]);
+  });
+});
+
+describe('deriveIngredients', () => {
+  const steps: Step[] = [
+    {
+      ingredients: [{ name: 'Joghurt', quantity: 200, unit: 'g' }],
+      text: 'Anrühren.',
+    },
+    {
+      ingredients: [{ name: 'Zitronensaft', quantity: 15, unit: 'ml' }],
+      text: 'Zugeben.',
+    },
+    {
+      ingredients: [{ name: 'Joghurt', quantity: 200, unit: 'g' }],
+      text: 'Unterheben.',
+    },
+  ];
+
+  it('merges the rows of all steps in order of first use', () => {
+    expect(deriveIngredients(steps)).toEqual([
+      { name: 'Joghurt', quantity: 400, unit: 'g' },
+      { name: 'Zitronensaft', quantity: 15, unit: 'ml' },
+    ]);
+  });
+
+  it('flags the merged entries whose name is in the reference list', () => {
+    expect(deriveIngredients(steps, ['Zitronensaft'])).toEqual([
+      { name: 'Joghurt', quantity: 400, unit: 'g' },
+      { name: 'Zitronensaft', quantity: 15, unit: 'ml', reference: true },
+    ]);
+  });
+
+  it('resolves reference by trimmed name', () => {
+    const result = deriveIngredients(steps, ['  Zitronensaft ']);
+    expect(result[1]).toEqual({ name: 'Zitronensaft', quantity: 15, unit: 'ml', reference: true });
+  });
+
+  it('never counts inline artifacts (they live in the prose, not the rows)', () => {
+    const withArtifacts: Step[] = [
+      { ingredients: [], text: 'Nudeln in {{1500 ml Wasser}} kochen.' },
+      { ingredients: [{ name: 'Nudeln', quantity: 500, unit: 'g' }], text: 'Würzen.' },
+    ];
+    expect(deriveIngredients(withArtifacts)).toEqual([{ name: 'Nudeln', quantity: 500, unit: 'g' }]);
   });
 });

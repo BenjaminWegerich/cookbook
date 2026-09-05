@@ -5,11 +5,17 @@ subtitle: Knusprige Bratkartoffeln mit Speck und Zwiebeln
 description: Klassische Pfannenbeilage aus gekochten Kartoffeln.
 servings: 2
 prep_time: 40 min
+reference:
+  - Kartoffeln
 ---
 
 ## Zubereitung
 
-1. {{ingredient|Kartoffeln|600|g|ref}} kochen, abkühlen lassen und in Scheiben schneiden.
-2. {{ingredient|Speck|100|g}} und {{ingredient|Zwiebel|100|g}} in {{ingredient|Butterschmalz|25|g}} knusprig braten.
+1. - 600 g Kartoffeln
+   Kartoffeln kochen, abkühlen lassen und in Scheiben schneiden.
+2. - 100 g Speck
+   - 100 g Zwiebel
+   - 25 g Butterschmalz
+   Speck und Zwiebel in Butterschmalz knusprig braten.
 3. Kartoffelscheiben zugeben und goldbraun braten.
 4. Mit Salz und Pfeffer würzen und sofort servieren.

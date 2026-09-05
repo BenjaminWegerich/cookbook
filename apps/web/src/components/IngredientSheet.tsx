@@ -1,25 +1,33 @@
 /**
- * Ingredient sheet (bottom sheet) for the recipe editor.
+ * Ingredient / quantity sheet (bottom sheet) for the recipe editor.
  *
- * Used in two modes:
- * - "add" — create a new ingredient (from a step's "+ Zutat"). The editor
- *   inserts the marker {{ingredient|…}} into the step text at the caret;
- * - "edit" — adjust every marker of the selected ingredient (Menge/Einheit/
- *   Referenz) or remove them.
+ * Used in three modes:
+ * - "row-add" / "row-edit" — add a row to a step's own ingredient list, or
+ *   edit one step-row (name + Menge). A row is a *counted* ingredient: it
+ *   feeds the recipe's master list (storage_format.md §4). The name is
+ *   required and must come from the master data or be an ingredient recipe
+ *   (sub-recipe — implicit by name == title).
+ * - "inline-add" — insert a display-only inline artifact into the step text
+ *   (`{{100 g}}`, `{{100}}` or `{{1500 ml Wasser}}`). Artifacts scale with the
+ *   serving count but are never counted; the ingredient name is optional, and
+ *   a quantity-only artifact may omit the unit entirely.
  *
  * Decided with the user:
- * - only ingredients from the master data are allowed (no free text) — the
- *   unit is derived from the ingredient's master-data entry (g or ml family)
- *   as soon as the name is chosen, there is no unit selector;
+ * - only ingredients from the master data are allowed in rows (no free text) —
+ *   the unit is derived from the ingredient's master-data entry (g or ml
+ *   family) as soon as the name is chosen, there is no unit selector in row
+ *   modes;
  * - sub-recipes behave like regular ingredients: their titles appear in the
  *   same name autofill (tagged "Zutaten-Rezept"), the quantity family comes
- *   from the sub-recipe's yield unit, and picking a title sets the |recipe:
- *   link implicitly (name == title invariant) — there is no separate
- *   "Verknüpftes Rezept" field;
+ *   from the sub-recipe's yield unit, and picking a title makes the row/
+ *   artifact a sub-recipe use implicitly (there is no link field);
  * - the quantity is picked with the QuantityPicker (suggested chips + a
- *   ±1-rung stepper over the full pool 1 … 10000);
- * - the live preview shows the full display arrangement ("1 Becher Joghurt
- *   (1.2 kg)") via the core renderAQS.
+ *   ±1-rung stepper over the full pool 1 … 10000); quantity-only inline
+ *   mentions may be Gewicht / Volumen / ohne Einheit;
+ * - the live preview shows the full display form ("1 Becher Joghurt (400 g)",
+ *   "1,5 l Wasser", "100") via core renderAQS/formatBQ;
+ * - the reference role is set on the *master list* only — this sheet never
+ *   offers it (recipe_structure.md §Reference).
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -27,6 +35,7 @@
 import { useMemo, useState } from 'react';
 
 import {
+  formatBQ,
   masterIngredientNames,
   mappingsFor,
   renderAQS,
@@ -56,20 +65,29 @@ function familyOf(name: string): QuantityFamily | null {
   return entry.bu === 'ml' ? 'ml' : 'g';
 }
 
+/** How the confirmed value is applied by the editor. */
+export type IngredientSheetMode = 'row-add' | 'row-edit' | 'inline-add';
+
+/** Unit choice for a quantity-only inline mention (g/ml family or unitless). */
+export type FreeUnit = QuantityFamily | 'none';
+
+/** A confirmed row/artifact value. Rows always carry a name and a unit;
+ *  quantity-only inline artifacts may omit the name and/or the unit. */
+export type SheetResult = Ingredient | { quantity: number; unit?: Unit };
+
 interface IngredientSheetProps {
-  mode: 'add' | 'edit';
-  /** The existing (derived, merged) entry when editing; after the
-   *  create-master-data flow (add mode) a synthetic entry carrying the
-   *  name+quantity to restore. */
+  mode: IngredientSheetMode;
+  /** The existing row when editing (row modes only). */
   initial?: Ingredient;
-  /** finished_dish recipes allow the reference flag (§4: at most 2 per recipe). */
-  referenceAllowed: boolean;
-  /** Count of other entries already flagged as reference (for the max-2 rule). */
-  referenceUsed: number;
+  /** Prefill after the create-master-data flow (name + quantity restored). */
+  prefill?: { name: string; quantity: number };
   /** The collection's ingredient recipes, offered in the name autofill. */
   ingredientRecipes: IngredientRecipeOption[];
-  /** Called with the resulting entry; action 'remove' only in edit mode. */
-  onConfirm: (ingredient: Ingredient, action: 'add' | 'update' | 'remove') => void;
+  /**
+   * Called with the resulting value; `action 'remove'` only in row-edit mode.
+   * In inline-add mode the name and/or the unit may be absent.
+   */
+  onConfirm: (ingredient: SheetResult, action: 'add' | 'update' | 'remove') => void;
   onClose: () => void;
   /** Opens the create-master-data sheet for an unregistered name; the current
    *  name+quantity are passed along so the sheet can be restored on return. */
@@ -77,24 +95,25 @@ interface IngredientSheetProps {
 }
 
 /**
- * The bottom sheet with the ingredient form (see file header). Renders on top
- * of the editor; the backdrop closes it.
+ * The bottom sheet with the ingredient/quantity form (see file header).
+ * Renders on top of the editor; the backdrop closes it.
  */
 function IngredientSheet({
   mode,
   initial,
-  referenceAllowed,
-  referenceUsed,
+  prefill,
   ingredientRecipes,
   onConfirm,
   onClose,
   onCreateNewIngredient,
 }: IngredientSheetProps) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [quantity, setQuantity] = useState(initial?.quantity ?? 100);
-  const [reference, setReference] = useState(initial?.reference === true);
+  const [name, setName] = useState(prefill?.name ?? initial?.name ?? '');
+  const [quantity, setQuantity] = useState(prefill?.quantity ?? initial?.quantity ?? 100);
+  /** Inline mode without a name: the author picks Gewicht / Volumen / no unit. */
+  const [freeUnit, setFreeUnit] = useState<FreeUnit>('g');
   const [error, setError] = useState<string | null>(null);
 
+  const rowMode = mode === 'row-add' || mode === 'row-edit';
   /** Titles of the collection's ingredient recipes (Set for O(1) lookups). */
   const recipeTitles = useMemo(
     () => new Set(ingredientRecipes.map((recipe) => recipe.title)),
@@ -107,34 +126,26 @@ function IngredientSheet({
   /** Master names are read on every render: the runtime registry changes when
    *  the create sheet saves a new ingredient (see ingredientRegistry.ts). */
   const masterNames = masterIngredientNames();
-  /** The ingredient is only valid when its name exists in the master data. */
+  /** A name is only valid when it exists in the master data or is a recipe title. */
   const isMasterName = masterNames.includes(trimmedName);
   const validName = isMasterName || isRecipeTitle;
+  /** Rows always need a valid name; inline artifacts may be quantity-only. */
+  const nameRequired = rowMode || trimmedName !== '';
 
-  /**
-   * The sub-recipe link is implied by the chosen name. In edit mode a legacy
-   * entry whose link no longer matches any recipe title (e.g. a hand-written
-   * file with a divergent name) keeps its link as long as the name is
-   * unchanged — editing anything else must not silently drop the link.
-   */
-  const recipeLink: string | undefined = isRecipeTitle
-    ? trimmedName
-    : mode === 'edit' && trimmedName === initial?.name && initial?.recipe !== undefined
-      ? initial.recipe
-      : undefined;
-
-  /**
-   * The ingredient's family unit: the master-data unit, or — for a
-   * sub-recipe — the yield unit of the ingredient recipe (a recipe title
-   * wins over a master-data collision: the entry IS the sub-recipe).
-   */
-  const family: QuantityFamily | null = isRecipeTitle
-    ? ingredientRecipes.find((recipe) => recipe.title === trimmedName)?.yieldUnit === 'ml'
-      ? 'ml'
-      : 'g'
-    : familyOf(trimmedName);
-  /** Stored unit of this ingredient: the family unit, or the legacy unit when editing. */
-  const unit: Unit = family ?? initial?.unit ?? 'g';
+  /** The quantity family: master data / sub-recipe yield when a name is
+   *  chosen, otherwise the free choice of the inline mode (null = unitless). */
+  const family: QuantityFamily | null =
+    trimmedName === ''
+      ? freeUnit === 'none'
+        ? null
+        : freeUnit
+      : isRecipeTitle
+        ? ingredientRecipes.find((recipe) => recipe.title === trimmedName)?.yieldUnit === 'ml'
+          ? 'ml'
+          : 'g'
+        : familyOf(trimmedName);
+  /** Stored unit: always present for rows/ingredient mentions. */
+  const unit: Unit | undefined = family ?? initial?.unit;
 
   /**
    * Suggestions: master-data ingredient names plus ingredient-recipe titles
@@ -178,28 +189,26 @@ function IngredientSheet({
   };
 
   const handleConfirm = (): void => {
-    if (trimmedName === '') {
-      setError('Bitte eine Zutat aus der Liste wählen.');
-      return;
-    }
-    if (!validName) {
+    if (trimmedName !== '' && !validName) {
       setError(
         `„${trimmedName}" ist weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept.`,
       );
       return;
     }
-    const ingredient: Ingredient = {
-      name: trimmedName,
-      quantity,
-      unit,
-      ...(reference ? { reference: true } : {}),
-      ...(recipeLink !== undefined ? { recipe: recipeLink } : {}),
-    };
-    onConfirm(ingredient, mode === 'edit' ? 'update' : 'add');
+    if (nameRequired && trimmedName === '') {
+      setError('Bitte eine Zutat aus der Liste wählen.');
+      return;
+    }
+    const value: SheetResult =
+      trimmedName !== ''
+        ? { name: trimmedName, quantity, unit: unit ?? 'g' }
+        : unit !== undefined
+          ? { quantity, unit }
+          : { quantity };
+    onConfirm(value, mode === 'row-edit' ? 'update' : 'add');
   };
 
-  /** The reference toggle is locked when both slots are taken by others. */
-  const referenceLocked = referenceUsed >= 2 && !reference;
+  const showCreate = trimmedName !== '' && !validName;
 
   return (
     <>
@@ -208,17 +217,36 @@ function IngredientSheet({
         className="sheet"
         role="dialog"
         aria-modal="true"
-        aria-label={mode === 'add' ? 'Zutat hinzufügen' : 'Zutat bearbeiten'}
+        aria-label={
+          mode === 'inline-add'
+            ? 'Menge im Text einfügen'
+            : mode === 'row-add'
+              ? 'Zutat zum Schritt hinzufügen'
+              : 'Zutat des Schritts bearbeiten'
+        }
       >
-        <h3 className="sheet-title">{mode === 'add' ? 'Zutat hinzufügen' : 'Zutat bearbeiten'}</h3>
+        <h3 className="sheet-title">
+          {mode === 'inline-add'
+            ? 'Menge im Text'
+            : mode === 'row-add'
+              ? 'Zutat zum Schritt hinzufügen'
+              : 'Zutat bearbeiten'}
+        </h3>
 
         <label className="field">
-          <span className="field-label">Name</span>
+          <span className="field-label">
+            Name {mode === 'inline-add' ? '(optional — leer = nur Menge)' : ''}
+          </span>
           <input
             type="text"
             value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Tippen, um aus der Liste zu wählen"
+            onChange={(event) => {
+              setName(event.target.value);
+              setError(null);
+            }}
+            placeholder={
+              mode === 'inline-add' ? 'Leer lassen oder aus Liste wählen' : 'Tippen, um aus der Liste zu wählen'
+            }
             autoFocus
           />
         </label>
@@ -236,7 +264,7 @@ function IngredientSheet({
             ))}
           </ul>
         )}
-        {trimmedName !== '' && !validName && (
+        {showCreate && (
           <div className="not-in-master">
             <p className="field-error" role="alert">
               Weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept — bitte einen Vorschlag
@@ -251,35 +279,53 @@ function IngredientSheet({
             </button>
             <p className="create-ingredient-hint">
               Legt „{trimmedName}“ mit Stammdaten an (Basis-Einheit + optionale Umrechnungen) —
-              danach kannst du sie zum Rezept hinzufügen.
+              danach kannst du sie im Rezept verwenden.
             </p>
+          </div>
+        )}
+
+        {mode === 'inline-add' && trimmedName === '' && (
+          <div className="field">
+            <span className="field-label">Einheit</span>
+            <div className="segmented" role="group" aria-label="Einheit der Menge">
+              <button
+                type="button"
+                className={freeUnit === 'g' ? 'segmented-active' : ''}
+                onClick={() => setFreeUnit('g')}
+              >
+                Gewicht
+              </button>
+              <button
+                type="button"
+                className={freeUnit === 'ml' ? 'segmented-active' : ''}
+                onClick={() => setFreeUnit('ml')}
+              >
+                Volumen
+              </button>
+              <button
+                type="button"
+                className={freeUnit === 'none' ? 'segmented-active' : ''}
+                onClick={() => setFreeUnit('none')}
+              >
+                ohne Einheit
+              </button>
+            </div>
           </div>
         )}
 
         <div className="field">
           <span className="field-label">Menge</span>
-          <QuantityPicker value={quantity} onChange={setQuantity} family={family ?? 'g'} />
+          <QuantityPicker value={quantity} onChange={setQuantity} family={family} />
         </div>
 
-        {/* Live BQS + AQS preview (docs/additional_quantity_specifications.md §2). */}
+        {/* Live preview of the display form (§2). */}
         <p className="aqs-preview" aria-live="polite">
-          {validName ? renderAQS(trimmedName, quantity, unit) : `${quantity} ${unit} …`}
+          {trimmedName !== '' && validName
+            ? renderAQS(trimmedName, quantity, unit ?? 'g')
+            : unit !== undefined
+              ? formatBQ(quantity, unit)
+              : String(quantity)}
         </p>
-
-        {referenceAllowed && (
-          <label className="field checkbox-field">
-            <input
-              type="checkbox"
-              checked={reference}
-              disabled={referenceLocked}
-              onChange={(event) => setReference(event.target.checked)}
-            />
-            <span>
-              Referenz-Menge
-              <small>Anker für die Portionsgröße (max. 2 pro Rezept)</small>
-            </span>
-          </label>
-        )}
 
         {error !== null && (
           <p className="field-error" role="alert">
@@ -288,7 +334,7 @@ function IngredientSheet({
         )}
 
         <div className="sheet-actions">
-          {mode === 'edit' && (
+          {mode === 'row-edit' && (
             <button
               type="button"
               className="danger-button"
@@ -301,7 +347,7 @@ function IngredientSheet({
             Abbrechen
           </button>
           <button type="button" className="primary-button" onClick={handleConfirm}>
-            {mode === 'add' ? 'Hinzufügen' : 'Übernehmen'}
+            {mode === 'inline-add' ? 'Einfügen' : mode === 'row-add' ? 'Hinzufügen' : 'Übernehmen'}
           </button>
         </div>
       </div>

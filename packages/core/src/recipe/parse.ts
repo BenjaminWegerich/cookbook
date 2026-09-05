@@ -10,6 +10,22 @@
  *
  * Cross-recipe validation (§7.2) lives in ./validate.ts.
  *
+ * Body grammar (§4/§5): each numbered step is a block — either a single prose
+ * line, or its own ingredient rows followed by one prose line:
+ *
+ *   ## Zubereitung
+ *   1. - 250 g Tortillas
+ *      - 15 ml Zitronensaft
+ *      Tortillas im Ofen erwärmen.
+ *   2. Tofu marinieren.
+ *
+ * Rows are natural amount-first phrases with a required name (`- 250 g Reis`);
+ * the prose is free text with optional {{…}} display-only artifacts
+ * (./artifacts.ts). Hand-written quantities may use German comma decimals and
+ * kg/l; everything is normalized to the canonical family form (g/ml, '.'
+ * decimals) here, so the in-memory model and every serializer output are
+ * canonical.
+ *
  * Known limitation: the front matter ends at the *first* line that is exactly
  * `---` after the opening delimiter. A `---` line inside a YAML block scalar
  * would therefore end the front matter early. The canonical serializer never
@@ -20,22 +36,25 @@
 import { parseDocument } from 'yaml';
 
 import { pos } from '../ladder.js';
-import { deriveIngredients, extractMarkers } from './markers.js';
+import { parseIngredientPhrase, replaceArtifacts } from './artifacts.js';
+import { deriveIngredients } from './ingredientList.js';
 import { RecipeParseError } from './types.js';
-import type { Ingredient, Recipe, RecipeType, Unit, ValidationIssue } from './types.js';
+import type { Ingredient, Recipe, RecipeType, Step, Unit, ValidationIssue } from './types.js';
 
 /** The line that opens and closes the YAML front matter (§2). */
 const FRONT_MATTER_DELIMITER = '---';
 /** The single structural heading of the body (§5). */
 const ZUBEREITUNG_HEADING = '## Zubereitung';
-/** A numbered step line: "N. text" (leading indentation allowed). */
-const ORDERED_LIST_ITEM = /^\s*(\d+)\.\s+(.+)$/;
+/** A numbered step line: "N. …" (leading indentation allowed). */
+const ORDERED_LIST_ITEM = /^\s*(\d+)\.\s*(.*)$/;
 /** Any Markdown heading — none may appear in the body except the one above. */
 const HEADING_PATTERN = /^\s*#{1,6}\s/;
 /** Characters that are invalid in file names on common filesystems (§2). */
 const INVALID_TITLE_CHARS = /[/\\:*?"<>|]/;
 /** Windows reserved device names; such titles break file sync to Windows. */
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+/** Any `{{ … }}` block in a step — candidates for malformed artifacts. */
+const CURLY_BLOCK_RE = /\{\{([^{}]*)\}\}/g;
 
 const UNITS: readonly Unit[] = ['g', 'kg', 'ml', 'l'];
 
@@ -49,7 +68,7 @@ const COMMON_FIELDS: ReadonlySet<string> = new Set([
   'total_time',
 ]);
 /** Fields allowed only on finished_dish (§3). */
-const FINISHED_DISH_ONLY: ReadonlySet<string> = new Set(['servings']);
+const FINISHED_DISH_ONLY: ReadonlySet<string> = new Set(['servings', 'reference']);
 /** Fields allowed only on ingredient_recipe (§3). */
 const INGREDIENT_RECIPE_ONLY: ReadonlySet<string> = new Set(['yield', 'yield_unit']);
 /** The union of all allowed top-level fields (unknown fields are rejected). */
@@ -58,12 +77,6 @@ const ALL_TOP_LEVEL_FIELDS: ReadonlySet<string> = new Set([
   ...FINISHED_DISH_ONLY,
   ...INGREDIENT_RECIPE_ONLY,
 ]);
-
-/** The marker grammar (see markers.ts) — strict form for malformed detection. */
-const STRICT_MARKER_RE =
-  /^\{\{ingredient\|[^|}]+\|[0-9]+(?:\.[0-9]+)?\|(?:g|kg|ml|l)(?:\|ref)?(?:\|recipe:[^|}]+)?\}\}$/;
-/** Any `{{ … }}` block in a step — candidates for malformed markers. */
-const CURLY_BLOCK_RE = /\{\{([^{}]*)\}\}/g;
 
 /** Type guard for plain YAML mappings (objects). */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -163,6 +176,34 @@ function checkTitle(title: string, issues: ValidationIssue[]): void {
 }
 
 /**
+ * Validates and normalizes one amount-first phrase (a step row or an artifact
+ * content) into the canonical Ingredient/artifact form.
+ */
+function parsePhrase(
+  phrase: string,
+  requireName: boolean,
+  path: string,
+  issues: ValidationIssue[],
+): Ingredient | null {
+  const parsed = parseIngredientPhrase(phrase, requireName);
+  if (parsed === null) {
+    issues.push({
+      path,
+      message: requireName
+        ? `"${phrase}" ist keine gültige Zutaten-Zeile (erwartet z. B. "500 g Reis").`
+        : `Ungültiger Mengen-Baustein "${phrase}" (erwartet z. B. "1500 ml Wasser" oder "100 g").`,
+    });
+    return null;
+  }
+  if (parsed.name !== undefined && parsed.name.includes('|')) {
+    issues.push({ path, message: 'Der Zutatenname darf kein "|" enthalten.' });
+    return null;
+  }
+  checkLadderValue(parsed.quantity, path, issues, false);
+  return parsed as Ingredient;
+}
+
+/**
  * Validates the raw YAML front matter against the schema of §3/§4 and the
  * value rules of §7.1. Returns the typed recipe (steps filled by the caller)
  * or undefined when a required field could not be built — in that case the
@@ -191,19 +232,10 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     });
   }
 
-  // Field-level schema: reject unknown fields (incl. the removed `ingredients`
-  // — it is derived from the body now, §4), reject fields forbidden for the
+  // Field-level schema: reject unknown fields, reject fields forbidden for the
   // declared type. With an invalid type the per-type checks are skipped (the
   // type problem above is the precise error; the union still rejects unknowns).
   for (const key of Object.keys(data)) {
-    if (key === 'ingredients') {
-      issues.push({
-        path: key,
-        message:
-          'Feld "ingredients" wird aus dem Zubereitungstext abgeleitet und darf nicht mehr im Front Matter stehen.',
-      });
-      continue;
-    }
     if (!ALL_TOP_LEVEL_FIELDS.has(key)) {
       issues.push({ path: key, message: `Unbekanntes Feld "${key}".` });
       continue;
@@ -224,14 +256,11 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   const prepTime = readString(data, 'prep_time', issues, 'prep_time');
   const totalTime = readOptionalString(data, 'total_time', issues, 'total_time');
 
-  // The ingredient list is derived from the body markers (§4); the typed
-  // recipe returned here carries a placeholder that the caller replaces.
-  const ingredients: Ingredient[] = [];
-
   // Per-type required fields (§3) and their value rules (§7.1).
   let servings: number | undefined;
   let yieldValue: number | undefined;
   let yieldUnit: Unit | undefined;
+  let reference: string[] | undefined;
   if (type === 'finished_dish') {
     const servingsValue = data['servings'];
     if (servingsValue === undefined) {
@@ -241,6 +270,52 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     } else {
       checkLadderValue(servingsValue, 'servings', issues, true);
       servings = servingsValue;
+    }
+    // Reference role (§4): 0–2 ingredient names anchored to the portion size,
+    // resolved onto the derived master list at the end of parseRecipe.
+    const referenceValue = data['reference'];
+    if (referenceValue !== undefined) {
+      const names =
+        typeof referenceValue === 'string'
+          ? [referenceValue]
+          : Array.isArray(referenceValue)
+            ? referenceValue.filter((entry): entry is string => typeof entry === 'string')
+            : [];
+      if (
+        typeof referenceValue !== 'string' &&
+        !(Array.isArray(referenceValue) && referenceValue.every((entry) => typeof entry === 'string'))
+      ) {
+        issues.push({
+          path: 'reference',
+          message: '"reference" muss eine Liste von Zutatennamen sein (z. B. ["Tortillas"]).',
+        });
+      } else {
+        reference = [];
+        const seen = new Set<string>();
+        names.forEach((name, index) => {
+          const path = `reference[${index}]`;
+          const trimmed = name.trim();
+          if (trimmed === '') {
+            issues.push({ path, message: 'Ein Referenz-Name darf nicht leer sein.' });
+            return;
+          }
+          if (seen.has(trimmed)) {
+            issues.push({
+              path,
+              message: `"${trimmed}" ist mehrfach als Referenz-Zutat angegeben.`,
+            });
+            return;
+          }
+          seen.add(trimmed);
+          reference!.push(trimmed);
+        });
+        if (reference.length > 2) {
+          issues.push({
+            path: 'reference',
+            message: 'Höchstens 2 Zutaten dürfen als Referenz-Menge markiert sein.',
+          });
+        }
+      }
     }
   } else if (type === 'ingredient_recipe') {
     const yieldRaw = data['yield'];
@@ -264,13 +339,19 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
         message: `"yield_unit" muss eine der Einheiten g, kg, ml oder l sein (gefunden: ${JSON.stringify(yieldUnitValue)}).`,
       });
     } else {
-      yieldUnit = yieldUnitValue as Unit;
+      const rawUnit = yieldUnitValue as Unit;
+      // kg/l are display units: normalize the yield to the family form (×1000).
+      if (rawUnit === 'kg') {
+        yieldUnit = 'g';
+        if (yieldValue !== undefined) yieldValue *= 1000;
+      } else if (rawUnit === 'l') {
+        yieldUnit = 'ml';
+        if (yieldValue !== undefined) yieldValue *= 1000;
+      } else {
+        yieldUnit = rawUnit;
+      }
     }
   }
-
-  // Reference rules (§4): at most 2 per recipe and only for finished_dish.
-  // Validated against the body markers (validateMarkers); the placeholder
-  // list is empty here, so nothing to check at this stage.
 
   if (title === undefined || type === undefined || prepTime === undefined) {
     // The problems are already recorded; the recipe cannot be built.
@@ -280,11 +361,13 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   const recipe: Recipe = {
     title,
     type,
-    ingredients,
+    // Filled by the caller from the derived master list.
+    ingredients: [],
     ...(subtitle !== undefined ? { subtitle } : {}),
     ...(description !== undefined ? { description } : {}),
     prep_time: prepTime,
     ...(totalTime !== undefined ? { total_time: totalTime } : {}),
+    ...(reference !== undefined ? { reference } : {}),
     ...(servings !== undefined ? { servings } : {}),
     ...(yieldValue !== undefined ? { yield: yieldValue } : {}),
     ...(yieldUnit !== undefined ? { yield_unit: yieldUnit } : {}),
@@ -293,8 +376,52 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   return recipe;
 }
 
-/** Validates the Markdown body (§5) and returns the steps in order. */
-function parseSteps(body: string, issues: ValidationIssue[]): string[] | undefined {
+/**
+ * Parses one row line ("- 250 g Reis") into a canonical Ingredient. Records
+ * issues on the given path.
+ */
+function parseRow(line: string, path: string, issues: ValidationIssue[]): Ingredient | null {
+  const content = line.trim().replace(/^-\s+/, '');
+  const parsed = parsePhrase(content, true, path, issues);
+  if (parsed === null) return null;
+  if (parsed.name === undefined) return null; // unreachable with requireName
+  return parsed;
+}
+
+/**
+ * Validates the artifacts of one step text and normalizes them to the
+ * canonical family form (kg/l and German comma decimals → g/ml + '.').
+ */
+function validateAndNormalizeText(text: string, path: string, issues: ValidationIssue[]): string {
+  for (const match of text.matchAll(CURLY_BLOCK_RE)) {
+    const content = match[1] ?? '';
+    if (parseIngredientPhrase(content) === null) {
+      issues.push({
+        path,
+        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}} oder {{100}}).`,
+      });
+      continue;
+    }
+    // Validate the quantity without creating issues inside replaceArtifacts:
+    // every artifact's content must be a standard number (§7.1).
+    try {
+      pos((parseIngredientPhrase(content) as { quantity: number }).quantity);
+    } catch {
+      issues.push({
+        path,
+        message: `Die Menge in ${JSON.stringify(match[0])} ist kein Standardwert (Leiterwert).`,
+      });
+    }
+  }
+  // Normalization: rewrite every valid artifact to the canonical text form.
+  return replaceArtifacts(text, (artifact) => artifact);
+}
+
+/**
+ * Validates the Markdown body (§4/§5) and returns the steps in order. Each
+ * step block is one numbered item with optional rows followed by a prose line.
+ */
+function parseSteps(body: string, issues: ValidationIssue[]): Step[] | undefined {
   const lines = body.split(/\r?\n/);
 
   // Trim leading and trailing blank lines so the structural checks are stable.
@@ -318,26 +445,32 @@ function parseSteps(body: string, issues: ValidationIssue[]): string[] | undefin
     return undefined;
   }
 
-  const steps: string[] = [];
+  const steps: Step[] = [];
   let expected = 1;
   let numberingReported = false;
-  for (let i = first + 1; i <= last; i++) {
+  let i = first + 1;
+  while (i <= last) {
     const line = lines[i]!;
     const trimmed = line.trim();
-    if (trimmed === '') continue; // blank lines between steps are allowed
+    if (trimmed === '') {
+      i++; // blank lines between steps are allowed
+      continue;
+    }
     if (HEADING_PATTERN.test(line)) {
       issues.push({
         path: 'body',
         message: `Unerwartete Überschrift "${trimmed}" — der Rezepttext enthält nur die eine "${ZUBEREITUNG_HEADING}"-Überschrift.`,
       });
+      i++;
       continue;
     }
     const match = ORDERED_LIST_ITEM.exec(line);
     if (match === null) {
       issues.push({
         path: 'body',
-        message: `"${trimmed}" ist kein nummerierter Schritt (erwartet: "N. Text").`,
+        message: `"${trimmed}" ist kein nummerierter Schritt (erwartet: "N. Text" oder "N. - 250 g Reis").`,
       });
+      i++;
       continue;
     }
     const num = Number(match[1]);
@@ -349,7 +482,57 @@ function parseSteps(body: string, issues: ValidationIssue[]): string[] | undefin
       numberingReported = true;
     }
     expected = num + 1;
-    steps.push(match[2]!.trim());
+
+    const stepIndex = steps.length;
+    const stepPath = `steps[${stepIndex}]`;
+    const ingredients: Ingredient[] = [];
+    const firstContent = match[2]!;
+    let prose: string | undefined;
+    const blockStart = i;
+
+    // A step either starts with its rows ("- 250 g Reis") — then the rows run
+    // until the first line that is not a row, which must be the prose — or it
+    // is a single prose line.
+    if (!firstContent.startsWith('- ')) {
+      prose = firstContent.trim();
+      i = blockStart + 1;
+    } else {
+      // Rows: the first row sits on the number line, further rows follow.
+      const rowLine = parseRow(firstContent, `${stepPath}.ingredients[0]`, issues);
+      if (rowLine !== null) ingredients.push(rowLine);
+      i = blockStart + 1;
+      while (prose === undefined && i <= last) {
+        const next = lines[i]!.trim();
+        if (next === '' || ORDERED_LIST_ITEM.test(lines[i]!) || HEADING_PATTERN.test(lines[i]!)) {
+          // The step ended without a prose line (blank, or the next step).
+          break;
+        }
+        if (next.startsWith('- ')) {
+          const row = parseRow(lines[i]!, `${stepPath}.ingredients[${ingredients.length}]`, issues);
+          if (row !== null) ingredients.push(row);
+          i++;
+          continue;
+        }
+        prose = next;
+        i++;
+      }
+    }
+
+    if (prose === undefined || prose === '') {
+      issues.push({
+        path: stepPath,
+        message: 'Jeder Schritt braucht nach seinen Zutaten einen Text.',
+      });
+      continue;
+    }
+    if (prose.startsWith('- ')) {
+      issues.push({
+        path: `${stepPath}.text`,
+        message: 'Der Schritt-Text darf nicht mit "- " beginnen (das ist Zutaten-Zeilen vorbehalten).',
+      });
+    }
+    const text = validateAndNormalizeText(prose, `${stepPath}.text`, issues);
+    steps.push({ ingredients, text });
   }
 
   if (steps.length === 0) {
@@ -410,66 +593,10 @@ function parseYaml(frontMatter: string, issues: ValidationIssue[]): unknown {
 }
 
 /**
- * Validates the ingredient markers of the steps (§4, decided with the user:
- * the step text is the source of truth for the ingredient list).
- *
- * Reports malformed markers and invalid marker values with the step index as
- * the issue path. The reference rules depend on the recipe type and are only
- * enforced when the type is known (an invalid type is reported separately).
- */
-function validateMarkers(
-  steps: readonly string[],
-  type: RecipeType | undefined,
-  issues: ValidationIssue[],
-): void {
-  let referenceCount = 0;
-  steps.forEach((step, index) => {
-    const path = `steps[${index}]`;
-    // Any `{{ … }}` block that does not match the marker grammar is a
-    // malformed marker — never silently treated as prose.
-    for (const match of step.matchAll(CURLY_BLOCK_RE)) {
-      if (!STRICT_MARKER_RE.test(match[0])) {
-        issues.push({
-          path,
-          message: `Ungültiger Zutaten-Marker: ${JSON.stringify(match[0])} (erwartet z. B. {{ingredient|Joghurt|400|g}}).`,
-        });
-      }
-    }
-    for (const marker of extractMarkers(step)) {
-      if (marker.name.trim() === '') {
-        issues.push({ path, message: 'Der Zutatenname in einem Marker darf nicht leer sein.' });
-      }
-      if (!Number.isFinite(marker.quantity) || marker.quantity <= 0) {
-        issues.push({
-          path,
-          message: `Die Menge für "${marker.name}" muss eine positive Zahl sein.`,
-        });
-      } else {
-        try {
-          pos(marker.quantity);
-        } catch {
-          issues.push({
-            path,
-            message: `Die Menge ${marker.quantity} für "${marker.name}" ist kein Standardwert (Leiterwert).`,
-          });
-        }
-      }
-      if (marker.reference === true) referenceCount++;
-    }
-  });
-
-  if (type === 'finished_dish' && referenceCount > 2) {
-    issues.push({ path: 'body', message: 'Höchstens 2 Zutaten dürfen mit "ref" markiert sein.' });
-  } else if (type === 'ingredient_recipe' && referenceCount > 0) {
-    issues.push({ path: 'body', message: '"ref" ist nur für finished_dish erlaubt.' });
-  }
-}
-
-/**
  * Parses and validates one recipe file (§7.1).
  *
  * @param text the raw file content (UTF-8, Markdown + YAML front matter)
- * @returns the typed recipe (ingredients derived from the body markers, §4)
+ * @returns the typed recipe (master list derived from the step rows, §4)
  * @throws {RecipeParseError} with every problem found (paths + German messages)
  */
 export function parseRecipe(text: string): Recipe {
@@ -479,9 +606,6 @@ export function parseRecipe(text: string): Recipe {
   const data = frontMatter === undefined ? undefined : parseYaml(frontMatter, issues);
   const recipe = data === undefined ? undefined : validateRecipeData(data, issues);
   const steps = body === undefined ? undefined : parseSteps(body, issues);
-  if (steps !== undefined) {
-    validateMarkers(steps, recipe?.type, issues);
-  }
 
   if (issues.length > 0) {
     throw new RecipeParseError(issues);
@@ -490,5 +614,22 @@ export function parseRecipe(text: string): Recipe {
     // Unreachable: both are only undefined when an issue was recorded above.
     throw new RecipeParseError(issues);
   }
-  return { ...recipe, steps, ingredients: deriveIngredients(steps) };
+
+  const ingredients = deriveIngredients(steps, recipe.reference ?? []);
+  // §4: every reference name must match a merged ingredient of the recipe.
+  if (recipe.reference !== undefined) {
+    const mergedNames = new Set(ingredients.map((ingredient) => ingredient.name));
+    recipe.reference.forEach((name, index) => {
+      if (!mergedNames.has(name)) {
+        issues.push({
+          path: `reference[${index}]`,
+          message: `Die Referenz-Zutat "${name}" kommt im Rezept nicht vor.`,
+        });
+      }
+    });
+  }
+  if (issues.length > 0) {
+    throw new RecipeParseError(issues);
+  }
+  return { ...recipe, steps, ingredients };
 }

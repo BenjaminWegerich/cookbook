@@ -35,7 +35,15 @@ const SUGGESTED_VALUES = [
   1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000,
 ];
 
+/**
+ * The label of a quantity: formatted base form (switches to kg/l at 1000) for
+ * a family unit, plain number for a unitless quantity (`{{100}}`).
+ */
+export function quantityLabel(quantity: number, family: QuantityFamily | null): string {
+  return family === null ? String(quantity) : formatBQ(quantity, family);
+}
+
 /** The suggested chips with display labels (see file header). */
-export function suggestedChips(family: QuantityFamily): QuantityChip[] {
-  return SUGGESTED_VALUES.map((quantity) => ({ quantity, label: formatBQ(quantity, family) }));
+export function suggestedChips(family: QuantityFamily | null): QuantityChip[] {
+  return SUGGESTED_VALUES.map((quantity) => ({ quantity, label: quantityLabel(quantity, family) }));
 }

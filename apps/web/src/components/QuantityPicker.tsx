@@ -14,16 +14,22 @@
  * (core formatBQ). UI language is German.
  */
 
-import { formatBQ, scale } from '@cookbook/core';
+import { scale } from '@cookbook/core';
 
-import { QUANTITY_MAX, QUANTITY_MIN, suggestedChips, type QuantityFamily } from './quantityChips';
+import {
+  QUANTITY_MAX,
+  QUANTITY_MIN,
+  quantityLabel,
+  suggestedChips,
+  type QuantityFamily,
+} from './quantityChips';
 
 interface QuantityPickerProps {
   /** The stored quantity (family unit); undefined = nothing chosen yet. */
   value?: number;
   onChange: (quantity: number) => void;
-  /** The ingredient's family unit (g or ml), derived from the master data. */
-  family: QuantityFamily;
+  /** The ingredient's family unit (g/ml) — null = unitless quantity (`{{100}}`). */
+  family: QuantityFamily | null;
 }
 
 /**
@@ -69,7 +75,7 @@ function QuantityPicker({ value, onChange, family }: QuantityPickerProps) {
           −
         </button>
         <span className="quantity-value">
-          {value === undefined ? '—' : formatBQ(value, family)}
+          {value === undefined ? '—' : quantityLabel(value, family)}
         </span>
         <button
           type="button"

@@ -418,17 +418,54 @@
   gap: var(--space-2);
 }
 
+/* Master list row: one compact line (name/display left, actions right). */
 .ingredient-row {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-bg);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
 }
 
+.ingredient-row.is-reference {
+  border-color: var(--color-accent);
+}
+
 .ingredient-row.has-error {
   border-color: var(--color-danger);
+}
+
+/* Compact reference toggle on a master-list row (☆ off, ★ on). */
+.ref-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%; /* structural exception to the ladder: full circle */
+  color: var(--color-ink-muted);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ref-toggle.on {
+  color: var(--color-accent);
+}
+
+.ref-toggle:active {
+  background: var(--color-line);
+}
+
+.ref-toggle:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .ingredient-row-button {
@@ -686,4 +723,60 @@
 .factor-base {
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+}
+
+/* ---- Step rows (per-step ingredient list) -------------------------------- */
+
+/* A row of a step's own ingredient list: compact, one line per use. */
+.step-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+}
+
+.step-row .ingredient-row-button {
+  width: auto;
+}
+
+.step-row .ingredient-line {
+  font-size: var(--text-sm);
+}
+
+.step-row .ingredient-hint {
+  display: none;
+}
+
+.step-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.step-row-actions .link-badge {
+  justify-self: auto;
+}
+
+.step-add-row {
+  margin-block-start: var(--space-2);
+}
+
+.step-card .add-ingredient {
+  margin-block-start: var(--space-1);
+}
+
+/* Reference toggle on the (read-only) master list. */
+.badge-toggle {
+  justify-self: start;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.badge-toggle:disabled {
+  opacity: 0.45;
 }

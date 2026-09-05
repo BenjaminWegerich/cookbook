@@ -8,5 +8,7 @@ prep_time: 15 min
 
 ## Zubereitung
 
-1. {{ingredient|Butter|25|g}} schmelzen, Mehl anschwitzen und mit {{ingredient|Milch|300|ml}} aufgießen.
+1. - 25 g Butter
+   - 300 ml Milch
+   Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.
 2. Unter Rühren köcheln, bis die Sauce bindet.

@@ -1,112 +1,123 @@
 /**
- * Tests for the title-rename logic (docs/storage_format.md §6).
+ * Tests for the title-rename transformation (docs/storage_format.md §6).
+ *
+ * Sub-recipe links are implicit: renaming an `ingredient_recipe` renames every
+ * use of its old title — as a step row, as an inline text artifact and as an
+ * entry of a `reference` list — in all other recipes. Renaming a finished dish
+ * touches no other file.
  */
 
 import { describe, expect, it } from 'vitest';
 
-import type { Recipe } from './types.js';
-import { deriveIngredients } from './markers.js';
+import { parseRecipe } from './parse.js';
 import { renameRecipeInCollection } from './rename.js';
+import type { Recipe } from './types.js';
 
-const WRAPS_STEPS = [
-  '{{ingredient|Tortillas|250|g|ref}} füllen. {{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}} dazureichen.',
-];
-const WRAPS: Recipe = {
-  title: 'Shredded Tofu Wraps',
-  type: 'finished_dish',
-  servings: 6,
-  prep_time: '25 min',
-  ingredients: deriveIngredients(WRAPS_STEPS),
-  steps: WRAPS_STEPS,
-};
+function parse(text: string): Recipe {
+  return parseRecipe(text);
+}
 
-const BECHAMEL: Recipe = {
-  title: 'Béchamelsauce',
-  type: 'ingredient_recipe',
-  yield: 500,
-  yield_unit: 'ml',
-  prep_time: '15 min',
-  ingredients: deriveIngredients(['{{ingredient|Milch|300|ml}} kochen.']),
-  steps: ['{{ingredient|Milch|300|ml}} kochen.'],
-};
+/** The sub-recipe to be renamed. */
+const BECHAMEL = parse(`---
+title: Béchamelsauce
+type: ingredient_recipe
+yield: 500
+yield_unit: ml
+prep_time: 15 min
+---
+## Zubereitung
+1. - 300 ml Milch
+   Milch aufkochen.
+`);
 
-/** A second dish that also uses the Béchamelsauce. */
-const LASAGNE_STEPS = [
-  '{{ingredient|Nudelplatten|250|g}} schichten. {{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}} darübergeben.',
-];
-const LASAGNE: Recipe = {
-  title: 'Lasagne',
-  type: 'finished_dish',
-  servings: 6,
-  prep_time: '40 min',
-  ingredients: deriveIngredients(LASAGNE_STEPS),
-  steps: LASAGNE_STEPS,
-};
+/** A finished dish using the sub-recipe in a row, an artifact and as reference. */
+const WRAPS = parse(`---
+title: Shredded Tofu Wraps
+type: finished_dish
+servings: 6
+prep_time: 20 min
+reference:
+  - Béchamelsauce
+---
+## Zubereitung
+1. - 250 g Tortillas
+   - 500 ml Béchamelsauce
+   Tortillas füllen, {{200 ml Béchamelsauce}} dazureichen.
+`);
 
-const PASTA: Recipe = {
-  title: 'Spaghetti',
-  type: 'finished_dish',
-  servings: 4,
-  prep_time: '10 min',
-  ingredients: deriveIngredients(['{{ingredient|Nudeln|500|g|ref}} kochen.']),
-  steps: ['{{ingredient|Nudeln|500|g|ref}} kochen.'],
-};
+/** A finished dish with an unrelated plain ingredient. */
+const PASTA = parse(`---
+title: Spaghetti
+type: finished_dish
+servings: 4
+prep_time: 10 min
+---
+## Zubereitung
+1. - 500 g Nudeln
+   Nudeln kochen.
+`);
 
 describe('renameRecipeInCollection', () => {
-  it('returns the target recipe with the new title', () => {
-    const result = renameRecipeInCollection([WRAPS, BECHAMEL], 'Béchamelsauce', 'Käsesauce');
-    expect(result.renamed.title).toBe('Käsesauce');
-    expect(result.renamed).toEqual({ ...BECHAMEL, title: 'Käsesauce' });
+  it('renames the target recipe title', () => {
+    const { renamed } = renameRecipeInCollection([BECHAMEL, WRAPS], 'Béchamelsauce', 'Käsesauce');
+    expect(renamed.title).toBe('Käsesauce');
   });
 
-  it('updates every |recipe: marker to the old title', () => {
-    const result = renameRecipeInCollection(
-      [WRAPS, BECHAMEL, LASAGNE, PASTA],
+  it('renames implicit sub-recipe uses in rows, artifacts and the reference list', () => {
+    const { updated } = renameRecipeInCollection(
+      [BECHAMEL, WRAPS, PASTA],
       'Béchamelsauce',
       'Käsesauce',
     );
-    // Both dishes referenced the renamed sub-recipe.
-    expect(result.updated.map((recipe) => recipe.title).sort()).toEqual([
-      'Lasagne',
-      'Shredded Tofu Wraps',
+    expect(updated).toHaveLength(1);
+    const parent = updated[0]!;
+    expect(parent.title).toBe('Shredded Tofu Wraps');
+    // Step rows renamed (name == old title).
+    expect(parent.steps[0]!.ingredients.map((entry) => entry.name)).toEqual([
+      'Tortillas',
+      'Käsesauce',
     ]);
-    for (const recipe of result.updated) {
-      expect(recipe.steps.join(' ')).not.toContain('recipe:Béchamelsauce');
-      for (const ingredient of recipe.ingredients) {
-        expect(ingredient.recipe).not.toBe('Béchamelsauce');
-      }
-    }
-    const lasagne = result.updated.find((recipe) => recipe.title === 'Lasagne')!;
-    expect(lasagne.steps[0]).toContain('recipe:Käsesauce');
-    // Name follows rename: the ingredient that IS the sub-recipe carries the
-    // recipe's title as its name too (name == title invariant, §4).
-    expect(lasagne.ingredients.find((i) => i.name === 'Käsesauce')!.recipe).toBe('Käsesauce');
+    // Inline artifact renamed in the prose.
+    expect(parent.steps[0]!.text).toBe(
+      'Tortillas füllen, {{200 ml Käsesauce}} dazureichen.',
+    );
+    // The reference list entry followed the renamed ingredient.
+    expect(parent.reference).toEqual(['Käsesauce']);
+    // The derived master list is recomputed from the renamed rows.
+    expect(parent.ingredients.map((entry) => entry.name)).toEqual(['Tortillas', 'Käsesauce']);
   });
 
-  it('leaves unrelated recipes untouched and out of the result', () => {
-    const result = renameRecipeInCollection([WRAPS, BECHAMEL, PASTA], 'Béchamelsauce', 'Käsesauce');
-    expect(result.updated.map((recipe) => recipe.title)).toEqual(['Shredded Tofu Wraps']);
-    // The original collection objects are never mutated.
-    expect(PASTA.ingredients[0]!.recipe).toBeUndefined();
-    expect(WRAPS.steps[0]).toContain('recipe:Béchamelsauce');
+  it('leaves recipes without the old title unchanged', () => {
+    const { updated } = renameRecipeInCollection([BECHAMEL, WRAPS, PASTA], 'Béchamelsauce', 'Käsesauce');
+    expect(updated.some((recipe) => recipe.title === 'Spaghetti')).toBe(false);
   });
 
-  it('is a no-op when old and new title are equal', () => {
-    const result = renameRecipeInCollection([WRAPS, BECHAMEL], 'Béchamelsauce', 'Béchamelsauce');
-    expect(result.renamed).toBe(BECHAMEL);
-    expect(result.updated).toEqual([]);
+  it('renaming a finished dish never touches other files (names are plain ingredients)', () => {
+    const usesName = parse(`---
+title: Reste-Pfanne
+type: finished_dish
+servings: 2
+prep_time: 10 min
+---
+## Zubereitung
+1. - 200 g Spaghetti
+   Spaghetti mit Ei braten.
+`);
+    const { updated } = renameRecipeInCollection(
+      [PASTA, usesName],
+      'Spaghetti',
+      'Linguine',
+    );
+    expect(updated).toHaveLength(0);
+  });
+
+  it('returns the target unchanged for an identical title', () => {
+    const { renamed, updated } = renameRecipeInCollection([BECHAMEL, WRAPS], 'Béchamelsauce', 'Béchamelsauce');
+    expect(renamed.title).toBe('Béchamelsauce');
+    expect(updated).toHaveLength(0);
   });
 
   it('throws when the old title is not in the collection', () => {
-    expect(() => renameRecipeInCollection([WRAPS], 'GibtEsNicht', 'Neu')).toThrow(
-      /not in the collection/,
-    );
-  });
-
-  it('preserves all other fields of the renamed recipe', () => {
-    const result = renameRecipeInCollection([BECHAMEL], 'Béchamelsauce', 'Käsesauce');
-    const { title: _title, ...restOfRenamed } = result.renamed;
-    const { title: _title2, ...restOfOriginal } = BECHAMEL;
-    expect(restOfRenamed).toEqual(restOfOriginal);
+    expect(() => renameRecipeInCollection([BECHAMEL], 'Fehlt', 'Neu')).toThrow(/not in the collection/);
   });
 });

@@ -1,9 +1,10 @@
 /**
  * Tests for the per-file parser and validator (docs/storage_format.md §7.1).
  *
- * Since the ingredient list is derived from the step text (markers, §4 —
- * decided with the user), the fixtures carry no `ingredients` front matter;
- * ingredients appear inline in the steps as {{ingredient|…}} markers.
+ * The step rows are the source of truth for the ingredient list (§4): each
+ * step may carry its own rows (`- 250 g Tortillas`) above a prose line; the
+ * master list is derived from the rows. The front matter may carry the
+ * `reference` name list (finished_dish only).
  *
  * All fixture quantities are real ladder values — e.g. 250, not 240 (the
  * authoritative docs/standard_numbers.csv has no 240; the master data wins).
@@ -15,7 +16,7 @@ import { RecipeParseError } from './types.js';
 import type { ValidationIssue } from './types.js';
 import { parseRecipe } from './parse.js';
 
-/** The finished-dish example of storage_format.md §8 (marker form). */
+/** The finished-dish example of storage_format.md §8 (row form). */
 const FINISHED_DISH = `---
 title: Shredded Tofu Wraps
 type: finished_dish
@@ -24,15 +25,21 @@ description: Knusprige Wraps mit mariniertem Tofu und frischem Gemüse.
 servings: 6
 prep_time: 25 min
 total_time: 40 min
+reference:
+  - Tortillas
 ---
 ## Zubereitung
-1. {{ingredient|Tortillas|250|g|ref}} im Ofen erwärmen und warm halten.
+1. - 250 g Tortillas
+   Tortillas im Ofen erwärmen und warm halten.
 2. Tofu marinieren und scharf anbraten.
-3. {{ingredient|Joghurt|400|g}} mit {{ingredient|Zitronensaft|15|ml}} verrühren und würzen.
-4. Wraps mit Tofu, Joghurt-Dip und Gemüse füllen. {{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}} dazureichen.
+3. - 400 g Joghurt
+   - 15 ml Zitronensaft
+   Joghurt mit Zitronensaft verrühren und würzen.
+4. - 500 ml Béchamelsauce
+   Wraps mit Tofu, Joghurt-Dip und Gemüse füllen und mit Béchamelsauce servieren.
 `;
 
-/** The ingredient-recipe example of storage_format.md §8 (marker form). */
+/** The ingredient-recipe example of storage_format.md §8 (row form). */
 const INGREDIENT_RECIPE = `---
 title: Béchamelsauce
 type: ingredient_recipe
@@ -41,7 +48,9 @@ yield_unit: ml
 prep_time: 15 min
 ---
 ## Zubereitung
-1. {{ingredient|Butter|25|g}} schmelzen, Mehl anschwitzen und mit {{ingredient|Milch|300|ml}} aufgießen.
+1. - 25 g Butter
+   - 300 ml Milch
+   Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.
 2. Unter Rühren köcheln, bis die Sauce bindet.
 `;
 
@@ -84,15 +93,35 @@ describe('parseRecipe — happy paths', () => {
     expect(recipe.servings).toBe(6);
     expect(recipe.yield).toBeUndefined();
     expect(recipe.yield_unit).toBeUndefined();
+    expect(recipe.reference).toEqual(['Tortillas']);
 
-    // Derived from the markers: order of first appearance in the steps.
+    expect(recipe.steps).toEqual([
+      {
+        ingredients: [{ name: 'Tortillas', quantity: 250, unit: 'g' }],
+        text: 'Tortillas im Ofen erwärmen und warm halten.',
+      },
+      { ingredients: [], text: 'Tofu marinieren und scharf anbraten.' },
+      {
+        ingredients: [
+          { name: 'Joghurt', quantity: 400, unit: 'g' },
+          { name: 'Zitronensaft', quantity: 15, unit: 'ml' },
+        ],
+        text: 'Joghurt mit Zitronensaft verrühren und würzen.',
+      },
+      {
+        ingredients: [{ name: 'Béchamelsauce', quantity: 500, unit: 'ml' }],
+        text: 'Wraps mit Tofu, Joghurt-Dip und Gemüse füllen und mit Béchamelsauce servieren.',
+      },
+    ]);
+
+    // Derived from the step rows: order of first appearance, reference resolved
+    // from the front-matter name list.
     expect(recipe.ingredients).toEqual([
       { name: 'Tortillas', quantity: 250, unit: 'g', reference: true },
       { name: 'Joghurt', quantity: 400, unit: 'g' },
       { name: 'Zitronensaft', quantity: 15, unit: 'ml' },
-      { name: 'Béchamelsauce', quantity: 500, unit: 'ml', recipe: 'Béchamelsauce' },
+      { name: 'Béchamelsauce', quantity: 500, unit: 'ml' },
     ]);
-    expect(recipe.steps).toHaveLength(4);
   });
 
   it('parses the ingredient-recipe example completely', () => {
@@ -101,6 +130,7 @@ describe('parseRecipe — happy paths', () => {
     expect(recipe.yield).toBe(500);
     expect(recipe.yield_unit).toBe('ml');
     expect(recipe.servings).toBeUndefined();
+    expect(recipe.reference).toBeUndefined();
     expect(recipe.ingredients).toEqual([
       { name: 'Butter', quantity: 25, unit: 'g' },
       { name: 'Milch', quantity: 300, unit: 'ml' },
@@ -108,7 +138,7 @@ describe('parseRecipe — happy paths', () => {
     expect(recipe.steps).toHaveLength(2);
   });
 
-  it('derives a recipe without markers to an empty ingredient list', () => {
+  it('derives a recipe without rows to an empty ingredient list', () => {
     const recipe = parseRecipe(
       '---\ntitle: Minimal\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' +
         '---\n## Zubereitung\n1. Backen.\n',
@@ -117,15 +147,51 @@ describe('parseRecipe — happy paths', () => {
     expect('subtitle' in recipe).toBe(false);
     expect('description' in recipe).toBe(false);
     expect('total_time' in recipe).toBe(false);
+    expect('reference' in recipe).toBe(false);
   });
 
-  it('leaves the reference flag absent when no marker carries |ref', () => {
+  it('merges repeated rows of one ingredient with the summed quantity', () => {
     const recipe = parseRecipe(
-      '---\ntitle: Ohne Referenz\ntype: finished_dish\nservings: 2\nprep_time: 5 min\n' +
-        '---\n## Zubereitung\n1. {{ingredient|Salz|5|g}} würzen.\n',
+      '---\ntitle: Summiert\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n' +
+        '1. - 200 g Joghurt\n   Joghurt anrühren.\n' +
+        '2. - 200 g Joghurt\n   Joghurt unterheben.\n',
     );
-    expect(recipe.ingredients).toEqual([{ name: 'Salz', quantity: 5, unit: 'g' }]);
-    expect('reference' in recipe.ingredients[0]!).toBe(false);
+    expect(recipe.ingredients).toEqual([{ name: 'Joghurt', quantity: 400, unit: 'g' }]);
+  });
+
+  it('normalizes hand-written kg/l rows and comma decimals to the family form', () => {
+    const recipe = parseRecipe(
+      '---\ntitle: Normalisiert\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. - 1,5 l Wasser\n   - 0.2 kg Reis\n   Wasser aufgießen und Reis kochen.\n',
+    );
+    expect(recipe.steps[0]!.ingredients).toEqual([
+      { name: 'Wasser', quantity: 1500, unit: 'ml' },
+      { name: 'Reis', quantity: 200, unit: 'g' },
+    ]);
+  });
+
+  it('normalizes inline artifact text to the canonical family form', () => {
+    const recipe = parseRecipe(
+      '---\ntitle: Artifakt\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Nudeln in {{1,5 l Wasser}} kochen, dann {{100 g}} unterheben.\n',
+    );
+    expect(recipe.steps[0]!.text).toBe(
+      'Nudeln in {{1500 ml Wasser}} kochen, dann {{100 g}} unterheben.',
+    );
+    // Inline artifacts never count toward the ingredient list.
+    expect(recipe.ingredients).toEqual([]);
+  });
+
+  it('allows unitless quantity-only artifacts in the step text', () => {
+    const recipe = parseRecipe(
+      '---\ntitle: Einheitenlos\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. {{3}} Minuten ziehen lassen, dann {{1,5}} l Wasser ergänzen.\n',
+    );
+    expect(recipe.steps[0]!.text).toBe(
+      '{{3}} Minuten ziehen lassen, dann {{1.5}} l Wasser ergänzen.',
+    );
+    expect(recipe.ingredients).toEqual([]);
   });
 
   it('accepts CRLF line endings and a leading UTF-8 BOM', () => {
@@ -138,12 +204,12 @@ describe('parseRecipe — happy paths', () => {
   it('allows blank lines between steps and indented step numbers', () => {
     const recipe = parseRecipe(
       '---\ntitle: Blanks\ntype: finished_dish\nservings: 2\nprep_time: 20 min\n' +
-        '---\n## Zubereitung\n1. {{ingredient|Reis|250|g}} kochen.\n\n2. Abkühlen lassen.\n  3. Servieren.\n',
+        '---\n## Zubereitung\n1. - 250 g Reis\n   Reis kochen.\n\n2. Abkühlen lassen.\n  3. Servieren.\n',
     );
     expect(recipe.steps).toEqual([
-      '{{ingredient|Reis|250|g}} kochen.',
-      'Abkühlen lassen.',
-      'Servieren.',
+      { ingredients: [{ name: 'Reis', quantity: 250, unit: 'g' }], text: 'Reis kochen.' },
+      { ingredients: [], text: 'Abkühlen lassen.' },
+      { ingredients: [], text: 'Servieren.' },
     ]);
   });
 });
@@ -214,17 +280,20 @@ describe('parseRecipe — schema validation (§3)', () => {
     expectIssueAt(missing, 'type', 'Pflichtfeld');
   });
 
-  it('rejects unknown top-level fields and a front-matter ingredients list', () => {
+  it('rejects unknown top-level fields', () => {
     const unknown = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nrezeptart: fertig\n---\n## Zubereitung\n1. x\n',
     );
     expectIssueAt(unknown, 'rezeptart', 'Unbekanntes Feld');
 
+    // The old marker format stored an `ingredients` list in the front matter;
+    // the master list is derived from the step rows now — an explicit field is
+    // simply an unknown field.
     const oldFormat = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\n' +
         'ingredients:\n  - name: X\n    quantity: 1\n    unit: g\n---\n## Zubereitung\n1. x\n',
     );
-    expectIssueAt(oldFormat, 'ingredients', 'abgeleitet');
+    expectIssueAt(oldFormat, 'ingredients', 'Unbekanntes Feld');
   });
 
   it('forbids servings on ingredient_recipe and yield fields on finished_dish', () => {
@@ -261,7 +330,7 @@ describe('parseRecipe — schema validation (§3)', () => {
   });
 });
 
-describe('parseRecipe — marker validation (§4)', () => {
+describe('parseRecipe — reference validation (§4)', () => {
   it('rejects non-integer and non-ladder servings', () => {
     const fractional = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 1.5\n---\n## Zubereitung\n1. x\n',
@@ -274,48 +343,89 @@ describe('parseRecipe — marker validation (§4)', () => {
     expectIssueAt(notLadder, 'servings', 'Standardwert');
   });
 
-  it('rejects non-ladder and zero marker quantities', () => {
-    const notLadder = parseIssues(
-      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n---\n## Zubereitung\n1. {{ingredient|Mehl|450|g}} vermengen.\n',
+  it('allows 0, 1 or 2 reference names, only for finished_dish', () => {
+    const three = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        'reference: [A, B, C]\n' +
+        '---\n## Zubereitung\n1. - 1 g A\n   - 1 g B\n   - 1 g C\n   Text.\n',
     );
-    expectIssueAt(notLadder, 'steps[0]', 'Standardwert');
+    expectIssueAt(three, 'reference', 'Höchstens 2');
 
-    const zero = parseIssues(
-      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n---\n## Zubereitung\n1. {{ingredient|Salz|0|g}} würzen.\n',
+    const onSub = parseIssues(
+      '---\ntitle: X\ntype: ingredient_recipe\nyield: 500\nyield_unit: ml\nprep_time: 10 min\n' +
+        'reference: [A]\n---\n## Zubereitung\n1. x\n',
     );
-    expectIssueAt(zero, 'steps[0]', 'positive Zahl');
+    expectIssueAt(onSub, 'reference', 'nur für finished_dish');
   });
 
-  it('rejects malformed markers (quoted quantity, invalid unit, missing fields)', () => {
-    const quoted = parseIssues(
-      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n---\n## Zubereitung\n1. {{ingredient|Mehl|"400"|g}} vermengen.\n',
+  it('requires every reference name to occur in the recipe rows', () => {
+    const issues = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        'reference:\n  - Reis\n' +
+        '---\n## Zubereitung\n1. - 250 g Tortillas\n   Tortillas erwärmen.\n',
     );
-    expectIssueAt(quoted, 'steps[0]', 'Ungültiger Zutaten-Marker');
+    expectIssueAt(issues, 'reference[0]', 'kommt im Rezept nicht vor');
+  });
+});
+
+describe('parseRecipe — rows and artifacts validation (§4)', () => {
+  it('rejects non-ladder and non-positive row quantities', () => {
+    const notLadder = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. - 450 g Mehl\n   Vermengen.\n',
+    );
+    expectIssueAt(notLadder, 'steps[0].ingredients[0]', 'Standardwert');
+
+    // A zero amount is not a valid amount-first phrase at all.
+    const zero = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. - 0 g Mehl\n   Vermengen.\n',
+    );
+    expectIssueAt(zero, 'steps[0].ingredients[0]', 'keine gültige Zutaten-Zeile');
+  });
+
+  it('rejects rows without a name, with an invalid unit or missing quantity', () => {
+    const noName = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. - 400 g\n   Vermengen.\n',
+    );
+    expectIssueAt(noName, 'steps[0].ingredients[0]', 'keine gültige Zutaten-Zeile');
 
     const badUnit = parseIssues(
-      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n---\n## Zubereitung\n1. {{ingredient|Mehl|400|Stück}} vermengen.\n',
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. - 400 Stück Mehl\n   Vermengen.\n',
     );
-    expectIssueAt(badUnit, 'steps[0]', 'Ungültiger Zutaten-Marker');
+    expectIssueAt(badUnit, 'steps[0].ingredients[0]', 'keine gültige Zutaten-Zeile');
 
-    const missingFields = parseIssues(
-      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n---\n## Zubereitung\n1. {{ingredient|Joghurt}} verrühren.\n',
+    const noQuantity = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. - Mehl\n   Vermengen.\n',
     );
-    expectIssueAt(missingFields, 'steps[0]', 'Ungültiger Zutaten-Marker');
+    expectIssueAt(noQuantity, 'steps[0].ingredients[0]', 'keine gültige Zutaten-Zeile');
   });
 
-  it('allows at most 2 reference markers, only for finished_dish', () => {
-    const threeRefs = parseIssues(
+  it('rejects malformed and non-ladder inline artifacts in step text', () => {
+    const malformed = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
-        '---\n## Zubereitung\n' +
-        '1. {{ingredient|A|1|g|ref}} und {{ingredient|B|1|g|ref}} und {{ingredient|C|1|g|ref}}.\n',
+        '---\n## Zubereitung\n1. Mit {{100 g}} und {{irgendwas}} mischen.\n',
     );
-    expectIssueAt(threeRefs, 'body', 'Höchstens 2');
+    expectIssueAt(malformed, 'steps[0].text', 'Ungültiger Mengen-Baustein');
 
-    const refOnSub = parseIssues(
-      '---\ntitle: X\ntype: ingredient_recipe\nyield: 500\nyield_unit: ml\nprep_time: 10 min\n' +
-        '---\n## Zubereitung\n1. {{ingredient|A|1|g|ref}}.\n',
+    const notLadder = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{450 g}} Mehl mischen.\n',
     );
-    expectIssueAt(refOnSub, 'body', 'finished_dish');
+    expectIssueAt(notLadder, 'steps[0].text', 'Standardwert');
+  });
+
+  it('rejects a step whose prose starts with "- "', () => {
+    const issues = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. - Kurz stocken lassen, dann servieren.\n',
+    );
+    // "- Kurz …" is not a valid row (no quantity) and no prose line follows.
+    expectIssueAt(issues, 'steps[0].ingredients[0]');
+    expectIssueAt(issues, 'steps[0]', 'einen Text');
   });
 });
 
@@ -359,14 +469,22 @@ describe('parseRecipe — body validation (§5)', () => {
     expectIssueAt(issues, 'body', 'mindestens einen Schritt');
   });
 
+  it('rejects a row step whose prose is missing', () => {
+    const issues = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. - 250 g Reis\n2. - 250 g Reis\n   Reis kochen.\n',
+    );
+    expectIssueAt(issues, 'steps[0]', 'einen Text');
+  });
+
   it('collects several independent problems in one call', () => {
     const issues = parseIssues(
-      '---\ntype: dessert\nservings: 11\nprep_time: 10 min\n---\n## Zubereitung\n1. {{ingredient|Mehl|450|Stück}} vermengen.\n',
+      '---\ntype: dessert\nservings: 11\nprep_time: 10 min\n---\n## Zubereitung\n1. - 450 g Mehl\n   Vermengen.\n',
     );
     // Invalid type: per-type checks (e.g. servings) are deliberately skipped so
     // the type problem stays the precise error; independent checks still run.
     expectIssueAt(issues, 'type');
     expectIssueAt(issues, 'title');
-    expectIssueAt(issues, 'steps[0]');
+    expectIssueAt(issues, 'steps[0].ingredients[0]');
   });
 });

@@ -1,8 +1,9 @@
 /**
  * Tests for the cross-recipe validation (docs/storage_format.md §7.2).
  *
- * The fixtures carry their ingredients as body markers (§4 — the step text is
- * the source of truth); the `recipe:` link is the marker's |recipe: flag.
+ * Sub-recipe links are implicit: an ingredient use whose name equals the title
+ * of an `ingredient_recipe` *is* that sub-recipe. Uses appear as step rows or
+ * as inline text artifacts of the prose.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -17,7 +18,7 @@ function parse(text: string): Recipe {
   return parseRecipe(text);
 }
 
-/** A finished dish that links the Béchamelsauce ingredient recipe. */
+/** A finished dish that uses the Béchamelsauce ingredient recipe (by name). */
 const WRAPS = parse(`---
 title: Shredded Tofu Wraps
 type: finished_dish
@@ -25,7 +26,9 @@ servings: 6
 prep_time: 20 min
 ---
 ## Zubereitung
-1. {{ingredient|Tortillas|250|g|ref}} füllen. {{ingredient|Béchamelsauce|500|ml|recipe:Béchamelsauce}} dazureichen.
+1. - 250 g Tortillas
+   - 500 ml Béchamelsauce
+   Tortillas füllen und Béchamelsauce dazureichen.
 `);
 
 /** The linked ingredient recipe. */
@@ -37,7 +40,8 @@ yield_unit: ml
 prep_time: 15 min
 ---
 ## Zubereitung
-1. {{ingredient|Milch|300|ml}} kochen.
+1. - 300 ml Milch
+   Milch kochen.
 `);
 
 /** An unrelated finished dish without links. */
@@ -48,7 +52,8 @@ servings: 4
 prep_time: 10 min
 ---
 ## Zubereitung
-1. {{ingredient|Nudeln|500|g|ref}} kochen.
+1. - 500 g Nudeln
+   Nudeln kochen.
 `);
 
 /** Asserts that validateCollection throws and returns the issues. */
@@ -61,103 +66,6 @@ function collectionIssues(recipes: readonly Recipe[]): readonly ValidationIssue[
     return (error as RecipeCollectionError).issues;
   }
 }
-
-describe('validateCollection', () => {
-  it('accepts a valid collection (dish + linked ingredient recipe)', () => {
-    expect(() => validateCollection([WRAPS, BECHAMEL])).not.toThrow();
-    expect(() => validateCollection([PASTA, WRAPS, BECHAMEL])).not.toThrow();
-  });
-
-  it('accepts a recipe without any recipe: links', () => {
-    expect(() => validateCollection([PASTA])).not.toThrow();
-  });
-
-  it('accepts a chain of ingredient recipes', () => {
-    const dough = parse(`---
-title: Teig
-type: ingredient_recipe
-yield: 500
-yield_unit: g
-prep_time: 15 min
----
-## Zubereitung
-1. {{ingredient|Mehl|300|g}} kneten.
-`);
-    expect(() => validateCollection([BECHAMEL, dough])).not.toThrow();
-  });
-
-  it('rejects duplicate titles', () => {
-    const twin = parse(`---
-title: Spaghetti
-type: finished_dish
-servings: 2
-prep_time: 10 min
----
-## Zubereitung
-1. {{ingredient|Nudeln|250|g}} kochen.
-`);
-    const issues = collectionIssues([PASTA, twin]);
-    expectIssueAt(issues, 'Spaghetti', 'nicht eindeutig');
-  });
-
-  it('rejects a dangling recipe: reference', () => {
-    const issues = collectionIssues([WRAPS]); // Béchamelsauce is missing
-    expectIssueAt(issues, 'Shredded Tofu Wraps.ingredients[1].recipe', 'existiert nicht');
-  });
-
-  it('rejects a recipe: reference to a finished_dish', () => {
-    const linksDish = parse(`---
-title: Tofu-Füllung
-type: ingredient_recipe
-yield: 500
-yield_unit: g
-prep_time: 10 min
----
-## Zubereitung
-1. {{ingredient|Füllung|400|g|recipe:Spaghetti}} unterheben.
-`);
-    const issues = collectionIssues([PASTA, linksDish]);
-    expectIssueAt(issues, 'Tofu-Füllung.ingredients[0].recipe', 'ingredient_recipe');
-  });
-
-  it('rejects self-referencing and cyclic link graphs', () => {
-    const selfRef = parse(`---
-title: Selbst
-type: ingredient_recipe
-yield: 100
-yield_unit: g
-prep_time: 5 min
----
-## Zubereitung
-1. {{ingredient|Eigen|100|g|recipe:Selbst}} mischen.
-`);
-    const selfIssues = collectionIssues([selfRef]);
-    expectIssueAt(selfIssues, 'Selbst', 'Zyklus');
-
-    const a = parse(`---
-title: Sauce A
-type: ingredient_recipe
-yield: 100
-yield_unit: ml
-prep_time: 5 min
----
-## Zubereitung
-1. {{ingredient|Anteil B|100|ml|recipe:Sauce B}} mischen.
-`);
-    const b = parse(`---
-title: Sauce B
-type: ingredient_recipe
-yield: 100
-yield_unit: ml
-prep_time: 5 min
----
-## Zubereitung
-1. {{ingredient|Anteil A|100|ml|recipe:Sauce A}} mischen.
-`);
-    const cycleIssues = collectionIssues([a, b]);
-    expectIssueAt(cycleIssues, 'Sauce A', 'Zyklus');
-  });
-});
 
 /** Asserts that exactly one issue exists at `path`. */
 function expectIssueAt(
@@ -174,3 +82,137 @@ function expectIssueAt(
     expect(matching[0]!.message).toContain(messagePart);
   }
 }
+
+describe('validateCollection', () => {
+  it('accepts a valid collection (dish + linked ingredient recipe)', () => {
+    expect(() => validateCollection([WRAPS, BECHAMEL])).not.toThrow();
+    expect(() => validateCollection([PASTA, WRAPS, BECHAMEL])).not.toThrow();
+  });
+
+  it('accepts a recipe without any sub-recipe links', () => {
+    expect(() => validateCollection([PASTA])).not.toThrow();
+  });
+
+  it('accepts a chain of ingredient recipes', () => {
+    const dough = parse(`---
+title: Brühwürfel
+type: ingredient_recipe
+yield: 100
+yield_unit: g
+prep_time: 5 min
+---
+## Zubereitung
+1. - 100 g Brühe
+   Brühe einkochen.
+`);
+    const sauce = parse(`---
+title: Bratensauce
+type: ingredient_recipe
+yield: 300
+yield_unit: ml
+prep_time: 10 min
+---
+## Zubereitung
+1. - 60 g Brühwürfel
+   Brühwürfel in Wasser auflösen.
+`);
+    expect(() => validateCollection([BECHAMEL, dough, sauce])).not.toThrow();
+  });
+
+  it('accepts an ingredient name that equals a finished-dish title (no link)', () => {
+    const usesPlainName = parse(`---
+title: Curry
+type: finished_dish
+servings: 4
+prep_time: 10 min
+---
+## Zubereitung
+1. - 200 g Spaghetti
+   Spaghetti unterheben.
+`);
+    // "Spaghetti" names the finished dish above, not an ingredient_recipe —
+    // the row stays a plain ingredient and no cycle/link check applies.
+    expect(() => validateCollection([PASTA, usesPlainName])).not.toThrow();
+  });
+
+  it('rejects duplicate titles', () => {
+    const twin = parse(`---
+title: Spaghetti
+type: finished_dish
+servings: 2
+prep_time: 10 min
+---
+## Zubereitung
+1. - 250 g Nudeln
+   Nudeln kochen.
+`);
+    const issues = collectionIssues([PASTA, twin]);
+    expectIssueAt(issues, 'Spaghetti', 'nicht eindeutig');
+  });
+
+  it('rejects self-referencing and cyclic link graphs', () => {
+    const selfRef = parse(`---
+title: Selbst
+type: ingredient_recipe
+yield: 100
+yield_unit: g
+prep_time: 5 min
+---
+## Zubereitung
+1. - 100 g Selbst
+   Selbst verwenden.
+`);
+    const selfIssues = collectionIssues([selfRef]);
+    expectIssueAt(selfIssues, 'Selbst', 'Zyklus');
+
+    const a = parse(`---
+title: Sauce A
+type: ingredient_recipe
+yield: 100
+yield_unit: ml
+prep_time: 5 min
+---
+## Zubereitung
+1. - 100 ml Sauce B
+   Sauce B untermischen.
+`);
+    const b = parse(`---
+title: Sauce B
+type: ingredient_recipe
+yield: 100
+yield_unit: ml
+prep_time: 5 min
+---
+## Zubereitung
+1. - 100 ml Sauce A
+   Sauce A untermischen.
+`);
+    const cycleIssues = collectionIssues([a, b]);
+    expectIssueAt(cycleIssues, 'Sauce A', 'Zyklus');
+  });
+
+  it('detects links that only appear as inline text artifacts', () => {
+    const viaArtifact = parse(`---
+title: Bowl
+type: finished_dish
+servings: 2
+prep_time: 10 min
+---
+## Zubereitung
+1. - 100 g Reis
+   Reis kochen, dann {{200 ml Béchamelsauce}} untermischen.
+`);
+    const cyclic = parse(`---
+title: Béchamelsauce
+type: ingredient_recipe
+yield: 200
+yield_unit: ml
+prep_time: 5 min
+---
+## Zubereitung
+1. Bowl zubereiten und einkochen.
+`);
+    // Artifact mention in Bowl links Béchamelsauce (single edge, no cycle).
+    expect(() => validateCollection([viaArtifact, cyclic])).not.toThrow();
+  });
+});

@@ -5,11 +5,18 @@ subtitle: Mildes Curry mit Kokosmilch und Reis
 description: Cremiges Curry, das sich gut vorbereiten und aufwärmen lässt.
 servings: 4
 prep_time: 30 min
+reference:
+  - Hähnchenbrust
 ---
 
 ## Zubereitung
 
-1. {{ingredient|Reis|300|g}} nach Packungsangabe garen.
-2. {{ingredient|Hähnchenbrust|500|g|ref}} würfeln und in der {{ingredient|Currypaste|30|g}} scharf anbraten.
-3. {{ingredient|Paprika|200|g}} zugeben, mit {{ingredient|Kokosmilch|400|ml}} ablöschen und 15 Minuten köcheln.
+1. - 300 g Reis
+   Reis nach Packungsangabe garen.
+2. - 500 g Hähnchenbrust
+   - 30 g Currypaste
+   Hähnchenbrust würfeln und in Currypaste scharf anbraten.
+3. - 200 g Paprika
+   - 400 ml Kokosmilch
+   Paprika zugeben, mit Kokosmilch ablöschen und 15 Minuten köcheln.
 4. Mit Reis servieren und mit Koriander bestreuen.
