@@ -104,15 +104,16 @@ export async function loadIngredientMasterData(token: string): Promise<void> {
  *
  * @param name the new ingredient name
  * @param bu the base unit family ("g" or "ml")
- * @param entries the additional units with their g/ml factors (may be empty —
- *   an ingredient without additional units is valid master data); priority
- *   1, 2, … is assigned in the given order
+ * @param entries the additional units with their g/ml factors and unique
+ *   positive-integer priorities (may be empty — an ingredient without
+ *   additional units is valid master data); the entries are stored sorted by
+ *   ascending priority (registry invariant, see additionalUnitsData.ts)
  */
 export async function appendIngredientMasterData(
   token: string,
   name: string,
   bu: string,
-  entries: ReadonlyArray<{ au: string; factor: number }>,
+  entries: ReadonlyArray<{ au: string; factor: number; priority: number }>,
 ): Promise<void> {
   const folderId = await ensureRecipeFolder(token);
   const files = await listFilesInFolder(token, folderId);
@@ -132,17 +133,20 @@ export async function appendIngredientMasterData(
         );
 
   if (current[name] !== undefined) {
-    throw new Error(`Die Zutat „${name}" existiert bereits in der Stammdatenliste.`);
+    throw new Error(`Die Zutat „${name}“ existiert bereits in der Stammdatenliste.`);
   }
 
+  // Sorted ascending by priority so the registry shape keeps its invariant
+  // (the entries are tried in this order, §7 of the AQS spec).
+  const sorted = [...entries].sort((a, b) => a.priority - b.priority);
   const extended: IngredientMappings = {
     ...current,
     [name]: {
       bu,
-      entries: entries.map((entry, index) => ({
+      entries: sorted.map((entry) => ({
         au: entry.au,
         factor: entry.factor,
-        priority: index + 1,
+        priority: entry.priority,
       })),
     },
   };

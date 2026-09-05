@@ -695,14 +695,24 @@
   font-size: var(--text-sm);
 }
 
+.factor-head {
+  display: grid;
+  grid-template-columns: var(--space-10) minmax(0, 1fr) minmax(0, 4.5rem);
+  gap: var(--space-3);
+  margin-block-start: var(--space-2);
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
 .factor-row {
   display: grid;
-  grid-template-columns: var(--space-10) 1fr auto;
+  grid-template-columns: var(--space-10) minmax(0, 1fr) minmax(0, 4.5rem);
   align-items: center;
   gap: var(--space-3);
 }
 
 .factor-row input {
+  width: 100%;
   padding: var(--space-3) var(--space-4);
   background: var(--color-bg);
   border: 1px solid var(--color-line);
@@ -720,9 +730,26 @@
   font-weight: 600;
 }
 
-.factor-base {
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
+/* Copy-source select in the create-master-data sheet. */
+.copy-from {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.copy-from select {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+}
+
+.copy-from select:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 /* ---- Step rows (per-step ingredient list) -------------------------------- */

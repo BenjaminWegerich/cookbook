@@ -54,7 +54,7 @@ import IngredientSheet, {
   type IngredientSheetMode,
   type SheetResult,
 } from './IngredientSheet';
-import NewIngredientSheet from './NewIngredientSheet';
+import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientSheet';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityPicker from './QuantityPicker';
 
@@ -708,7 +708,7 @@ function RecipeEditor({
   const handleCreateIngredient = async (
     name: string,
     bu: string,
-    entries: Array<{ au: string; factor: number }>,
+    entries: NewIngredientEntry[],
   ): Promise<void> => {
     setCreateSaving(true);
     setCreateError(null);
