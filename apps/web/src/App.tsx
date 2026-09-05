@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { resetIngredientMappings } from '@cookbook/core';
 
+import { clearAiApiKey } from './ai/sessionKey';
 import { getAccessToken, requestAccessToken, revokeAccessToken } from './auth/googleAuth';
 import RecipeEditor from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
@@ -104,8 +105,10 @@ function App() {
     setError(null);
     setMasterDataWarning(null);
     await revokeAccessToken();
-    // Drop the loaded master data so the next account starts from the seed.
+    // Drop the loaded master data and the pasted AI key so the next account
+    // (and session) starts clean — neither is ever persisted (N6).
     resetIngredientMappings();
+    clearAiApiKey();
     setToken(null);
     setRecipes(null);
   }, []);
