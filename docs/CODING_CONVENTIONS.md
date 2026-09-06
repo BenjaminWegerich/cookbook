@@ -43,3 +43,30 @@
 - **Typography:** readability first; body text is `18px` (the ladder has no `16px`). One
   self-hosted typeface, Source Sans 3 (variable), bundled at build time via `@fontsource` —
   no runtime font fetch and no server.
+- **Number and unit are inseparable:** user-visible text joins a number and its unit with a
+  narrow no-break space (U+202F), so they never wrap apart: `300 g`, `1,5 kg`, `500 ml`.
+  Durations use it between every token, so `1 h 30 min` renders as one unbreakable unit
+  (including between `h` and `30`). Stored recipe files always keep plain ASCII spaces — the
+  narrow no-break space is a display-layer rule only. Reuse the core helpers (`formatBQ`,
+  `renderAQS`, `formatTimeDisplay`, `displayTimeText`, `NNBSP`) instead of joining numbers
+  and units by hand.
+- **German decimal comma on the display layer:** fractional numbers in user-visible text use
+  the comma as decimal separator (`1,5 kg`, `0,25 l`), never a dot. Applies to every frontend
+  surface (web app UI and the exported cooking view). Stored recipe files keep their canonical
+  plain forms (whole g/ml family values; the parsers accept both `,` and `.` on read). Always
+  format display numbers through the core helpers (`formatDecimal`, or formatters built on it —
+  `formatBQ`, `renderAQS`) — never build numbers into strings by hand.
+- **Mandatory vs. optional fields:** mandatory fields keep a plain label; optional fields
+  append a single muted, italic marker `(optional)` (class `optional-mark`) to their label.
+  No asterisks, no `Pflichtfeld` wording — required is the implicit default, only the
+  exception is named.
+- **Field captions are all caps:** form labels above inputs/controls (`.field-label`) are
+  displayed in all caps via `text-transform: uppercase` in the CSS. Keep the markup and
+  stored strings in normal German case (`"Titel"`, not `"TITEL"`) — the caps are purely
+  visual, so source text stays readable and screen readers announce the normal form. The
+  muted `(optional)` marker stays lowercase.
+- **Browser Back steps one screen:** every layer above the recipe list (editor, AI-create,
+  create menu) and every modal sheet is reflected in the browser history, and the Back button
+  closes exactly the topmost layer (NewIngredient sheet → Ingredient sheet → editor → list).
+  New full-screen views/sheets must go through App's navigation helper (`setNav` + the
+  editor's `notifyBack`) instead of toggling React booleans directly.

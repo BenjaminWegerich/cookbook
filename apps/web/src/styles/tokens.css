@@ -60,7 +60,7 @@
   /* ---- Layout constants -------------------------------------------------- */
   --app-padding: 18px; /* screen gutters */
   --fab-size: 56px; /* floating action button */
-  --thumb-size: 56px; /* recipe thumbnail in the list */
+  --thumb-size: 56px; /* clear button on the search field (was the list thumbnail) */
   --icon-size: 24px; /* inline icons */
 
   /* ---- Letter-avatar palette --------------------------------------------- */
@@ -74,4 +74,8 @@
   --avatar-2-fg: #fffcf6;
   --avatar-3: #8a6d4f; /* walnut */
   --avatar-3-fg: #fffcf6;
+
+  /* Initial letter of the square no-photo media area on a home-screen card
+     (42 px, a ladder value like the typography scale). */
+  --avatar-letter-size: 42px;
 }

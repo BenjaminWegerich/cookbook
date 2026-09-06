@@ -12,7 +12,15 @@
  * A value outside this list can still exist in stored files (the format is
  * free text) — the editor shows it as a custom value and lets the user
  * replace it with a standard one.
+ *
+ * Stored files keep plain ASCII spaces between numbers and units (the free
+ * text is parsed by `parseTimeValue`). Only the *display* forms use the
+ * narrow no-break space (U+202F, see docs/CODING_CONVENTIONS.md) — the
+ * duration is rendered unbreakable, e.g. `1 h 30 min` — via
+ * `formatTimeDisplay` / `displayTimeText`.
  */
+
+import { NNBSP } from '../additionalUnits.js';
 
 /** A standard duration: its length in minutes and the display label. */
 export interface TimeValue {
@@ -36,7 +44,9 @@ export const STANDARD_TIME_VALUES: readonly TimeValue[] = [
 
 /**
  * Formats a duration in minutes as the German display string used in the
- * storage format (§3): `45 min`, `1 h`, `1 h 30 min`, `2 h`.
+ * storage format (§3): `45 min`, `1 h`, `1 h 30 min`, `2 h` — with plain
+ * ASCII spaces, because the string is written verbatim into the recipe file
+ * (the parser and `parseTimeValue` expect plain spaces).
  */
 export function formatTimeValue(minutes: number): string {
   if (minutes < 60) {
@@ -45,6 +55,33 @@ export function formatTimeValue(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
+/**
+ * Display form of a duration (same value as `formatTimeValue`, but every gap
+ * is a narrow no-break space, U+202F): `45 min`, `1 h 30 min`, `2 h`. The
+ * whole duration then never breaks across lines and cannot be split between
+ * the number and its unit (docs/CODING_CONVENTIONS.md). Used for *display
+ * only* — never written into a stored file.
+ */
+export function formatTimeDisplay(minutes: number): string {
+  if (minutes < 60) {
+    return `${minutes}${NNBSP}min`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours}${NNBSP}h` : `${hours}${NNBSP}h${NNBSP}${rest}${NNBSP}min`;
+}
+
+/**
+ * Display form of a *stored* time value (free text): canonical values that
+ * `parseTimeValue` understands are re-formatted with the narrow no-break
+ * space typography (e.g. `25 min` → `25 min`), anything else a hand-written
+ * file contains is shown verbatim.
+ */
+export function displayTimeText(text: string): string {
+  const minutes = parseTimeValue(text);
+  return minutes === null ? text : formatTimeDisplay(minutes);
 }
 
 /**

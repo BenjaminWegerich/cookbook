@@ -37,10 +37,20 @@
   padding: var(--space-2) 0;
 }
 
+/* Initial chat hint: two short paragraphs (describe the dish, then the
+   website-source guidance). Grouped in one block so the transcript's grid gap
+   is not doubled by default paragraph margins; the inner gap is the requested
+   small paragraph break. */
 .ai-hint {
+  display: grid;
+  gap: var(--space-4);
   color: var(--color-ink-muted);
   font-size: var(--text-md);
   line-height: 1.45;
+}
+
+.ai-hint p {
+  margin: 0;
 }
 
 .ai-bubble {
@@ -72,12 +82,6 @@
 
 .ai-draft-card {
   border-color: var(--color-olive);
-}
-
-.ai-draft-note {
-  color: var(--color-ink-muted);
-  font-size: var(--text-md);
-  line-height: 1.4;
 }
 
 /* ---- Composer ------------------------------------------------------------- */

@@ -25,10 +25,11 @@ interface RecipeThumbProps {
 }
 
 /**
- * Small recipe thumbnail (56 px, --thumb-size): the recipe photo when one
- * exists (§2, optional sibling file), otherwise a warm letter avatar (initial
- * letter on a deterministic color from tokens.css). The photo is downloaded
- * via the Drive API and shown as an object URL.
+ * Recipe photo area of a home-screen card: the recipe photo when one exists
+ * (§2, optional sibling file), otherwise a warm letter avatar (initial letter
+ * on a deterministic color from tokens.css). The photo is downloaded via the
+ * Drive API and shown as an object URL. The square format of the media area
+ * is set in CSS (aspect-ratio 1/1, see recipe-list.css).
  *
  * The currently shown object URL is tracked in a ref so it is only revoked
  * when it is actually replaced (or on unmount): a failed re-download must

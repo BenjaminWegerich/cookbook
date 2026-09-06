@@ -4,17 +4,20 @@
  * The prose may contain inline display-only artifacts ({{100 g}} /
  * {{1500 ml Wasser}}, storage_format.md §4). Artifacts render as non-editable
  * code-like chips ("wie ein Inline-Code-Schnipsel", decided with the user);
- * they are inserted at the caret from the ingredient sheet and carry a small
- * "×" to remove them. They never count toward any ingredient list — the
- * counted ingredients live in the step's own list above this editor.
+ * they are inserted at the caret from the ingredient sheet, carry a small
+ * "×" to remove them, and tapping a chip opens the ingredient sheet
+ * prefilled to edit the element in place. They never count toward any
+ * ingredient list — the counted ingredients live in the step's own list
+ * above this editor.
  *
  * Model: the step text string is the source of truth. The DOM is authoritative
  * while the user types (re-rendering on every keystroke would lose the caret);
  * the component syncs the string upward via onChange and only re-renders the
  * segments when the string changed externally (artifact insert/remove).
  *
- * The "+ Menge im Text" insertion happens at the caret: the editor calls
- * `insertArtifact` (via the exposed ref) with the tracked caret offset.
+ * The "+ Zutat oder Menge zum Text" insertion happens at the caret: the
+ * editor calls `insertArtifact` (via the exposed ref) with the tracked caret
+ * offset.
  */
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
@@ -22,6 +25,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import {
   artifactToText,
   formatBQ,
+  formatDecimal,
   insertArtifact,
   renderAQS,
   splitArtifacts,
@@ -68,6 +72,25 @@ function serializeDom(div: HTMLDivElement): string {
   return Array.from(div.childNodes).map(serializeNode).join('');
 }
 
+/** Parses one stored artifact (a `{{…}}` block) back into its object. */
+function parseStoredArtifact(stored: string): TextArtifact | undefined {
+  return splitArtifacts(stored).spans[0]?.artifact;
+}
+
+/** The string offset of an artifact span within its parent (the editor div). */
+function artifactOffsetOf(parent: ParentNode, span: HTMLElement): number {
+  let at = 0;
+  for (const node of Array.from(parent.childNodes)) {
+    if (node === span) break;
+    if (node instanceof HTMLElement && node.dataset.artifact !== undefined) {
+      at += node.dataset.artifact.length;
+    } else {
+      at += node.textContent?.length ?? 0;
+    }
+  }
+  return at;
+}
+
 /** The string offset of the current caret within the step. */
 function caretStringOffset(div: HTMLDivElement): number {
   const selection = window.getSelection();
@@ -100,7 +123,10 @@ function placeCaretAfter(span: HTMLElement): void {
 export interface StepEditorHandle {
   /** Inserts an artifact at the given offset (or the current caret, else the end). */
   insertArtifact: (artifact: TextArtifact, at?: number) => void;
-  /** The string offset of the current caret (for the "+ Menge im Text" button). */
+  /** Replaces `length` characters at `at` with the artifact (inline edit). */
+  replaceArtifact: (artifact: TextArtifact, at: number, length: number) => void;
+  /** The string offset of the current caret (for the "+ Zutat oder Menge zum
+   Text" button). */
   caretOffset: () => number;
 }
 
@@ -109,8 +135,8 @@ interface StepEditorProps {
   value: string;
   /** Called with the new prose whenever it changes. */
   onChange: (step: string) => void;
-  /** Error text to show under the step (validation feedback, §7). */
-  error?: string;
+  /** A chip (outside its ×) was tapped: edit the artifact at this offset. */
+  onArtifactEdit?: (artifact: TextArtifact, at: number) => void;
 }
 
 /**
@@ -119,7 +145,7 @@ interface StepEditorProps {
  * externally (artifact insert/remove).
  */
 const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEditor(
-  { value, onChange, error },
+  { value, onChange, onArtifactEdit },
   ref,
 ) {
   const divRef = useRef<HTMLDivElement | null>(null);
@@ -139,10 +165,11 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         span.className = 'step-artifact';
         span.contentEditable = 'false';
         span.dataset.artifact = segment.stored;
+        span.title = 'Antippen zum Bearbeiten';
         span.textContent =
           segment.artifact.name === undefined
             ? segment.artifact.unit === undefined
-              ? String(segment.artifact.quantity)
+              ? formatDecimal(segment.artifact.quantity)
               : formatBQ(segment.artifact.quantity, segment.artifact.unit)
             : renderAQS(
                 segment.artifact.name,
@@ -158,8 +185,8 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         div.appendChild(span);
       }
     }
-    // After an artifact insert, place the caret after the new artifact: the
-    // span whose accumulated string offset equals the insertion offset.
+    // After an artifact insert/replace, place the caret after the new
+    // artifact: the span whose accumulated string offset equals the offset.
     const caretTarget = caretAfterRef.current;
     if (caretTarget !== null) {
       caretAfterRef.current = null;
@@ -200,6 +227,12 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         caretAfterRef.current = { at: offset };
         onChange(insertArtifact(value, offset, artifact));
       },
+      replaceArtifact: (artifact: TextArtifact, at: number, length: number) => {
+        const replacement = artifactToText(artifact);
+        // Place the caret after the replacement (same offset logic as insert).
+        caretAfterRef.current = { at };
+        onChange(`${value.slice(0, at)}${replacement}${value.slice(at + length)}`);
+      },
       caretOffset: () => (divRef.current === null ? 0 : caretStringOffset(divRef.current)),
     }),
     [value, onChange],
@@ -212,26 +245,30 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
     }
   };
 
-  /** Removes the artifact under the × button (display-only mention). */
+  /**
+   * Chip interactions: the × removes the artifact; tapping the chip body
+   * (outside the ×) opens the edit sheet for the artifact.
+   */
   const handleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
-    const remove = (event.target as HTMLElement).closest('.artifact-remove');
-    if (remove === null) return;
-    const span = remove.closest<HTMLElement>('[data-artifact]');
-    const parent = span?.parentElement;
-    const artifactText = span?.dataset.artifact;
-    if (span === undefined || parent === null || parent === undefined || artifactText === undefined)
+    const target = event.target as HTMLElement;
+    const parent = divRef.current;
+    if (parent === null) return;
+    const remove = target.closest('.artifact-remove');
+    if (remove !== null) {
+      const span = remove.closest<HTMLElement>('[data-artifact]');
+      const artifactText = span?.dataset.artifact;
+      if (span === null || artifactText === undefined) return;
+      // Remove exactly the clicked artifact (its string offset within the step).
+      const at = artifactOffsetOf(parent, span);
+      onChange(`${value.slice(0, at)}${value.slice(at + artifactText.length)}`);
       return;
-    // Remove exactly the clicked artifact (its string offset within the step).
-    let at = 0;
-    for (const node of Array.from(parent.childNodes)) {
-      if (node === span) break;
-      if (node instanceof HTMLElement && node.dataset.artifact !== undefined) {
-        at += node.dataset.artifact.length;
-      } else {
-        at += node.textContent?.length ?? 0;
-      }
     }
-    onChange(`${value.slice(0, at)}${value.slice(at + artifactText.length)}`);
+    const span = target.closest<HTMLElement>('[data-artifact]');
+    const stored = span?.dataset.artifact;
+    if (span === null || stored === undefined) return;
+    const artifact = parseStoredArtifact(stored);
+    if (artifact === undefined || onArtifactEdit === undefined) return;
+    onArtifactEdit(artifact, artifactOffsetOf(parent, span));
   };
 
   return (
@@ -255,11 +292,6 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         }}
         data-placeholder="Schritt beschreiben …"
       />
-      {error !== undefined && (
-        <p className="field-error" role="alert">
-          {error}
-        </p>
-      )}
     </div>
   );
 });

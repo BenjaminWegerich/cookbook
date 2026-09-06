@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { resetIngredientMappings } from '@cookbook/core';
 import type { Recipe } from '@cookbook/core';
 
-import { clearAiApiKey } from './ai/sessionKey';
-import { getAccessToken, requestAccessToken, revokeAccessToken } from './auth/googleAuth';
+import { getAccessToken, requestAccessToken } from './auth/googleAuth';
 import AiCreateSheet from './components/AiCreateSheet';
-import RecipeEditor from './components/RecipeEditor';
+import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
@@ -15,18 +13,42 @@ import './styles/recipe-list.css';
 import './styles/editor.css';
 
 /**
+ * The app screens above the recipe list (the list itself is the root/bottom
+ * layer and has no marker of its own). The create menu is treated like a
+ * screen here: the browser Back button closes it first, then leaves the list.
+ */
+type TopScreen = 'editor' | 'ai' | 'menu';
+
+/**
+ * Browser-history entry marker for a TopScreen. The recipe list is the app's
+ * initial entry (state `null`); each screen above it is a single history
+ * entry carrying this marker.
+ */
+const SCREEN_MARKER = 'above-list';
+
+/** True when `state` belongs to one of our screen entries (history.state is a
+ *  structured clone, so this must be a value check, never an identity check). */
+function isScreenEntry(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { appScreen?: unknown }).appScreen === SCREEN_MARKER
+  );
+}
+
+/**
  * Root component of the web app — the recipe-list home screen plus the recipe
  * editor (Phase 2).
  *
  * States: login (not connected), loading, error, empty collection, and the
- * recipe list (single column, small thumbnails). The floating action button
- * and a tap on a recipe row open the recipe editor. UI language is German
+ * recipe list (adaptive card grid with square photos). The floating action
+ * button opens the create menu (manual / AI) and a tap on a recipe card
+ * opens the recipe editor. UI language is German
  * (see docs/CODING_CONVENTIONS.md).
  */
 function App() {
   const [token, setToken] = useState<string | null>(() => getAccessToken());
   const [recipes, setRecipes] = useState<StoredRecipe[] | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Non-fatal warning when the Drive master data could not be loaded; the
    *  built-in seed keeps the app functional (see ingredientMasterData.ts). */
@@ -37,10 +59,56 @@ function App() {
   const [editorTarget, setEditorTarget] = useState<StoredRecipe | null>(null);
   /** An already-valid draft (AI create) that opens the editor prefilled. */
   const [editorDraft, setEditorDraft] = useState<Recipe | null>(null);
-  /** The FAB action sheet (manually create vs. AI create). */
+  /** The FAB create menu: two extended FABs (manually create vs. AI create). */
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   /** The AI-create conversation screen. */
   const [aiCreateOpen, setAiCreateOpen] = useState(false);
+
+  /**
+   * The current TopScreen above the recipe list, or null for the list itself.
+   * Mirrored into the browser history (one entry per screen) and kept in a
+   * ref so the popstate listener always sees the *current* layer even though
+   * it is registered only once. All screen switches go through `setNav` so
+   * React state and the history never drift apart.
+   */
+  const navRef = useRef<TopScreen | null>(null);
+  /** Imperative handle of the mounted RecipeEditor (browser-back consumer). */
+  const editorHandleRef = useRef<RecipeEditorHandle | null>(null);
+
+  /**
+   * Switches the visible layer and keeps the browser history in sync so the
+   * Back button steps back exactly one screen:
+   * - list → screen: push one history entry (the list stays underneath);
+   * - screen → screen (e.g. AI-create → editor): replace the entry;
+   * - screen → list: pop via history.back() — the popstate listener then
+   *   finds the layer already closed and does nothing.
+   */
+  const setNav = useCallback((next: TopScreen | null): void => {
+    const prev = navRef.current;
+    navRef.current = next;
+    if (next === prev) {
+      return;
+    }
+    setEditorOpen(next === 'editor');
+    setAiCreateOpen(next === 'ai');
+    setCreateMenuOpen(next === 'menu');
+    if (prev === null) {
+      if (next === null) {
+        return;
+      }
+      // Collapse a stale screen entry (e.g. left behind by a browser Forward)
+      // instead of stacking a duplicate on top of it.
+      if (isScreenEntry(window.history.state)) {
+        window.history.replaceState({ appScreen: SCREEN_MARKER }, '');
+      } else {
+        window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+      }
+    } else if (next === null) {
+      window.history.back();
+    } else {
+      window.history.replaceState({ appScreen: SCREEN_MARKER }, '');
+    }
+  }, []);
 
   /** Refreshes the recipe list from the Google Drive recipe folder. */
   const refreshRecipes = useCallback(async (activeToken: string): Promise<void> => {
@@ -51,19 +119,6 @@ function App() {
       setError(err instanceof Error ? err.message : String(err));
     }
   }, []);
-
-  /** Refreshes the list with a loading indicator (user-triggered refreshes). */
-  const refreshWithLoading = useCallback(
-    async (activeToken: string): Promise<void> => {
-      setLoading(true);
-      try {
-        await refreshRecipes(activeToken);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [refreshRecipes],
-  );
 
   // Reload the list automatically on startup when a session is still active.
   // State is only updated in promise callbacks (never synchronously), so the
@@ -96,6 +151,40 @@ function App() {
     };
   }, [token]);
 
+  // Browser Back / Forward: step back one screen at a time instead of leaving
+  // the app. The history holds the list (initial entry) plus at most one
+  // screen entry, so a pop onto the list entry must close the current screen.
+  // The editor can consume the pop itself (its topmost overlay closes first;
+  // unsaved changes arm the "Wirklich verwerfen?" step like the header button
+  // does) — when it does, the screen entry is re-pushed to cancel the pop.
+  useEffect(() => {
+    const onPopState = (): void => {
+      const top = navRef.current;
+      if (top === null) {
+        // A screen entry must not outlive its (now closed) screen — this can
+        // happen when a browser Forward restores a stale entry after the app
+        // already returned to the list. Reset it to a plain list entry so the
+        // Back/Forward trail stays clean.
+        if (isScreenEntry(window.history.state)) {
+          window.history.replaceState(null, '');
+        }
+        return;
+      }
+      if (top === 'editor' && editorHandleRef.current?.notifyBack() === true) {
+        // Stay on the editor (an overlay closed or the discard confirmation
+        // was armed): undo the pop by re-pushing the screen entry.
+        window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+        return;
+      }
+      navRef.current = null;
+      setEditorOpen(false);
+      setAiCreateOpen(false);
+      setCreateMenuOpen(false);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   /**
    * Logs in; the mount effect below refreshes the recipe list as soon as the
    * token is set (recipes === null shows the loading message meanwhile).
@@ -109,57 +198,45 @@ function App() {
     }
   }, []);
 
-  /** Logs out and clears the session state. */
-  const handleDisconnect = useCallback(async (): Promise<void> => {
-    setError(null);
-    setMasterDataWarning(null);
-    await revokeAccessToken();
-    // Drop the loaded master data and the pasted AI key so the next account
-    // (and session) starts clean — neither is ever persisted (N6).
-    resetIngredientMappings();
-    clearAiApiKey();
-    setToken(null);
-    setRecipes(null);
-    setCreateMenuOpen(false);
-    setAiCreateOpen(false);
-    setEditorOpen(false);
-  }, []);
-
   /** Opens the editor for a recipe (null = new recipe). */
-  const openEditor = useCallback((recipe: StoredRecipe | null): void => {
-    setEditorTarget(recipe);
-    setEditorDraft(null);
-    setEditorOpen(true);
-  }, []);
+  const openEditor = useCallback(
+    (recipe: StoredRecipe | null): void => {
+      setEditorTarget(recipe);
+      setEditorDraft(null);
+      setNav('editor');
+    },
+    [setNav],
+  );
 
   /** Opens the editor prefilled with an AI-created draft (new recipe). */
-  const openEditorWithDraft = useCallback((recipe: Recipe): void => {
-    setEditorTarget(null);
-    setEditorDraft(recipe);
-    setEditorOpen(true);
-    setAiCreateOpen(false);
-  }, []);
+  const openEditorWithDraft = useCallback(
+    (recipe: Recipe): void => {
+      setEditorTarget(null);
+      setEditorDraft(recipe);
+      setNav('editor');
+    },
+    [setNav],
+  );
 
   /** Opens the AI-create conversation screen. */
   const openAiCreate = useCallback((): void => {
-    setCreateMenuOpen(false);
-    setAiCreateOpen(true);
-  }, []);
+    setNav('ai');
+  }, [setNav]);
 
   const closeEditor = useCallback((): void => {
-    setEditorOpen(false);
-  }, []);
+    setNav(null);
+  }, [setNav]);
 
   /** After a save/delete: refresh the list and return to it. */
   const handleEditorSaved = useCallback((): void => {
     if (token !== null) void refreshRecipes(token);
-    setEditorOpen(false);
-  }, [token, refreshRecipes]);
+    setNav(null);
+  }, [token, refreshRecipes, setNav]);
 
   /** Status line under the header, German. */
   const subtitle = !token
     ? 'Nicht verbunden'
-    : loading || recipes === null
+    : recipes === null
       ? 'Rezepte werden geladen …'
       : recipes.length === 0
         ? 'Noch keine Rezepte'
@@ -169,6 +246,7 @@ function App() {
     <main className="app">
       {editorOpen ? (
         <RecipeEditor
+          ref={editorHandleRef}
           token={token ?? ''}
           target={editorTarget}
           initialDraft={editorDraft ?? undefined}
@@ -181,7 +259,7 @@ function App() {
         <AiCreateSheet
           token={token ?? ''}
           recipes={recipes ?? []}
-          onClose={() => setAiCreateOpen(false)}
+          onClose={() => setNav(null)}
           onOpenDraft={openEditorWithDraft}
         />
       ) : (
@@ -193,24 +271,6 @@ function App() {
                 {subtitle}
               </p>
             </div>
-            {token && (
-              <div className="header-actions">
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => void refreshWithLoading(token)}
-                >
-                  Aktualisieren
-                </button>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => void handleDisconnect()}
-                >
-                  Trennen
-                </button>
-              </div>
-            )}
           </header>
 
           {token && masterDataWarning !== null && (
@@ -236,7 +296,7 @@ function App() {
             <p className="error-message" role="alert">
               {error}
             </p>
-          ) : loading || recipes === null ? (
+          ) : recipes === null ? (
             <p className="loading-message" role="status">
               Rezepte werden geladen …
             </p>
@@ -252,10 +312,10 @@ function App() {
           {token && (
             <button
               type="button"
-              className="fab"
-              aria-label="Neues Rezept"
+              className={createMenuOpen ? 'fab fab-active' : 'fab'}
+              aria-label={createMenuOpen ? 'Menü schließen' : 'Neues Rezept'}
               aria-expanded={createMenuOpen}
-              onClick={() => setCreateMenuOpen((open) => !open)}
+              onClick={() => setNav(createMenuOpen ? null : 'menu')}
             >
               <svg className="fab-icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor" />
@@ -267,20 +327,29 @@ function App() {
             <>
               <button
                 type="button"
-                className="sheet-backdrop"
-                aria-label="Schließen"
-                onClick={() => setCreateMenuOpen(false)}
+                className="fab-backdrop"
+                aria-label="Menü schließen"
+                onClick={() => setNav(null)}
               />
-              <div className="sheet create-menu" role="dialog" aria-modal="true" aria-label="Neues Rezept">
-                <p className="sheet-title">Neues Rezept</p>
-                <div className="suggestions">
-                  <button type="button" onClick={() => openEditor(null)}>
-                    Manuell erfassen
-                  </button>
-                  <button type="button" onClick={openAiCreate}>
-                    Aus Beschreibung erstellen (KI)
-                  </button>
-                </div>
+              <div className="fab-menu" role="group" aria-label="Neues Rezept anlegen">
+                <button type="button" className="fab-extended" onClick={() => openEditor(null)}>
+                  <svg className="fab-extended-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span>Rezept manuell anlegen</span>
+                </button>
+                <button type="button" className="fab-extended" onClick={openAiCreate}>
+                  <svg className="fab-extended-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span>Rezept mit KI anlegen</span>
+                </button>
               </div>
             </>
           )}

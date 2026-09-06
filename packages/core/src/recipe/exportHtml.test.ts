@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { renderAQS } from '../additionalUnits.js';
+import { NNBSP, renderAQS } from '../additionalUnits.js';
 import { difference, scale } from '../ladder.js';
 import { parseRecipe } from './parse.js';
 import { generateRecipeHtml } from './exportHtml.js';
@@ -49,9 +49,7 @@ describe('generateRecipeHtml — finished dish', () => {
 
   it('scales the master list and the headline for an option', () => {
     const delta = difference(WRAPS.servings!, 9);
-    expect(html).toContain(
-      `9 Personen (${renderAQS('Tortillas', scale(250, delta), 'g')})`,
-    );
+    expect(html).toContain(`9 Personen (${renderAQS('Tortillas', scale(250, delta), 'g')})`);
     // Master row of the scaled Joghurt.
     expect(html).toContain(renderAQS('Joghurt', scale(400, delta), 'g'));
   });
@@ -111,7 +109,7 @@ prep_time: 15 min
 
   it('has no serving picker and keeps stored quantities', () => {
     expect(html).not.toContain('class="serving-button"');
-    expect(html).toContain('500 ml');
+    expect(html).toContain(`500${NNBSP}ml`);
     expect(html).toContain(renderAQS('Butter', 25, 'g'));
   });
 
@@ -135,5 +133,41 @@ prep_time: 5 min
     );
     expect(escaped).not.toContain('Pfeffer <script>');
     expect(escaped).toContain('Salz &amp; Pfeffer &lt;script&gt; x');
+  });
+});
+
+describe('generateRecipeHtml — duration typography', () => {
+  it('renders meta durations with narrow no-break spaces', () => {
+    const html = generateRecipeHtml(
+      parseRecipe(`---
+title: Eintopf
+type: finished_dish
+servings: 4
+prep_time: 25 min
+total_time: 1 h 30 min
+---
+## Zubereitung
+1. Alles köcheln lassen.
+`),
+    );
+    // Display form: number and unit (and h–30 in compounds) are unbreakable.
+    expect(html).toContain(`<p class="meta">25${NNBSP}min · 1${NNBSP}h${NNBSP}30${NNBSP}min</p>`);
+    // The plain ASCII storage form is never emitted into the file.
+    expect(html).not.toContain('1 h 30 min');
+  });
+
+  it('shows unparseable free-text durations verbatim', () => {
+    const html = generateRecipeHtml(
+      parseRecipe(`---
+title: Sauerteig
+type: finished_dish
+servings: 1
+prep_time: über Nacht
+---
+## Zubereitung
+1. Gehen lassen.
+`),
+    );
+    expect(html).toContain('<p class="meta">über Nacht</p>');
   });
 });

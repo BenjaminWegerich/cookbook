@@ -3,7 +3,7 @@
  *
  * All pixel values come from the design ladder (docs/CODING_CONVENTIONS.md);
  * colors and sizes reference the tokens in styles/tokens.css. Layout follows
- * the agreed editor design: sticky header (Zurück · Titel · Speichern), one
+ * the agreed editor design: sticky header (Zurück · Speichern), one
  * scrolling page of cards, bottom sheet for ingredients.
  */
 
@@ -19,30 +19,13 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
   margin-inline: calc(-1 * var(--app-padding));
   padding: var(--space-4) var(--app-padding);
   background: var(--color-bg);
-}
-
-.editor-header h2 {
-  font-size: var(--text-md);
-  font-weight: 600;
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.header-spacer {
-  justify-self: end;
-}
-
-.save-button {
-  justify-self: end;
 }
 
 /* ---- Cards -------------------------------------------------------------- */
@@ -57,16 +40,13 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Card/section titles (Kopfdaten, Zubereitung, Zutaten, …). margin: 0 clears
+   the browser-default heading margins so the title follows the card's own
+   padding/gap rhythm instead of adding ~24 px of unintended whitespace. */
 .editor-card-title {
+  margin: 0;
   font-size: var(--text-lg);
   font-weight: 600;
-}
-
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
 }
 
 /* ---- Form fields -------------------------------------------------------- */
@@ -76,10 +56,25 @@
   gap: var(--space-2);
 }
 
+/* Form-field caption above an input/chip row. Displayed in all caps per
+   docs/CODING_CONVENTIONS.md (Design Conventions); keep the markup in normal
+   German case ("Titel", not "TITEL") so the source stays readable and screen
+   readers announce the plain word — the caps are a visual layer only. */
 .field-label {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-ink-muted);
+  text-transform: uppercase;
+}
+
+/* Uniform optional-field marker (docs/CODING_CONVENTIONS.md): appended to the
+   label of optional fields; required fields stay unmarked. Stays lowercase
+   next to the all-caps caption so the quiet marker remains visually subdued. */
+.optional-mark {
+  font-weight: 400;
+  font-style: italic;
+  opacity: 0.85;
+  text-transform: none;
 }
 
 .field-hint {
@@ -206,8 +201,13 @@
 .step-button {
   width: 42px;
   height: 42px;
+  /* Override the base button padding (8px 14px): it would push the sign out
+     of the circle's center into the bottom-right corner. line-height 1 keeps
+     the glyph box compact so grid centering is exact. */
+  padding: 0;
   display: grid;
   place-items: center;
+  line-height: 1;
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: 50%; /* structural exception to the ladder: full circle */
@@ -257,7 +257,10 @@
   color: var(--color-ink-muted);
 }
 
-/* An ingredient artifact: not plain text, but a token (like inline code). */
+/* An ingredient artifact: not plain text, but a token (like inline code).
+   Text size matches the step prose (18 px, decided with the user) — the chip
+   stays distinct through its box; the whole chip is a tap target that opens
+   the edit sheet (its × still removes). */
 .step-artifact {
   display: inline-flex;
   align-items: center;
@@ -268,8 +271,10 @@
   border: 1px solid var(--color-olive);
   border-radius: var(--radius-sm);
   color: var(--color-olive);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
+  line-height: 1;
   white-space: nowrap;
+  cursor: pointer;
   user-select: none;
 }
 
@@ -377,7 +382,36 @@
 
 .step-actions {
   display: flex;
-  gap: var(--space-1);
+  gap: var(--space-2);
+}
+
+/* Compact bordered icon buttons (step ↑/↓/✕) — more prominent than the quiet
+   text buttons they replaced (design decision with the user). */
+.icon-button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.icon-button:active {
+  background: var(--color-line);
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.icon-button.danger-text {
+  color: var(--color-danger);
 }
 
 .step-card textarea {
@@ -401,6 +435,25 @@
   color: var(--color-olive);
   font-size: var(--text-sm);
   background: none;
+}
+
+/* "+ Schritt": adds a step below the last one — left-aligned, prominent
+   olive-outlined button (design decision with the user), secondary to the
+   accent "Speichern" but clearly stronger than the dashed add-ingredient pills. */
+.add-step {
+  justify-self: start;
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-surface);
+  border: 2px solid var(--color-olive);
+  border-radius: var(--radius-md);
+  color: var(--color-olive);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.add-step:active {
+  background: var(--color-olive);
+  color: var(--color-on-accent);
 }
 
 /* ---- Computed ingredient list ------------------------------------------- */
@@ -685,11 +738,6 @@
   color: var(--color-on-accent);
 }
 
-.create-ingredient-hint {
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
-}
-
 .sheet-subtitle {
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
@@ -730,28 +778,6 @@
   font-weight: 600;
 }
 
-/* Copy-source select in the create-master-data sheet. */
-.copy-from {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.copy-from select {
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-bg);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  color: var(--color-ink);
-  font-size: var(--text-md);
-  font-family: var(--font-sans);
-}
-
-.copy-from select:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-}
-
 /* ---- Step rows (per-step ingredient list) -------------------------------- */
 
 /* A row of a step's own ingredient list: compact, one line per use. */
@@ -785,12 +811,11 @@
   font-weight: 600;
 }
 
+/* The whole step-row (minus the right-side ✕ / verknüpft actions) is one big
+   tap target for editing the ingredient — the button grows across the row. */
 .step-row .ingredient-row-button {
-  width: auto;
-}
-
-.step-row .ingredient-line {
-  font-size: var(--text-sm);
+  flex: 1;
+  min-width: 0;
 }
 
 .step-row .ingredient-hint {
@@ -805,6 +830,14 @@
 
 .step-row-actions .link-badge {
   justify-self: auto;
+}
+
+/* Validation message directly under an ingredient row whose name is not in
+   the master data (appears after a failed save; the row itself is already
+   highlighted red and tagged "neu"). */
+.row-issue {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
 }
 
 .step-add-row {

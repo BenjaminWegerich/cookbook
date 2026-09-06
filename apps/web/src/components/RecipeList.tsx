@@ -5,19 +5,18 @@ import RecipeThumb from './RecipeThumb';
 
 interface RecipeListProps {
   recipes: StoredRecipe[];
-  /** Drive access token, forwarded to the thumbnails for photo downloads. */
+  /** Drive access token, forwarded to the card media areas for photo downloads. */
   token: string;
-  /** Called when the user taps a recipe row (opens the recipe editor). */
+  /** Called when the user taps a recipe card (opens the recipe editor). */
   onOpenRecipe: (recipe: StoredRecipe) => void;
 }
 
 /**
- * Home-screen recipe list (single column, phone-first layout that scales to
- * desktop widths): a sticky search
- * field above the list, one row per recipe with a small thumbnail and the
- * title. The search filters recipes by title as you type (case-insensitive);
- * tapping a row opens the recipe editor. UI language is German
- * (see docs/CODING_CONVENTIONS.md).
+ * Home-screen recipe list (adaptive card grid, phone-first layout that scales
+ * to desktop widths): a sticky search field above the grid, one card per
+ * recipe with a square photo and the title below. The search filters recipes
+ * by title as you type (case-insensitive); tapping a card opens the recipe
+ * editor. UI language is German (see docs/CODING_CONVENTIONS.md).
  */
 function RecipeList({ recipes, token, onOpenRecipe }: RecipeListProps) {
   const [query, setQuery] = useState('');
@@ -37,14 +36,22 @@ function RecipeList({ recipes, token, onOpenRecipe }: RecipeListProps) {
   return (
     <>
       <div className="recipe-search" role="search">
-        <input
-          type="search"
-          className="recipe-search-input"
-          placeholder="Rezepte suchen"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Rezepte durchsuchen"
-        />
+        <div className="recipe-search-field">
+          <svg className="recipe-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M9.5 3a6.5 6.5 0 1 0 4.05 11.55l4.2 4.2 1.5-1.5-4.2-4.2A6.5 6.5 0 0 0 9.5 3zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"
+              fill="currentColor"
+            />
+          </svg>
+          <input
+            type="search"
+            className="recipe-search-input"
+            placeholder="Rezept suchen"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Rezept suchen"
+          />
+        </div>
         {query !== '' && (
           <button
             type="button"
@@ -67,9 +74,9 @@ function RecipeList({ recipes, token, onOpenRecipe }: RecipeListProps) {
         <ul className="recipe-list">
           {filtered.map((recipe) => (
             <li key={recipe.fileId}>
-              <button type="button" className="recipe-row" onClick={() => onOpenRecipe(recipe)}>
+              <button type="button" className="recipe-card" onClick={() => onOpenRecipe(recipe)}>
                 <RecipeThumb recipe={recipe} token={token} />
-                <span className="recipe-title">{recipe.title}</span>
+                <span className="recipe-card-title">{recipe.title}</span>
               </button>
             </li>
           ))}

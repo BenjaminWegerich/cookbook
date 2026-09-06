@@ -30,10 +30,11 @@
  * must never be able to inject markup into the exported file.
  */
 
-import { formatBQ, renderAQS } from '../additionalUnits.js';
+import { formatBQ, formatDecimal, NNBSP, renderAQS } from '../additionalUnits.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
 import type { TextArtifact } from './artifacts.js';
 import { difference, integerLadderValues, scale } from '../ladder.js';
+import { displayTimeText } from './timeValues.js';
 import type { Ingredient, Recipe, Step, Unit } from './types.js';
 
 /** Allowed serving options of the export: integer ladder values 1–30 (§D2). */
@@ -55,7 +56,7 @@ function displayLine(
   const line =
     name === undefined
       ? bu === undefined
-        ? String(bq)
+        ? formatDecimal(bq)
         : formatBQ(bq, bu)
       : renderAQS(name, bq, bu ?? 'g');
   const url = name !== undefined ? links[name] : undefined;
@@ -164,7 +165,7 @@ function renderIngredientRecipeView(
   recipe: Recipe,
   links: Readonly<Record<string, string>>,
 ): string {
-  const yieldLine = `${recipe.yield} ${recipe.yield_unit}`;
+  const yieldLine = `${recipe.yield}${NNBSP}${recipe.yield_unit}`;
   const lines = recipe.ingredients.map((ingredient) =>
     ingredientLine(ingredient, ingredient.quantity, links),
   );
@@ -285,7 +286,7 @@ export function generateRecipeHtml(
     (recipe.description !== undefined
       ? `  <p class="description">${escapeHtml(recipe.description)}</p>\n`
       : '') +
-    `  <p class="meta">${escapeHtml(recipe.prep_time)}${recipe.total_time !== undefined ? ` · ${escapeHtml(recipe.total_time)}` : ''}</p>\n` +
+    `  <p class="meta">${escapeHtml(displayTimeText(recipe.prep_time))}${recipe.total_time !== undefined ? ` · ${escapeHtml(displayTimeText(recipe.total_time))}` : ''}</p>\n` +
     `</header>`;
 
   const body =

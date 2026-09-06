@@ -7,7 +7,16 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { STANDARD_TIME_VALUES, formatTimeValue, parseTimeValue } from './timeValues.js';
+import {
+  STANDARD_TIME_VALUES,
+  displayTimeText,
+  formatTimeDisplay,
+  formatTimeValue,
+  parseTimeValue,
+} from './timeValues.js';
+
+/** Narrow no-break space (U+202F) — the display-time typography (§ rule). */
+const NNBSP = '\u202F';
 
 describe('STANDARD_TIME_VALUES', () => {
   it('offers the agreed minute and hour values in ascending order', () => {
@@ -70,11 +79,46 @@ describe('parseTimeValue', () => {
     expect(parseTimeValue('1H30Min')).toBe(90);
   });
 
+  it('tolerates narrow no-break spaces pasted into a file', () => {
+    expect(parseTimeValue(`25${NNBSP}min`)).toBe(25);
+    expect(parseTimeValue(`1${NNBSP}h${NNBSP}30${NNBSP}min`)).toBe(90);
+  });
+
   it('returns null for anything that is not a duration', () => {
     expect(parseTimeValue('')).toBeNull();
     expect(parseTimeValue('so lange wie nötig')).toBeNull();
     expect(parseTimeValue('-5 min')).toBeNull();
     expect(parseTimeValue('0 h')).toBeNull();
     expect(parseTimeValue('2.5')).toBeNull();
+  });
+});
+
+describe('formatTimeDisplay', () => {
+  it('separates every number/unit gap with a narrow no-break space', () => {
+    expect(formatTimeDisplay(45)).toBe(`45${NNBSP}min`);
+    expect(formatTimeDisplay(60)).toBe(`1${NNBSP}h`);
+    // Compound durations are unbreakable: "1 h 30 min" binds h–30 too.
+    expect(formatTimeDisplay(90)).toBe(`1${NNBSP}h${NNBSP}30${NNBSP}min`);
+    expect(formatTimeDisplay(135)).toBe(`2${NNBSP}h${NNBSP}15${NNBSP}min`);
+    expect(formatTimeDisplay(2880)).toBe(`48${NNBSP}h`);
+  });
+
+  it('is never stored — equals formatTimeValue up to the spacing', () => {
+    // The storage string stays plain; only the display swaps the spaces.
+    expect(formatTimeValue(90)).toBe('1 h 30 min');
+    expect(formatTimeDisplay(90)).not.toBe(formatTimeValue(90));
+  });
+});
+
+describe('displayTimeText', () => {
+  it('re-formats canonical stored values for display', () => {
+    expect(displayTimeText('25 min')).toBe(`25${NNBSP}min`);
+    expect(displayTimeText('1 h 30 min')).toBe(`1${NNBSP}h${NNBSP}30${NNBSP}min`);
+  });
+
+  it('shows hand-written free text verbatim', () => {
+    expect(displayTimeText('über Nacht')).toBe('über Nacht');
+    expect(displayTimeText('ca. 2 h')).toBe('ca. 2 h');
+    expect(displayTimeText('')).toBe('');
   });
 });

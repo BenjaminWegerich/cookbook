@@ -48,6 +48,7 @@
 
 - A single real photo per recipe, either self-taken or from the web. No illustrations, no AI-generated images.
 - The photo lives with the recipe in the collection.
+- Photos are stored as square images (aspect ratio 1:1). On upload, the app center-crops the photo to a square before saving it — choose a photo that works in a square crop.
 
 ## Ingredients List
 

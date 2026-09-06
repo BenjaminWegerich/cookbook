@@ -3,7 +3,7 @@
  *
  * Decided with the user:
  * - every step carries its own counted ingredient list (rows) that appears
- *   above the step text; rows are added/edited per step ("+ Zutat") and feed
+ *   above the step text; rows are added/edited per step ("+ Zutat zur Liste") and feed
  *   the derived master list (order of first use, duplicates merged with the
  *   total, storage_format.md §4);
  * - the step text is free prose; display-only inline artifacts ("+ Menge im
@@ -14,17 +14,20 @@
  *   wherever they appear (step rows, master list, text artifacts);
  * - quantities are stored in the family unit g/ml; the display switches to
  *   kg/l at 1000 (chips carry base quantity AND base unit, no steppers);
- * - sections: Kopfdaten (Foto, Titel, Details, Zeiten, Typ, Portionen/
+ * - sections: Kopfdaten (Bild, Titel, Details, Zeiten, Typ, Portionen/
  *   Ergiebigkeit), Zubereitung, Zutaten.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import type { Ref } from 'react';
 
 import {
+  NNBSP,
   RecipeParseError,
   deriveIngredients,
+  displayTimeText,
   integerLadderValues,
   masterIngredientNames,
   parseRecipe,
@@ -32,6 +35,7 @@ import {
   renderAQS,
   serializeRecipe,
   splitArtifacts,
+  artifactToText,
   STANDARD_TIME_VALUES,
   type Ingredient,
   type Recipe,
@@ -85,6 +89,13 @@ function withIngredients(draft: EditorDraft): Recipe {
   return { ...draft, ingredients: deriveIngredients(draft.steps, draft.reference ?? []) };
 }
 
+/** Maps a confirmed sheet value to the display-only artifact stored in text. */
+function toTextArtifact(value: SheetResult): TextArtifact {
+  return 'name' in value
+    ? { name: value.name, quantity: value.quantity, unit: value.unit ?? 'g' }
+    : { quantity: value.quantity, ...(value.unit !== undefined ? { unit: value.unit } : {}) };
+}
+
 /**
  * Collects the ingredient names used by the steps (rows and named inline
  * {{…}} mentions) that `isKnown` does not accept — the names highlighted as
@@ -113,8 +124,39 @@ function unknownIngredientNames(
   return names;
 }
 
+/**
+ * Same check for the named inline {{…}} mentions of one step text only (rows
+ * carry their own per-row issues). Unknown mention names live inside the prose
+ * and stay step-level issues.
+ */
+function unknownMentionNames(text: string, isKnown: (name: string) => boolean): Set<string> {
+  const names = new Set<string>();
+  for (const segment of splitArtifacts(text).segments) {
+    if (
+      segment.type === 'artifact' &&
+      segment.artifact.name !== undefined &&
+      !isKnown(segment.artifact.name)
+    ) {
+      names.add(segment.artifact.name.trim());
+    }
+  }
+  return names;
+}
+
 /** Integer standard numbers 1–30 — the allowed serving counts (decision 7). */
 const SERVING_OPTIONS = integerLadderValues(1, 30);
+
+/**
+ * Imperative handle for the browser-back integration (owned by App): the
+ * editor is asked whether it consumes a browser Back before the app closes
+ * the editor screen. Consumed means a layer inside the editor was closed
+ * (topmost overlay first, or the "Wirklich verwerfen?" step was armed).
+ */
+export interface RecipeEditorHandle {
+  /** True when the back was handled inside the editor; false when the editor
+   *  may close and return to the recipe list. */
+  notifyBack: () => boolean;
+}
 
 interface RecipeEditorProps {
   /** Drive access token. */
@@ -135,16 +177,71 @@ interface RecipeEditorProps {
   onSaved: () => void;
   /** Opens another recipe in the editor (jump to a linked sub-recipe). */
   onOpenRecipe?: (recipe: StoredRecipe) => void;
+  /** Browser-back consumer handle (React 19: ref is a regular prop). */
+  ref?: Ref<RecipeEditorHandle>;
 }
 
-/** One sheet session: add/edit a step row, or insert an inline artifact. */
+/** One sheet session: add/edit a step row, insert or edit an inline artifact. */
 type SheetState =
   | { kind: 'row-add'; stepIndex: number }
   | { kind: 'row-edit'; stepIndex: number; rowIndex: number }
-  | { kind: 'inline'; stepIndex: number; insertAt: number };
+  | { kind: 'inline'; stepIndex: number; insertAt: number }
+  | { kind: 'inline-edit'; stepIndex: number; at: number; artifact: TextArtifact };
 
 /** A queued photo change, applied on Speichern (§2). */
 type PhotoChange = { kind: 'set'; blob: Blob; extension: 'jpg' | 'png' } | { kind: 'remove' };
+
+/** JPEG re-encode quality (canvas default) for cropped photos. */
+const JPEG_QUALITY = 0.92;
+
+/**
+ * Decodes a blob URL into an image. EXIF orientation is applied during
+ * decoding (modern browsers), so a portrait phone photo arrives upright.
+ */
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Bild konnte nicht gelesen werden.'));
+    image.src = url;
+  });
+}
+
+/**
+ * Center-crops a photo file to a square and re-encodes it in the same format.
+ * Recipe photos are stored as squares (recipe_structure.md, "Image"): the
+ * source is cropped to its shorter side at original resolution — a landscape
+ * 4000×3000 shot becomes 3000×3000 — so no pixel information is discarded
+ * except the bars that the square crop removes. The cropped result is drawn
+ * upright (EXIF is applied while decoding and not written back).
+ */
+async function squareCropPhoto(file: File, extension: 'jpg' | 'png'): Promise<Blob> {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(url);
+    const { naturalWidth: width, naturalHeight: height } = image;
+    const side = Math.min(width, height);
+    const canvas = document.createElement('canvas');
+    canvas.width = side;
+    canvas.height = side;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) {
+      throw new Error('Canvas wird nicht unterstützt.');
+    }
+    // Copy the centered square of the source onto the canvas.
+    ctx.drawImage(image, (width - side) / 2, (height - side) / 2, side, side, 0, 0, side, side);
+    const mimeType = extension === 'jpg' ? 'image/jpeg' : 'image/png';
+    const cropped = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, mimeType, JPEG_QUALITY),
+    );
+    if (cropped === null) {
+      throw new Error('Bild konnte nicht verarbeitet werden.');
+    }
+    return cropped;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 /** Where a validation issue is shown in the editor. */
 type IssueTarget =
@@ -153,6 +250,7 @@ type IssueTarget =
       field: 'title' | 'prep_time' | 'total_time' | 'servings' | 'yield' | 'yield_unit';
     }
   | { kind: 'step'; index: number }
+  | { kind: 'step-row'; index: number; rowIndex: number }
   | { kind: 'section'; section: 'ingredients' | 'body' | 'global' };
 
 /**
@@ -167,6 +265,14 @@ function mapIssue(issue: ValidationIssue): IssueTarget {
   if (path === 'servings') return { kind: 'field', field: 'servings' };
   if (path === 'yield') return { kind: 'field', field: 'yield' };
   if (path === 'yield_unit') return { kind: 'field', field: 'yield_unit' };
+  const rowMatch = /^steps\[(\d+)\]\.ingredients\[(\d+)\]$/.exec(path);
+  if (rowMatch !== null) {
+    return {
+      kind: 'step-row',
+      index: Number(rowMatch[1]),
+      rowIndex: Number(rowMatch[2]),
+    };
+  }
   const stepMatch = /^steps\[(\d+)\]/.exec(path);
   if (stepMatch !== null) {
     return { kind: 'step', index: Number(stepMatch[1]) };
@@ -241,7 +347,9 @@ function safeRenderAQS(name: string, quantity: number, unit: Unit): string {
   try {
     return renderAQS(name, quantity, unit);
   } catch {
-    return `${quantity} ${unit} ${name}`;
+    // Defensive fallback: same number↔unit narrow no-break space as renderAQS
+    // (docs/CODING_CONVENTIONS.md), then a plain space before the name.
+    return `${quantity}${NNBSP}${unit} ${name}`;
   }
 }
 
@@ -252,6 +360,10 @@ function safeRenderAQS(name: string, quantity: number, unit: Unit): string {
  * user replaces it with a standard value. `minMinutes` restricts the offered
  * values (Gesamtzeit must exceed Vorbereitungszeit). When `allowClear` is set
  * (optional fields like Gesamtzeit), a selected value can be removed again.
+ *
+ * Chips *display* durations with the narrow no-break space typography
+ * (displayTimeText); what is stored on selection is the plain-space form
+ * (entry.label) — files always keep plain ASCII spaces.
  */
 function TimeChips({
   value,
@@ -280,7 +392,7 @@ function TimeChips({
           className="chip chip-active"
           title="Bestehender Wert — durch einen Standardwert ersetzen"
         >
-          {value}
+          {displayTimeText(value)}
         </button>
       )}
       {options.map((entry) => (
@@ -290,7 +402,7 @@ function TimeChips({
           className={entry.minutes === currentMinutes ? 'chip chip-active' : 'chip'}
           onClick={() => onChange(entry.label)}
         >
-          {entry.label}
+          {displayTimeText(entry.label)}
         </button>
       ))}
       {allowClear && value !== '' && (
@@ -319,6 +431,7 @@ function RecipeEditor({
   onClose,
   onSaved,
   onOpenRecipe,
+  ref,
 }: RecipeEditorProps) {
   /** The working draft; null while the recipe + collection are loading. */
   const [draft, setDraft] = useState<EditorDraft | null>(null);
@@ -354,9 +467,7 @@ function RecipeEditor({
     quantity: number;
   } | null>(null);
   /** Prefill for a reopened ingredient sheet (add modes). */
-  const [sheetPrefill, setSheetPrefill] = useState<{ name: string; quantity: number } | null>(
-    null,
-  );
+  const [sheetPrefill, setSheetPrefill] = useState<{ name: string; quantity: number } | null>(null);
 
   const photoUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -519,25 +630,24 @@ function RecipeEditor({
    * when the create-master-data flow saves, and only a fresh read reflects
    * that new ingredient immediately.
    */
-  const unknownUsedNames = unknownIngredientNames(
-    draft?.steps ?? [],
-    (name) => isKnownIngredientName(name),
+  const unknownUsedNames = unknownIngredientNames(draft?.steps ?? [], (name) =>
+    isKnownIngredientName(name),
   );
 
   /** All issues for the saved form (core per-file + editor + §7.2 cross checks). */
   const collectIssues = (savedRecipe: Recipe): ValidationIssue[] => {
     const list: ValidationIssue[] = [];
     if (savedRecipe.prep_time === '') {
-      list.push({ path: 'prep_time', message: 'Bitte die Vorbereitungszeit angeben.' });
+      list.push({ path: 'prep_time', message: 'Bitte die Arbeitszeit angeben.' });
     }
     if (savedRecipe.steps.every((step) => step.text === '')) {
       list.push({ path: 'body', message: 'Bitte mindestens einen Zubereitungsschritt angeben.' });
     }
     // Per-step checks come out in step order so the first issue (the focus
     // target) points at the earliest problem: text rules, then the
-    // ingredient-name gate (rows AND named inline {{…}} mentions must resolve
-    // to the master data or an ingredient_recipe title — decided with the
-    // user; unknown names block the save and their rows are highlighted).
+    // ingredient-name gate. Unknown *rows* each get their own row issue so the
+    // error message sits directly under the row; unknown named inline {{…}}
+    // mentions live inside the prose and stay step-level issues.
     savedRecipe.steps.forEach((step, index) => {
       if (step.text === '' && step.ingredients.length > 0) {
         list.push({
@@ -552,18 +662,20 @@ function RecipeEditor({
             'Der Schritt-Text darf nicht mit "- " beginnen (das ist Zutaten-Zeilen vorbehalten).',
         });
       }
-      const unknownInStep = unknownIngredientNames([step], (name) => isKnownIngredientName(name));
-      if (unknownInStep.size > 0) {
-        const names = [...unknownInStep].map((name) => `„${name}“`).join(', ');
-        const predicate =
-          unknownInStep.size === 1
-            ? 'ist weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept'
-            : 'sind weder in der Zutaten-Stammdatenliste noch Zutaten-Rezepte';
+      step.ingredients.forEach((ingredient, rowIndex) => {
+        if (!isKnownIngredientName(ingredient.name)) {
+          list.push({
+            path: `steps[${index}].ingredients[${rowIndex}]`,
+            message: 'Bitte diese Zutat anlegen oder ersetzen.',
+          });
+        }
+      });
+      const unknownMentions = unknownMentionNames(step.text, (name) => isKnownIngredientName(name));
+      if (unknownMentions.size > 0) {
+        const names = [...unknownMentions].map((name) => `„${name}“`).join(', ');
         list.push({
           path: `steps[${index}]`,
-          message:
-            `${names} ${predicate}. ` +
-            'Tippe die Zeile an, um die Zutat als neue Zutat anzulegen oder durch eine vorhandene zu ersetzen.',
+          message: `${names}: Bitte diese Zutat anlegen oder ersetzen.`,
         });
       }
     });
@@ -599,17 +711,21 @@ function RecipeEditor({
     let id = 'editor-banner';
     if (targetIssue.kind === 'field') {
       id = `editor-field-${targetIssue.field}`;
-    } else if (targetIssue.kind === 'step') {
+    } else if (targetIssue.kind === 'step' || targetIssue.kind === 'step-row') {
       // The issue index refers to the normalized steps (empty steps are dropped
       // before validation) — map back to the draft step index for the DOM id.
       const normalizedIndices = draftNow.steps
-        .map((step, index) =>
-          step.text.trim() !== '' || step.ingredients.length > 0 ? index : -1,
-        )
+        .map((step, index) => (step.text.trim() !== '' || step.ingredients.length > 0 ? index : -1))
         .filter((index) => index !== -1);
-      id = `editor-step-${normalizedIndices[targetIssue.index] ?? targetIssue.index}`;
+      const draftStepIndex = normalizedIndices[targetIssue.index] ?? targetIssue.index;
+      id =
+        targetIssue.kind === 'step-row'
+          ? `editor-step-${draftStepIndex}-row-${targetIssue.rowIndex}`
+          : `editor-step-${draftStepIndex}`;
     } else if (targetIssue.section === 'ingredients') {
       id = 'editor-master-list';
+    } else if (targetIssue.section === 'body') {
+      id = 'editor-steps-section';
     }
     requestAnimationFrame(() => {
       const element = document.getElementById(id);
@@ -724,8 +840,9 @@ function RecipeEditor({
 
   /** The sheet mode for a SheetState (used when the create sheet reopens it). */
   const sheetMode = (state: SheetState): IngredientSheetMode => {
-    if (state.kind === 'inline') return 'inline-add';
-    return state.kind === 'row-add' ? 'row-add' : 'row-edit';
+    if (state.kind === 'row-add') return 'row-add';
+    if (state.kind === 'row-edit') return 'row-edit';
+    return state.kind === 'inline' ? 'inline-add' : 'inline-edit';
   };
 
   /**
@@ -775,11 +892,18 @@ function RecipeEditor({
     } else if (sheet.kind === 'inline') {
       // Insert the display-only artifact at the caret of the step (the
       // StepEditor handles the string insertion and caret placement).
-      const artifact: TextArtifact =
-        'name' in value
-          ? { name: value.name, quantity: value.quantity, unit: value.unit ?? 'g' }
-          : { quantity: value.quantity, ...(value.unit !== undefined ? { unit: value.unit } : {}) };
-      stepEditorRefs.current[sheet.stepIndex]?.insertArtifact(artifact, sheet.insertAt);
+      stepEditorRefs.current[sheet.stepIndex]?.insertArtifact(
+        toTextArtifact(value),
+        sheet.insertAt,
+      );
+    } else if (sheet.kind === 'inline-edit') {
+      // Replace the edited artifact in place: the span's start offset and its
+      // stored length were captured when the chip was tapped.
+      stepEditorRefs.current[sheet.stepIndex]?.replaceArtifact(
+        toTextArtifact(value),
+        sheet.at,
+        artifactToText(sheet.artifact).length,
+      );
     }
     setSheet(null);
     setSheetPrefill(null);
@@ -854,16 +978,25 @@ function RecipeEditor({
     setPhotoUrl(url);
   };
 
-  /** Queues a photo replacement; the Drive write happens on Speichern. */
-  const handlePhotoFile = (file: File): void => {
+  /**
+   * Queues a photo replacement; the Drive write happens on Speichern. The
+   * file is center-cropped to a square first (recipe_structure.md, "Image"),
+   * and the preview shows the cropped result — what you see is what is saved.
+   */
+  const handlePhotoFile = async (file: File): Promise<void> => {
     const extension = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/png' ? 'png' : null;
     if (extension === null) {
       setPhotoError('Nur JPG- oder PNG-Bilder werden unterstützt.');
       return;
     }
     setPhotoError(null);
-    showPhotoUrl(file);
-    setPhotoChange({ kind: 'set', blob: file, extension });
+    try {
+      const cropped = await squareCropPhoto(file, extension);
+      showPhotoUrl(cropped);
+      setPhotoChange({ kind: 'set', blob: cropped, extension });
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Bild konnte nicht verarbeitet werden.');
+    }
   };
 
   /** Queues a photo removal; the Drive write happens on Speichern. */
@@ -877,6 +1010,40 @@ function RecipeEditor({
     setPhotoChange({ kind: 'remove' });
   };
 
+  /**
+   * Browser-back consumer (see RecipeEditorHandle and App): closes the
+   * topmost layer and reports whether the back was consumed, mirroring the
+   * order of the visible stack — NewIngredientSheet first (closing restores
+   * the ingredient sheet underneath), then the IngredientSheet, and only then
+   * does an unsaved draft arm the "Wirklich verwerfen?" step (the same
+   * two-step guard as the header back button). Fresh every render, so it
+   * always sees the current state.
+   */
+  useImperativeHandle(ref, () => ({
+    notifyBack: (): boolean => {
+      if (saving) {
+        // A Drive write is in flight — do not unmount the editor mid-save
+        // (a late error would be reported into a dead component).
+        return true;
+      }
+      if (createSheet !== null) {
+        // handleCreateClose guards against closing while a save runs.
+        handleCreateClose();
+        return true;
+      }
+      if (sheet !== null) {
+        setSheet(null);
+        setSheetPrefill(null);
+        return true;
+      }
+      if (dirty && !confirmDiscard) {
+        setConfirmDiscard(true);
+        return true;
+      }
+      return false;
+    },
+  }));
+
   // ---- Render -------------------------------------------------------------
 
   if (loadError !== null) {
@@ -885,10 +1052,8 @@ function RecipeEditor({
         <section className="editor" aria-label="Rezept-Editor">
           <div className="editor-header">
             <button type="button" className="text-button" onClick={onClose}>
-              ← Zurück
+              Zurück
             </button>
-            <h2>{target?.title ?? 'Neues Rezept'}</h2>
-            <span className="header-spacer" />
           </div>
           <p className="error-message" role="alert">
             {loadError}
@@ -924,9 +1089,7 @@ function RecipeEditor({
   // normalizeRecipe drops empty steps before validation, so the issue paths
   // refer to the normalized steps; map them back to the draft's step indices.
   const normalizedIndices = draft.steps
-    .map((step, index) =>
-      step.text.trim() !== '' || step.ingredients.length > 0 ? index : -1,
-    )
+    .map((step, index) => (step.text.trim() !== '' || step.ingredients.length > 0 ? index : -1))
     .filter((index) => index !== -1);
   const stepIssues = (index: number): ValidationIssue[] =>
     mappedIssues
@@ -935,10 +1098,21 @@ function RecipeEditor({
           entry.target.kind === 'step' && entry.target.index === normalizedIndices.indexOf(index),
       )
       .map((entry) => entry.issue);
-  const bannerIssues = sectionIssues('global').concat(
-    sectionIssues('ingredients'),
-    sectionIssues('body'),
-  );
+  /** Row issue (unknown ingredient) of one draft step row, after a failed save. */
+  const rowIssue = (stepIndex: number, rowIndex: number): ValidationIssue | undefined => {
+    const normalizedIndex = normalizedIndices.indexOf(stepIndex);
+    if (normalizedIndex === -1) return undefined;
+    return mappedIssues.find(
+      (entry) =>
+        entry.target.kind === 'step-row' &&
+        entry.target.index === normalizedIndex &&
+        entry.target.rowIndex === rowIndex,
+    )?.issue;
+  };
+  /** General issues: shown in the top box, never under a field. */
+  const globalIssues = sectionIssues('global');
+  /** Any non-global issue exists → the top box shows the generic prompt. */
+  const hasValidationIssues = issues.length > globalIssues.length;
 
   return (
     <main className="app">
@@ -955,12 +1129,11 @@ function RecipeEditor({
               }
             }}
           >
-            {confirmDiscard ? 'Wirklich verwerfen?' : '← Zurück'}
+            {confirmDiscard ? 'Wirklich verwerfen?' : 'Zurück'}
           </button>
-          <h2>{target?.title ?? 'Neues Rezept'}</h2>
           <button
             type="button"
-            className="primary-button save-button"
+            className="primary-button"
             onClick={() => void handleSave()}
             disabled={saving}
           >
@@ -968,33 +1141,33 @@ function RecipeEditor({
           </button>
         </div>
 
-        {bannerIssues.length > 0 && (
+        {(hasValidationIssues || globalIssues.length > 0) && (
           <div className="validation-banner" id="editor-banner" role="alert">
-            <p>
-              {bannerIssues.length === 1
-                ? 'Ein Punkt muss korrigiert werden:'
-                : `${bannerIssues.length} Punkte müssen korrigiert werden:`}
-            </p>
-            <ul>
-              {bannerIssues.map((issue, index) => (
-                <li key={`${issue.path}-${index}`}>{issue.message}</li>
-              ))}
-            </ul>
+            {hasValidationIssues && <p>Bitte alle Pflichtfelder ausfüllen.</p>}
+            {globalIssues.length > 0 && (
+              <ul>
+                {globalIssues.map((issue, index) => (
+                  <li key={`global-${index}`}>{issue.message}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
-        {/* Kopfdaten — Foto, Titel, Details, Zeiten, Typ und Portionen/Ergiebigkeit */}
+        {/* Kopfdaten — Bild, Titel, Details, Zeiten, Typ und Portionen/Ergiebigkeit */}
         <section className="editor-card" aria-label="Kopfdaten">
           <h3 className="editor-card-title">Kopfdaten</h3>
 
-          {/* Foto (§2, optional sibling file) */}
+          {/* Bild (§2, optional sibling file) */}
           <div className="field">
-            <span className="field-label">Foto</span>
+            <span className="field-label">
+              Bild <span className="optional-mark">(optional)</span>
+            </span>
             <div className="photo-row">
               {photoUrl !== null ? (
-                <img className="photo-preview" src={photoUrl} alt="Rezeptfoto" />
+                <img className="photo-preview" src={photoUrl} alt="Rezeptbild" />
               ) : (
-                <div className="photo-placeholder">Kein Foto</div>
+                <div className="photo-placeholder">Kein Bild</div>
               )}
               <div className="photo-actions">
                 <input
@@ -1004,7 +1177,7 @@ function RecipeEditor({
                   hidden
                   onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file !== undefined) handlePhotoFile(file);
+                    if (file !== undefined) void handlePhotoFile(file);
                     event.target.value = '';
                   }}
                 />
@@ -1013,7 +1186,7 @@ function RecipeEditor({
                   className="text-button"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  {photoUrl !== null ? 'Foto ersetzen' : 'Foto wählen'}
+                  {photoUrl !== null ? 'Ersetzen' : 'Auswählen'}
                 </button>
                 {photoUrl !== null && (
                   <button
@@ -1040,7 +1213,6 @@ function RecipeEditor({
               type="text"
               value={draft.title}
               onChange={(event) => patchDraft({ title: event.target.value })}
-              placeholder="z. B. Shredded Tofu Wraps"
             />
           </label>
           {fieldIssue('title').map((issue, index) => (
@@ -1050,7 +1222,9 @@ function RecipeEditor({
           ))}
 
           <label className="field">
-            <span className="field-label">Untertitel</span>
+            <span className="field-label">
+              Untertitel <span className="optional-mark">(optional)</span>
+            </span>
             <input
               type="text"
               value={draft.subtitle ?? ''}
@@ -1058,7 +1232,9 @@ function RecipeEditor({
             />
           </label>
           <label className="field">
-            <span className="field-label">Beschreibung</span>
+            <span className="field-label">
+              Beschreibung <span className="optional-mark">(optional)</span>
+            </span>
             <textarea
               rows={3}
               value={draft.description ?? ''}
@@ -1080,7 +1256,9 @@ function RecipeEditor({
           ))}
 
           <div className="field" id="editor-field-total_time">
-            <span className="field-label">Gesamtzeit</span>
+            <span className="field-label">
+              Gesamtzeit <span className="optional-mark">(optional)</span>
+            </span>
             <span className="field-hint">nur wenn sie größer als die Arbeitszeit ist</span>
             <TimeChips
               value={draft.total_time ?? ''}
@@ -1186,23 +1364,14 @@ function RecipeEditor({
 
         {/* Zubereitung — steps with their own ingredient lists + prose */}
         <section className="editor-card" id="editor-steps-section" aria-label="Zubereitung">
-          <div className="card-head">
-            <h3 className="editor-card-title">Zubereitung</h3>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() =>
-                updateDraft((current) => ({
-                  ...current,
-                  steps: [...current.steps, { ingredients: [], text: '' }],
-                }))
-              }
-            >
-              + Schritt
-            </button>
-          </div>
+          <h3 className="editor-card-title">Zubereitung</h3>
+          {draft.steps.length === 0 &&
+            sectionIssues('body').map((issue, index) => (
+              <p className="field-error" key={`body-empty-${index}`} role="alert">
+                {issue.message}
+              </p>
+            ))}
           {draft.steps.map((step, stepIndex) => {
-            const stepError = stepIssues(stepIndex)[0]?.message;
             return (
               <div className="step-card" id={`editor-step-${stepIndex}`} key={stepIndex}>
                 <div className="step-head">
@@ -1210,7 +1379,7 @@ function RecipeEditor({
                   <div className="step-actions">
                     <button
                       type="button"
-                      className="text-button"
+                      className="icon-button"
                       disabled={stepIndex === 0}
                       onClick={() =>
                         updateDraft((current) => {
@@ -1228,7 +1397,7 @@ function RecipeEditor({
                     </button>
                     <button
                       type="button"
-                      className="text-button"
+                      className="icon-button"
                       disabled={stepIndex === draft.steps.length - 1}
                       onClick={() =>
                         updateDraft((current) => {
@@ -1246,7 +1415,7 @@ function RecipeEditor({
                     </button>
                     <button
                       type="button"
-                      className="text-button"
+                      className="icon-button danger-text"
                       onClick={() =>
                         updateDraft((current) => ({
                           ...current,
@@ -1261,20 +1430,16 @@ function RecipeEditor({
                 </div>
 
                 {/* The step's own counted ingredient list (appears above the text). */}
-                <div className="field">
-                  <span className="field-label">Zutaten dieses Schritts</span>
-                  {step.ingredients.length === 0 ? (
-                    <p className="empty-hint">
-                      Keine — die Mengen stehen nur im Text oder kommen später dazu.
-                    </p>
-                  ) : (
-                    <ul className="ingredient-list">
-                      {step.ingredients.map((ingredient, rowIndex) => {
-                        const jumpTarget = subRecipeTarget(ingredient.name);
-                        const isNewName = unknownUsedNames.has(ingredient.name.trim());
-                        return (
+                {step.ingredients.length > 0 && (
+                  <ul className="ingredient-list">
+                    {step.ingredients.map((ingredient, rowIndex) => {
+                      const jumpTarget = subRecipeTarget(ingredient.name);
+                      const isNewName = unknownUsedNames.has(ingredient.name.trim());
+                      const rowError = rowIssue(stepIndex, rowIndex);
+                      return (
+                        <Fragment key={`${stepIndex}-${rowIndex}`}>
                           <li
-                            key={`${stepIndex}-${rowIndex}`}
+                            id={`editor-step-${stepIndex}-row-${rowIndex}`}
                             className={isNewName ? 'step-row is-new-ingredient' : 'step-row'}
                           >
                             <button
@@ -1294,9 +1459,7 @@ function RecipeEditor({
                                   ingredient.quantity,
                                   ingredient.unit,
                                 )}
-                                {isNewName && (
-                                  <span className="new-ingredient-tag">Neu</span>
-                                )}
+                                {isNewName && <span className="new-ingredient-tag">neu</span>}
                               </span>
                               <span className="ingredient-hint">
                                 {isNewName
@@ -1312,7 +1475,7 @@ function RecipeEditor({
                                   onClick={() => requestJump(jumpTarget)}
                                   title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
                                 >
-                                  Verknüpft
+                                  verknüpft
                                 </button>
                               )}
                               <button
@@ -1332,19 +1495,24 @@ function RecipeEditor({
                               </button>
                             </div>
                           </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                  <div className="step-add-row">
-                    <button
-                      type="button"
-                      className="add-ingredient"
-                      onClick={() => setSheet({ kind: 'row-add', stepIndex })}
-                    >
-                      + Zutat
-                    </button>
-                  </div>
+                          {rowError !== undefined && (
+                            <li className="row-issue" role="alert">
+                              {rowError.message}
+                            </li>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </ul>
+                )}
+                <div className="step-add-row">
+                  <button
+                    type="button"
+                    className="add-ingredient"
+                    onClick={() => setSheet({ kind: 'row-add', stepIndex })}
+                  >
+                    + Zutat zur Liste
+                  </button>
                 </div>
 
                 <StepEditor
@@ -1355,8 +1523,21 @@ function RecipeEditor({
                   onChange={(next) =>
                     updateStep(stepIndex, (current) => ({ ...current, text: next }))
                   }
-                  error={stepError}
+                  onArtifactEdit={(artifact, at) =>
+                    setSheet({ kind: 'inline-edit', stepIndex, at, artifact })
+                  }
                 />
+                {stepIssues(stepIndex).map((issue, index) => (
+                  <p className="field-error" key={`step-${stepIndex}-${index}`} role="alert">
+                    {issue.message}
+                  </p>
+                ))}
+                {stepIndex === 0 &&
+                  sectionIssues('body').map((issue, index) => (
+                    <p className="field-error" key={`body-${index}`} role="alert">
+                      {issue.message}
+                    </p>
+                  ))}
                 <button
                   type="button"
                   className="add-ingredient"
@@ -1369,26 +1550,45 @@ function RecipeEditor({
                     })
                   }
                 >
-                  + Menge im Text
+                  + Zutat oder Menge zum Text
                 </button>
               </div>
             );
           })}
+
+          {/* + Schritt — adds a new empty step after the last one. */}
+          <button
+            type="button"
+            className="add-step"
+            onClick={() =>
+              updateDraft((current) => ({
+                ...current,
+                steps: [...current.steps, { ingredients: [], text: '' }],
+              }))
+            }
+          >
+            + Schritt
+          </button>
         </section>
 
         {/* Zutaten — the read-only master list (reference role only, §4) */}
         <section className="editor-card" aria-label="Zutaten" id="editor-master-list">
           <h3 className="editor-card-title">Zutaten</h3>
+          {sectionIssues('ingredients').map((issue, index) => (
+            <p className="field-error" key={`ingredients-${index}`} role="alert">
+              {issue.message}
+            </p>
+          ))}
           {computedIngredients.length === 0 ? (
             <p className="empty-hint">
-              Die Zutatenliste wird aus den Listen der Zubereitungsschritte zusammengestellt —
-              füge Zutaten über „+ Zutat“ in den Schritten hinzu.
+              Die Zutatenliste wird aus den Listen der Zubereitungsschritte zusammengestellt — füge
+              Zutaten über „+ Zutat zur Liste“ in den Schritten hinzu.
             </p>
           ) : (
             <>
               <p className="empty-hint">
-                Gesamtliste (aus den Schritten zusammengefasst) — nur lesbar. Die Referenz-Menge
-                (★) wird hier pro Zeile gesetzt; Mengen bearbeitest du im jeweiligen Schritt.
+                Liste aus den Zubereitungsschritten zusammengesetzt. Bis zu zwei Referenz-Zutaten
+                mit ★ markieren.
               </p>
               <ul className="ingredient-list">
                 {computedIngredients.map((ingredient) => {
@@ -1415,7 +1615,7 @@ function RecipeEditor({
                             onClick={() => requestJump(jumpTarget)}
                             title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
                           >
-                            Verknüpft
+                            verknüpft
                           </button>
                         )}
                       </span>
@@ -1485,7 +1685,9 @@ function RecipeEditor({
           initial={
             sheet.kind === 'row-edit'
               ? draft.steps[sheet.stepIndex]!.ingredients[sheet.rowIndex]
-              : undefined
+              : sheet.kind === 'inline-edit'
+                ? sheet.artifact
+                : undefined
           }
           prefill={sheetPrefill ?? undefined}
           ingredientRecipes={ingredientRecipes}

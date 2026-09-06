@@ -20,12 +20,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { allIngredientMappings } from '@cookbook/core';
+import { NNBSP, allIngredientMappings } from '@cookbook/core';
 import type { Recipe } from '@cookbook/core';
 
 import { buildAiContextText } from '../ai/aiContext';
 import { createAiCreateSession } from '../ai/createRecipeDraft';
-import type { AiCreateSession, NewIngredientProposal } from '../ai/createRecipeDraft';
+import type { AiCreateSession } from '../ai/createRecipeDraft';
 import { createAiClient } from '../ai/client';
 import { getAiApiKey, setAiApiKey } from '../ai/sessionKey';
 import type { StoredRecipe } from '../drive/recipeStorage';
@@ -120,8 +120,6 @@ export default function AiCreateSheet({
   const [busy, setBusy] = useState(false);
   /** A validated draft ready to open in the editor. */
   const [draft, setDraft] = useState<Recipe | null>(null);
-  /** Ingredient names of the draft not yet in the master data (info only). */
-  const [unknownIngredients, setUnknownIngredients] = useState<NewIngredientProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
 
@@ -208,7 +206,6 @@ export default function AiCreateSheet({
         setMessages((current) => [...current, { role: 'assistant', content: result.text }]);
       } else if (result.kind === 'draft') {
         setDraft(result.recipe);
-        setUnknownIngredients(result.newIngredients);
       } else {
         setError(result.message);
       }
@@ -219,17 +216,16 @@ export default function AiCreateSheet({
     }
   };
 
-  const canSend =
-    !busy && draft === null && (description.trim() !== '' || source.trim() !== '');
+  /** True once the user sent the first prompt — from then on only a single
+   *  answer field is shown (the two-field description layout is over). */
+  const conversationStarted = messages.length > 0;
+  const canSend = !busy && draft === null && (description.trim() !== '' || source.trim() !== '');
 
   return (
     <main className="app ai-screen">
       <header className="app-header">
         <div>
-          <h1>Rezept aus Beschreibung</h1>
-          <p className="app-subtitle" role="status">
-            KI-Assistent (Gemini)
-          </p>
+          <h1>Rezept mit KI anlegen</h1>
         </div>
         <button type="button" className="text-button" onClick={onClose}>
           Zurück
@@ -240,8 +236,8 @@ export default function AiCreateSheet({
         <section className="editor-card ai-key-card" aria-label="API-Schlüssel">
           <h2 className="editor-card-title">Gemini-API-Schlüssel</h2>
           <p>
-            Füge deinen Gemini-API-Schlüssel ein. Er wird nur für diese Sitzung im Speicher
-            gehalten und niemals gespeichert.
+            Füge deinen Gemini-API-Schlüssel ein. Er wird nur für diese Sitzung im Speicher gehalten
+            und niemals dauerhaft gespeichert.
           </p>
           <input
             type="password"
@@ -281,11 +277,14 @@ export default function AiCreateSheet({
                 aria-label="Unterhaltung"
               >
                 {messages.length === 0 && (
-                  <p className="ai-hint">
-                    Beschreibe das Rezept frei — z. B. „vegane Lasagne mit Zucchini und meiner
-                    Béchamelsauce für 4 Personen“. Du kannst auch den Text einer Webseite als
-                    Inspiration einfügen. Die KI fragt bei Unklarheiten nach.
-                  </p>
+                  <div className="ai-hint">
+                    <p>Beschreibe das Gericht frei und beliebig detailliert.</p>
+                    <p>
+                      Soll eine Webseite als Inspiration dienen, füge nicht den Link ein, sondern
+                      beschreibe die Webseite (z.{NNBSP}B. „Thick and Creamy Tomato Soup von Serious
+                      Eats“), oder kopiere den Text und füge ihn im zweiten Feld ein.
+                    </p>
+                  </div>
                 )}
                 {messages.map((message, index) => (
                   <p key={index} className={`ai-bubble ai-${message.role}`}>
@@ -303,18 +302,9 @@ export default function AiCreateSheet({
                 <section className="editor-card ai-draft-card">
                   <h2 className="editor-card-title">Entwurf erstellt</h2>
                   <p>
-                    „{draft.title}“ wurde im gültigen Rezeptformat erstellt. Du kannst ihn jetzt
-                    im Editor ansehen, ändern und speichern.
+                    Ich habe einen Entwurf für „{draft.title}“ erstellt. Du kannst ihn jetzt im
+                    Editor ansehen, ändern und speichern.
                   </p>
-                  {unknownIngredients.length > 0 && (
-                    <p className="ai-draft-note">
-                      Diese Zutaten sind noch nicht in deinen Stammdaten:{' '}
-                      {unknownIngredients
-                        .map((entry) => `„${entry.name}“ (${entry.unit})`)
-                        .join(', ')}
-                      . Du legst sie im Editor bei Bedarf an („Neue Zutat anlegen“).
-                    </p>
-                  )}
                   <div className="sheet-actions">
                     <button
                       type="button"
@@ -333,18 +323,28 @@ export default function AiCreateSheet({
                     void handleSend();
                   }}
                 >
-                  <textarea
-                    rows={3}
-                    value={description}
-                    placeholder="Rezept beschreiben …"
-                    onChange={(event) => setDescription(event.target.value)}
-                  />
-                  <textarea
-                    rows={2}
-                    value={source}
-                    placeholder="Quelltext von einer Webseite einfügen (optional) …"
-                    onChange={(event) => setSource(event.target.value)}
-                  />
+                  {conversationStarted ? (
+                    <textarea
+                      rows={3}
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                    />
+                  ) : (
+                    <>
+                      <textarea
+                        rows={3}
+                        value={description}
+                        placeholder="Rezept beschreiben …"
+                        onChange={(event) => setDescription(event.target.value)}
+                      />
+                      <textarea
+                        rows={2}
+                        value={source}
+                        placeholder="Quelltext von einer Webseite einfügen (optional) …"
+                        onChange={(event) => setSource(event.target.value)}
+                      />
+                    </>
+                  )}
                   {error !== null && (
                     <p className="error-message" role="alert">
                       {error}

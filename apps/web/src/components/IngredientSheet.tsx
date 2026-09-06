@@ -11,6 +11,9 @@
  *   (`{{100 g}}`, `{{100}}` or `{{1500 ml Wasser}}`). Artifacts scale with the
  *   serving count but are never counted; the ingredient name is optional, and
  *   a quantity-only artifact may omit the unit entirely.
+ * - "inline-edit" — edit an existing inline artifact (tapping its chip in the
+ *   step text): the sheet opens prefilled and confirming replaces the
+ *   artifact in place.
  *
  * Decided with the user:
  * - only ingredients from the master data are allowed in rows (no free text) —
@@ -36,10 +39,12 @@ import { useMemo, useState } from 'react';
 
 import {
   formatBQ,
+  formatDecimal,
   masterIngredientNames,
   mappingsFor,
   renderAQS,
   type Ingredient,
+  type TextArtifact,
   type Unit,
 } from '@cookbook/core';
 
@@ -66,7 +71,7 @@ function familyOf(name: string): QuantityFamily | null {
 }
 
 /** How the confirmed value is applied by the editor. */
-export type IngredientSheetMode = 'row-add' | 'row-edit' | 'inline-add';
+export type IngredientSheetMode = 'row-add' | 'row-edit' | 'inline-add' | 'inline-edit';
 
 /** Unit choice for a quantity-only inline mention (g/ml family or unitless). */
 export type FreeUnit = QuantityFamily | 'none';
@@ -77,15 +82,17 @@ export type SheetResult = Ingredient | { quantity: number; unit?: Unit };
 
 interface IngredientSheetProps {
   mode: IngredientSheetMode;
-  /** The existing row when editing (row modes only). */
-  initial?: Ingredient;
+  /** Existing value when editing: a row (row modes) or an inline artifact
+   *  (inline-edit mode). */
+  initial?: Ingredient | TextArtifact;
   /** Prefill after the create-master-data flow (name + quantity restored). */
   prefill?: { name: string; quantity: number };
   /** The collection's ingredient recipes, offered in the name autofill. */
   ingredientRecipes: IngredientRecipeOption[];
   /**
    * Called with the resulting value; `action 'remove'` only in row-edit mode.
-   * In inline-add mode the name and/or the unit may be absent.
+   * In inline modes the name and/or the unit may be absent; inline-edit
+   * confirms with `action 'update'`.
    */
   onConfirm: (ingredient: SheetResult, action: 'add' | 'update' | 'remove') => void;
   onClose: () => void;
@@ -109,11 +116,18 @@ function IngredientSheet({
 }: IngredientSheetProps) {
   const [name, setName] = useState(prefill?.name ?? initial?.name ?? '');
   const [quantity, setQuantity] = useState(prefill?.quantity ?? initial?.quantity ?? 100);
-  /** Inline mode without a name: the author picks Gewicht / Volumen / no unit. */
-  const [freeUnit, setFreeUnit] = useState<FreeUnit>('g');
+  /** Inline mode without a name: the author picks Gewicht / Volumen / no unit.
+   *  Editing an inline artifact restores its stored unit; fresh inserts start
+   *  at Gewicht. */
+  const [freeUnit, setFreeUnit] = useState<FreeUnit>(() => {
+    if (mode !== 'inline-edit') return 'g';
+    return initial?.unit === 'ml' ? 'ml' : initial?.unit === 'g' ? 'g' : 'none';
+  });
   const [error, setError] = useState<string | null>(null);
 
   const rowMode = mode === 'row-add' || mode === 'row-edit';
+  /** Both inline modes allow quantity-only mentions without a name/unit. */
+  const inlineMode = mode === 'inline-add' || mode === 'inline-edit';
   /** Titles of the collection's ingredient recipes (Set for O(1) lookups). */
   const recipeTitles = useMemo(
     () => new Set(ingredientRecipes.map((recipe) => recipe.title)),
@@ -144,8 +158,11 @@ function IngredientSheet({
           ? 'ml'
           : 'g'
         : familyOf(trimmedName);
-  /** Stored unit: always present for rows/ingredient mentions. */
-  const unit: Unit | undefined = family ?? initial?.unit;
+  /** Stored unit: always present for rows/ingredient mentions. While a name
+   *  is being retyped (not yet a master name) the previous unit stays for the
+   *  preview; a cleared name in inline mode follows the free-unit choice
+   *  (unitless stays unitless). */
+  const unit: Unit | undefined = family ?? (trimmedName === '' ? undefined : initial?.unit);
 
   /**
    * Suggestions: master-data ingredient names plus ingredient-recipe titles
@@ -191,7 +208,7 @@ function IngredientSheet({
   const handleConfirm = (): void => {
     if (trimmedName !== '' && !validName) {
       setError(
-        `„${trimmedName}" ist weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept.`,
+        `„${trimmedName}" ist keine bekannte Zutat. Bitte neu anlegen oder eine Zutat aus der Liste wählen.`,
       );
       return;
     }
@@ -205,7 +222,7 @@ function IngredientSheet({
         : unit !== undefined
           ? { quantity, unit }
           : { quantity };
-    onConfirm(value, mode === 'row-edit' ? 'update' : 'add');
+    onConfirm(value, mode === 'row-edit' || mode === 'inline-edit' ? 'update' : 'add');
   };
 
   const showCreate = trimmedName !== '' && !validName;
@@ -218,24 +235,44 @@ function IngredientSheet({
         role="dialog"
         aria-modal="true"
         aria-label={
-          mode === 'inline-add'
-            ? 'Menge im Text einfügen'
+          inlineMode
+            ? mode === 'inline-add'
+              ? 'Zutat oder Menge zum Text hinzufügen'
+              : 'Zutat oder Menge im Text bearbeiten'
             : mode === 'row-add'
-              ? 'Zutat zum Schritt hinzufügen'
-              : 'Zutat des Schritts bearbeiten'
+              ? 'Zutat zur Liste hinzufügen'
+              : 'Zutat in der Liste bearbeiten'
         }
       >
         <h3 className="sheet-title">
-          {mode === 'inline-add'
-            ? 'Menge im Text'
+          {inlineMode
+            ? mode === 'inline-add'
+              ? 'Zutat oder Menge zum Text hinzufügen'
+              : 'Zutat oder Menge im Text bearbeiten'
             : mode === 'row-add'
-              ? 'Zutat zum Schritt hinzufügen'
-              : 'Zutat bearbeiten'}
+              ? 'Zutat zur Liste hinzufügen'
+              : 'Zutat in der Liste bearbeiten'}
         </h3>
+        {rowMode && (
+          <p className="sheet-subtitle">
+            Skaliert mit der Gesamtmenge und erscheint auch in der Liste für das gesamte Rezept.
+          </p>
+        )}
+        {inlineMode && (
+          <p className="sheet-subtitle">
+            Skaliert mit der Gesamtmenge, aber erscheint nicht in der Liste für das gesamte Rezept.
+          </p>
+        )}
 
         <label className="field">
           <span className="field-label">
-            Name {mode === 'inline-add' ? '(optional — leer = nur Menge)' : ''}
+            {inlineMode ? (
+              <>
+                Zutat <span className="optional-mark">(optional)</span>
+              </>
+            ) : (
+              'Name'
+            )}
           </span>
           <input
             type="text"
@@ -244,9 +281,6 @@ function IngredientSheet({
               setName(event.target.value);
               setError(null);
             }}
-            placeholder={
-              mode === 'inline-add' ? 'Leer lassen oder aus Liste wählen' : 'Tippen, um aus der Liste zu wählen'
-            }
             autoFocus
           />
         </label>
@@ -266,10 +300,6 @@ function IngredientSheet({
         )}
         {showCreate && (
           <div className="not-in-master">
-            <p className="field-error" role="alert">
-              Weder in der Zutaten-Stammdatenliste noch ein Zutaten-Rezept — bitte einen Vorschlag
-              wählen oder die Zutat neu anlegen.
-            </p>
             <button
               type="button"
               className="create-ingredient-button"
@@ -277,16 +307,23 @@ function IngredientSheet({
             >
               Neue Zutat anlegen
             </button>
-            <p className="create-ingredient-hint">
-              Legt „{trimmedName}“ mit Stammdaten an (Basis-Einheit + optionale Umrechnungen) —
-              danach kannst du sie im Rezept verwenden.
-            </p>
           </div>
         )}
 
-        {mode === 'inline-add' && trimmedName === '' && (
+        {/* Validation result of the save attempt (unknown/empty name). The
+            live "Neue Zutat anlegen" block above carries no error text; the
+            message appears only after a failed confirm, once. */}
+        {error !== null && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        {inlineMode && trimmedName === '' && (
           <div className="field">
-            <span className="field-label">Einheit</span>
+            <span className="field-label">
+              Einheit <span className="optional-mark">(optional)</span>
+            </span>
             <div className="segmented" role="group" aria-label="Einheit der Menge">
               <button
                 type="button"
@@ -318,20 +355,17 @@ function IngredientSheet({
           <QuantityPicker value={quantity} onChange={setQuantity} family={family} />
         </div>
 
-        {/* Live preview of the display form (§2). */}
-        <p className="aqs-preview" aria-live="polite">
-          {trimmedName !== '' && validName
-            ? renderAQS(trimmedName, quantity, unit ?? 'g')
-            : unit !== undefined
-              ? formatBQ(quantity, unit)
-              : String(quantity)}
-        </p>
-
-        {error !== null && (
-          <p className="field-error" role="alert">
-            {error}
+        <div className="field">
+          <span className="field-label">Vorschau</span>
+          {/* Live preview of the display form (§2). */}
+          <p className="aqs-preview" aria-live="polite">
+            {trimmedName !== '' && validName
+              ? renderAQS(trimmedName, quantity, unit ?? 'g')
+              : unit !== undefined
+                ? formatBQ(quantity, unit)
+                : formatDecimal(quantity)}
           </p>
-        )}
+        </div>
 
         <div className="sheet-actions">
           {mode === 'row-edit' && (

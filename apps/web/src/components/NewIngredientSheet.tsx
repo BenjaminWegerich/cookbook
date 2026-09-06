@@ -13,16 +13,23 @@
  * Every mapping carries an explicit priority (1 = most preferred, unique per
  * ingredient, §7 of the AQS spec). As a convenience the mappings of an
  * existing ingredient with the same base-unit family can be copied in as a
- * starting point ("Umrechnungen von bestehender Zutat übernehmen") and then
- * edited / extended — factors are expressed in the ingredient's own base
- * unit, so only same-family sources are offered.
+ * starting point ("Von bekannter Zutat übernehmen", a text-autocomplete like
+ * the ingredient sheet's name selector) and then edited / extended — factors
+ * are expressed in the ingredient's own base unit, so only same-family
+ * sources are offered.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
 import { useState } from 'react';
 
-import { ADDITIONAL_UNITS, masterIngredientNames, mappingsFor } from '@cookbook/core';
+import {
+  ADDITIONAL_UNITS,
+  NNBSP,
+  formatDecimal,
+  masterIngredientNames,
+  mappingsFor,
+} from '@cookbook/core';
 
 /** One filled mapping row handed to the parent for persistence. */
 export interface NewIngredientEntry {
@@ -109,7 +116,9 @@ function validateRows(rows: MappingRow[]): string | null {
 /**
  * Builds the live summary line of what will be saved, e.g. "Basis: ml — EL (15 ml),
  * TL (5 ml)". Only fully valid rows are shown, so a half-typed row never renders
- * as "NaN"; save-time validation still reports the offending row.
+ * as "NaN"; save-time validation still reports the offending row. Number and
+ * unit in the factors are joined with a narrow no-break space (NNBSP) like all
+ * quantity displays (docs/CODING_CONVENTIONS.md).
  */
 function buildSummary(bu: string, entries: NewIngredientEntry[]): string | null {
   const valid = entries.filter(
@@ -122,7 +131,9 @@ function buildSummary(bu: string, entries: NewIngredientEntry[]): string | null 
   if (valid.length === 0) {
     return null;
   }
-  return `Basis: ${bu} — ${valid.map((entry) => `${entry.au} (${entry.factor} ${bu})`).join(', ')}`;
+  return `Basis: ${bu} — ${valid
+    .map((entry) => `${entry.au} (${formatDecimal(entry.factor)}${NNBSP}${bu})`)
+    .join(', ')}`;
 }
 
 /**
@@ -142,8 +153,8 @@ function NewIngredientSheet({
   const [factors, setFactors] = useState<Record<string, string>>({});
   /** Priority inputs keyed by additional-unit name; empty string = not set. */
   const [priorities, setPriorities] = useState<Record<string, string>>({});
-  /** The copy-source select value ("" = placeholder); applying resets it. */
-  const [copySource, setCopySource] = useState('');
+  /** The copy-source autocomplete text ("" = nothing typed); applying resets it. */
+  const [copyQuery, setCopyQuery] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
   const trimmedName = name.trim();
@@ -202,6 +213,26 @@ function NewIngredientSheet({
     setLocalError(null);
   };
 
+  /**
+   * Adopts a copy suggestion: fills the AU rows from that ingredient and
+   * clears the autocomplete, mirroring the ingredient selector of the
+   * ingredient sheet (typed text + suggestion list, tap to apply).
+   */
+  const adoptCopy = (candidate: string): void => {
+    applyCopy(candidate);
+    setCopyQuery('');
+  };
+
+  /** Suggestion list of the copy autocomplete (same matching as the
+   *  ingredient selector: case-insensitive substring, capped at 6). */
+  const copyNeedle = copyQuery.trim().toLowerCase();
+  const copySuggestions =
+    copyNeedle === ''
+      ? []
+      : copyCandidates
+          .filter((candidate) => candidate.toLowerCase().includes(copyNeedle))
+          .slice(0, 6);
+
   const handleSave = (): void => {
     if (trimmedName === '') {
       setLocalError('Bitte einen Namen angeben.');
@@ -230,10 +261,6 @@ function NewIngredientSheet({
       />
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Neue Zutat anlegen">
         <h3 className="sheet-title">Neue Zutat anlegen</h3>
-        <p className="sheet-subtitle">
-          Legt die Zutat in der Stammdatenliste an (zutaten.csv + zutaten-umrechnungen.csv in deinem
-          Cookbook-Ordner). Danach kannst du sie zum Rezept hinzufügen.
-        </p>
 
         <label className="field">
           <span className="field-label">Name</span>
@@ -264,35 +291,35 @@ function NewIngredientSheet({
         </div>
 
         <div className="field">
-          <span className="field-label">Umrechnungen (optional)</span>
-          <p className="create-ingredient-hint">
-            Jede Zeile braucht einen Faktor (Menge in {bu} je Einheit) und eine Priorität (1 =
-            bevorzugt). Leere Zeilen werden übersprungen.
-          </p>
+          <span className="field-label">Verknüpfungen mit Zusatz-Einheiten</span>
+
           {copyCandidates.length > 0 && (
-            <label className="copy-from">
-              <span className="field-label">Von bestehender Zutat übernehmen</span>
-              <select
-                value={copySource}
-                onChange={(event) => {
-                  if (event.target.value === '') return;
-                  applyCopy(event.target.value);
-                  setCopySource('');
-                }}
-                aria-label="Umrechnungen von bestehender Zutat übernehmen"
-              >
-                <option value="">— Zutat wählen —</option>
-                {copyCandidates.map((candidate) => (
-                  <option key={candidate} value={candidate}>
-                    {candidate}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <>
+              <p className="field-hint">Von bekannter Zutat übernehmen:</p>
+              <input
+                type="text"
+                value={copyQuery}
+                onChange={(event) => setCopyQuery(event.target.value)}
+                aria-label="Von bekannter Zutat übernehmen"
+              />
+              {copySuggestions.length > 0 && (
+                <ul className="suggestions">
+                  {copySuggestions.map((candidate) => (
+                    <li key={candidate}>
+                      <button type="button" onClick={() => adoptCopy(candidate)}>
+                        {candidate}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
+
+          <p className="field-hint">Manuell anpassen:</p>
           <div className="factor-head" aria-hidden="true">
             <span />
-            <span>Faktor ({bu})</span>
+            <span>Menge [{bu}]</span>
             <span>Priorität</span>
           </div>
           {ADDITIONAL_UNITS.map((unit) => (
@@ -301,8 +328,7 @@ function NewIngredientSheet({
               <input
                 type="text"
                 inputMode="decimal"
-                placeholder="z. B. 250"
-                aria-label={`${unit.name}: Faktor in ${bu}`}
+                aria-label={`${unit.name}: Menge in ${bu}`}
                 value={factors[unit.name] ?? ''}
                 onChange={(event) =>
                   setFactors((current) => ({ ...current, [unit.name]: event.target.value }))
@@ -311,7 +337,6 @@ function NewIngredientSheet({
               <input
                 type="text"
                 inputMode="numeric"
-                placeholder="z. B. 1"
                 aria-label={`${unit.name}: Priorität`}
                 value={priorities[unit.name] ?? ''}
                 onChange={(event) =>

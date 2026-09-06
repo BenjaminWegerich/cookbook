@@ -13,7 +13,7 @@
  * every value here is a ladder value by construction.
  */
 
-import { formatBQ } from '@cookbook/core';
+import { formatBQ, formatDecimal } from '@cookbook/core';
 
 /** The two authorable base-unit families (decided with the user: g/ml only). */
 export type QuantityFamily = 'g' | 'ml';
@@ -37,10 +37,11 @@ const SUGGESTED_VALUES = [
 
 /**
  * The label of a quantity: formatted base form (switches to kg/l at 1000) for
- * a family unit, plain number for a unitless quantity (`{{100}}`).
+ * a family unit, plain number for a unitless quantity (`{{100}}`). Numbers
+ * use the German decimal comma on the display layer (formatDecimal).
  */
 export function quantityLabel(quantity: number, family: QuantityFamily | null): string {
-  return family === null ? String(quantity) : formatBQ(quantity, family);
+  return family === null ? formatDecimal(quantity) : formatBQ(quantity, family);
 }
 
 /** The suggested chips with display labels (see file header). */

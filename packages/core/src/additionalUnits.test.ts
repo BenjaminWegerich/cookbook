@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ADDITIONAL_UNITS, INGREDIENT_MAPPINGS, NUMBER_SCHEMES } from './additionalUnitsData.js';
 import {
   formatBQ,
+  formatDecimal,
   roundToAQ,
   selectAQ,
   renderAQS,
@@ -186,14 +187,14 @@ describe('renderAQS (§4)', () => {
 
   it('renders the base form for unknown ingredients and foreign base units', () => {
     expect(renderAQS('Zucker', 400, 'g')).toBe(`400${NNBSP}g Zucker`);
-    expect(renderAQS('Joghurt', 0.4, 'kg')).toBe(`0.4${NNBSP}kg Joghurt`);
+    expect(renderAQS('Joghurt', 0.4, 'kg')).toBe(`0,4${NNBSP}kg Joghurt`);
   });
 
   it('shows the exact stored base quantity with the kg conversion at 1000', () => {
     // The AQS applies (2+1/2 Becher), and the base quantity is displayed in kg
     // from 1000 up (decided with the user: g/ml stored, kg/l for display).
     expect(renderAQS('Joghurt', 1000, 'g')).toBe(`2+1/2${NNBSP}Becher Joghurt (1${NNBSP}kg)`);
-    expect(renderAQS('Joghurt', 1200, 'g')).toBe(`3${NNBSP}Becher Joghurt (1.2${NNBSP}kg)`);
+    expect(renderAQS('Joghurt', 1200, 'g')).toBe(`3${NNBSP}Becher Joghurt (1,2${NNBSP}kg)`);
   });
 
   it('rejects non-standard base quantities', () => {
@@ -210,13 +211,26 @@ describe('formatBQ (§2 — g/ml stored, kg/l displayed from 1000)', () => {
 
   it('converts g to kg and ml to l from 1000 up', () => {
     expect(formatBQ(1000, 'g')).toBe(`1${NNBSP}kg`);
-    expect(formatBQ(1200, 'g')).toBe(`1.2${NNBSP}kg`);
+    expect(formatBQ(1200, 'g')).toBe(`1,2${NNBSP}kg`);
     expect(formatBQ(1000, 'ml')).toBe(`1${NNBSP}l`);
-    expect(formatBQ(2500, 'ml')).toBe(`2.5${NNBSP}l`);
+    expect(formatBQ(2500, 'ml')).toBe(`2,5${NNBSP}l`);
   });
 
   it('shows stored kg/l unchanged (legacy files)', () => {
-    expect(formatBQ(1.5, 'kg')).toBe(`1.5${NNBSP}kg`);
+    expect(formatBQ(1.5, 'kg')).toBe(`1,5${NNBSP}kg`);
     expect(formatBQ(2, 'l')).toBe(`2${NNBSP}l`);
+  });
+});
+
+describe('formatDecimal (§8 — German decimal comma on the display layer)', () => {
+  it('keeps whole numbers as-is', () => {
+    expect(formatDecimal(400)).toBe('400');
+    expect(formatDecimal(0)).toBe('0');
+  });
+
+  it('uses the comma for fractional values', () => {
+    expect(formatDecimal(1.5)).toBe('1,5');
+    expect(formatDecimal(0.25)).toBe('0,25');
+    expect(formatDecimal(2)).toBe('2');
   });
 });

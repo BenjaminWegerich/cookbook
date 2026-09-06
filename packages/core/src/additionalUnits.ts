@@ -23,11 +23,7 @@
  * (docs/CODING_CONVENTIONS.md).
  */
 
-import {
-  ADDITIONAL_UNITS,
-  NUMBER_SCHEMES,
-  type AdditionalUnit,
-} from './additionalUnitsData.js';
+import { ADDITIONAL_UNITS, NUMBER_SCHEMES, type AdditionalUnit } from './additionalUnitsData.js';
 import { LADDER_RUNGS } from './ladderData.js';
 import { pos } from './ladder.js';
 import { allIngredientMappings, mappingsFor } from './ingredientRegistry.js';
@@ -36,8 +32,14 @@ import { allIngredientMappings, mappingsFor } from './ingredientRegistry.js';
 const MIN_AQ = 0.1;
 /** Largest AQ ladder value (1000); above it no additional quantity exists (§6.1). */
 const MAX_AQ = 1000;
-/** Narrow no-break space (U+202F), substituted for the <NNBSP> placeholder (§8). */
-const NNBSP = '\u202F';
+/**
+ * Narrow no-break space (U+202F), substituted for the <NNBSP> placeholder
+ * (§8). Single definition of the typographic space between a number and its
+ * unit for every display helper in core — the web app and the HTML export
+ * render all quantity/duration text with it (docs/CODING_CONVENTIONS.md).
+ * Stored files always keep plain ASCII spaces.
+ */
+export const NNBSP = '\u202F';
 
 /** One distinct AQ ladder value together with its numeric form. */
 interface AQEntry {
@@ -177,22 +179,35 @@ export function selectAQ(ingredient: string, bq: number, bu: string): Additional
 }
 
 /**
+ * Formats a number for display with the German decimal comma
+ * (docs/CODING_CONVENTIONS.md): whole numbers stay as-is ("400"), fractional
+ * values use a comma ("1,5", "0,25"). This is a display-layer rule only —
+ * stored files always keep the canonical plain forms. Never build numbers by
+ * hand for user-visible text; always pass them through this helper (or a
+ * formatter built on it like `formatBQ`).
+ */
+export function formatDecimal(value: number): string {
+  return String(value).replace('.', ',');
+}
+
+/**
  * Formats a base quantity for display (decided with the user): quantities are
  * stored in the family unit g or ml, and the display switches to kg / l at
  * 1000 ("right between 750 and 1000, the unit changes"). Values below 1000
  * are shown as-is ("400 g", "750 ml"); at and above 1000 the unit steps up
- * ("1 kg", "1.2 kg", "1 l"). Stored kg/l (legacy files) are shown unchanged.
- * Number and unit are separated by a narrow no-break space (U+202F), like all
- * quantity displays in the app (§8).
+ * ("1 kg", "1,2 kg", "1 l"). Stored kg/l (legacy files) are shown unchanged.
+ * Decimal fractions always use the German comma (`formatDecimal`). Number and
+ * unit are separated by a narrow no-break space (U+202F), like all quantity
+ * displays in the app (§8).
  */
 export function formatBQ(bq: number, bu: string): string {
   if (bu === 'g' && bq >= 1000) {
-    return `${bq / 1000}${NNBSP}kg`;
+    return `${formatDecimal(bq / 1000)}${NNBSP}kg`;
   }
   if (bu === 'ml' && bq >= 1000) {
-    return `${bq / 1000}${NNBSP}l`;
+    return `${formatDecimal(bq / 1000)}${NNBSP}l`;
   }
-  return `${bq}${NNBSP}${bu}`;
+  return `${formatDecimal(bq)}${NNBSP}${bu}`;
 }
 
 /**
