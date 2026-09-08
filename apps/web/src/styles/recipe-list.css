@@ -316,6 +316,22 @@
   font-size: var(--text-sm);
 }
 
+/* Transient status while the sign-in popup is being opened. */
+.login-status {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* Failed sign-in attempt (e.g. popup blocked on the automatic login) —
+   shown on the login panel below the button. */
+.login-error {
+  padding: var(--space-4);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
 .empty-state {
   display: grid;
   gap: var(--space-2);

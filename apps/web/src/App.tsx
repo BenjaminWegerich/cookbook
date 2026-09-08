@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Recipe } from '@cookbook/core';
 
-import { getAccessToken, requestAccessToken } from './auth/googleAuth';
+import { getAccessToken, isGoogleAuthAvailable, requestAccessToken } from './auth/googleAuth';
 import AiCreateSheet from './components/AiCreateSheet';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
@@ -36,6 +36,13 @@ function isScreenEntry(state: unknown): boolean {
   );
 }
 
+/** Auto-login on page load waits at most this long for the async-loaded GIS
+ *  script before it gives up silently (the login button keeps working). */
+const GIS_LOAD_TIMEOUT_MS = 10_000;
+
+/** Polling cadence of the GIS availability check. */
+const GIS_POLL_INTERVAL_MS = 200;
+
 /**
  * Root component of the web app — the recipe-list home screen plus the recipe
  * editor (Phase 2).
@@ -48,6 +55,9 @@ function isScreenEntry(state: unknown): boolean {
  */
 function App() {
   const [token, setToken] = useState<string | null>(() => getAccessToken());
+  /** True while the Google sign-in popup is being requested (auto-login or
+   *  the login button); shows a status line on the login panel meanwhile. */
+  const [connecting, setConnecting] = useState(false);
   const [recipes, setRecipes] = useState<StoredRecipe[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Non-fatal warning when the Drive master data could not be loaded; the
@@ -186,17 +196,55 @@ function App() {
   }, []);
 
   /**
-   * Logs in; the mount effect below refreshes the recipe list as soon as the
-   * token is set (recipes === null shows the loading message meanwhile).
+   * Logs in — triggered by the login button (user gesture) or by the
+   * auto-login effect below (`{ automatic: true }`, best-effort, may be
+   * popup-blocked). The mount effect refreshes the recipe list as soon as
+   * the token is set (recipes === null shows the loading message meanwhile).
    */
-  const handleConnect = useCallback(async (): Promise<void> => {
+  const handleConnect = useCallback(async (options?: { automatic?: boolean }): Promise<void> => {
     setError(null);
+    setConnecting(true);
+    let aborted = false;
     try {
-      setToken(await requestAccessToken());
+      setToken(await requestAccessToken(options));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // A superseded automatic attempt (user clicked during page-load login)
+      // is aborted without a user-visible error — the fresh gesture attempt
+      // takes over. Keep the `connecting` flag: it belongs to that attempt.
+      aborted = err instanceof Error && err.name === 'AbortError';
+      if (!aborted) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      if (!aborted) setConnecting(false);
     }
   }, []);
+
+  /**
+   * Best-effort auto-login: the access token is memory-only (googleAuth.ts),
+   * so every page load starts logged out. To skip the intro screen, request
+   * the token flow without a click once the GIS script is ready. Browsers
+   * only allow the account-chooser popup after a user gesture, so this
+   * attempt may be blocked — GIS then reports an error (or the request times
+   * out) and the login panel stays, where a single click retries with a
+   * gesture. The GIS script loads `async`, so poll until it is usable.
+   */
+  useEffect(() => {
+    if (token) {
+      return;
+    }
+    const deadline = Date.now() + GIS_LOAD_TIMEOUT_MS;
+    const interval = window.setInterval(() => {
+      if (isGoogleAuthAvailable()) {
+        window.clearInterval(interval);
+        void handleConnect({ automatic: true });
+      } else if (Date.now() >= deadline) {
+        // GIS still unavailable — give up silently; the button keeps working.
+        window.clearInterval(interval);
+      }
+    }, GIS_POLL_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [token, handleConnect]);
 
   /** Opens the editor for a recipe (null = new recipe). */
   const openEditor = useCallback(
@@ -291,6 +339,16 @@ function App() {
               <button type="button" onClick={() => void handleConnect()}>
                 Mit Google verbinden
               </button>
+              {connecting && (
+                <p className="login-status" role="status">
+                  Google-Anmeldefenster wird geöffnet …
+                </p>
+              )}
+              {!connecting && error !== null && (
+                <p className="login-error" role="alert">
+                  {error}
+                </p>
+              )}
             </section>
           ) : error ? (
             <p className="error-message" role="alert">
