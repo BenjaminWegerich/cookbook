@@ -268,7 +268,7 @@ function IngredientSheet({
           <span className="field-label">
             {inlineMode ? (
               <>
-                Zutat <span className="optional-mark">(optional)</span>
+                Zutat<span className="optional-mark">(optional)</span>
               </>
             ) : (
               'Name'
@@ -322,7 +322,7 @@ function IngredientSheet({
         {inlineMode && trimmedName === '' && (
           <div className="field">
             <span className="field-label">
-              Einheit <span className="optional-mark">(optional)</span>
+              Einheit<span className="optional-mark">(optional)</span>
             </span>
             <div className="segmented" role="group" aria-label="Einheit der Menge">
               <button

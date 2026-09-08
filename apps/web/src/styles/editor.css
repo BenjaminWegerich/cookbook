@@ -59,8 +59,11 @@
 /* Form-field caption above an input/chip row. Displayed in all caps per
    docs/CODING_CONVENTIONS.md (Design Conventions); keep the markup in normal
    German case ("Titel", not "TITEL") so the source stays readable and screen
-   readers announce the plain word — the caps are a visual layer only. */
+   readers announce the plain word — the caps are a visual layer only.
+   margin-block-start: var(--space-1) adds a little extra air above the caption
+   on top of the parent container's own gap rhythm. */
 .field-label {
+  margin-block-start: var(--space-1);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-ink-muted);
@@ -69,12 +72,15 @@
 
 /* Uniform optional-field marker (docs/CODING_CONVENTIONS.md): appended to the
    label of optional fields; required fields stay unmarked. Stays lowercase
-   next to the all-caps caption so the quiet marker remains visually subdued. */
+   next to the all-caps caption so the quiet marker remains visually subdued.
+   margin-inline-start: 0.5em — exactly one En space at the caption size —
+   keeps a little breathing room between the caption word and the marker. */
 .optional-mark {
   font-weight: 400;
   font-style: italic;
   opacity: 0.85;
   text-transform: none;
+  margin-inline-start: 0.5em; /* En space (U+2002 width) before the marker */
 }
 
 .field-hint {

@@ -14,6 +14,14 @@
   box-sizing: border-box;
 }
 
+/* Suppress the default light-blue tap flash that mobile browsers (Chrome /
+   WebKit) paint over the element's bounding box while a tap is in progress.
+   The app is touch-first, so the flash is visual noise; keyboard users keep
+   their visible cue via the global :focus-visible ring below. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 html,
 body,
 #root {

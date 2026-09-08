@@ -1161,7 +1161,7 @@ function RecipeEditor({
           {/* Bild (§2, optional sibling file) */}
           <div className="field">
             <span className="field-label">
-              Bild <span className="optional-mark">(optional)</span>
+              Bild<span className="optional-mark">(optional)</span>
             </span>
             <div className="photo-row">
               {photoUrl !== null ? (
@@ -1223,7 +1223,7 @@ function RecipeEditor({
 
           <label className="field">
             <span className="field-label">
-              Untertitel <span className="optional-mark">(optional)</span>
+              Untertitel<span className="optional-mark">(optional)</span>
             </span>
             <input
               type="text"
@@ -1233,7 +1233,7 @@ function RecipeEditor({
           </label>
           <label className="field">
             <span className="field-label">
-              Beschreibung <span className="optional-mark">(optional)</span>
+              Beschreibung<span className="optional-mark">(optional)</span>
             </span>
             <textarea
               rows={3}
@@ -1257,7 +1257,7 @@ function RecipeEditor({
 
           <div className="field" id="editor-field-total_time">
             <span className="field-label">
-              Gesamtzeit <span className="optional-mark">(optional)</span>
+              Gesamtzeit<span className="optional-mark">(optional)</span>
             </span>
             <span className="field-hint">nur wenn sie größer als die Arbeitszeit ist</span>
             <TimeChips
