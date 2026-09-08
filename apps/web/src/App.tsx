@@ -165,7 +165,7 @@ function App() {
   // the app. The history holds the list (initial entry) plus at most one
   // screen entry, so a pop onto the list entry must close the current screen.
   // The editor can consume the pop itself (its topmost overlay closes first;
-  // unsaved changes arm the "Wirklich verwerfen?" step like the header button
+  // unsaved changes arm the "Änderungen verwerfen?" step like the header button
   // does) — when it does, the screen entry is re-pushed to cancel the pop.
   useEffect(() => {
     const onPopState = (): void => {

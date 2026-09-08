@@ -55,6 +55,7 @@ import {
   type StoredRecipe,
 } from '../drive/recipeStorage';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
+import AutoGrowTextarea from './AutoGrowTextarea';
 import IngredientSheet, {
   type IngredientRecipeOption,
   type IngredientSheetMode,
@@ -150,7 +151,7 @@ const SERVING_OPTIONS = integerLadderValues(1, 30);
  * Imperative handle for the browser-back integration (owned by App): the
  * editor is asked whether it consumes a browser Back before the app closes
  * the editor screen. Consumed means a layer inside the editor was closed
- * (topmost overlay first, or the "Wirklich verwerfen?" step was armed).
+ * (topmost overlay first, or the "Änderungen verwerfen?" step was armed).
  */
 export interface RecipeEditorHandle {
   /** True when the back was handled inside the editor; false when the editor
@@ -412,7 +413,7 @@ function TimeChips({
           onClick={() => onChange('')}
           aria-label="Gewählte Zeit entfernen"
         >
-          → entfernen
+          entfernen
         </button>
       )}
     </div>
@@ -443,9 +444,20 @@ function RecipeEditor({
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  /** Two-step confirmations for discarding changes / deleting. */
+  /** Two-step confirmations for discarding changes / deleting / photo removal. */
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** Two-step "Wirklich entfernen?" before the queued photo removal (§2). */
+  const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
+  /** The armed "Schritt wirklich entfernen?" row (index of the step to remove). */
+  const [confirmRemoveStep, setConfirmRemoveStep] = useState<number | null>(null);
+
+  /** Focuses a Kopf text field with the caret at the end (Enter = next). */
+  const focusEditorField = (field: HTMLTextAreaElement | null): void => {
+    if (field === null) return;
+    field.focus();
+    field.setSelectionRange(field.value.length, field.value.length);
+  };
   /** Photo change queued into the save flow (applied with Speichern, §2). */
   const [photoChange, setPhotoChange] = useState<PhotoChange | null>(null);
   /** Drive file id of a newly created recipe (so a retry updates instead of duplicating). */
@@ -471,6 +483,10 @@ function RecipeEditor({
 
   const photoUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  /** Kopf text fields — Enter (the phone keyboard's "next") walks this chain. */
+  const titleFieldRef = useRef<HTMLTextAreaElement | null>(null);
+  const subtitleFieldRef = useRef<HTMLTextAreaElement | null>(null);
+  const descriptionFieldRef = useRef<HTMLTextAreaElement | null>(null);
   const stepEditorRefs = useRef<(StepEditorHandle | null)[]>([]);
 
   // Load the recipe (or the empty draft) and the rest of the collection.
@@ -558,9 +574,13 @@ function RecipeEditor({
     [draft, original, photoChange],
   );
 
-  // Any change cancels the two-step "verwerfen" confirmation.
+  // Any change cancels the two-step "verwerfen" and "Schritt entfernen?"
+  // confirmations: an armed confirm must never outlive the state it refers
+  // to — reordering or removing steps shifts the armed step index, and
+  // editing elsewhere means the user moved on ("Behalten").
   useEffect(() => {
     setConfirmDiscard(false);
+    setConfirmRemoveStep(null);
   }, [draft]);
 
   // Gesamtzeit must be larger than Vorbereitungszeit: clear it when it isn't.
@@ -836,6 +856,41 @@ function RecipeEditor({
     });
   };
 
+  /** Removes a step from the draft (the armed ✕'s confirming tap, or an
+   *  empty step's immediate ✕). Called only when the step being removed is
+   *  the one the armed state refers to. */
+  const removeStep = (stepIndex: number): void => {
+    setConfirmRemoveStep(null);
+    updateDraft((current) => ({
+      ...current,
+      steps: current.steps.filter((_, i) => i !== stepIndex),
+    }));
+  };
+
+  /**
+   * ✕ tap on a step (two-step confirm like the photo removal): a content-
+   * bearing step (prose or rows) first swaps the ✕ for a red "Wirklich
+   * entfernen?" button; the second tap on it performs the removal. Any other
+   * change (arrows, editing, adding) cancels the armed state = "Behalten"
+   * (see the draft-change effect above). A truly empty step has nothing to
+   * lose and is removed immediately.
+   */
+  const toggleRemoveStep = (stepIndex: number): void => {
+    if (draft === null) return;
+    const step = draft.steps[stepIndex];
+    if (step === undefined) return;
+    if (confirmRemoveStep === stepIndex) {
+      removeStep(stepIndex);
+      return;
+    }
+    const hasContent = step.text.trim() !== '' || step.ingredients.length > 0;
+    if (hasContent) {
+      setConfirmRemoveStep(stepIndex);
+    } else {
+      removeStep(stepIndex);
+    }
+  };
+
   // ---- Sheet handlers -----------------------------------------------------
 
   /** The sheet mode for a SheetState (used when the create sheet reopens it). */
@@ -972,6 +1027,9 @@ function RecipeEditor({
   // ---- Photo handlers -----------------------------------------------------
 
   const showPhotoUrl = (blob: Blob): void => {
+    // A new preview invalidates an armed "Wirklich entfernen?" — it would
+    // otherwise target the previous image on the next tap.
+    setConfirmRemovePhoto(false);
     if (photoUrlRef.current !== null) URL.revokeObjectURL(photoUrlRef.current);
     const url = URL.createObjectURL(blob);
     photoUrlRef.current = url;
@@ -1015,7 +1073,7 @@ function RecipeEditor({
    * topmost layer and reports whether the back was consumed, mirroring the
    * order of the visible stack — NewIngredientSheet first (closing restores
    * the ingredient sheet underneath), then the IngredientSheet, and only then
-   * does an unsaved draft arm the "Wirklich verwerfen?" step (the same
+   * does an unsaved draft arm the "Änderungen verwerfen?" step (the same
    * two-step guard as the header back button). Fresh every render, so it
    * always sees the current state.
    */
@@ -1129,7 +1187,7 @@ function RecipeEditor({
               }
             }}
           >
-            {confirmDiscard ? 'Wirklich verwerfen?' : 'Zurück'}
+            {confirmDiscard ? 'Änderungen verwerfen?' : 'Zurück'}
           </button>
           <button
             type="button"
@@ -1192,9 +1250,15 @@ function RecipeEditor({
                   <button
                     type="button"
                     className="text-button danger-text"
-                    onClick={handleRemovePhoto}
+                    onClick={() => {
+                      if (!confirmRemovePhoto) {
+                        setConfirmRemovePhoto(true);
+                      } else {
+                        handleRemovePhoto();
+                      }
+                    }}
                   >
-                    Entfernen
+                    {confirmRemovePhoto ? 'Wirklich entfernen?' : 'Entfernen'}
                   </button>
                 )}
               </div>
@@ -1208,11 +1272,12 @@ function RecipeEditor({
 
           <label className="field">
             <span className="field-label">Titel</span>
-            <input
+            <AutoGrowTextarea
+              ref={titleFieldRef}
               id="editor-field-title"
-              type="text"
               value={draft.title}
-              onChange={(event) => patchDraft({ title: event.target.value })}
+              onChange={(title) => patchDraft({ title })}
+              onEnter={() => focusEditorField(subtitleFieldRef.current)}
             />
           </label>
           {fieldIssue('title').map((issue, index) => (
@@ -1225,20 +1290,24 @@ function RecipeEditor({
             <span className="field-label">
               Untertitel<span className="optional-mark">(optional)</span>
             </span>
-            <input
-              type="text"
+            <AutoGrowTextarea
+              ref={subtitleFieldRef}
               value={draft.subtitle ?? ''}
-              onChange={(event) => patchDraft({ subtitle: event.target.value })}
+              onChange={(subtitle) => patchDraft({ subtitle })}
+              onEnter={() => focusEditorField(descriptionFieldRef.current)}
             />
           </label>
           <label className="field">
             <span className="field-label">
               Beschreibung<span className="optional-mark">(optional)</span>
             </span>
-            <textarea
-              rows={3}
+            <AutoGrowTextarea
+              ref={descriptionFieldRef}
+              tall
+              enterKeyHint="done"
               value={draft.description ?? ''}
-              onChange={(event) => patchDraft({ description: event.target.value })}
+              onChange={(description) => patchDraft({ description })}
+              onEnter={() => descriptionFieldRef.current?.blur()}
             />
           </label>
 
@@ -1413,19 +1482,25 @@ function RecipeEditor({
                     >
                       ↓
                     </button>
-                    <button
-                      type="button"
-                      className="icon-button danger-text"
-                      onClick={() =>
-                        updateDraft((current) => ({
-                          ...current,
-                          steps: current.steps.filter((_, i) => i !== stepIndex),
-                        }))
-                      }
-                      aria-label="Schritt entfernen"
-                    >
-                      ✕
-                    </button>
+                    {confirmRemoveStep === stepIndex ? (
+                      <button
+                        type="button"
+                        className="text-button danger-text step-confirm-remove"
+                        onClick={() => removeStep(stepIndex)}
+                        aria-label="Schritt wirklich entfernen?"
+                      >
+                        Wirklich entfernen?
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="icon-button danger-text"
+                        onClick={() => toggleRemoveStep(stepIndex)}
+                        aria-label="Schritt entfernen"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1526,6 +1601,15 @@ function RecipeEditor({
                   onArtifactEdit={(artifact, at) =>
                     setSheet({ kind: 'inline-edit', stepIndex, at, artifact })
                   }
+                  onEnterNext={() => {
+                    // Enter advances to the next step's text (phone keyboard
+                    // "next"); the last step hands back to the form.
+                    if (stepIndex + 1 < draft.steps.length) {
+                      stepEditorRefs.current[stepIndex + 1]?.focus();
+                    } else {
+                      (document.activeElement as HTMLElement | null)?.blur();
+                    }
+                  }}
                 />
                 {stepIssues(stepIndex).map((issue, index) => (
                   <p className="field-error" key={`step-${stepIndex}-${index}`} role="alert">
@@ -1586,9 +1670,11 @@ function RecipeEditor({
             </p>
           ) : (
             <>
+              {/* The &shy; (U+00AD soft hyphen) lets "zusammengesetzt" break as
+                  "zusammen-gesetzt" on narrow widths; invisible when the line fits. */}
               <p className="empty-hint">
-                Liste aus den Zubereitungsschritten zusammengesetzt. Bis zu zwei Referenz-Zutaten
-                mit ★ markieren.
+                Liste aus den Zubereitungsschritten zusammen&shy;gesetzt. Bis zu zwei
+                Referenz-Zutaten mit ★ markieren.
               </p>
               <ul className="ingredient-list">
                 {computedIngredients.map((ingredient) => {

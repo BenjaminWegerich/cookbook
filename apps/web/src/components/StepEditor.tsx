@@ -34,8 +34,7 @@ import {
 
 /** One renderable segment of the step: plain prose or an artifact. */
 type Segment =
-  | { type: 'text'; value: string }
-  | { type: 'artifact'; artifact: TextArtifact; stored: string };
+  { type: 'text'; value: string } | { type: 'artifact'; artifact: TextArtifact; stored: string };
 
 /** Splits a step into segments (prose / artifacts), preserving order. */
 function splitSegments(step: string): Segment[] {
@@ -125,6 +124,8 @@ export interface StepEditorHandle {
   insertArtifact: (artifact: TextArtifact, at?: number) => void;
   /** Replaces `length` characters at `at` with the artifact (inline edit). */
   replaceArtifact: (artifact: TextArtifact, at: number, length: number) => void;
+  /** Focuses the field with the caret at the end (Enter = "next" key). */
+  focus: () => void;
   /** The string offset of the current caret (for the "+ Zutat oder Menge zum
    Text" button). */
   caretOffset: () => number;
@@ -137,6 +138,9 @@ interface StepEditorProps {
   onChange: (step: string) => void;
   /** A chip (outside its ×) was tapped: edit the artifact at this offset. */
   onArtifactEdit?: (artifact: TextArtifact, at: number) => void;
+  /** Runs on Enter instead of inserting a line break (advance to the next
+   *  step's text field; steps never contain line breaks, §5). */
+  onEnterNext?: () => void;
 }
 
 /**
@@ -145,7 +149,7 @@ interface StepEditorProps {
  * externally (artifact insert/remove).
  */
 const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEditor(
-  { value, onChange, onArtifactEdit },
+  { value, onChange, onArtifactEdit, onEnterNext },
   ref,
 ) {
   const divRef = useRef<HTMLDivElement | null>(null);
@@ -234,6 +238,18 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         onChange(`${value.slice(0, at)}${replacement}${value.slice(at + length)}`);
       },
       caretOffset: () => (divRef.current === null ? 0 : caretStringOffset(divRef.current)),
+      focus: () => {
+        const div = divRef.current;
+        if (div === null) return;
+        div.focus();
+        // Caret at the end, so the next text is appended to the step.
+        const range = document.createRange();
+        range.selectNodeContents(div);
+        range.collapse(false);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      },
     }),
     [value, onChange],
   );
@@ -283,7 +299,12 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         onInput={handleInput}
         onClick={handleClick}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') event.preventDefault();
+          // Enter never inserts a line break; it acts as the "next" key and
+          // hands over to the following step's text field.
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            onEnterNext?.();
+          }
         }}
         onPaste={(event) => {
           event.preventDefault();

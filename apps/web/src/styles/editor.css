@@ -101,8 +101,19 @@
   line-height: 1.4;
 }
 
+/* Auto-growing text fields (see AutoGrowTextarea): the manual grip is gone
+   and overflow is clipped — the component sizes the box so nothing ever
+   scrolls. The min-height is the start size of an empty field (one line; the
+   .grow-tall variant — Beschreibung — starts like the step text); the text
+   wraps and the JS fit grows the box beyond it. */
 .field textarea {
-  resize: vertical;
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  min-height: 42px;
+}
+
+.field textarea.grow-tall {
   min-height: 74px;
 }
 
@@ -137,6 +148,15 @@
 .segmented .segmented-active {
   background: var(--color-olive);
   color: var(--color-on-accent);
+}
+
+/* Ergiebigkeit field: keep the Gewicht/Volumen toggle at the same distance
+   from the quantity chips as the QuantityPicker keeps between its chips and
+   the stepper. The .field grid gap (--space-2) alone would leave the toggle
+   6 px too close — the picker's chip→stepper band is its --space-3 row gap
+   plus the chips row's --space-1 bottom padding (12 px). */
+#editor-field-yield .segmented {
+  margin-block-end: calc(var(--space-3) + var(--space-1) - var(--space-2));
 }
 
 /* ---- Chips (times, servings, quantities) -------------------------------- */
@@ -266,13 +286,17 @@
 /* An ingredient artifact: not plain text, but a token (like inline code).
    Text size matches the step prose (18 px, decided with the user) — the chip
    stays distinct through its box; the whole chip is a tap target that opens
-   the edit sheet (its × still removes). */
+   the edit sheet (its × still removes).
+   No margin around the chip (decided with the user): a side margin would
+   fake a word boundary on both sides of the border even where the stored
+   step text has no space, so the prose could look spaced out while it is
+   not (read-aloud reads the text as written). The gap next to a chip is
+   exactly the space the text really contains. */
 .step-artifact {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-2);
-  margin-inline: var(--space-1);
   background: var(--color-bg);
   border: 1px solid var(--color-olive);
   border-radius: var(--radius-sm);
@@ -284,7 +308,13 @@
   user-select: none;
 }
 
+/* The × to delete an inline artifact. Touch-first fix (decided with the
+   user): the glyph grows one ladder step (14 → 18 px, text-sm → text-md)
+   and stays inside the 18 px button, so the chip's height is unchanged.
+   The tap target grows to 28×28 px via the invisible ::before ring (below),
+   well above the 24 px WCAG 2.5.8 AA minimum. */
 .artifact-remove {
+  position: relative;
   display: inline-grid;
   place-items: center;
   width: 18px;
@@ -294,8 +324,23 @@
   border: none;
   border-radius: 50%; /* structural exception to the ladder: full circle */
   color: var(--color-olive);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   line-height: 1;
+}
+
+/* Touch-target ring. ::before has no layout, so the hit area can exceed the
+   visible circle without growing the chip. inset -5px yields a 28×28 px
+   square — the largest that fits inside the chip's 28 px border box and
+   never reaches the chip text: it stops 1 px short of the 6 px (space-2)
+   gap to the text on the left and inside the chip's padding on the other
+   sides. Taps on the ring resolve to the button (the ring's originating
+   element), so they remove the artifact instead of opening the edit sheet.
+   5 px is a derived hit-area value, not a visual geometry — a deliberate
+   exception to the design ladder (see tokens.css). */
+.artifact-remove::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
 }
 
 .artifact-remove:active {
@@ -418,6 +463,13 @@
 
 .icon-button.danger-text {
   color: var(--color-danger);
+}
+
+/* Armed step ✕ → "Wirklich entfernen?" label (two-step confirm, swaps in
+   place inside the step head so the card does not grow). */
+.step-confirm-remove {
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .step-card textarea {
@@ -846,12 +898,18 @@
   font-size: var(--text-sm);
 }
 
+/* "+ Zutat zur Liste" (step-add-row): the pill hugs the ingredient rows above
+   it (only the card's own grid gap stays above), while keeping a clearly
+   larger gap to the step text field below: 8 px card gap + 10 px margin =
+   18 px (space-6). The pill reads as an extension of its list. */
 .step-add-row {
-  margin-block-start: var(--space-2);
+  margin-block-end: var(--space-4);
 }
 
+/* The step-card pills sit flush in the card's grid (8 px gap above); the
+   former extra top margin made the gaps above them uneven, so it is gone. */
 .step-card .add-ingredient {
-  margin-block-start: var(--space-1);
+  margin-block-start: 0;
 }
 
 /* Reference toggle on the (read-only) master list. */
