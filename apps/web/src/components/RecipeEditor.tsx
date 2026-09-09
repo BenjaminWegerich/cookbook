@@ -1000,6 +1000,7 @@ function RecipeEditor({
    *  unmounted sheet (the restore would swallow it). */
   const handleCreateClose = (): void => {
     if (createSaving) return;
+    setCreateError(null);
     setCreateSheet(null);
     if (sheetContext !== null) {
       setSheet(sheetContext.sheet);
@@ -1132,7 +1133,48 @@ function RecipeEditor({
   }
 
   const prepMinutes = parseTimeValue(draft.prep_time) ?? 0;
-  const mappedIssues = issues.map((issue) => ({ issue, target: mapIssue(issue) }));
+
+  /**
+   * The stored save-attempt issues that still apply to the current draft.
+   *
+   * `issues` holds the result of the last *failed* save attempt and is only
+   * ever refreshed there — validation messages must not nag live while the
+   * user is still typing. But once the user resolves a reported problem (the
+   * prominent case: creating the master data for a previously unknown
+   * ingredient — the runtime registry updates), the stale message must vanish
+   * without requiring another Speichern click. Intersecting the stored list
+   * with the issues the current draft still produces achieves exactly that:
+   * nothing new appears live, yet each message disappears the moment its
+   * cause is gone. Storage-level failures (path 'global', e.g. a Drive write
+   * error) are not draft issues — they persist until the next save attempt.
+   * Issue paths encode the *normalized* step/row indices, so reordering above
+   * a flagged element shifts its path and prunes the message although the
+   * cause remains — acceptable: the row highlight is live, and the next save
+   * attempt re-announces the problem under its new index. The same holds for
+   * messages that embed changing text (e.g. a step-level list of unknown
+   * inline-mention names): resolving one of several names changes the text,
+   * so the whole message clears and the next save announces what is left.
+   */
+  const liveIssues: ValidationIssue[] =
+    issues.length === 0 || saved === null || issues.every((issue) => issue.path === 'global')
+      ? issues
+      : (() => {
+          let applicable: Set<string>;
+          try {
+            applicable = new Set(
+              collectIssues(saved).map((issue) => `${issue.path}\u0000${issue.message}`),
+            );
+          } catch {
+            // A thrown core validation must not crash the render — keep the
+            // stored issues untouched; the next save attempt reports properly.
+            return issues;
+          }
+          return issues.filter(
+            (issue) =>
+              issue.path === 'global' || applicable.has(`${issue.path}\u0000${issue.message}`),
+          );
+        })();
+  const mappedIssues = liveIssues.map((issue) => ({ issue, target: mapIssue(issue) }));
   /** Issues belonging to one editor field (by its IssueTarget field name). */
   const fieldIssue = (
     field: 'title' | 'prep_time' | 'total_time' | 'servings' | 'yield' | 'yield_unit',
@@ -1170,7 +1212,7 @@ function RecipeEditor({
   /** General issues: shown in the top box, never under a field. */
   const globalIssues = sectionIssues('global');
   /** Any non-global issue exists → the top box shows the generic prompt. */
-  const hasValidationIssues = issues.length > globalIssues.length;
+  const hasValidationIssues = liveIssues.length > globalIssues.length;
 
   return (
     <main className="app">
@@ -1786,6 +1828,9 @@ function RecipeEditor({
             if (sheet === null) return;
             setSheetContext({ sheet, mode: sheetMode(sheet), name, quantity });
             setSheet(null);
+            // A fresh create flow must not start with the stale Drive error of
+            // a previous (failed or cancelled) attempt.
+            setCreateError(null);
             setCreateSheet({ name });
           }}
         />
@@ -1797,6 +1842,7 @@ function RecipeEditor({
           saving={createSaving}
           error={createError}
           onSave={(name, bu, entries) => void handleCreateIngredient(name, bu, entries)}
+          onEdited={() => setCreateError(null)}
           onClose={handleCreateClose}
         />
       )}

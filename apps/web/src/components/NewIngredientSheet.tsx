@@ -48,6 +48,9 @@ interface NewIngredientSheetProps {
   error: string | null;
   /** Called with the master data to create. */
   onSave: (name: string, bu: string, entries: NewIngredientEntry[]) => void;
+  /** Called when the user edits any form field — the parent forgets the
+   *  stale Drive error of the last attempt (its cause may be gone now). */
+  onEdited: () => void;
   onClose: () => void;
 }
 
@@ -114,6 +117,22 @@ function validateRows(rows: MappingRow[]): string | null {
 }
 
 /**
+ * The exact German message a save attempt would report for the current form:
+ * empty/duplicate name first, then the first invalid mapping row. It is the
+ * single source of truth for both the save attempt and the live error text.
+ */
+function currentSaveErrorMessage(name: string, rows: MappingRow[]): string | null {
+  const trimmed = name.trim();
+  if (trimmed === '') {
+    return 'Bitte einen Namen angeben.';
+  }
+  if (masterIngredientNames().includes(trimmed)) {
+    return `„${trimmed}“ existiert bereits in der Stammdatenliste.`;
+  }
+  return validateRows(rows);
+}
+
+/**
  * Builds the live summary line of what will be saved, e.g. "Basis: ml — EL (15 ml),
  * TL (5 ml)". Only fully valid rows are shown, so a half-typed row never renders
  * as "NaN"; save-time validation still reports the offending row. Number and
@@ -145,6 +164,7 @@ function NewIngredientSheet({
   saving,
   error,
   onSave,
+  onEdited,
   onClose,
 }: NewIngredientSheetProps) {
   const [name, setName] = useState(initialName);
@@ -196,6 +216,19 @@ function NewIngredientSheet({
 
   const summary = buildSummary(bu, entries);
 
+  /**
+   * The message of the last failed save attempt, shown only while the current
+   * form would still produce exactly that message. Deriving it every render
+   * (instead of clearing it on input events) makes the error disappear the
+   * moment its cause is resolved — typing a still-invalid value keeps it, a
+   * different problem is only announced by the next save attempt.
+   */
+  const saveErrorNow = currentSaveErrorMessage(trimmedName, mappingRows);
+  const shownLocalError = localError !== null && localError === saveErrorNow ? localError : null;
+
+  /** Reports a form edit to the parent (drops the stale Drive error). */
+  const markEdited = (): void => onEdited();
+
   /** Copies the mappings of `source` into the form (AU rows are overwritten). */
   const applyCopy = (source: string): void => {
     const entry = mappingsFor(source);
@@ -210,7 +243,7 @@ function NewIngredientSheet({
     }
     setFactors(nextFactors);
     setPriorities(nextPriorities);
-    setLocalError(null);
+    markEdited();
   };
 
   /**
@@ -233,18 +266,15 @@ function NewIngredientSheet({
           .filter((candidate) => candidate.toLowerCase().includes(copyNeedle))
           .slice(0, 6);
 
+  /**
+   * Validates and saves. On failure the exact message is stored; it stays
+   * visible only while the form would still produce it (see `shownLocalError`)
+   * and disappears the moment its cause is fixed.
+   */
   const handleSave = (): void => {
-    if (trimmedName === '') {
-      setLocalError('Bitte einen Namen angeben.');
-      return;
-    }
-    if (masterIngredientNames().includes(trimmedName)) {
-      setLocalError(`„${trimmedName}“ existiert bereits in der Stammdatenliste.`);
-      return;
-    }
-    const rowError = validateRows(mappingRows);
-    if (rowError !== null) {
-      setLocalError(rowError);
+    const saveError = currentSaveErrorMessage(trimmedName, mappingRows);
+    if (saveError !== null) {
+      setLocalError(saveError);
       return;
     }
     setLocalError(null);
@@ -267,7 +297,10 @@ function NewIngredientSheet({
           <input
             type="text"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value);
+              markEdited();
+            }}
             autoFocus
           />
         </label>
@@ -282,7 +315,10 @@ function NewIngredientSheet({
                 role="radio"
                 aria-checked={bu === option}
                 className={bu === option ? 'segmented-active' : undefined}
-                onClick={() => setBu(option)}
+                onClick={() => {
+                  setBu(option);
+                  markEdited();
+                }}
               >
                 {option}
               </button>
@@ -330,18 +366,20 @@ function NewIngredientSheet({
                 inputMode="decimal"
                 aria-label={`${unit.name}: Menge in ${bu}`}
                 value={factors[unit.name] ?? ''}
-                onChange={(event) =>
-                  setFactors((current) => ({ ...current, [unit.name]: event.target.value }))
-                }
+                onChange={(event) => {
+                  setFactors((current) => ({ ...current, [unit.name]: event.target.value }));
+                  markEdited();
+                }}
               />
               <input
                 type="text"
                 inputMode="numeric"
                 aria-label={`${unit.name}: Priorität`}
                 value={priorities[unit.name] ?? ''}
-                onChange={(event) =>
-                  setPriorities((current) => ({ ...current, [unit.name]: event.target.value }))
-                }
+                onChange={(event) => {
+                  setPriorities((current) => ({ ...current, [unit.name]: event.target.value }));
+                  markEdited();
+                }}
               />
             </div>
           ))}
@@ -349,9 +387,9 @@ function NewIngredientSheet({
 
         {summary !== null && <p className="aqs-preview">{summary}</p>}
 
-        {(localError ?? error) !== null && (
+        {(shownLocalError ?? error) !== null && (
           <p className="field-error" role="alert">
-            {localError ?? error}
+            {shownLocalError ?? error}
           </p>
         )}
 

@@ -194,6 +194,9 @@ function IngredientSheet({
    */
   const adoptSuggestion = (candidate: string): void => {
     setName(candidate);
+    // The typed name caused the last validation error (unknown/empty name);
+    // adopting a known suggestion resolves it, so the message must clear.
+    setError(null);
     const recipe = ingredientRecipes.find((entry) => entry.title === candidate);
     if (recipe !== undefined) {
       setQuantity(recipe.yield);
