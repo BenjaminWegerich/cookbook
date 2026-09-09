@@ -84,6 +84,11 @@
 }
 
 .field-hint {
+  /* margin: 0 — a hint is a plain paragraph inside a .field (grid, space-2
+     gap): the browser-default paragraph margins do not collapse in grid and
+     would inflate the gap after the caption/above the next control beyond the
+     uniform 6 px that every other field shows. */
+  margin: 0;
   font-size: var(--text-sm);
   color: var(--color-ink-muted);
 }
@@ -234,6 +239,12 @@
   display: grid;
   place-items: center;
   line-height: 1;
+  /* Press-and-hold stepper: no text selection/magnifier and no double-tap
+     zoom delay on touch, so a long press reads purely as a hold. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: 50%; /* structural exception to the ladder: full circle */
@@ -243,6 +254,18 @@
 
 .step-button:active:not(:disabled) {
   background: var(--color-line);
+}
+
+/* Optical centering for the +/− glyphs inside the circle: grid + line-height
+   center the *line box*, not the ink. The font draws +/− slightly above the
+   em's geometric middle (it reserves room for descenders below the baseline,
+   which a circle button does not need), so the signs read ~1 px too high.
+   translateY(1px) — the smallest ladder step — pulls the ink onto the visual
+   center. Identical on every platform: the self-hosted font renders both
+   glyphs (U+002B, U+2212) from the same file. */
+.step-glyph {
+  display: block;
+  transform: translateY(1px);
 }
 
 .step-button:disabled {
@@ -679,13 +702,28 @@
   gap: var(--space-5);
   max-height: 85%;
   overflow-y: auto;
-  padding: var(--space-7) var(--app-padding) calc(var(--space-7) + env(safe-area-inset-bottom, 0px));
+  /* Top padding one notch tighter than the sides/bottom (space-6 vs space-7):
+     the head block starts the sheet, so keeping it snug avoids a top-heavy
+     look once the heading's default margin is removed (.sheet-title). */
+  padding: var(--space-6) var(--app-padding) calc(var(--space-7) + env(safe-area-inset-bottom, 0px));
   background: var(--color-surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-md);
 }
 
+/* Sheet head: title + optional explanatory line as one tight block. margin: 0
+   on both clears the browser-default heading/paragraph margins — as with
+   .editor-card-title, they do not collapse inside the sheet's grid and would
+   otherwise stack on its padding/gap, adding large unintended whitespace above
+   the title and between title and subtitle. The block's own small gap (and not
+   the sheet-wide space-5) sets the caption distance. */
+.sheet-head {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .sheet-title {
+  margin: 0;
   font-size: var(--text-lg);
   font-weight: 600;
 }
@@ -714,6 +752,10 @@
 }
 
 .aqs-preview {
+  /* margin: 0 — like .field-hint: this paragraph often sits directly under a
+     .field-label caption, and UA margins would push it far below the caption
+     (only the .field's own space-2 gap belongs there). */
+  margin: 0;
   padding: var(--space-4);
   background: var(--color-bg);
   border: 1px solid var(--color-line);
@@ -797,6 +839,7 @@
 }
 
 .sheet-subtitle {
+  margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
 }

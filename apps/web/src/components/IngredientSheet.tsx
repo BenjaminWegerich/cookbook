@@ -244,25 +244,31 @@ function IngredientSheet({
               : 'Zutat in der Liste bearbeiten'
         }
       >
-        <h3 className="sheet-title">
-          {inlineMode
-            ? mode === 'inline-add'
-              ? 'Zutat oder Menge zum Text hinzufügen'
-              : 'Zutat oder Menge im Text bearbeiten'
-            : mode === 'row-add'
-              ? 'Zutat zur Liste hinzufügen'
-              : 'Zutat in der Liste bearbeiten'}
-        </h3>
-        {rowMode && (
-          <p className="sheet-subtitle">
-            Skaliert mit der Gesamtmenge und erscheint auch in der Liste für das gesamte Rezept.
-          </p>
-        )}
-        {inlineMode && (
-          <p className="sheet-subtitle">
-            Skaliert mit der Gesamtmenge, aber erscheint nicht in der Liste für das gesamte Rezept.
-          </p>
-        )}
+        {/* Head block: title + explanatory line. Grouped into a single grid
+            item so the two can sit closer together than the sheet-wide gap
+            (see .sheet-head); the subtitle always follows the title. */}
+        <div className="sheet-head">
+          <h3 className="sheet-title">
+            {inlineMode
+              ? mode === 'inline-add'
+                ? 'Zutat oder Menge zum Text hinzufügen'
+                : 'Zutat oder Menge im Text bearbeiten'
+              : mode === 'row-add'
+                ? 'Zutat zur Liste hinzufügen'
+                : 'Zutat in der Liste bearbeiten'}
+          </h3>
+          {rowMode && (
+            <p className="sheet-subtitle">
+              Skaliert mit der Gesamtmenge und erscheint auch in der Liste für das gesamte Rezept.
+            </p>
+          )}
+          {inlineMode && (
+            <p className="sheet-subtitle">
+              Skaliert mit der Gesamtmenge, aber erscheint nicht in der Liste für das gesamte
+              Rezept.
+            </p>
+          )}
+        </div>
 
         <label className="field">
           <span className="field-label">
@@ -321,9 +327,7 @@ function IngredientSheet({
 
         {inlineMode && trimmedName === '' && (
           <div className="field">
-            <span className="field-label">
-              Einheit<span className="optional-mark">(optional)</span>
-            </span>
+            <span className="field-label">Einheit</span>
             <div className="segmented" role="group" aria-label="Einheit der Menge">
               <button
                 type="button"
