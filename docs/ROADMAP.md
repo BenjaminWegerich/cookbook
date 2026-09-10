@@ -30,9 +30,13 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
       via its REST API (no relay); the seam keeps DeepSeek possible later behind a CORS relay.
       Implemented in `apps/web/src/ai/` (types, Gemini adapter, factory, session key store).
 - [x] AI key handling: pasted per session, never stored (N6).
-- [ ] AI create: natural-language description → draft recipe in the canonical format,
+- [x] AI create: natural-language description → draft recipe in the canonical format,
       reviewable and editable before saving.
 - [ ] AI edit: fill gaps / correct units, preview + accept or reject (user story A3).
+- [ ] AI workflow refinements:
+      - [ ] More entry fields: servings, „schnell und einfach“ / „günstig“ / „vegan“.
+      - [ ] Choose between asking clarifying questions first vs. drafting directly.
+      - [ ] Resume the chat after a draft has been created.
 
 ## Google Keep — follow-up milestone (depends on: web app)
 
