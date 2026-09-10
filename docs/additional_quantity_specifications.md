@@ -19,6 +19,9 @@
 - The additional quantity specification is **always computed from the stored base
   quantity** — it is never stored, never authored, and never scaled directly.
   After scaling, the display is simply recomputed from the scaled base quantity.
+  The shown base quantity in the same line is the stored value, except for an
+  **exact** unit, where it is derived from the rounded additional quantity
+  (§6.3) — again without storing anything.
 - Every additional unit has a chance to apply: its additional quantity is
   computed from the base quantity, rounded to the nearest **AQ ladder value**
   (a fraction, see [quantity_scaling.md](quantity_scaling.md) §2), and checked
@@ -49,7 +52,7 @@ they belong to the implementation phase.
 
 The logic is driven by three master-data entities. Their concrete storage design is decided:
 the master data lives in four CSV tables in the repository — `docs/number_schemes.csv` (scheme
-matrix), `docs/additional_units.csv` (units with arrangement and scheme),
+matrix), `docs/additional_units.csv` (units with arrangement, scheme and exactness),
 `docs/ingredients.csv` (ingredient list with base unit),
 `docs/ingredient_unit_mappings.csv` (mappings with factor and priority) — and is compiled into a
 TypeScript module by `scripts/generate-additional-data.mjs`, which validates cross-references and
@@ -59,7 +62,10 @@ guards the scheme matrix against drift from the ladder's AQ column (see
 1. **Additional units** — each AU has:
    - a **name** ("Becher"),
    - a **display arrangement** (see §4),
-   - a **number scheme** (see §5).
+   - a **number scheme** (see §5),
+   - an **exactness flag** (`Unit Exact`, see §6.3): `yes` when the unit fixes
+     the base amount by definition (a 400 g Becher, a 200 g Block), `no` when
+     the factor is only a measured average (a carrot of roughly 80 g).
 2. **Ingredient–additional-unit mappings** — for each ingredient and each AU
    mapped to it:
    - a **conversion factor**: the amount of base unit per one additional unit
@@ -89,9 +95,10 @@ guards the scheme matrix against drift from the ladder's AQ column (see
   → "15 ml Zitronensaft (1/2 Zitrone)".
 - If **no** AQS applies, the ingredient is rendered in the standard base form
   `<BQ> <BU> <IN>`: "200 g Joghurt", "800 ml Wasser".
-- The base quantity is always shown with its **exact stored/scaled value**.
-  The rounding described in §6 affects only the additional quantity, never the
-  base quantity.
+- The base quantity is shown with its **exact stored/scaled value** — except for
+  an **exact** unit (§6.3), whose factor defines the base amount: there the shown
+  base quantity is derived from the rounded additional quantity instead. The
+  rounding described in §6 never changes the **stored** base quantity.
 
 ## 5. Number Schemes
 
@@ -122,8 +129,9 @@ For every ingredient, at display time:
       stop**; otherwise continue with the next mapping.
    Priority ties must not occur in master data; if they do, the order between
    them is implementation-defined but must be deterministic.
-3. Render the display line using the selected AU's arrangement (§4). If no AU
-   applies, render the base form (§4).
+3. Render the display line using the selected AU's arrangement (§4): the shown
+   base quantity is the stored value, or — for an exact unit — the value derived
+   from the rounded AQ (§6.3). If no AU applies, render the base form (§4).
 
 ### 6.1 Rounding to the Nearest AQ Ladder Value
 
@@ -146,7 +154,10 @@ For every ingredient, at display time:
 ### 6.2 Worked Examples
 
 The examples use the seed master data that ships with the implementation (see the CSV tables
-in §3); further examples arrive with more ingredient mappings.
+in §3); further examples arrive with more ingredient mappings. In that seed, Becher is
+**exact** (`Unit Exact = yes`) while EL and TL are **approximate** (`no`) — a spoon is heaped
+or level depending on the ingredient, so its average factor must not overrule the weighed
+amount (§6.3).
 
 | Ingredient | Stored BQ | AU (factor) | raw | rounded AQ | scheme allows? | Displayed |
 |---|---|---|---|---|---|---|
@@ -154,8 +165,60 @@ in §3); further examples arrive with more ingredient mappings.
 | Joghurt | 200 g | Becher (400 g), p1 | 0.5 | 1/2 | ✓ (half) | "1/2 Becher Joghurt (200 g)" |
 | Joghurt | 600 g (scaled) | Becher (400 g), p1 | 1.5 | 1+1/2 | ✓ (half) | "1+1/2 Becher Joghurt (600 g)" |
 | Joghurt | 500 g | Becher p1 → EL (24 g) p2 → TL (7.5 g) p3 | 1.25 → 20.83 → 66.67 | 1+1/4 → 20 → 70 | ✗ (not half/integer) → ✗ (20 > 10) → ✗ (70 > 10) | "500 g Joghurt" |
-| Joghurt | 25 g | Becher p1 → EL p2 → TL p3 | 0.0625 → 1.04 | — → 1 | ✗ (< 1/10) → ✓ | "1 EL Joghurt (25 g)" |
-| Joghurt | 8 g | Becher p1 → EL p2 → TL p3 | 0.02 → 0.33 → 1.07 | — → 1/3 → 1 | ✗ (< 1/10) → ✗ (not integer) → ✓ | "1 TL Joghurt (8 g)" |
+| Joghurt | 25 g | Becher p1 → EL p2 → TL p3 | 0.0625 → 1.04 | — → 1 | ✗ (< 1/10) → ✓ | "1 EL Joghurt (25 g)" (§6.3, EL approximate) |
+| Joghurt | 8 g | Becher p1 → EL p2 → TL p3 | 0.02 → 0.33 → 1.07 | — → 1/3 → 1 | ✗ (< 1/10) → ✗ (not integer) → ✓ | "1 TL Joghurt (8 g)" (§6.3, TL approximate) |
+
+The last two rows show the approximate case of §6.3: the count is rounded ("1 EL" instead of
+1.04 EL), but the stored weight stays the authoritative reading, so the shown amount remains
+25 g / 8 g rather than 1 × 24 g / 1 × 7.5 g.
+
+### 6.3 Exact vs. Approximate Units
+
+- The selection algorithm derives the AQ from the stored base quantity, so the
+  two can **contradict each other** whenever the rounding moves the AQ: a
+  ladder value of 1500 g with 1 Block = 200 g gives "7+1/2 Blöcke" → rounded to
+  "8 Blöcke", but the displayed base quantity stayed "1500 g" → "8 Blöcke Tofu
+  (1,5 kg)", although 8 blocks weigh 1.6 kg.
+- Whether that contradiction is acceptable depends on the **unit**, not on the
+  ingredient or the mapping — which is why the master data carries the flag on
+  the unit (`docs/additional_units.csv`, `Unit Exact`; default `yes`):
+  - **exact (`yes`)** — the unit *defines* the base amount: a physical package
+    (1 Becher = 400 g, 1 Block = 200 g). Here the **shown count is the source of
+    truth**: the shown base quantity is recomputed as `AQ × factor`, even when
+    the result is **not a ladder value** ("8 Blöcke Tofu (1,6 kg)").
+  - **approximate (`no`)** — the factor is a measured average: a carrot weighs
+    roughly 80 g but varies. Here the **stored/scaled base quantity stays the
+    source of truth** and keeps being displayed; the rounded count is the
+    convenience reading ("250 g Karotte (3 Karotten)").
+- The flag affects the **display only**. The stored base quantity is never
+  rewritten, so it stays a ladder value, scaling stays closed over the ladder
+  (quantity_scaling.md §3), and the merge/summing rules are untouched. The exact
+  derivation happens after selection and outside scaling.
+- Reference table for an exact unit with factor 200 (1 Block = 200 g), showing
+  the stored amount, the rounded count and the shown amount:
+
+  | Stored BQ | raw | rounded AQ | shown BQ (AQ × 200 g) | Displayed |
+  |---|---|---|---|---|
+  | 200 g | 1 | 1 | 200 g | "1 Block Tofu (200 g)" |
+  | 600 g | 3 | 3 | 600 g | "3 Block Tofu (600 g)" |
+  | 900 g | 4.5 | 5 | 1000 g | "5 Block Tofu (1 kg)" |
+  | 1500 g (scaled) | 7.5 | 8 | 1600 g | "8 Block Tofu (1,6 kg)" |
+
+  With an exact unit the shown amount can therefore differ from the stored one by
+  at most half an AQ step. That is the deliberate trade-off: the display never
+  contradicts itself, at the price of showing a weight that the recipe does not
+  store.
+
+- If an ingredient's factor is only approximate, mark the unit `no` — or, when
+  the same unit name would otherwise have to be both, define a **separate unit**
+  for the exact case (e.g. "EL" vs. "EL gestrichen"): the flag is a property of
+  the unit, so two different meanings need two units.
+- The seed follows that reading: **Becher is exact**, **EL and TL are
+  approximate** (a spoon is heaped or level depending on the ingredient). An
+  empty `Unit Exact` cell means `yes`, so a newly added unit is exact unless the
+  master data says otherwise — deliberate, because a new unit is usually a
+  package or container whose amount is fixed; a measured average must be marked
+  `no`.
 
 ## 7. Priority
 
@@ -188,6 +251,9 @@ in §3); further examples arrive with more ingredient mappings.
   (⅒ ⅑ ⅛ ⅙ ⅕ ¼ ⅓ ⅜ ⅖ ½ ⅗ ⅔ ¾ ⅞) and mixed numbers as integer + narrow no-break
   space (U+202F) + glyph ("1 ¼") — is a UI/design concern and is resolved in the
   UI phase together with the user.
+- For an **exact** unit (§6.3), the AQS is the authoritative part of the line:
+  its base quantity is derived from the AQ, not read from the recipe. The stored
+  value stays untouched and is unchanged by the flag.
 
 ## 9. Relationship to Other Documents
 

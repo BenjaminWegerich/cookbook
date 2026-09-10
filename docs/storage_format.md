@@ -270,6 +270,11 @@ added as further columns later. The mappings file is a pure overlay; an ingredie
 without additional units (e.g. Cashews) exists only in the list and always renders in
 the base form (see additional_quantity_specifications.md §4).
 
+The additional **units** themselves — display arrangement, number scheme, and the
+`Unit Exact` flag (see additional_quantity_specifications.md §6.3) — are not part of the
+user's Drive files: they are built-in definitions compiled from `docs/additional_units.csv`
+into the core package. Only the ingredient list and the mappings are user data.
+
 The files are created on the first user addition („Neue Zutat anlegen“ in the recipe
 editor), seeded with the built-in repo data, and are the authoritative master data once
 they exist: the app loads both into the runtime registry at startup and renders/exports

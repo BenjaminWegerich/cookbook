@@ -13,6 +13,8 @@ export interface AdditionalUnit {
   readonly arrangement: string;
   /** Name of the number scheme gating this unit's additional quantities. */
   readonly numberScheme: string;
+  /** True when the unit fixes the base amount (a 400 g Becher, a 200 g Block): the shown base quantity is then derived from the rounded AQ (docs/additional_quantity_specifications.md §6.3). */
+  readonly exact: boolean;
 }
 
 /** One ingredient–additional-unit mapping (conversion factor + priority). */
@@ -39,16 +41,19 @@ export const ADDITIONAL_UNITS: readonly AdditionalUnit[] = [
     name: 'Becher',
     arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
     numberScheme: 'halves_and_integers_up_to_30',
+    exact: true,
   },
   {
     name: 'EL',
     arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
     numberScheme: 'integers_up_to_10',
+    exact: false,
   },
   {
     name: 'TL',
     arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
     numberScheme: 'integers_up_to_10',
+    exact: false,
   },
 ];
 

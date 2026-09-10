@@ -12,6 +12,8 @@
  * - the **AU mappings** (`Ingredient;Additional Unit;Conversion Factor;Priority`,
  *   one row per ingredient–additional-unit mapping): a pure overlay on the
  *   list — an ingredient without additional units simply has no rows here.
+ *   The exactness of a unit is NOT part of this file — it is a property of the
+ *   unit itself (docs/additional_units.csv, `Unit Exact`).
  *
  * Common format rules (both files):
  * - one header row; CRLF and one optional trailing empty cell per row
@@ -41,21 +43,19 @@ import type { IngredientMappings } from './ingredientRegistry.js';
 export type IngredientList = Readonly<Record<string, string>>;
 
 /** AU mappings keyed by ingredient name (each list sorted by ascending priority). */
-export type IngredientMappingsByIngredient = Readonly<
-  Record<string, readonly IngredientMapping[]>
->;
+export type IngredientMappingsByIngredient = Readonly<Record<string, readonly IngredientMapping[]>>;
 
 /** Exact header of the ingredient list CSV. */
 const LIST_HEADER = 'Ingredient;Base Unit';
-/** Column count of the ingredient list format (2). */
-const LIST_COLUMN_COUNT = LIST_HEADER.split(';').length;
 
 /** Exact header of the AU mappings CSV. */
 const MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor;Priority';
-/** Column count of the mappings format (4). */
-const MAPPINGS_COLUMN_COUNT = MAPPINGS_HEADER.split(';').length;
 
-/** The known additional unit names (Becher, EL, TL). */
+/**
+ * The known additional unit names (Becher, EL, TL).
+ * The exactness of a unit is a property of the unit itself and lives in
+ * docs/additional_units.csv (`Unit Exact`), not in this mappings file.
+ */
 const UNIT_NAMES = new Set(ADDITIONAL_UNITS.map((unit) => unit.name));
 
 /** Allowed base units: the g/ml family (kg/l exist only in display). */
@@ -68,27 +68,43 @@ function toNumber(cell: string): number {
 
 /**
  * Splits the text into rows; tolerates CRLF and blank lines and a leading
- * UTF-8 BOM (spreadsheet exports). `columnCount` is the expected cell count.
+ * UTF-8 BOM (spreadsheet exports). Throws on an empty file.
+ *
+ * The first row is the header and must equal `headerText`; its cell count is
+ * the expected cell count of every following row. Supporting an older format
+ * that lacks a trailing column therefore means passing its header here, too —
+ * the row validation follows the header, so such files keep parsing until they
+ * are written back in the current format.
  */
-function parseRows(text: string, columnCount: number): string[][] {
-  return text
+function parseRows(text: string, headerText: string): { header: string[]; rows: string[][] } {
+  const rows = text
     .replace(/^\uFEFF/, '')
     .split(/\r?\n/)
     .filter((line) => line.trim() !== '')
-    .map((line) => {
-      const cells = line.split(';').map((cell) => cell.trim());
-      // Drop exactly one trailing empty cell produced by spreadsheet exports
-      // (e.g. a row ending in ';'); a meaningful empty cell inside stays.
-      if (cells.length === columnCount + 1 && cells[cells.length - 1] === '') {
-        cells.pop();
-      }
-      if (cells.length !== columnCount) {
-        throw new Error(
-          `unerwartete Spaltenzahl in Zeile "${line}" (erwartet ${columnCount}).`,
-        );
-      }
-      return cells;
-    });
+    .map((line) => line.split(';').map((cell) => cell.trim()));
+  if (rows.length === 0) {
+    throw new Error('Datei ist leer.');
+  }
+  const header = rows[0]!;
+  const columnCount = headerText.split(';').length;
+  for (const cells of rows) {
+    // Drop exactly one trailing empty cell produced by spreadsheet exports
+    // (e.g. a row or the header ending in ';'); a meaningful empty cell inside
+    // stays.
+    if (cells.length === columnCount + 1 && cells[cells.length - 1] === '') {
+      cells.pop();
+    }
+    if (cells.length !== columnCount) {
+      throw new Error(
+        `unerwartete Spaltenzahl in Zeile "${cells.join(';')}" (erwartet ${columnCount}).`,
+      );
+    }
+  }
+  const actualHeader = header.join(';');
+  if (actualHeader !== headerText) {
+    throw new Error(`unerwartete Kopfzeile "${actualHeader}".`);
+  }
+  return { header, rows: rows.slice(1) };
 }
 
 /**
@@ -97,17 +113,9 @@ function parseRows(text: string, columnCount: number): string[][] {
  * unit); the returned record preserves the file order.
  */
 export function parseIngredientListCsv(text: string): IngredientList {
-  const rows = parseRows(text, LIST_COLUMN_COUNT);
-  if (rows.length === 0) {
-    throw new Error('Zutaten-Liste: Datei ist leer.');
-  }
-  // The empty-file check above guarantees rows[0] exists.
-  const header = rows[0]!;
-  if (header.join(';') !== LIST_HEADER) {
-    throw new Error(`Zutaten-Liste: unerwartete Kopfzeile "${header.join(';')}".`);
-  }
+  const { rows } = parseRows(text, LIST_HEADER);
   const result: Record<string, string> = {};
-  for (const row of rows.slice(1)) {
+  for (const row of rows) {
     const [ingredient, bu] = row;
     if (ingredient === undefined || ingredient === '' || bu === undefined || bu === '') {
       throw new Error(`Zutaten-Liste: leere Zutat oder Basis-Einheit in Zeile "${row.join(';')}".`);
@@ -145,17 +153,9 @@ export function serializeIngredientListCsv(list: IngredientList): string {
  * ingredient list (mergeIngredientMasterData).
  */
 export function parseIngredientMappingsCsv(text: string): IngredientMappingsByIngredient {
-  const rows = parseRows(text, MAPPINGS_COLUMN_COUNT);
-  if (rows.length === 0) {
-    throw new Error('Zutaten-Umrechnungen: Datei ist leer.');
-  }
-  // The empty-file check above guarantees rows[0] exists.
-  const header = rows[0]!;
-  if (header.join(';') !== MAPPINGS_HEADER) {
-    throw new Error(`Zutaten-Umrechnungen: unerwartete Kopfzeile "${header.join(';')}".`);
-  }
+  const { rows } = parseRows(text, MAPPINGS_HEADER);
   const byIngredient = new Map<string, IngredientMapping[]>();
-  for (const row of rows.slice(1)) {
+  for (const row of rows) {
     const [ingredient, au, factorCell, priorityCell] = row;
     if (ingredient === undefined || ingredient === '') {
       throw new Error(`Zutaten-Umrechnungen: leere Zutat in Zeile "${row.join(';')}".`);
@@ -204,9 +204,7 @@ export function parseIngredientMappingsCsv(text: string): IngredientMappingsByIn
  * each ingredient's list order, so a parsed file round-trips byte-stable
  * apart from comma→dot normalization.
  */
-export function serializeIngredientMappingsCsv(
-  mappings: IngredientMappingsByIngredient,
-): string {
+export function serializeIngredientMappingsCsv(mappings: IngredientMappingsByIngredient): string {
   const lines = [MAPPINGS_HEADER];
   for (const [ingredient, list] of Object.entries(mappings)) {
     for (const mapping of list) {
@@ -246,9 +244,10 @@ export function mergeIngredientMasterData(
  * (the inverse of mergeIngredientMasterData) — the web app uses this before
  * serializing the two Drive files.
  */
-export function splitIngredientMasterData(
-  mappings: IngredientMappings,
-): { list: IngredientList; mappings: IngredientMappingsByIngredient } {
+export function splitIngredientMasterData(mappings: IngredientMappings): {
+  list: IngredientList;
+  mappings: IngredientMappingsByIngredient;
+} {
   const list: Record<string, string> = {};
   const byIngredient: Record<string, readonly IngredientMapping[]> = {};
   for (const [ingredient, entry] of Object.entries(mappings)) {

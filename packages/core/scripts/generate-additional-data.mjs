@@ -2,9 +2,15 @@
 /**
  * Generates `src/additionalUnitsData.ts` from the additional-unit master data:
  *   - docs/number_schemes.csv            (AQ value × number scheme matrix)
- *   - docs/additional_units.csv          (units: name, arrangement, scheme)
+ *   - docs/additional_units.csv          (units: name, arrangement, scheme, exactness)
  *   - docs/ingredients.csv               (ingredient list: name, base unit)
  *   - docs/ingredient_unit_mappings.csv  (ingredient → AU: factor, priority)
+ *
+ * The `Unit Exact` column of docs/additional_units.csv is validated here and
+ * compiled into the `exact` flag of each unit: `yes` (the default for an empty
+ * cell) means the unit fixes the base amount, so the displayed base quantity is
+ * derived from the rounded additional quantity
+ * (docs/additional_quantity_specifications.md §6.3).
  *
  * The AQ values in number_schemes.csv must exactly match the AQ column of the
  * authoritative ladder table docs/standard_numbers.csv (see
@@ -23,7 +29,7 @@
  * CSV format (canonical): semicolon-separated, dot decimals (German comma
  * decimals tolerated), header row, CRLF tolerated, one optional trailing empty
  * cell per row (spreadsheet exports). Scheme cells: `1` = allowed, `0` or
- * empty = not allowed.
+ * empty = not allowed. The `Unit Exact` cell is `yes` or `no`, empty = `yes`.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -40,9 +46,30 @@ const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/additi
 /** Placeholders allowed in an arrangement template (docs/additional_quantity_specifications.md §4). */
 const ARRANGEMENT_TOKENS = new Set(['<AQ>', '<AU>', '<IN>', '<BQ>', '<BU>', '<NNBSP>']);
 
+/** Exact header of the additional-units table (docs/additional_units.csv). */
+const UNITS_HEADER = 'Additional Unit;Arrangement;Number Scheme;Unit Exact';
+
 /** Converts a CSV cell to a number, accepting both '.' and ',' decimals. */
 function toNumber(cell) {
   return Number(cell.trim().replace(',', '.'));
+}
+
+/**
+ * Parses the `Unit Exact` cell of the additional-units table: `yes` / `no`,
+ * with an empty cell meaning the default `yes` (docs/additional_units.csv).
+ * Anything else is a master-data error.
+ */
+function parseUnitExact(cell, unitName) {
+  const value = (cell ?? '').trim().toLowerCase();
+  if (value === '' || value === 'yes') {
+    return true;
+  }
+  if (value === 'no') {
+    return false;
+  }
+  throw new Error(
+    `${UNITS_CSV}: invalid Unit Exact value '${cell}' for unit '${unitName}' (use yes or no)`,
+  );
 }
 
 /** Parses a `;`-separated CSV into { header, rows } of trimmed cells. */
@@ -156,14 +183,14 @@ function buildSchemes(ladderAq) {
   return schemes;
 }
 
-/** Parses the additional units table; validates arrangements and scheme references. */
+/** Parses the additional units table; validates arrangements, scheme refs and the exactness flag. */
 function buildUnits(schemeNames) {
   const { header, rows } = parseCsv(UNITS_CSV);
-  if (header.join(';') !== 'Additional Unit;Arrangement;Number Scheme') {
+  if (header.join(';') !== UNITS_HEADER) {
     throw new Error(`${UNITS_CSV}: unexpected header ${JSON.stringify(header)}`);
   }
   const units = rows.map((row, index) => {
-    const [name, arrangement, numberScheme] = row;
+    const [name, arrangement, numberScheme, exactCell] = row;
     if (name === '') {
       throw new Error(`${UNITS_CSV}: empty unit name in row ${index + 2}`);
     }
@@ -188,6 +215,10 @@ function buildUnits(schemeNames) {
       // placeholder, keeping the generated module pure ASCII.
       arrangement,
       numberScheme,
+      // "Unit Exact" (docs/additional_quantity_specifications.md §6.3): an
+      // empty cell means the default `yes` — an exact unit is one whose
+      // definition fixes the base amount (a 400 g Becher, a 200 g Block).
+      exact: parseUnitExact(exactCell, name),
     };
   });
   if (new Set(units.map((unit) => unit.name)).size !== units.length) {
@@ -206,7 +237,9 @@ function buildIngredientList() {
   for (const row of rows) {
     const [ingredient, bu] = row;
     if (ingredient === '' || bu === '') {
-      throw new Error(`${INGREDIENTS_CSV}: empty ingredient or base unit in line: ${row.join(';')}`);
+      throw new Error(
+        `${INGREDIENTS_CSV}: empty ingredient or base unit in line: ${row.join(';')}`,
+      );
     }
     if (bu !== 'g' && bu !== 'ml') {
       throw new Error(
@@ -306,6 +339,10 @@ function render(units, schemes, ingredientList, mappings) {
   lines.push('  readonly arrangement: string;');
   lines.push("  /** Name of the number scheme gating this unit's additional quantities. */");
   lines.push('  readonly numberScheme: string;');
+  lines.push(
+    '  /** True when the unit fixes the base amount (a 400 g Becher, a 200 g Block): the shown base quantity is then derived from the rounded AQ (docs/additional_quantity_specifications.md §6.3). */',
+  );
+  lines.push('  readonly exact: boolean;');
   lines.push('}');
   lines.push('');
   lines.push('/** One ingredient–additional-unit mapping (conversion factor + priority). */');
@@ -325,7 +362,7 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push('  readonly bu: string;');
   lines.push(
-    '  /** The ingredient\'s additional-unit mappings, ascending priority; empty = bare ingredient without additional units. */',
+    "  /** The ingredient's additional-unit mappings, ascending priority; empty = bare ingredient without additional units. */",
   );
   lines.push('  readonly entries: readonly IngredientMapping[];');
   lines.push('}');
@@ -335,7 +372,7 @@ function render(units, schemes, ingredientList, mappings) {
   for (const unit of units) {
     lines.push(
       `  { name: ${JSON.stringify(unit.name)}, arrangement: ${JSON.stringify(unit.arrangement)}, ` +
-        `numberScheme: ${JSON.stringify(unit.numberScheme)} },`,
+        `numberScheme: ${JSON.stringify(unit.numberScheme)}, exact: ${unit.exact} },`,
     );
   }
   lines.push('];');
@@ -375,7 +412,10 @@ const ladderAq = ladderAqValues();
 const schemes = buildSchemes(ladderAq);
 const units = buildUnits(schemes.map((scheme) => scheme.name));
 const ingredientList = buildIngredientList();
-const mappings = buildMappings(units.map((unit) => unit.name), ingredientList);
+const mappings = buildMappings(
+  units.map((unit) => unit.name),
+  ingredientList,
+);
 let output = render(units, schemes, ingredientList, mappings);
 try {
   // Format with Prettier (root devDependency, used by `npm run format`) so the

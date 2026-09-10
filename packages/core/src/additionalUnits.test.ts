@@ -35,6 +35,16 @@ describe('generated additional-unit master data', () => {
     expect(byName.get('TL')).toBe('integers_up_to_10');
   });
 
+  it('marks Becher as exact and the spoons as approximate (Unit Exact)', () => {
+    // Becher is a fixed measure (a 400 g cup of yogurt); a spoon is heaped or
+    // level depending on the ingredient, so its factor is an average and the
+    // stored weight stays the authoritative reading (§6.3).
+    const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.exact]));
+    expect(byName.get('Becher')).toBe(true);
+    expect(byName.get('EL')).toBe(false);
+    expect(byName.get('TL')).toBe(false);
+  });
+
   it('defines the two schemes as documented', () => {
     expect(NUMBER_SCHEMES.integers_up_to_10).toEqual([
       '1',
@@ -199,6 +209,42 @@ describe('renderAQS (§4)', () => {
 
   it('rejects non-standard base quantities', () => {
     expect(() => renderAQS('Joghurt', 450, 'g')).toThrow();
+  });
+});
+
+describe('renderAQS exact units (§6.3)', () => {
+  // The seed marks only Becher as exact. For an exact unit the shown base
+  // quantity follows the shown count, so the display can never contradict
+  // itself: 1000 g Joghurt would otherwise read "2+1/2 Becher (1 kg)".
+  it('derives the shown base quantity from the rounded AQ for exact units', () => {
+    // A quantity whose AQ rounding moves the amount: 1500 g ÷ 400 g = 3.75
+    // rounds to 4 Becher (scheme: halves and integers), and the shown amount is
+    // 4 × 400 g = 1,6 kg — the displayed count and the displayed weight agree,
+    // even though 1,6 kg is not the stored ladder value.
+    expect(renderAQS('Joghurt', 1500, 'g')).toBe(`4${NNBSP}Becher Joghurt (1,6${NNBSP}kg)`);
+  });
+
+  it('leaves exact units unchanged when the stored amount already matches', () => {
+    expect(renderAQS('Joghurt', 400, 'g')).toBe(`1${NNBSP}Becher Joghurt (400${NNBSP}g)`);
+    expect(renderAQS('Joghurt', 1200, 'g')).toBe(`3${NNBSP}Becher Joghurt (1,2${NNBSP}kg)`);
+  });
+
+  it('keeps the stored amount for approximate units', () => {
+    // EL and TL are approximate in the seed (a spoon is heaped or level), so
+    // the stored/scaled weight stays the authoritative reading even though the
+    // count is rounded: "2 EL Joghurt (50 g)", not 2 × 24 g.
+    expect(renderAQS('Joghurt', 50, 'g')).toBe(`2${NNBSP}EL Joghurt (50${NNBSP}g)`);
+    expect(renderAQS('Joghurt', 25, 'g')).toBe(`1${NNBSP}EL Joghurt (25${NNBSP}g)`);
+    expect(renderAQS('Joghurt', 8, 'g')).toBe(`1${NNBSP}TL Joghurt (8${NNBSP}g)`);
+  });
+
+  it('exposes the mapping factor on the selection', () => {
+    // renderAQS needs the factor to derive the shown amount for exact units;
+    // the approximate branch (exact = false) simply keeps the stored amount.
+    const selected = selectAQ('Joghurt', 1500, 'g');
+    expect(selected?.au.name).toBe('Becher');
+    expect(selected?.au.exact).toBe(true);
+    expect(selected?.factor).toBe(400);
   });
 });
 

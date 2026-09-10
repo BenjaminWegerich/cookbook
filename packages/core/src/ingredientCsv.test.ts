@@ -13,13 +13,9 @@ import {
 } from './ingredientCsv.js';
 
 /** The canonical ingredient list (docs format) as a fixture. */
-const LIST_TEXT = [
-  'Ingredient;Base Unit',
-  'Joghurt;g',
-  'Zucker;g',
-  'Milch;ml',
-  'Cashews;g',
-].join('\n');
+const LIST_TEXT = ['Ingredient;Base Unit', 'Joghurt;g', 'Zucker;g', 'Milch;ml', 'Cashews;g'].join(
+  '\n',
+);
 
 const LIST: IngredientList = {
   Joghurt: 'g',
@@ -118,6 +114,15 @@ describe('parseIngredientMappingsCsv', () => {
     expect(parseIngredientMappingsCsv(text).Joghurt?.[0]?.factor).toBe(400);
   });
 
+  it('does not expect an exactness column (that flag lives on the units)', () => {
+    // The exactness of a unit is master data of the unit itself
+    // (docs/additional_units.csv, `Unit Exact`), not of the mapping: the file
+    // stays a pure overlay and the serializer never adds such a column.
+    const text = MAPPINGS_TEXT.replaceAll('400;1', '400;1;yes');
+    expect(() => parseIngredientMappingsCsv(text)).toThrow(/unerwartete Spaltenzahl/);
+    expect(serializeIngredientMappingsCsv(MAPPINGS)).not.toContain('yes');
+  });
+
   it('throws on a row with too many columns', () => {
     expect(() => parseIngredientMappingsCsv(`${MAPPINGS_TEXT}\nZucker;EL;12;1;extra`)).toThrow(
       /unerwartete Spaltenzahl/,
@@ -176,9 +181,7 @@ describe('mergeIngredientMasterData', () => {
 
   it('throws when a mapping references an ingredient that is not in the list', () => {
     const withOrphan = { ...MAPPINGS, Käse: [{ au: 'EL', factor: 12, priority: 1 }] };
-    expect(() => mergeIngredientMasterData(LIST, withOrphan)).toThrow(
-      /nicht in der Zutaten-Liste/,
-    );
+    expect(() => mergeIngredientMasterData(LIST, withOrphan)).toThrow(/nicht in der Zutaten-Liste/);
   });
 });
 

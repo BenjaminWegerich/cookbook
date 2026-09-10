@@ -13,6 +13,12 @@
  * (§6.1, tie → larger) and checked against the unit's number scheme; the first
  * mapping whose AQ passes is selected. If none passes, the base form is shown.
  *
+ * Exactness (§6.3): a unit marked exact in the master data fixes the base
+ * amount per unit (a 400 g Becher, a 200 g Block). For those, the shown base
+ * quantity is derived from the rounded AQ (AQ × factor), so count and amount
+ * never contradict each other; approximate units (a carrot varies in weight)
+ * keep showing the stored/scaled base quantity.
+ *
  * The AQ ladder values are the fraction column of the standard number ladder
  * (docs/quantity_scaling.md §2); their numeric values are derived from
  * LADDER_RUNGS here so that the ladder table stays the single source of truth.
@@ -135,6 +141,11 @@ export interface AdditionalQuantity {
   readonly aq: string;
   /** The selected additional unit. */
   readonly au: AdditionalUnit;
+  /**
+   * The selected mapping's conversion factor (base unit per one AU). Used by
+   * §6.3 to derive the shown base quantity for exact units.
+   */
+  readonly factor: number;
 }
 
 /**
@@ -172,7 +183,7 @@ export function selectAQ(ingredient: string, bq: number, bu: string): Additional
     }
     const allowed = NUMBER_SCHEMES[au.numberScheme] ?? EMPTY_SCHEME;
     if (allowed.includes(aq)) {
-      return { aq, au };
+      return { aq, au, factor: mapping.factor };
     }
   }
   return null;
@@ -213,21 +224,30 @@ export function formatBQ(bq: number, bu: string): string {
 /**
  * Renders the full display line for an ingredient (§4): the selected unit's
  * arrangement template with <AQ> <AU> <IN> <BQ> <BU> and <NNBSP> (U+202F)
- * substituted, or the base form "<BQ> <BU> <IN>" when no AQS applies. The base
- * quantity is displayed with the kg/l conversion (`formatBQ`) — the stored
- * value and the AQ computation are untouched (rounding affects only the
- * additional quantity, §4).
+ * substituted, or the base form "<BQ> <BU> <IN>" when no AQS applies.
+ *
+ * The shown base quantity is the stored value (`formatBQ`) — except for an
+ * **exact** unit (§6.3): its factor defines the base amount (a 200 g Block),
+ * so rounding the AQ to the nearest fraction of that unit would contradict the
+ * shown count ("8 Blöcke (1,5 kg)"). For exact units the shown base quantity is
+ * therefore derived from the rounded AQ instead (AQ × factor), even when the
+ * result is not a ladder value. Approximate units (a carrot varies in weight)
+ * keep the stored/scaled value, which is the preferred reading there: the
+ * rounding stays visible in the count only. Storage and scaling are untouched
+ * either way.
  */
 export function renderAQS(ingredient: string, bq: number, bu: string): string {
   const selected = selectAQ(ingredient, bq, bu);
   if (selected === null) {
     return `${formatBQ(bq, bu)} ${ingredient}`;
   }
+  // Exact unit (§6.3): the count is the source of truth for the shown amount.
+  const shownBq = selected.au.exact ? aqToNumber(selected.aq) * selected.factor : bq;
   // The arrangement binds <BQ> and <BU> together with a narrow no-break
   // space; substitute that pair with the formatted base quantity first (the
   // <NNBSP> placeholder is consumed here, before the general substitution).
   return selected.au.arrangement
-    .replace('<BQ><NNBSP><BU>', formatBQ(bq, bu))
+    .replace('<BQ><NNBSP><BU>', formatBQ(shownBq, bu))
     .replaceAll('<AQ>', selected.aq)
     .replaceAll('<AU>', selected.au.name)
     .replaceAll('<IN>', ingredient)
