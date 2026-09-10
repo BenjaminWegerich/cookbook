@@ -8,12 +8,15 @@
  * - additional-unit selection and display — implemented
  *   (docs/additional_quantity_specifications.md, src/additionalUnits.ts;
  *   master data in docs/*.csv, compiled by scripts/generate-additional-data.mjs)
+ * - the AQ ladder — the standard numbers for additional quantities and for
+ *   unitless inline counts — implemented (src/aqLadder.ts)
  * - recipe format parsing and validation — implemented
  *   (docs/storage_format.md, src/recipe/parse.ts + src/recipe/validate.ts)
  */
 
 export * from './additionalUnits.js';
 export * from './additionalUnitsData.js';
+export * from './aqLadder.js';
 export * from './ingredientCsv.js';
 export * from './ingredientRegistry.js';
 export * from './ladder.js';

@@ -61,6 +61,18 @@ describe('parseIngredientPhrase', () => {
     expect(parseIngredientPhrase('2,5 g')).toEqual({ quantity: 2.5, unit: 'g' });
   });
 
+  it('parses fraction and mixed-number amounts (the unitless AQ notation)', () => {
+    expect(parseIngredientPhrase('1/3')).toEqual({ quantity: 1 / 3 });
+    expect(parseIngredientPhrase('1+1/4')).toEqual({ quantity: 1.25 });
+    expect(parseIngredientPhrase('1 / 2')).toEqual({ quantity: 0.5 });
+    expect(parseIngredientPhrase('1/2 g')).toEqual({ quantity: 0.5, unit: 'g' });
+    expect(parseIngredientPhrase('1/2 g Mehl')).toEqual({
+      name: 'Mehl',
+      quantity: 0.5,
+      unit: 'g',
+    });
+  });
+
   it('rejects non-quantity phrases', () => {
     for (const bad of [
       '',
@@ -84,6 +96,13 @@ describe('artifact text helpers', () => {
     );
     expect(artifactToText({ quantity: 100, unit: 'g' })).toBe('{{100 g}}');
     expect(artifactToText({ quantity: 300 })).toBe('{{300}}');
+  });
+
+  it('writes a unitless count in the canonical AQ fraction notation', () => {
+    expect(artifactToText({ quantity: 1 / 3 })).toBe('{{1/3}}');
+    expect(artifactToText({ quantity: 1.25 })).toBe('{{1+1/4}}');
+    expect(artifactToText({ quantity: 0.5 })).toBe('{{1/2}}');
+    expect(artifactToText({ quantity: 3 })).toBe('{{3}}');
   });
 
   it('splits a step text into prose segments and artifact spans', () => {
@@ -120,6 +139,10 @@ describe('artifact text helpers', () => {
     const text = 'Mit {{1,5 l Wasser}} und {{0.2 kg Reis}} arbeiten.';
     expect(replaceArtifacts(text, (artifact) => artifact)).toBe(
       'Mit {{1500 ml Wasser}} und {{200 g Reis}} arbeiten.',
+    );
+    // Unitless counts normalize to their canonical AQ fraction.
+    expect(replaceArtifacts('Mit {{0.5}} und {{1,25}} arbeiten.', (a) => a)).toBe(
+      'Mit {{1/2}} und {{1+1/4}} arbeiten.',
     );
   });
 

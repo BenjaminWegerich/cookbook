@@ -38,6 +38,11 @@
   `docs/ingredient_unit_mappings.csv`, is validated against the ladder's AQ column and
   compiled into a generated TypeScript module (`packages/core/src/additionalUnitsData.ts`)
   via `npm run generate:additional` (packages/core/scripts/generate-additional-data.mjs).
+- The AQ ladder (the standard numbers for additional quantities and for unitless
+  inline counts, the distinct fractions 1/10 … 1000) in
+  `packages/core/src/aqLadder.ts`, derived from the generated ladder data. It
+  backs the §6.1 rounding, the fraction typography and the scaling of unitless
+  counts.
 - Recipe format parsing and validation
   (see [storage_format.md](storage_format.md)).
 - No React, no DOM — a plain TypeScript module, unit-tested with Vitest.

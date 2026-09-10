@@ -24,8 +24,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 import {
   artifactToText,
+  formatAQValue,
   formatBQ,
-  formatDecimal,
   insertArtifact,
   renderAQS,
   splitArtifacts,
@@ -173,7 +173,7 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         span.textContent =
           segment.artifact.name === undefined
             ? segment.artifact.unit === undefined
-              ? formatDecimal(segment.artifact.quantity)
+              ? formatAQValue(segment.artifact.quantity)
               : formatBQ(segment.artifact.quantity, segment.artifact.unit)
             : renderAQS(
                 segment.artifact.name,

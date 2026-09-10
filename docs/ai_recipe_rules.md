@@ -108,8 +108,11 @@ value directly.
   comma decimals (`1,5 l`, `0,2 kg`): hand-written files may use them and the
   parser *tolerates* them (normalizing to g/ml ×1000), but the file you produce
   is stored verbatim and must already be canonical.
-- Every row and every `{{…}}` amount needs a positive ladder value; amounts are
-  bounded by common sense for the dish (the editor's pool is 1 … 10000 g/ml).
+- Every row and every `{{…}}` amount needs a positive ladder value: rows and
+  artifacts with a unit use the BQ ladder (the editor's pool is 1 … 10000 g/ml);
+  a unitless count uses the AQ ladder — the distinct fractions 1/10 … 1000,
+  written canonically (`{{1/2}}`, `{{1+1/4}}`, `{{3}}`). Amounts are bounded by
+  common sense for the dish.
 
 ## 4. Ingredient rows and the derived master list
 
@@ -119,7 +122,8 @@ value directly.
 - A row may carry an inline **`{{…}}` mention** inside the step *prose* for a
   scaled, code-styled display value that does **not** count toward the
   ingredient list: `{{1500 ml Wasser}}` (ingredient mention), `{{100 g}}`
-  (quantity-only), `{{3}}` (unitless count). A name always requires a unit.
+  (quantity-only), `{{1/2}}` (unitless count; AQ fraction notation). A name
+  always requires a unit.
   These are optional; use them sparingly for water, salt, or piece counts that
   should scale with the servings but not be counted.
 - The **master ingredient list is derived** from the rows of all steps: an

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { ADDITIONAL_UNITS, INGREDIENT_MAPPINGS, NUMBER_SCHEMES } from './additionalUnitsData.js';
 import {
+  formatAQ,
+  formatAQValue,
   formatBQ,
   formatDecimal,
   roundToAQ,
@@ -182,11 +184,11 @@ describe('selectAQ (§6)', () => {
 describe('renderAQS (§4)', () => {
   it('renders the arrangement template with NNBSP between number and unit', () => {
     expect(renderAQS('Joghurt', 400, 'g')).toBe(`1${NNBSP}Becher Joghurt (400${NNBSP}g)`);
-    expect(renderAQS('Joghurt', 600, 'g')).toBe(`1+1/2${NNBSP}Becher Joghurt (600${NNBSP}g)`);
+    expect(renderAQS('Joghurt', 600, 'g')).toBe(`1${NNBSP}½${NNBSP}Becher Joghurt (600${NNBSP}g)`);
   });
 
-  it('renders fraction forms canonically (the "+" marks a mixed number)', () => {
-    expect(renderAQS('Joghurt', 200, 'g')).toBe(`1/2${NNBSP}Becher Joghurt (200${NNBSP}g)`);
+  it('renders AQ fractions in the documented glyph typography (§8)', () => {
+    expect(renderAQS('Joghurt', 200, 'g')).toBe(`½${NNBSP}Becher Joghurt (200${NNBSP}g)`);
   });
 
   it('renders the base form when no AQS applies', () => {
@@ -203,7 +205,7 @@ describe('renderAQS (§4)', () => {
   it('shows the exact stored base quantity with the kg conversion at 1000', () => {
     // The AQS applies (2+1/2 Becher), and the base quantity is displayed in kg
     // from 1000 up (decided with the user: g/ml stored, kg/l for display).
-    expect(renderAQS('Joghurt', 1000, 'g')).toBe(`2+1/2${NNBSP}Becher Joghurt (1${NNBSP}kg)`);
+    expect(renderAQS('Joghurt', 1000, 'g')).toBe(`2${NNBSP}½${NNBSP}Becher Joghurt (1${NNBSP}kg)`);
     expect(renderAQS('Joghurt', 1200, 'g')).toBe(`3${NNBSP}Becher Joghurt (1,2${NNBSP}kg)`);
   });
 
@@ -245,6 +247,40 @@ describe('renderAQS exact units (§6.3)', () => {
     expect(selected?.au.name).toBe('Becher');
     expect(selected?.au.exact).toBe(true);
     expect(selected?.factor).toBe(400);
+  });
+});
+
+describe('formatAQ / formatAQValue (§8 — fraction glyph typography)', () => {
+  it('renders proper fractions as a single Unicode glyph', () => {
+    expect(formatAQ('1/10')).toBe('⅒');
+    expect(formatAQ('1/8')).toBe('⅛');
+    expect(formatAQ('1/3')).toBe('⅓');
+    expect(formatAQ('1/2')).toBe('½');
+    expect(formatAQ('2/3')).toBe('⅔');
+    expect(formatAQ('3/4')).toBe('¾');
+    expect(formatAQ('7/8')).toBe('⅞');
+  });
+
+  it('renders a mixed number as integer + NNBSP + glyph', () => {
+    expect(formatAQ('1+1/4')).toBe(`1${NNBSP}¼`);
+    expect(formatAQ('2+1/2')).toBe(`2${NNBSP}½`);
+  });
+
+  it('keeps whole AQ values unchanged', () => {
+    expect(formatAQ('1')).toBe('1');
+    expect(formatAQ('12')).toBe('12');
+    expect(formatAQ('1000')).toBe('1000');
+  });
+
+  it('formats numeric AQ values (unitless inline counts)', () => {
+    expect(formatAQValue(0.1)).toBe('⅒');
+    expect(formatAQValue(0.5)).toBe('½');
+    expect(formatAQValue(1.25)).toBe(`1${NNBSP}¼`);
+    expect(formatAQValue(3)).toBe('3');
+  });
+
+  it('rejects a value that is not an AQ ladder number', () => {
+    expect(() => formatAQValue(0.3)).toThrow();
   });
 });
 

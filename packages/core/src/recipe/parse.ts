@@ -35,6 +35,7 @@
 
 import { parseDocument } from 'yaml';
 
+import { isAQValue } from '../aqLadder.js';
 import { pos } from '../ladder.js';
 import { parseIngredientPhrase, replaceArtifacts } from './artifacts.js';
 import { deriveIngredients } from './ingredientList.js';
@@ -390,23 +391,36 @@ function parseRow(line: string, path: string, issues: ValidationIssue[]): Ingred
 
 /**
  * Validates the artifacts of one step text and normalizes them to the
- * canonical family form (kg/l and German comma decimals → g/ml + '.').
+ * canonical family form (kg/l and German comma decimals → g/ml + '.',
+ * unitless counts → canonical AQ fractions).
  */
 function validateAndNormalizeText(text: string, path: string, issues: ValidationIssue[]): string {
   for (const match of text.matchAll(CURLY_BLOCK_RE)) {
     const content = match[1] ?? '';
-    if (parseIngredientPhrase(content) === null) {
+    const parsed = parseIngredientPhrase(content);
+    if (parsed === null) {
       issues.push({
         path,
-        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}} oder {{100}}).`,
+        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}}, {{100}} oder {{1/2}}).`,
       });
       continue;
     }
-    // Validate the quantity without creating issues inside replaceArtifacts:
-    // every artifact's content must be a standard number (§7.1).
-    try {
-      pos((parseIngredientPhrase(content) as { quantity: number }).quantity);
-    } catch {
+    // A unitless quantity-only mention is a *count*: its standard numbers are
+    // the AQ ladder (fractions 1/10 … 1000, docs/additional_quantity_
+    // specifications.md §6.1). Every artifact that carries a unit is a base
+    // quantity and uses the BQ ladder (§7.1).
+    let isStandard: boolean;
+    if (parsed.unit === undefined) {
+      isStandard = isAQValue(parsed.quantity);
+    } else {
+      try {
+        pos(parsed.quantity);
+        isStandard = true;
+      } catch {
+        isStandard = false;
+      }
+    }
+    if (!isStandard) {
       issues.push({
         path,
         message: `Die Menge in ${JSON.stringify(match[0])} ist kein Standardwert (Leiterwert).`,
@@ -528,7 +542,8 @@ function parseSteps(body: string, issues: ValidationIssue[]): Step[] | undefined
     if (prose.startsWith('- ')) {
       issues.push({
         path: `${stepPath}.text`,
-        message: 'Der Schritt-Text darf nicht mit "- " beginnen (das ist Zutaten-Zeilen vorbehalten).',
+        message:
+          'Der Schritt-Text darf nicht mit "- " beginnen (das ist Zutaten-Zeilen vorbehalten).',
       });
     }
     const text = validateAndNormalizeText(prose, `${stepPath}.text`, issues);

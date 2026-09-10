@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { NNBSP, renderAQS } from '../additionalUnits.js';
+import { scaleAQ } from '../aqLadder.js';
 import { difference, scale } from '../ladder.js';
 import { parseRecipe } from './parse.js';
 import { generateRecipeHtml } from './exportHtml.js';
@@ -87,6 +88,42 @@ describe('generateRecipeHtml — finished dish', () => {
     const plain = generateRecipeHtml(WRAPS);
     expect(plain).not.toContain('class="sub-recipe-link"');
     expect(plain).not.toContain('{{');
+  });
+});
+
+describe('generateRecipeHtml — unitless inline counts (AQ ladder)', () => {
+  const counts: Recipe = parseRecipe(`---
+title: Zählen
+type: finished_dish
+servings: 4
+prep_time: 5 min
+---
+## Zubereitung
+1. Mit {{1/2}} und {{100}} und {{1/3}} arbeiten.
+`);
+
+  const html = generateRecipeHtml(counts);
+
+  it('scales a unitless count along the AQ ladder and shows fraction glyphs', () => {
+    const delta = difference(counts.servings!, 6); // +2
+    // Inspect the option-6 view: 1/2 → 2/3, 100 → 120, 1/3 → 2/5.
+    const marker = '<div class="serving-view" data-servings="6">';
+    const start = html.indexOf(marker);
+    const end = html.indexOf('<div class="serving-view"', start + 1);
+    const option6 = html.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(option6).toContain('<code class="step-artifact">⅔</code>');
+    expect(option6).toContain(`<code class="step-artifact">${scaleAQ(100, delta)}</code>`);
+    expect(option6).toContain('<code class="step-artifact">⅖</code>');
+    // The stored option 4 shows the unscaled fractions.
+    const option4Start = html.indexOf('<div class="serving-view" data-servings="4">');
+    const option4 = html.slice(
+      option4Start,
+      html.indexOf('<div class="serving-view"', option4Start + 1),
+    );
+    expect(option4).toContain('<code class="step-artifact">½</code>');
+    expect(option4).toContain('<code class="step-artifact">⅓</code>');
+    expect(html).not.toContain('{{');
   });
 });
 

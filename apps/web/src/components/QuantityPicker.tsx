@@ -6,18 +6,21 @@
  * - a horizontally scrollable **suggested** chip row (one tap for common
  *   values; the app may later highlight further suggestions, e.g. a whole
  *   Becher — the row is explicitly a "suggestions" surface);
- * - a **− / + stepper** that moves exactly one ladder rung per tap — it
- *   reaches every rung of the pool (1 … 10000 in the family unit), always
- *   ladder-valid by construction. Pressing and holding a stepper button
- *   repeats the step at a steady pace, as if it were tapped repeatedly;
+ * - a **− / + stepper** that moves exactly one standard-number step per tap —
+ *   for a g/ml quantity one BQ rung (pool 1 … 10000 in the family unit), for a
+ *   unitless count one AQ step (the fraction ladder, 0.1 … 1000). Both are
+ *   always standard-number-valid by construction. Pressing and holding a
+ *   stepper button repeats the step at a steady pace, as if it were tapped
+ *   repeatedly;
  *
  * Values are stored in the family unit (g/ml); labels switch to kg/l at 1000
- * (core formatBQ). UI language is German.
+ * (core formatBQ). A unitless count is labelled with the AQ fraction
+ * typography (core formatAQValue). UI language is German.
  */
 
 import { useEffect, useRef } from 'react';
 
-import { scale } from '@cookbook/core';
+import { AQ_MAX, AQ_MIN, isAQValue, nearestAQValue, scale, scaleAQ } from '@cookbook/core';
 
 import {
   QUANTITY_MAX,
@@ -85,14 +88,25 @@ function QuantityPicker({ value, onChange, family }: QuantityPickerProps) {
     };
   }, []);
 
-  /** One ladder rung up/down from the current value, clamped to the pool
-   *  bounds [1, 10000]. Returns false when the bound already blocks a further
-   *  step (a hold repeat then stops instead of burning cycles). */
+  /** One ladder step up/down from the current value, clamped to the mode's
+   *  bounds. A g/ml quantity walks the BQ ladder (pool 1 … 10000); a unitless
+   *  count walks the AQ ladder (0.1 … 1000, the standard numbers with
+   *  fractions). A current value that does not belong to the mode's ladder (a
+   *  transient state while the unit mode changes) is first snapped to the
+   *  nearest standard number. Returns false when the bound already blocks a
+   *  further step (a hold repeat then stops instead of burning cycles). */
   const step = (delta: 1 | -1): boolean => {
     const current = valueRef.current;
     if (current === undefined) return false;
-    const next = Math.min(QUANTITY_MAX, Math.max(QUANTITY_MIN, scale(current, delta)));
-    if (next === current) return false;
+    let next: number;
+    if (family === null) {
+      const base = isAQValue(current) ? current : nearestAQValue(current);
+      next = scaleAQ(base, delta);
+      if (next === current) return false;
+    } else {
+      next = Math.min(QUANTITY_MAX, Math.max(QUANTITY_MIN, scale(current, delta)));
+      if (next === current) return false;
+    }
     valueRef.current = next; // optimistic: repeat cadence is render-independent
     onChange(next);
     return true;
@@ -114,8 +128,10 @@ function QuantityPicker({ value, onChange, family }: QuantityPickerProps) {
     }, HOLD_FIRST_REPEAT_MS);
   };
 
-  const minReached = value !== undefined && value <= QUANTITY_MIN;
-  const maxReached = value !== undefined && value >= QUANTITY_MAX;
+  const boundMin = family === null ? AQ_MIN : QUANTITY_MIN;
+  const boundMax = family === null ? AQ_MAX : QUANTITY_MAX;
+  const minReached = value !== undefined && value <= boundMin;
+  const maxReached = value !== undefined && value >= boundMax;
 
   return (
     <div className="quantity-picker">

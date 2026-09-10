@@ -36,12 +36,14 @@
   - **rounded_BQ(x)** — a hand-picked round, practical decimal number per rung
     (chosen to match common packaging sizes); used for the base quantity
     (g / kg / ml / l) and for serving counts;
-  - **rounded_AQ(x)** — a hand-picked fraction per rung; used only to display
-    additional quantities (Becher, Packung, Stück, …).
+  - **rounded_AQ(x)** — a hand-picked fraction per rung; used to display
+    additional quantities (Becher, Packung, Stück, …) and as the standard numbers
+    of unitless inline counts (§7).
 - The **rounded BQ value is the value that is stored, scaled, and used as base
-  quantity**; the rounded AQ value exists only for display (§7) and is never
-  stored or scaled. The exact column exists solely to define the geometric
-  spacing.
+  quantity** for every ingredient that carries a unit. The rounded AQ value is
+  used for display (§7) and — for a unitless inline count, which has no base
+  unit — as that count's stored and scaled standard number. The exact column
+  exists solely to define the geometric spacing.
 - The reference table (x = −16 … 48, i.e. 0.1 … 1000) lives in
   [docs/standard_numbers.csv](standard_numbers.csv), with columns
   `Exact Number; Rounded Number for BQ; Rounded Number for AQ`.
@@ -158,7 +160,14 @@
   Example: a scaled 1000 g may be displayed as "1 kg" or "1 Packung", depending
   on the ingredient's additional-unit mappings.
 - When an additional unit applies, its quantity is displayed in the AQ fraction
-  form of the scaled rung (e.g. "1+1/2 Becher"), never as a decimal.
+  typography (e.g. "1 ½ Becher"), never as a decimal; the canonical value behind
+  it is the fraction form ("1+1/2", see
+  [additional_quantity_specifications.md](additional_quantity_specifications.md) §8).
+- A **unitless inline count** (`{{1/2}}`, storage_format.md §4) carries no base
+  unit, so its standard numbers are the AQ values instead of the BQ values. The
+  AQ ladder is the ordered set of *distinct* AQ fractions (1/10 … 1000, no
+  decade rule); scaling a count moves it by Δx whole AQ steps and clamps at the
+  ladder ends. The stored value stays an AQ standard number.
 
 ## 8. Implementation Notes (Deterministic, Table-Driven)
 

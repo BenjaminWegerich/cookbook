@@ -30,7 +30,8 @@
  * must never be able to inject markup into the exported file.
  */
 
-import { formatBQ, formatDecimal, NNBSP, renderAQS } from '../additionalUnits.js';
+import { formatAQValue, formatBQ, NNBSP, renderAQS } from '../additionalUnits.js';
+import { scaleAQ } from '../aqLadder.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
 import type { TextArtifact } from './artifacts.js';
 import { difference, integerLadderValues, scale } from '../ladder.js';
@@ -44,8 +45,8 @@ const SERVING_MAX = 30;
 /**
  * Renders a quantity/ingredient display line (already HTML-escaped). A link is
  * added when the name is present in `links` (implicit sub-recipe, §4). A
- * quantity-only artifact may be unitless (`{{100}}`) and then renders as the
- * plain number.
+ * quantity-only artifact may be unitless (`{{1/2}}`) and then renders as its AQ
+ * standard number in the fraction typography.
  */
 function displayLine(
   name: string | undefined,
@@ -56,7 +57,7 @@ function displayLine(
   const line =
     name === undefined
       ? bu === undefined
-        ? formatDecimal(bq)
+        ? formatAQValue(bq)
         : formatBQ(bq, bu)
       : renderAQS(name, bq, bu ?? 'g');
   const url = name !== undefined ? links[name] : undefined;
@@ -94,7 +95,12 @@ function renderStep(step: Step, deltaX: number, links: Readonly<Record<string, s
   // <code class="step-artifact"> for the quantity, wrapped in a link when the
   // artifact names an ingredient recipe.
   const text = renderArtifacts(step.text, (artifact: TextArtifact) => {
-    const bq = scale(artifact.quantity, deltaX);
+    // A unitless count scales along the AQ ladder (its own standard numbers);
+    // an artifact with a unit is a base quantity and scales along the BQ ladder.
+    const bq =
+      artifact.unit === undefined
+        ? scaleAQ(artifact.quantity, deltaX)
+        : scale(artifact.quantity, deltaX);
     // displayLine returns already-escaped HTML and wraps the line in a link
     // when the artifact names an ingredient recipe (links map, §4).
     return `<code class="step-artifact">${displayLine(artifact.name, bq, artifact.unit, links)}</code>`;

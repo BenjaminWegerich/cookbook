@@ -101,18 +101,27 @@ layout). The rows are written in a natural, amount-first phrase:
   ```
   Nudeln in {{1500 ml Wasser}} kochen.         ingredient mention
   {{100 g}} Teig flach ausrollen.              quantity-only mention
+  {{1/2}} Zwiebel fein würfeln.                unitless count
   ```
-  - Grammar: `{{ MENGE EINHEIT [NAME] }}`. With a name the artifact is an
-    ingredient mention (name = everything after the unit, e.g. `Wasser`); without
-    a name it is a quantity-only mention (`100 g`). A quantity-only mention may
-    also omit the unit entirely (`{{100}}` — a unitless count, e.g. a number of
-    pieces); an ingredient mention always carries a unit. All variants scale with
-    the number of servings and render code-styled, with the l/kg display form
-    where a unit is present.
+  - Grammar: `{{ MENGE EINHEIT [NAME] }}`, where MENGE is an integer, a decimal
+    (`.` or German `,`), a fraction (`1/3`) or a mixed number (`1+1/4`). With a
+    name the artifact is an ingredient mention (name = everything after the unit,
+    e.g. `Wasser`); without a name it is a quantity-only mention (`100 g`). A
+    quantity-only mention may also omit the unit entirely (`{{1/2}}` — a unitless
+    count, e.g. a number of pieces); an ingredient mention always carries a unit.
+    All variants scale with the number of servings and render code-styled, with
+    the l/kg display form where a unit is present.
+  - **A unitless count uses its own standard numbers — the AQ ladder**
+    (docs/quantity_scaling.md §2, docs/additional_quantity_specifications.md
+    §6.1): the distinct fractions 1/10 … 1000. It is stored in the canonical AQ
+    fraction notation (`{{1/3}}`, `{{1+1/4}}`, `{{3}}`) and displayed with the
+    fraction typography. Scaling moves it along the AQ ladder. An artifact that
+    carries a unit is a base quantity and stays on the BQ ladder.
   - **Canonical values are g/ml with `.` decimals.** Hand-written files may use
-    German comma decimals and `kg`/`l` (`{{1,5 l Wasser}}`, `- 0,2 kg Reis`); the
-    parser normalizes them on read (comma → dot, kg/l → g/ml ×1000). Non-standard
-    numbers remain validation errors.
+    German comma decimals, fractions and `kg`/`l` (`{{1,5 l Wasser}}`,
+    `- 0,2 kg Reis`); the parser normalizes them on read (comma → dot, kg/l →
+    g/ml ×1000, unitless count → canonical AQ fraction). Non-standard numbers
+    remain validation errors.
   - A malformed `{{…}}` block is a validation error — never silently treated as prose.
 - **Reference role** (portion anchor, `finished_dish` only): stored as a
   front-matter list of ingredient names, `reference: [Tortillas]` (0–2 entries).

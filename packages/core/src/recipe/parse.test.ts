@@ -183,13 +183,14 @@ describe('parseRecipe — happy paths', () => {
     expect(recipe.ingredients).toEqual([]);
   });
 
-  it('allows unitless quantity-only artifacts in the step text', () => {
+  it('allows unitless quantity-only artifacts and stores them as AQ fractions', () => {
     const recipe = parseRecipe(
       '---\ntitle: Einheitenlos\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' +
         '---\n## Zubereitung\n1. {{3}} Minuten ziehen lassen, dann {{1,5}} l Wasser ergänzen.\n',
     );
+    // The unitless amounts are AQ standard numbers, stored in fraction notation.
     expect(recipe.steps[0]!.text).toBe(
-      '{{3}} Minuten ziehen lassen, dann {{1.5}} l Wasser ergänzen.',
+      '{{3}} Minuten ziehen lassen, dann {{1+1/2}} l Wasser ergänzen.',
     );
     expect(recipe.ingredients).toEqual([]);
   });
@@ -416,6 +417,30 @@ describe('parseRecipe — rows and artifacts validation (§4)', () => {
         '---\n## Zubereitung\n1. Mit {{450 g}} Mehl mischen.\n',
     );
     expectIssueAt(notLadder, 'steps[0].text', 'Standardwert');
+  });
+
+  it('validates unitless artifacts against the AQ ladder and keeps AQ fractions', () => {
+    // AQ values (and their fraction spelling) are the standard numbers of a
+    // unitless count; the text is normalized to the canonical fraction.
+    const recipe = parseRecipe(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{1/3}} und {{1,25}} und {{0.5}} mischen.\n',
+    );
+    expect(recipe.steps[0]!.text).toBe('Mit {{1/3}} und {{1+1/4}} und {{1/2}} mischen.');
+
+    // A BQ-only value is no longer a unitless standard number.
+    const bqOnly = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{1.2}} mischen.\n',
+    );
+    expectIssueAt(bqOnly, 'steps[0].text', 'Standardwert');
+
+    // An artifact with a unit stays on the BQ ladder: the AQ fraction 1/3 is invalid there.
+    const aqWithUnit = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{1/3 g}} Mehl mischen.\n',
+    );
+    expectIssueAt(aqWithUnit, 'steps[0].text', 'Standardwert');
   });
 
   it('rejects a step whose prose starts with "- "', () => {

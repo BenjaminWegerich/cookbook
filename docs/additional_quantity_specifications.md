@@ -247,10 +247,12 @@ The last two rows show the approximate case of §6.3: the count is rounded ("1 E
   to `kg` / `l` ("1 kg", "1.2 kg") — also inside the AQS arrangement
   ("3 Becher Joghurt (1.2 kg)"). The stored value is never changed by this.
 - This spec fixes only the canonical AQ value (e.g. 1+1/4; the "+" marks a mixed
-  number — one and a quarter). The display typography — Unicode fraction glyphs
-  (⅒ ⅑ ⅛ ⅙ ⅕ ¼ ⅓ ⅜ ⅖ ½ ⅗ ⅔ ¾ ⅞) and mixed numbers as integer + narrow no-break
-  space (U+202F) + glyph ("1 ¼") — is a UI/design concern and is resolved in the
-  UI phase together with the user.
+  number — one and a quarter). The display typography is implemented in core
+  (`formatAQ` / `formatAQValue`): a proper fraction uses the Unicode fraction
+  glyphs (⅒ ⅑ ⅛ ⅙ ⅕ ¼ ⅓ ⅜ ⅖ ½ ⅗ ⅔ ¾ ⅞), a mixed number is written as integer +
+  narrow no-break space (U+202F) + glyph ("1 ¼"), and whole AQ values stay as
+  they are. `renderAQS` applies it to the additional quantity; unitless inline
+  counts use it for their own display.
 - For an **exact** unit (§6.3), the AQS is the authoritative part of the line:
   its base quantity is derived from the AQ, not read from the recipe. The stored
   value stays untouched and is unchanged by the flag.

@@ -20,8 +20,8 @@
  * keep showing the stored/scaled base quantity.
  *
  * The AQ ladder values are the fraction column of the standard number ladder
- * (docs/quantity_scaling.md §2); their numeric values are derived from
- * LADDER_RUNGS here so that the ladder table stays the single source of truth.
+ * (docs/quantity_scaling.md §2); they live in ./aqLadder.ts, which derives them
+ * from LADDER_RUNGS so that the ladder table stays the single source of truth.
  *
  * Naming: identifiers use the spec's abbreviations for the domain terms — aq
  * (additional quantity), au (additional unit), bq (base quantity), bu (base
@@ -29,15 +29,11 @@
  * (docs/CODING_CONVENTIONS.md).
  */
 
+import { aqNotation, aqToNumber, roundToAQValue } from './aqLadder.js';
 import { ADDITIONAL_UNITS, NUMBER_SCHEMES, type AdditionalUnit } from './additionalUnitsData.js';
-import { LADDER_RUNGS } from './ladderData.js';
 import { pos } from './ladder.js';
 import { allIngredientMappings, mappingsFor } from './ingredientRegistry.js';
 
-/** Smallest AQ ladder value (1/10); below it no additional quantity exists (§6.1). */
-const MIN_AQ = 0.1;
-/** Largest AQ ladder value (1000); above it no additional quantity exists (§6.1). */
-const MAX_AQ = 1000;
 /**
  * Narrow no-break space (U+202F), substituted for the <NNBSP> placeholder
  * (§8). Single definition of the typographic space between a number and its
@@ -46,12 +42,6 @@ const MAX_AQ = 1000;
  * Stored files always keep plain ASCII spaces.
  */
 export const NNBSP = '\u202F';
-
-/** One distinct AQ ladder value together with its numeric form. */
-interface AQEntry {
-  readonly aq: string;
-  readonly value: number;
-}
 
 /** Additional units by name (names are unique — validated by the generator). */
 const AU_BY_NAME: ReadonlyMap<string, AdditionalUnit> = new Map(
@@ -74,65 +64,14 @@ export function masterIngredientNames(): string[] {
 }
 
 /**
- * Parses a canonical AQ fraction ("a", "a/b" or "a+b/c") to its numeric value.
- * The strings come from the generated ladder data (validated at generation
- * time), so no error handling is needed here.
- */
-function aqToNumber(aq: string): number {
-  const plus = aq.indexOf('+');
-  const slash = aq.indexOf('/');
-  if (plus !== -1) {
-    const integer = Number(aq.slice(0, plus));
-    const fraction = aq.slice(plus + 1);
-    const slashInFraction = fraction.indexOf('/');
-    return (
-      integer +
-      Number(fraction.slice(0, slashInFraction)) / Number(fraction.slice(slashInFraction + 1))
-    );
-  }
-  if (slash !== -1) {
-    return Number(aq.slice(0, slash)) / Number(aq.slice(slash + 1));
-  }
-  return Number(aq);
-}
-
-/**
- * The distinct AQ ladder values with numeric forms, ascending — the lookup
- * table for the §6.1 rounding. Duplicate strings (e.g. "1/4" on two rungs)
- * occur once: the rounding result is the displayed fraction, not the rung.
- */
-const AQ_VALUES: readonly AQEntry[] = [
-  ...new Map(LADDER_RUNGS.map((rung) => [rung.aq, aqToNumber(rung.aq)])),
-]
-  .map(([aq, value]) => ({ aq, value }))
-  .sort((a, b) => a.value - b.value);
-
-/**
  * Rounds a raw quantity to the nearest AQ ladder value (§6.1), measured by
  * absolute difference on the value scale. Exact ties resolve toward the larger
  * value. Returns null when `raw` lies below the smallest AQ value (1/10) or
  * above the largest (1000) — the ingredient is then rendered in its base form.
  */
 export function roundToAQ(raw: number): string | null {
-  if (!(raw > 0) || !Number.isFinite(raw)) {
-    throw new Error(`roundToAQ: raw must be a positive finite number, got ${raw}`);
-  }
-  if (raw < MIN_AQ || raw > MAX_AQ) {
-    return null;
-  }
-  let best: AQEntry | undefined;
-  let bestDiff = Infinity;
-  for (const entry of AQ_VALUES) {
-    const diff = Math.abs(raw - entry.value);
-    // AQ_VALUES is ascending, so on an exact tie the later entry is the larger
-    // value — exactly the §6.1 tie rule.
-    if (best === undefined || diff < bestDiff || (diff === bestDiff && entry.value > best.value)) {
-      best = entry;
-      bestDiff = diff;
-    }
-  }
-  // Unreachable: AQ_VALUES is non-empty and `raw` is within [MIN_AQ, MAX_AQ].
-  return best!.aq;
+  const value = roundToAQValue(raw);
+  return value === null ? null : aqNotation(value);
 }
 
 /** The result of a successful additional-quantity selection (§6). */
@@ -222,9 +161,59 @@ export function formatBQ(bq: number, bu: string): string {
 }
 
 /**
+ * The Unicode fraction glyphs of the AQ fractions (docs/additional_quantity_
+ * specifications.md §8): a proper fraction displays as a single glyph, a mixed
+ * number as integer + narrow no-break space + glyph ("1 ¼"). AQ values that are
+ * whole numbers (1, 2, 10, 12, …) have no glyph and stay as they are.
+ */
+const AQ_GLYPHS: Readonly<Record<string, string>> = {
+  '1/10': '\u2152', // ⅒
+  '1/9': '\u2151', // ⅑
+  '1/8': '\u215B', // ⅛
+  '1/6': '\u2159', // ⅙
+  '1/5': '\u2155', // ⅕
+  '1/4': '\u00BC', // ¼
+  '1/3': '\u2153', // ⅓
+  '3/8': '\u215C', // ⅜
+  '2/5': '\u2156', // ⅖
+  '1/2': '\u00BD', // ½
+  '3/5': '\u2157', // ⅗
+  '2/3': '\u2154', // ⅔
+  '3/4': '\u00BE', // ¾
+  '7/8': '\u215E', // ⅞
+};
+
+/**
+ * Formats a canonical AQ fraction ("1/2", "1+1/4") in the display typography
+ * of §8: glyphs for the proper fractions and a narrow no-break space between
+ * the integer and the glyph of a mixed number ("1 ¼"). Whole AQ values pass
+ * through unchanged. A fraction without a glyph (none exists today) keeps its
+ * canonical form so a new ladder row never renders as garbage.
+ */
+export function formatAQ(aq: string): string {
+  const glyph = AQ_GLYPHS[aq];
+  if (glyph !== undefined) return glyph;
+  const plus = aq.indexOf('+');
+  if (plus === -1) return aq;
+  const integer = aq.slice(0, plus);
+  const fraction = aq.slice(plus + 1);
+  return `${integer}${NNBSP}${AQ_GLYPHS[fraction] ?? fraction}`;
+}
+
+/**
+ * Formats a numeric AQ value in the §8 typography (0.25 → "¼", 1.25 → "1 ¼").
+ * Used for unitless inline quantities, which are AQ ladder values. Throws when
+ * `value` is not an AQ value — non-standard numbers do not exist in the app.
+ */
+export function formatAQValue(value: number): string {
+  return formatAQ(aqNotation(value));
+}
+
+/**
  * Renders the full display line for an ingredient (§4): the selected unit's
  * arrangement template with <AQ> <AU> <IN> <BQ> <BU> and <NNBSP> (U+202F)
- * substituted, or the base form "<BQ> <BU> <IN>" when no AQS applies.
+ * substituted, or the base form "<BQ> <BU> <IN>" when no AQS applies. The AQ
+ * itself is rendered in the §8 glyph typography (`formatAQ`).
  *
  * The shown base quantity is the stored value (`formatBQ`) — except for an
  * **exact** unit (§6.3): its factor defines the base amount (a 200 g Block),
@@ -248,7 +237,7 @@ export function renderAQS(ingredient: string, bq: number, bu: string): string {
   // <NNBSP> placeholder is consumed here, before the general substitution).
   return selected.au.arrangement
     .replace('<BQ><NNBSP><BU>', formatBQ(shownBq, bu))
-    .replaceAll('<AQ>', selected.aq)
+    .replaceAll('<AQ>', formatAQ(selected.aq))
     .replaceAll('<AU>', selected.au.name)
     .replaceAll('<IN>', ingredient)
     .replaceAll('<NNBSP>', NNBSP);

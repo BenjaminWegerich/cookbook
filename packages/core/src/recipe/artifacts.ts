@@ -14,9 +14,12 @@
  * quantity-only mention may omit it (unitless count).
  *
  * The stored text uses the canonical family form (g/ml, '.' decimals, plain
- * integers): `{{1500 ml Wasser}}`. Hand-written files may use German comma
- * decimals and kg/l (`{{1,5 l Wasser}}`); `parseIngredientPhrase` normalizes
- * these (comma → dot, kg/l → g/ml ×1000) so the in-memory model and every
+ * integers): `{{1500 ml Wasser}}`. A unitless count stores its amount in the
+ * canonical AQ fraction notation of its standard number (`{{1/3}}`,
+ * `{{1+1/4}}`, `{{3}}`); hand-written files may spell those as decimals too.
+ * Hand-written files may use German comma decimals and kg/l
+ * (`{{1,5 l Wasser}}`); `parseIngredientPhrase` normalizes these
+ * (comma → dot, kg/l → g/ml ×1000) so the in-memory model and every
  * downstream writer are canonical.
  *
  * Artifacts never carry a reference flag and never link a sub-recipe
@@ -28,6 +31,7 @@
  * natural phrase grammar with a *required* name — see ./parse.ts.
  */
 
+import { aqNotation, isAQValue } from '../aqLadder.js';
 import type { Ingredient, Unit } from './types.js';
 
 /** One parsed inline artifact (ingredient or quantity-only mention). */
@@ -64,24 +68,45 @@ const CURLY_BLOCK_RE = /\{\{([^{}]*)\}\}/g;
 
 /**
  * The natural amount-first phrase grammar shared by artifact contents and step
- * rows: `MENGE [EINHEIT] [NAME]`. The number is an integer or a decimal with a
- * single `.` or `,` separator; the unit (g/kg/ml/l) is optional — but only for
- * a quantity-only phrase without a name (`{{100}}`); a name requires a unit
- * (otherwise `{{100 Teig}}` would be ambiguous). The name is the trailing
- * remainder (no `{`/`}`).
+ * rows: `MENGE [EINHEIT] [NAME]`. The amount is an integer, a decimal with a
+ * single `.` or `,` separator, a fraction (`1/3`) or a mixed number (`1+1/4`) —
+ * the canonical AQ notation used for unitless quantities (the fractions are
+ * plain display forms of the stored numeric value). The unit (g/kg/ml/l) is
+ * optional — but only for a quantity-only phrase without a name (`{{100}}`); a
+ * name requires a unit (otherwise `{{100 Teig}}` would be ambiguous). The name
+ * is the trailing remainder (no `{`/`}`).
  */
-const PHRASE_RE = /^\s*(\d+(?:[.,]\d+)?)\s*(kg|ml|l|g)?\s*([^{}]*)$/;
+const PHRASE_RE =
+  /^\s*(\d+\s*\/\s*\d+|\d+(?:[.,]\d+)?(?:\s*\+\s*\d+\s*\/\s*\d+)?)\s*(kg|ml|l|g)?\s*([^{}]*)$/;
 
-/** Normalizes a decimal written with a German comma to a JS number. */
-function parseDecimal(raw: string): number {
-  return Number(raw.replace(',', '.'));
+/**
+ * Parses an amount written as an integer, a decimal (`.` or German `,`), a
+ * fraction (`1/3`) or a mixed number (`1+1/4`) into its numeric value. Optical
+ * spaces around `/` and `+` are tolerated. A zero denominator yields Infinity,
+ * which the caller rejects via its finiteness check.
+ */
+function parseAmount(raw: string): number {
+  const compact = raw.replace(/\s+/g, '');
+  const plus = compact.indexOf('+');
+  if (plus !== -1) {
+    const integer = Number(compact.slice(0, plus).replace(',', '.'));
+    const [numerator, denominator] = compact.slice(plus + 1).split('/');
+    return integer + Number(numerator!.replace(',', '.')) / Number(denominator);
+  }
+  const slash = compact.indexOf('/');
+  if (slash !== -1) {
+    const [numerator, denominator] = compact.split('/');
+    return Number(numerator!.replace(',', '.')) / Number(denominator);
+  }
+  return Number(compact.replace(',', '.'));
 }
 
 /**
  * Parses a natural amount-first phrase and normalizes it to the canonical
  * form. Returns null when the phrase is not a valid quantity phrase.
  *
- * @param phrase the phrase, e.g. `1500 ml Wasser`, `100 g`, `100`, `1,5 l Wasser`
+ * @param phrase the phrase, e.g. `1500 ml Wasser`, `100 g`, `100`, `1,5 l Wasser`,
+ *   `1/2` or `1+1/4`
  * @param requireName when true (rows), a phrase without a name is invalid
  * @returns the canonical ingredient/artifact, or null
  */
@@ -91,7 +116,7 @@ export function parseIngredientPhrase(
 ): Ingredient | TextArtifact | null {
   const match = PHRASE_RE.exec(phrase);
   if (match === null) return null;
-  const rawQuantity = parseDecimal(match[1]!);
+  const rawQuantity = parseAmount(match[1]!);
   if (!Number.isFinite(rawQuantity) || rawQuantity <= 0) return null;
   const name = match[3]!.trim();
   const rawUnit = match[2] as Unit | undefined;
@@ -113,9 +138,24 @@ export function parseIngredientPhrase(
   return { name, quantity, unit };
 }
 
-/** Returns the canonical stored text of an artifact (§4). */
+/**
+ * Returns the canonical stored text of an artifact (§4).
+ *
+ * A unitless quantity-only artifact stores its amount in the canonical AQ
+ * fraction notation (`{{1/3}}`, `{{1+1/4}}`, `{{3}}`) — never as a decimal,
+ * which for a fraction like 1/3 would be a long non-terminating value. An
+ * amount that is not an AQ ladder value (a rejected hand-written file) falls
+ * back to its plain numeric form so normalization never crashes; the parser
+ * reports the value as invalid separately. Weighted and named artifacts keep
+ * the family-unit decimal form (`{{1500 ml Wasser}}`).
+ */
 export function artifactToText(artifact: TextArtifact): string {
-  const base = artifact.unit === undefined ? `${artifact.quantity}` : `${artifact.quantity} ${artifact.unit}`;
+  const base =
+    artifact.unit === undefined
+      ? isAQValue(artifact.quantity)
+        ? aqNotation(artifact.quantity)
+        : `${artifact.quantity}`
+      : `${artifact.quantity} ${artifact.unit}`;
   return artifact.name === undefined ? `{{${base}}}` : `{{${base} ${artifact.name}}}`;
 }
 
