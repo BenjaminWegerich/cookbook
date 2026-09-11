@@ -161,12 +161,16 @@
   margin-block-end: calc(var(--space-3) + var(--space-1) - var(--space-2));
 }
 
-/* „Die KI soll …“: a full-width two-way switch. The second label is long, so
-   the two segments share the row equally and may wrap instead of overflowing
-   the phone width. */
+/* „Die KI soll …“: the second label is long, so the switch has to survive a
+   phone width — but it should not stretch across a desktop screen either.
+   fit-content sizes it to its content when there is room (like the Typ
+   switch) and clamps it to the available width when there is not. The
+   minmax(0, auto) tracks are then free to shrink below their content width,
+   which wraps the long label onto a second line instead of overflowing. */
 .ai-options .ai-mode {
-  width: 100%;
-  grid-auto-columns: 1fr;
+  width: fit-content;
+  max-width: 100%;
+  grid-auto-columns: minmax(0, auto);
 }
 
 .ai-options .ai-mode button {
