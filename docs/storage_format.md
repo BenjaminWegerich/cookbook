@@ -67,7 +67,7 @@ Additional fields:
 
 | Field | Type | Allowed on | Notes |
 |---|---|---|---|
-| `reference` | list of strings | `finished_dish` only | Names of 0–2 ingredients anchored to the portion size (§4); names must occur in the recipe rows. |
+| `reference` | list of strings | both types | Names of any number of ingredients anchored to the recipe's size — the portion size (`finished_dish`) or the yield (`ingredient_recipe`), §4. Names must occur in the recipe rows. |
 
 A front-matter `ingredients` field is **rejected**: the master list is derived
 from the step rows (§4), never typed. The editor's quantity pool is bounded to
@@ -123,10 +123,12 @@ layout). The rows are written in a natural, amount-first phrase:
     g/ml ×1000, unitless count → canonical AQ fraction). Non-standard numbers
     remain validation errors.
   - A malformed `{{…}}` block is a validation error — never silently treated as prose.
-- **Reference role** (portion anchor, `finished_dish` only): stored as a
-  front-matter list of ingredient names, `reference: [Tortillas]` (0–2 entries).
-  It is a property of the *master* list — the editor shows it only there; rows and
-  artifacts never carry it. A name must match a merged ingredient of the recipe.
+- **Reference role** (size anchor, both recipe types): stored as a front-matter
+  list of ingredient names, `reference: [Tortillas]` (any number of entries). It
+  anchors the portion size on a `finished_dish` and the yield on an
+  `ingredient_recipe`. It is a property of the *master* list — the editor shows
+  it only there; rows and artifacts never carry it. A name must match a merged
+  ingredient of the recipe.
 - **Sub-recipe links are implicit**: an ingredient use — step row, master row or
   inline artifact — whose name equals the title of an `ingredient_recipe` in the
   collection *is* that sub-recipe (there is no link field; the editor picks the
@@ -198,8 +200,8 @@ the file. Two levels:
 - Row syntax, step structure and the artifacts of each step are validated (issue
   paths `steps[i].ingredients[j]…` and `steps[i].text`). A row without a name or
   quantity, a step whose prose is missing, and prose starting with `- ` are errors.
-- `reference` lists at most 2 names, only on `finished_dish`, and every name must
-  occur among the recipe's merged ingredients.
+- `reference` may list any number of names on both recipe types, and every name
+  must occur among the recipe's merged ingredients.
 - The body contains exactly one `## Zubereitung` heading followed by the numbered
   step blocks of §5.
 

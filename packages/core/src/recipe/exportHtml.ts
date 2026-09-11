@@ -172,6 +172,16 @@ function renderIngredientRecipeView(
   links: Readonly<Record<string, string>>,
 ): string {
   const yieldLine = `${recipe.yield}${NNBSP}${recipe.yield_unit}`;
+  // Reference ingredients anchor the yield (recipe_structure.md): shown as a
+  // parenthesized sanity check behind the yield, e.g. "500 ml (300 g Milch)".
+  // The view is unscaled, so each reference keeps its stored quantity.
+  const references = recipe.ingredients
+    .filter((ingredient) => ingredient.reference)
+    .map((ingredient) => ingredientLine(ingredient, ingredient.quantity, links));
+  const headline =
+    references.length > 0
+      ? `${escapeHtml(yieldLine)} (${references.join(', ')})`
+      : escapeHtml(yieldLine);
   const lines = recipe.ingredients.map((ingredient) =>
     ingredientLine(ingredient, ingredient.quantity, links),
   );
@@ -179,7 +189,7 @@ function renderIngredientRecipeView(
   return (
     `<div class="serving-view">\n` +
     `  <section aria-label="Zutaten">\n` +
-    `    <p class="serving-headline">${escapeHtml(yieldLine)}</p>\n` +
+    `    <p class="serving-headline">${headline}</p>\n` +
     `    <ul class="ingredients">\n${lines.map((line) => `  <li>${line}</li>`).join('\n')}\n` +
     `    </ul>\n` +
     `  </section>\n` +

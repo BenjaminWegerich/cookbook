@@ -133,6 +133,8 @@ title: Béchamelsauce
 type: ingredient_recipe
 yield: 500
 yield_unit: ml
+reference:
+  - Milch
 prep_time: 15 min
 ---
 ## Zubereitung
@@ -148,6 +150,12 @@ prep_time: 15 min
     expect(html).not.toContain('class="serving-button"');
     expect(html).toContain(`500${NNBSP}ml`);
     expect(html).toContain(renderAQS('Butter', 25, 'g'));
+  });
+
+  it('shows a reference ingredient as a parenthesized anchor behind the yield', () => {
+    // Unscaled view: the reference keeps its stored quantity, e.g.
+    // "500 ml (300 ml Milch)".
+    expect(html).toContain(`500${NNBSP}ml (${renderAQS('Milch', 300, 'ml')})`);
   });
 
   it('renders rows and unscaled artifacts in the steps', () => {

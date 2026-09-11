@@ -36,7 +36,7 @@ subtitle: Cremiges Curry mit Reis        (optional)
 description: …                           (optional, one paragraph)
 servings: 4                              (finished_dish only)
 reference:
-  - Reis                                  (finished_dish only, optional, 0–2 names)
+  - Reis                                  (optional, both types, any number of names)
 prep_time: 30 min
 total_time: 45 min                       (optional, only when larger than prep_time)
 ---
@@ -50,12 +50,13 @@ Rules:
   reserved Windows names `con`, `prn`, `aux`, `nul`, `com1`–`com9`, `lpt1`–`lpt9`).
 - `type` (required): exactly one of `finished_dish` or `ingredient_recipe`.
   - `finished_dish`: a complete dish with `servings` (integer, see §3) and
-    optionally `reference` (names of 0–2 ingredients anchored to the portion
-    size — each name must occur among the recipe's merged ingredients, §4).
+    optionally `reference` (names of ingredients anchored to the portion size —
+    each name must occur among the recipe's merged ingredients, §4).
   - `ingredient_recipe`: a reusable preparation whose own ingredient list is
     later scaled and added into dishes (e.g. a sauce, dough, spice mix). Carries
     `yield` (a §3 ladder number) and `yield_unit` (`g` or `ml`) instead of
-    `servings`; must **never** carry `servings` or `reference`.
+    `servings`; must **never** carry `servings`. It may optionally carry
+    `reference` (names anchored to the yield, same rules as above).
 - `prep_time` (required): free-text German display value, e.g. `25 min`,
   `1 h 30 min`. Prefer the standard values `1/3/5/10/15/20/30/45 min` and
   `1/1.5/2/3/6/12/24/48 h`; use plain text otherwise.
@@ -137,10 +138,11 @@ value directly.
   such a recipe). Do not rename or abbreviate existing titles. The match is
   **exact and case-sensitive** — copy the title from the context list
   character for character, never a differently cased or shortened variant.
-- For `finished_dish`, you may set `reference` to the names of the 1–2
-  ingredients anchored to the portion size (the "portion anchor", e.g. the
-  noodles or rice the servings count refers to). Each name must appear among the
-  recipe's merged rows.
+- You may set `reference` to the names of the ingredients that anchor the
+  recipe's size — for a `finished_dish` the portion ("portion anchor", e.g. the
+  noodles or rice the servings count refers to), for an `ingredient_recipe` the
+  yield (e.g. the milk a sauce is based on). There is no upper limit on the
+  number of names; each name must appear among the recipe's merged rows.
 
 ## 5. Collection-wide rules
 

@@ -177,7 +177,7 @@ export function buildSpecificationsText(spec: RecipeSpecifications): string {
   } else {
     lines.push(
       '- Rezept-Typ: `ingredient_recipe` (Zutaten-Rezept) — liefere genau diesen Typ, ohne ' +
-        '`servings` und ohne `reference`.',
+        '`servings`.',
     );
     if (spec.yieldQuantity !== null) {
       lines.push(

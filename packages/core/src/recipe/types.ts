@@ -68,9 +68,9 @@ export type MasterIngredient = Ingredient & { reference?: boolean };
  * A parsed recipe (storage_format.md §3–§5).
  *
  * Which optional fields are allowed depends on `type`: `finished_dish` carries
- * `servings` and the `reference` list; `ingredient_recipe` carries `yield` /
- * `yield_unit`. `steps` come from the Markdown body; `ingredients` is the
- * derived master list (never typed directly, §4).
+ * `servings`; `ingredient_recipe` carries `yield` / `yield_unit`. The
+ * `reference` list is allowed on both types. `steps` come from the Markdown
+ * body; `ingredients` is the derived master list (never typed directly, §4).
  */
 export interface Recipe {
   /** Unique within the whole collection; the stable identifier (§6). */
@@ -85,8 +85,9 @@ export interface Recipe {
   /** Only if it differs from `prep_time`. */
   total_time?: string;
   /**
-   * finished_dish only: names of 0–2 ingredients anchored to the portion size
-   * (§4). The names must match rows of the recipe; never set per step.
+   * Names of the ingredients anchored to the recipe's size: the portion size
+   * for a `finished_dish`, the yield for an `ingredient_recipe` (§4). The names
+   * must match rows of the recipe; never set per step. There is no upper limit.
    */
   reference?: string[];
   /** finished_dish only: integer standard number (ladder value), e.g. 6. */

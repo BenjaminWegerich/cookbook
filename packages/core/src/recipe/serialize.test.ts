@@ -79,12 +79,13 @@ describe('serializeRecipe', () => {
     expect(text).toContain('   Nudeln in {{1500 ml Wasser}} kochen, {{100 g}} beiseitelegen.');
   });
 
-  it('serializes an ingredient recipe without reference and with yield', () => {
+  it('serializes an ingredient recipe with a yield and a reference anchored to it', () => {
     const recipe: Recipe = {
       title: 'Béchamelsauce',
       type: 'ingredient_recipe',
       yield: 500,
       yield_unit: 'ml',
+      reference: ['Milch'],
       prep_time: '15 min',
       steps: [
         {
@@ -97,14 +98,16 @@ describe('serializeRecipe', () => {
       ],
       ingredients: [
         { name: 'Butter', quantity: 25, unit: 'g' },
-        { name: 'Milch', quantity: 300, unit: 'ml' },
+        { name: 'Milch', quantity: 300, unit: 'ml', reference: true },
       ],
     };
     const text = serializeRecipe(recipe);
     expect(text).toContain('yield: 500');
     expect(text).toContain('yield_unit: ml');
-    expect(text).not.toContain('reference');
+    // The reference list is written for ingredient recipes too, after the yield.
+    expect(text).toContain('yield_unit: ml\nreference:\n  - Milch\nprep_time: 15 min');
     const reparsed = parseRecipe(text);
+    expect(reparsed.reference).toEqual(['Milch']);
     expect(reparsed.ingredients).toEqual(recipe.ingredients);
   });
 

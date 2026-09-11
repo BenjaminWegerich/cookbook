@@ -5,7 +5,7 @@
 - Every recipe has exactly one explicit type, set by the author when creating the recipe. It is never derived automatically.
 - **Finished dish:** The recipe produces a dish that is served to people. Example: "Shredded Tofu Wraps".
 - **Ingredient recipe:** The recipe produces an ingredient that is used in other recipes. Example: "Salatdressing" (used for salads).
-- The type determines how "Servings" is specified and whether reference ingredients are defined (see below).
+- The type determines how "Servings" is specified (people vs. yield) and what a reference ingredient anchors (see below).
 
 ## Header Information
 
@@ -90,11 +90,11 @@
   master ingredient list (an author writing "500 g Nudeln" as prose only, without
   a step row, keeps the noodle amount out of the list on purpose — e.g. water that
   is always in stock).
-- For finished-dish recipes, 0 to 2 ingredients are defined as reference ingredients. Example: "6 Personen (700 g Nudeln)."
-- A reference ingredient anchors the portion size: it states how much of a key ingredient belongs to the specified number of servings. When the user scales the recipe to a different number of people, the app scales the reference ingredient's amount accordingly and displays the result as a sanity check for the user. Example: scaling the recipe above from 6 to 9 people shows "9 Personen (1000 g Nudeln)".
-- The reference role is a property of the **master list** only: it is set by name in the read-only master view (max 2 per `finished_dish`), never on a step row or artifact (see [storage_format.md](storage_format.md) §4).
-- The reference ingredient is a display aid for verification only; the step count itself is derived from the serving count (number of people), not from the reference ingredient.
-- The author chooses 0, 1, or 2 ingredients that best represent the portion size (e.g., the main starch or protein). If no ingredient represents the portion well, none is defined.
+- Recipes may define any number of reference ingredients — 0, 1, or all of them. Example (finished dish): "6 Personen (700 g Nudeln)"; example (ingredient recipe): "500 ml (300 ml Milch)".
+- A reference ingredient anchors the recipe's size: for a finished dish, how much of a key ingredient belongs to the specified number of servings; for an ingredient recipe, how much of a key ingredient the stated yield contains. When the recipe is scaled, the reference ingredient's amount moves by the same steps and the result is displayed as a sanity check for the user. Example: scaling the finished dish above from 6 to 9 people shows "9 Personen (1000 g Nudeln)".
+- The reference role is a property of the **master list** only: it is set by name in the read-only master view (★ toggle, available for both recipe types), never on a step row or artifact (see [storage_format.md](storage_format.md) §4).
+- The reference ingredient is a display aid for verification only; the portion size (finished dish) or the yield (ingredient recipe) is authored independently and never derived from the reference ingredient.
+- The author chooses the ingredients that best represent the portion size (finished dish) or the yield (ingredient recipe) — e.g., the main starch or protein. If no ingredient represents it well, none is defined.
 
 ## Preparation
 

@@ -4,7 +4,8 @@
  * The step rows are the source of truth for the ingredient list (§4): each
  * step may carry its own rows (`- 250 g Tortillas`) above a prose line; the
  * master list is derived from the rows. The front matter may carry the
- * `reference` name list (finished_dish only).
+ * `reference` name list on both recipe types (anchored to the servings of a
+ * finished_dish or to the yield of an ingredient_recipe).
  *
  * All fixture quantities are real ladder values — e.g. 250, not 240 (the
  * authoritative docs/standard_numbers.csv has no 240; the master data wins).
@@ -344,19 +345,31 @@ describe('parseRecipe — reference validation (§4)', () => {
     expectIssueAt(notLadder, 'servings', 'Standardwert');
   });
 
-  it('allows 0, 1 or 2 reference names, only for finished_dish', () => {
-    const three = parseIssues(
+  it('allows any number of reference names (no cap) and rejects duplicates', () => {
+    const many = parseRecipe(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
         'reference: [A, B, C]\n' +
         '---\n## Zubereitung\n1. - 1 g A\n   - 1 g B\n   - 1 g C\n   Text.\n',
     );
-    expectIssueAt(three, 'reference', 'Höchstens 2');
+    expect(many.reference).toEqual(['A', 'B', 'C']);
 
-    const onSub = parseIssues(
-      '---\ntitle: X\ntype: ingredient_recipe\nyield: 500\nyield_unit: ml\nprep_time: 10 min\n' +
-        'reference: [A]\n---\n## Zubereitung\n1. x\n',
+    const duplicate = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
+        'reference: [A, A]\n' +
+        '---\n## Zubereitung\n1. - 1 g A\n   Text.\n',
     );
-    expectIssueAt(onSub, 'reference', 'nur für finished_dish');
+    expectIssueAt(duplicate, 'reference[1]', 'mehrfach');
+  });
+
+  it('allows reference names on an ingredient recipe (anchored to the yield)', () => {
+    const recipe = parseRecipe(
+      '---\ntitle: X\ntype: ingredient_recipe\nyield: 500\nyield_unit: ml\nprep_time: 10 min\n' +
+        'reference: [Milch]\n---\n## Zubereitung\n1. - 300 ml Milch\n   Milch aufkochen.\n',
+    );
+    expect(recipe.reference).toEqual(['Milch']);
+    expect(recipe.ingredients).toEqual([
+      { name: 'Milch', quantity: 300, unit: 'ml', reference: true },
+    ]);
   });
 
   it('requires every reference name to occur in the recipe rows', () => {
@@ -364,6 +377,15 @@ describe('parseRecipe — reference validation (§4)', () => {
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
         'reference:\n  - Reis\n' +
         '---\n## Zubereitung\n1. - 250 g Tortillas\n   Tortillas erwärmen.\n',
+    );
+    expectIssueAt(issues, 'reference[0]', 'kommt im Rezept nicht vor');
+  });
+
+  it('checks reference names of an ingredient recipe against its rows too', () => {
+    const issues = parseIssues(
+      '---\ntitle: X\ntype: ingredient_recipe\nyield: 500\nyield_unit: ml\nprep_time: 10 min\n' +
+        'reference: [Sahne]\n' +
+        '---\n## Zubereitung\n1. - 300 ml Milch\n   Milch aufkochen.\n',
     );
     expectIssueAt(issues, 'reference[0]', 'kommt im Rezept nicht vor');
   });

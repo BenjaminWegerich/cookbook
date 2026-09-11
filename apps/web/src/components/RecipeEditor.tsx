@@ -9,7 +9,7 @@
  * - the step text is free prose; display-only inline artifacts ("+ Menge im
  *   Text") scale with the serving count but are never counted;
  * - the master list (Zutaten section) is read-only except for the reference
- *   role, which can only be set there (finished_dish, max 2);
+ *   role, which can only be set there (both recipe types, no limit);
  * - sub-recipes are implicit (name == ingredient-recipe title) and clickable
  *   wherever they appear (step rows, master list, text artifacts);
  * - quantities are stored in the family unit g/ml; the display switches to
@@ -290,8 +290,8 @@ function mapIssue(issue: ValidationIssue): IssueTarget {
 /**
  * Normalizes the draft into the form that is written to Drive (§7 round-trip):
  * trimmed single-line step prose (internal line breaks collapse to spaces),
- * empty optional fields dropped, the reference list kept for finished dishes
- * only, and the master list derived from the step rows (§4).
+ * empty optional fields dropped, the reference list kept for both recipe types,
+ * and the master list derived from the step rows (§4).
  */
 function normalizeRecipe(draft: EditorDraft): Recipe {
   // A step is kept when it has prose OR counted rows — a row-only step stays
@@ -308,9 +308,7 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
     }))
     .filter((step) => step.text !== '' || step.ingredients.length > 0);
   const reference =
-    draft.type === 'finished_dish' && draft.reference !== undefined && draft.reference.length > 0
-      ? draft.reference
-      : undefined;
+    draft.reference !== undefined && draft.reference.length > 0 ? draft.reference : undefined;
   const ingredients = deriveIngredients(steps, reference ?? []);
   const base = {
     title: draft.title.trim(),
@@ -337,6 +335,7 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
     ingredients,
     yield: draft.yield,
     yield_unit: draft.yield_unit,
+    ...(reference !== undefined ? { reference } : {}),
   };
 }
 
@@ -627,9 +626,6 @@ function RecipeEditor({
     }
     return names;
   }, [draft?.reference, computedIngredients]);
-
-  /** How many reference slots are already taken (max 2, §4). */
-  const referenceUsed = referenceNames.size;
 
   /**
    * A name a row or named inline mention may reference: it exists in the
@@ -1011,11 +1007,10 @@ function RecipeEditor({
     }
   };
 
-  /** Toggles the reference role of a master-list row (§4, finished_dish only). */
+  /** Toggles the reference role of a master-list row (§4; both recipe types). */
   const toggleReference = (name: string): void => {
-    if (draft === null || draft.type !== 'finished_dish') return;
+    if (draft === null) return;
     const flagged = referenceNames.has(name);
-    if (!flagged && referenceUsed >= 2) return;
     updateDraft((current) => {
       const reference = new Set(current.reference ?? []);
       if (flagged) {
@@ -1325,8 +1320,7 @@ function RecipeEditor({
                 onClick={() =>
                   patchDraft({
                     type: 'ingredient_recipe',
-                    // References are finished_dish-only (§4): drop them.
-                    reference: undefined,
+                    // References are available on both types (§4): keep them.
                     // Defaults for a fresh ingredient recipe: Gewicht, 1000 (1 kg).
                     yield: draft.yield ?? 1000,
                     yield_unit: draft.yield_unit ?? 'g',
@@ -1718,8 +1712,8 @@ function RecipeEditor({
               {/* The &shy; (U+00AD soft hyphen) lets "zusammengesetzt" break as
                   "zusammen-gesetzt" on narrow widths; invisible when the line fits. */}
               <p className="empty-hint">
-                Liste aus den Zubereitungsschritten zusammen&shy;gesetzt. Bis zu zwei
-                Referenz-Zutaten mit ★ markieren.
+                Liste aus den Zubereitungsschritten zusammen&shy;gesetzt. Zutaten mit ★ als
+                Referenz-Menge markieren.
               </p>
               <ul className="ingredient-list">
                 {computedIngredients.map((ingredient) => {
@@ -1750,27 +1744,22 @@ function RecipeEditor({
                           </button>
                         )}
                       </span>
-                      {draft.type === 'finished_dish' && (
-                        <button
-                          type="button"
-                          className={isReference ? 'ref-toggle on' : 'ref-toggle'}
-                          disabled={!isReference && referenceUsed >= 2}
-                          aria-pressed={isReference}
-                          title={
-                            isReference
-                              ? 'Referenz-Menge entfernen'
-                              : 'Als Referenz-Menge markieren'
-                          }
-                          aria-label={
-                            isReference
-                              ? `„${ingredient.name}“ als Referenz-Menge entfernen`
-                              : `„${ingredient.name}“ als Referenz-Menge markieren`
-                          }
-                          onClick={() => toggleReference(ingredient.name)}
-                        >
-                          {isReference ? '★' : '☆'}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className={isReference ? 'ref-toggle on' : 'ref-toggle'}
+                        aria-pressed={isReference}
+                        title={
+                          isReference ? 'Referenz-Menge entfernen' : 'Als Referenz-Menge markieren'
+                        }
+                        aria-label={
+                          isReference
+                            ? `„${ingredient.name}“ als Referenz-Menge entfernen`
+                            : `„${ingredient.name}“ als Referenz-Menge markieren`
+                        }
+                        onClick={() => toggleReference(ingredient.name)}
+                      >
+                        {isReference ? '★' : '☆'}
+                      </button>
                     </li>
                   );
                 })}

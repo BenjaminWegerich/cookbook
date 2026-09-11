@@ -133,8 +133,11 @@
 - A reference ingredient is an ordinary ingredient as far as scaling is concerned:
   it moves by the same common Δx and is displayed as a sanity check — e.g.
   "9 Personen (1000 g Nudeln)" when scaling "6 Personen (700 g Nudeln)" to 9 people.
-- The step count is derived exclusively from the serving counts; the reference
-  ingredient only visualizes the result.
+  The same holds for a reference ingredient of an ingredient recipe: it anchors
+  the yield (e.g. "500 ml (300 ml Milch)") and moves with the sub-recipe when the
+  sub-recipe is scaled to a required amount (§6).
+- The portion size (finished dish) or yield (ingredient recipe) is authored
+  exclusively from its own field; the reference ingredient only visualizes the result.
 
 ## 6. Ingredient Recipes and Sub-Recipes
 

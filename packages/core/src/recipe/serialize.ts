@@ -43,12 +43,14 @@ function buildFrontMatter(recipe: Recipe): Record<string, unknown> {
   if (recipe.description !== undefined) frontMatter.description = recipe.description;
   if (recipe.type === 'finished_dish') {
     frontMatter.servings = recipe.servings;
-    if (recipe.reference !== undefined && recipe.reference.length > 0) {
-      frontMatter.reference = recipe.reference;
-    }
   } else {
     frontMatter.yield = recipe.yield;
     frontMatter.yield_unit = recipe.yield_unit;
+  }
+  // The reference names anchor the recipe's size (portion for a finished dish,
+  // yield for an ingredient recipe, §4) and are written for both types.
+  if (recipe.reference !== undefined && recipe.reference.length > 0) {
+    frontMatter.reference = recipe.reference;
   }
   frontMatter.prep_time = recipe.prep_time;
   if (recipe.total_time !== undefined) frontMatter.total_time = recipe.total_time;

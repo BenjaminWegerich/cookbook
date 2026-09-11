@@ -65,11 +65,12 @@ const COMMON_FIELDS: ReadonlySet<string> = new Set([
   'type',
   'subtitle',
   'description',
+  'reference',
   'prep_time',
   'total_time',
 ]);
 /** Fields allowed only on finished_dish (§3). */
-const FINISHED_DISH_ONLY: ReadonlySet<string> = new Set(['servings', 'reference']);
+const FINISHED_DISH_ONLY: ReadonlySet<string> = new Set(['servings']);
 /** Fields allowed only on ingredient_recipe (§3). */
 const INGREDIENT_RECIPE_ONLY: ReadonlySet<string> = new Set(['yield', 'yield_unit']);
 /** The union of all allowed top-level fields (unknown fields are rejected). */
@@ -261,7 +262,6 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   let servings: number | undefined;
   let yieldValue: number | undefined;
   let yieldUnit: Unit | undefined;
-  let reference: string[] | undefined;
   if (type === 'finished_dish') {
     const servingsValue = data['servings'];
     if (servingsValue === undefined) {
@@ -271,52 +271,6 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     } else {
       checkLadderValue(servingsValue, 'servings', issues, true);
       servings = servingsValue;
-    }
-    // Reference role (§4): 0–2 ingredient names anchored to the portion size,
-    // resolved onto the derived master list at the end of parseRecipe.
-    const referenceValue = data['reference'];
-    if (referenceValue !== undefined) {
-      const names =
-        typeof referenceValue === 'string'
-          ? [referenceValue]
-          : Array.isArray(referenceValue)
-            ? referenceValue.filter((entry): entry is string => typeof entry === 'string')
-            : [];
-      if (
-        typeof referenceValue !== 'string' &&
-        !(Array.isArray(referenceValue) && referenceValue.every((entry) => typeof entry === 'string'))
-      ) {
-        issues.push({
-          path: 'reference',
-          message: '"reference" muss eine Liste von Zutatennamen sein (z. B. ["Tortillas"]).',
-        });
-      } else {
-        reference = [];
-        const seen = new Set<string>();
-        names.forEach((name, index) => {
-          const path = `reference[${index}]`;
-          const trimmed = name.trim();
-          if (trimmed === '') {
-            issues.push({ path, message: 'Ein Referenz-Name darf nicht leer sein.' });
-            return;
-          }
-          if (seen.has(trimmed)) {
-            issues.push({
-              path,
-              message: `"${trimmed}" ist mehrfach als Referenz-Zutat angegeben.`,
-            });
-            return;
-          }
-          seen.add(trimmed);
-          reference!.push(trimmed);
-        });
-        if (reference.length > 2) {
-          issues.push({
-            path: 'reference',
-            message: 'Höchstens 2 Zutaten dürfen als Referenz-Menge markiert sein.',
-          });
-        }
-      }
     }
   } else if (type === 'ingredient_recipe') {
     const yieldRaw = data['yield'];
@@ -351,6 +305,50 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
       } else {
         yieldUnit = rawUnit;
       }
+    }
+  }
+
+  // Reference role (§4): ingredient names anchored to the recipe's size — the
+  // portion for a finished_dish, the yield for an ingredient_recipe. The names
+  // are resolved onto the derived master list at the end of parseRecipe; there
+  // is no upper limit on their number.
+  let reference: string[] | undefined;
+  const referenceValue = data['reference'];
+  if (referenceValue !== undefined) {
+    const names =
+      typeof referenceValue === 'string'
+        ? [referenceValue]
+        : Array.isArray(referenceValue)
+          ? referenceValue.filter((entry): entry is string => typeof entry === 'string')
+          : [];
+    if (
+      typeof referenceValue !== 'string' &&
+      !(Array.isArray(referenceValue) && referenceValue.every((entry) => typeof entry === 'string'))
+    ) {
+      issues.push({
+        path: 'reference',
+        message: '"reference" muss eine Liste von Zutatennamen sein (z. B. ["Tortillas"]).',
+      });
+    } else {
+      reference = [];
+      const seen = new Set<string>();
+      names.forEach((name, index) => {
+        const path = `reference[${index}]`;
+        const trimmed = name.trim();
+        if (trimmed === '') {
+          issues.push({ path, message: 'Ein Referenz-Name darf nicht leer sein.' });
+          return;
+        }
+        if (seen.has(trimmed)) {
+          issues.push({
+            path,
+            message: `"${trimmed}" ist mehrfach als Referenz-Zutat angegeben.`,
+          });
+          return;
+        }
+        seen.add(trimmed);
+        reference!.push(trimmed);
+      });
     }
   }
 

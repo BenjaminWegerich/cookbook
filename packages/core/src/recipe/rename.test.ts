@@ -87,6 +87,32 @@ describe('renameRecipeInCollection', () => {
     expect(parent.ingredients.map((entry) => entry.name)).toEqual(['Tortillas', 'Käsesauce']);
   });
 
+  it('renames a reference entry in an ingredient recipe (reference is not finished-dish only)', () => {
+    const sauceBase = parse(`---
+title: Grundsauce
+type: ingredient_recipe
+yield: 500
+yield_unit: ml
+reference:
+  - Béchamelsauce
+prep_time: 5 min
+---
+## Zubereitung
+1. - 500 ml Béchamelsauce
+   Béchamelsauce verfeinern.
+`);
+    const { updated } = renameRecipeInCollection(
+      [BECHAMEL, sauceBase],
+      'Béchamelsauce',
+      'Käsesauce',
+    );
+    expect(updated).toHaveLength(1);
+    expect(updated[0]!.reference).toEqual(['Käsesauce']);
+    expect(updated[0]!.ingredients).toEqual([
+      { name: 'Käsesauce', quantity: 500, unit: 'ml', reference: true },
+    ]);
+  });
+
   it('leaves recipes without the old title unchanged', () => {
     const { updated } = renameRecipeInCollection([BECHAMEL, WRAPS, PASTA], 'Béchamelsauce', 'Käsesauce');
     expect(updated.some((recipe) => recipe.title === 'Spaghetti')).toBe(false);
