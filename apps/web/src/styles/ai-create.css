@@ -86,6 +86,14 @@
 
 /* ---- Composer ------------------------------------------------------------- */
 
+/* The screen title sits directly above the explanatory hint. The global
+   .app-header bottom margin (--space-7) would add ~24 px of air on top of the
+   screen's own grid gap, so it is dropped here: the grid gap alone is the
+   intended, tighter break between heading and hint. */
+.ai-screen .app-header {
+  margin-block-end: 0;
+}
+
 .ai-composer {
   display: grid;
   gap: var(--space-4);
@@ -93,6 +101,10 @@
   padding-top: var(--space-5);
 }
 
+/* Fixed-height entry fields: the row counts are set in the component
+   (6 lines for the first prompt, 3 lines for the source field and for every
+   follow-up answer). The height must not be changeable by the user, hence
+   resize: none — longer text scrolls vertically inside the field. */
 .ai-composer textarea {
   width: 100%;
   padding: var(--space-3) var(--space-4);
@@ -103,9 +115,60 @@
   font-family: var(--font-sans);
   font-size: var(--text-md);
   line-height: 1.4;
-  resize: vertical;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .ai-composer textarea::placeholder {
   color: var(--color-ink-muted);
+}
+
+/* ---- Recipe options (Typ, Portionen/Ergiebigkeit, Merkmale) --------------- */
+
+/* The option block reuses the manual editor's Kopfdaten controls (.field,
+   .field-label, .segmented, .quantity-chips, .chip, .checkbox-field from
+   editor.css) so both create paths look and behave identically. Only the
+   block's own rhythm and the flags row are specific to this screen. */
+.ai-options {
+  display: grid;
+  gap: var(--space-5);
+}
+
+/* The Merkmale checkboxes sit next to each other in one wrapping row. */
+.ai-flags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-6);
+}
+
+/* .checkbox-field is defined for a stacked label + hint; in this row the box
+   and its single-word label are vertically centred (no hint text). */
+.ai-options .checkbox-field {
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ai-options .checkbox-field input {
+  margin-block-start: 0;
+  flex-shrink: 0;
+}
+
+/* Editor parity (editor.css #editor-field-yield): keep the Gewicht/Volumen
+   toggle at the same distance from the QuantityPicker as the manual editor. */
+.ai-options .ai-yield .segmented {
+  margin-block-end: calc(var(--space-3) + var(--space-1) - var(--space-2));
+}
+
+/* „Die KI soll …“: a full-width two-way switch. The second label is long, so
+   the two segments share the row equally and may wrap instead of overflowing
+   the phone width. */
+.ai-options .ai-mode {
+  width: 100%;
+  grid-auto-columns: 1fr;
+}
+
+.ai-options .ai-mode button {
+  white-space: normal;
 }

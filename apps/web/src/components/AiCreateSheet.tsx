@@ -14,14 +14,21 @@
  * - No blocking "new ingredient" confirm step: the draft opens in the recipe
  *   editor, where unknown ingredient names / sub-recipes are handled with the
  *   editor's existing flows ("Neue Zutat anlegen", saving an ingredient_recipe).
+ * - The first prompt optionally carries recipe specifications below the source
+ *   field: the manual editor's Typ and Portionen/Ergiebigkeit controls (defaults:
+ *   6 Portionen for a Gericht, Gewicht / 1 kg for a Zutaten-Rezept), the
+ *   Merkmale flags "Vorgaben" (vegan — always on for now, schnell und einfach,
+ *   günstig) and "Die KI soll …" (ggf. nachfragen vs. direkt den Entwurf
+ *   schreiben). The values are collected here; wiring them into the AI prompt is
+ *   the next slice.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { NNBSP, allIngredientMappings } from '@cookbook/core';
-import type { Recipe } from '@cookbook/core';
+import { NNBSP, allIngredientMappings, integerLadderValues } from '@cookbook/core';
+import type { Recipe, RecipeType } from '@cookbook/core';
 
 import { buildAiContextText } from '../ai/aiContext';
 import { createAiCreateSession } from '../ai/createRecipeDraft';
@@ -31,12 +38,27 @@ import { getAiApiKey, setAiApiKey } from '../ai/sessionKey';
 import type { StoredRecipe } from '../drive/recipeStorage';
 import { readRecipe } from '../drive/recipeStorage';
 import { loadPersonalRules } from '../drive/personalRules';
+import QuantityPicker from './QuantityPicker';
 
 /** One bubble of the chat transcript. */
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
+
+/** Integer standard numbers 1–30 — the allowed serving counts, identical to
+ *  the manual editor's Portionen chips (decision 7). */
+const SERVING_OPTIONS = integerLadderValues(1, 30);
+
+/** Default Portionen of a finished dish (agreed with the user). */
+const DEFAULT_SERVINGS = 6;
+
+/** Default Ergiebigkeit of a Zutaten-Rezept: 1 kg, measured by weight. */
+const DEFAULT_YIELD = 1000;
+
+/** How the AI should behave on the first prompt (agreed with the user): ask a
+ *  clarifying question when something is ambiguous, or always draft directly. */
+type ReplyMode = 'clarify' | 'draft';
 
 interface AiCreateSheetProps {
   /** Drive access token (the Drive connection is required). */
@@ -117,6 +139,26 @@ export default function AiCreateSheet({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [description, setDescription] = useState('');
   const [source, setSource] = useState('');
+  /**
+   * Recipe specifications below the source field (editor parity): the Typ
+   * toggle, the type-dependent Portionen / Ergiebigkeit input, and the
+   * Merkmale flags. Collected here for the prompt wiring of the next slice —
+   * they have no effect on the AI request yet.
+   */
+  const [recipeType, setRecipeType] = useState<RecipeType>('finished_dish');
+  /** Finished dish: chosen serving count (defaults to 6, agreed with the user). */
+  const [servings, setServings] = useState<number>(DEFAULT_SERVINGS);
+  /** Zutaten-Rezept: yield quantity and its base unit (g/ml); defaults 1 kg. */
+  const [yieldQuantity, setYieldQuantity] = useState<number>(DEFAULT_YIELD);
+  const [yieldUnit, setYieldUnit] = useState<'g' | 'ml'>('g');
+  /** Merkmale: „schnell und einfach“ and „günstig“ default to off. „vegan“ is
+   *  permanently on for now (the app's only user is vegan); the checkbox stays
+   *  interactive-looking but cannot be turned off (see the flags row below). */
+  const [wantsVegan, setWantsVegan] = useState(true);
+  const [wantsFast, setWantsFast] = useState(false);
+  const [wantsCheap, setWantsCheap] = useState(false);
+  /** „Die KI soll …“: ask for clarification by default (current behaviour). */
+  const [replyMode, setReplyMode] = useState<ReplyMode>('clarify');
   const [busy, setBusy] = useState(false);
   /** A validated draft ready to open in the editor. */
   const [draft, setDraft] = useState<Recipe | null>(null);
@@ -324,6 +366,7 @@ export default function AiCreateSheet({
                   }}
                 >
                   {conversationStarted ? (
+                    // Follow-up answer: fixed three-line height, scrolls vertically.
                     <textarea
                       rows={3}
                       value={description}
@@ -331,18 +374,156 @@ export default function AiCreateSheet({
                     />
                   ) : (
                     <>
+                      {/* First prompt (description): fixed six-line height. */}
                       <textarea
-                        rows={3}
+                        rows={6}
                         value={description}
                         placeholder="Rezept beschreiben …"
                         onChange={(event) => setDescription(event.target.value)}
                       />
+                      {/* Optional pasted source text: fixed three-line height. */}
                       <textarea
-                        rows={2}
+                        rows={3}
                         value={source}
                         placeholder="Quelltext von einer Webseite einfügen (optional) …"
                         onChange={(event) => setSource(event.target.value)}
                       />
+
+                      {/* Rezept-Vorgaben — the manual editor's Typ and
+                          Portionen/Ergiebigkeit controls plus the Merkmale
+                          flags (values collected for the next slice's prompt
+                          wiring; they do not reach the AI yet). */}
+                      <div className="ai-options">
+                        <div className="field">
+                          <span className="field-label">Typ</span>
+                          <div className="segmented" role="group" aria-label="Rezept-Typ">
+                            <button
+                              type="button"
+                              className={recipeType === 'finished_dish' ? 'segmented-active' : ''}
+                              onClick={() => setRecipeType('finished_dish')}
+                            >
+                              Gericht
+                            </button>
+                            <button
+                              type="button"
+                              className={
+                                recipeType === 'ingredient_recipe' ? 'segmented-active' : ''
+                              }
+                              onClick={() => setRecipeType('ingredient_recipe')}
+                            >
+                              Zutaten-Rezept
+                            </button>
+                          </div>
+                        </div>
+
+                        {recipeType === 'finished_dish' ? (
+                          <div className="field">
+                            <span className="field-label">Portionen</span>
+                            <div className="quantity-chips" role="group" aria-label="Portionen">
+                              {SERVING_OPTIONS.map((option) => (
+                                <button
+                                  key={option}
+                                  type="button"
+                                  className={option === servings ? 'chip chip-active' : 'chip'}
+                                  onClick={() => setServings(option)}
+                                >
+                                  {option}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="field ai-yield">
+                            <span className="field-label">Ergiebigkeit</span>
+                            <div
+                              className="segmented"
+                              role="group"
+                              aria-label="Einheit der Ergiebigkeit"
+                            >
+                              <button
+                                type="button"
+                                className={yieldUnit !== 'ml' ? 'segmented-active' : ''}
+                                onClick={() => setYieldUnit('g')}
+                              >
+                                Gewicht
+                              </button>
+                              <button
+                                type="button"
+                                className={yieldUnit === 'ml' ? 'segmented-active' : ''}
+                                onClick={() => setYieldUnit('ml')}
+                              >
+                                Volumen
+                              </button>
+                            </div>
+                            <QuantityPicker
+                              value={yieldQuantity}
+                              onChange={setYieldQuantity}
+                              family={yieldUnit === 'ml' ? 'ml' : 'g'}
+                            />
+                          </div>
+                        )}
+
+                        {/* Merkmale, grouped under their own caption. „vegan“ is
+                            permanently on for now (the app's only user is
+                            vegan): it stays an ordinary, enabled-looking
+                            checkbox, but its handler can never turn it off.
+                            The other two are plain toggles, off by default. */}
+                        <div className="field">
+                          <span className="field-label">Vorgaben</span>
+                          <div className="ai-flags">
+                            <label className="checkbox-field">
+                              <input
+                                type="checkbox"
+                                checked={wantsVegan}
+                                onChange={() => setWantsVegan(true)}
+                              />
+                              <span>vegan</span>
+                            </label>
+                            <label className="checkbox-field">
+                              <input
+                                type="checkbox"
+                                checked={wantsFast}
+                                onChange={(event) => setWantsFast(event.target.checked)}
+                              />
+                              <span>schnell und einfach</span>
+                            </label>
+                            <label className="checkbox-field">
+                              <input
+                                type="checkbox"
+                                checked={wantsCheap}
+                                onChange={(event) => setWantsCheap(event.target.checked)}
+                              />
+                              <span>günstig</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* „Die KI soll …“: clarify when needed (current rules
+                            behaviour) or always draft directly. */}
+                        <div className="field">
+                          <span className="field-label">Die KI soll …</span>
+                          <div
+                            className="segmented ai-mode"
+                            role="group"
+                            aria-label="Verhalten der KI"
+                          >
+                            <button
+                              type="button"
+                              className={replyMode === 'clarify' ? 'segmented-active' : ''}
+                              onClick={() => setReplyMode('clarify')}
+                            >
+                              ggf. nachfragen
+                            </button>
+                            <button
+                              type="button"
+                              className={replyMode === 'draft' ? 'segmented-active' : ''}
+                              onClick={() => setReplyMode('draft')}
+                            >
+                              direkt den Entwurf schreiben
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </>
                   )}
                   {error !== null && (
