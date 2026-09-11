@@ -86,11 +86,15 @@
 
 /* ---- Composer ------------------------------------------------------------- */
 
-/* The screen title sits directly above the explanatory hint. The global
-   .app-header bottom margin (--space-7) would add ~24 px of air on top of the
-   screen's own grid gap, so it is dropped here: the grid gap alone is the
-   intended, tighter break between heading and hint. */
+/* Header stack: the Zurück button sits on its own line at the top left (the
+   editor's back placement), the screen title below it. The global .app-header
+   bottom margin (--space-7) would add ~24 px of air on top of the screen's own
+   grid gap, so it is dropped here: the grid gap alone is the intended, tighter
+   break between heading and hint. */
 .ai-screen .app-header {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
   margin-block-end: 0;
 }
 

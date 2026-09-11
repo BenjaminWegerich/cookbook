@@ -34,7 +34,8 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { Ref } from 'react';
 
 import { NNBSP, allIngredientMappings, integerLadderValues } from '@cookbook/core';
 import type { Recipe, RecipeType } from '@cookbook/core';
@@ -100,6 +101,18 @@ function shouldAutoApplyKey(previousValue: string, nextValue: string, inputType:
   return nextValue.length - previousValue.length > 1;
 }
 
+/**
+ * Imperative handle for the browser-back integration (owned by App), mirroring
+ * the recipe editor: the sheet is asked whether it consumes a browser Back
+ * before the app closes the AI-create screen. Consumed means the
+ * "Änderungen verwerfen?" step was armed.
+ */
+export interface AiCreateSheetHandle {
+  /** True when the back was handled inside the sheet; false when the sheet may
+   *  close and return to the recipe list. */
+  notifyBack: () => boolean;
+}
+
 interface AiCreateSheetProps {
   /** Drive access token (the Drive connection is required). */
   token: string;
@@ -117,6 +130,8 @@ interface AiCreateSheetProps {
   onClose: () => void;
   /** A validated AI draft is ready for review — open it in the editor. */
   onOpenDraft: (recipe: Recipe) => void;
+  /** Browser-back consumer handle (React 19: ref is a regular prop). */
+  ref?: Ref<AiCreateSheetHandle>;
 }
 
 /** The AI context block (aiContext.ts) plus the collection facts it was built
@@ -217,6 +232,7 @@ export default function AiCreateSheet({
   onHandoffConsumed,
   onClose,
   onOpenDraft,
+  ref,
 }: AiCreateSheetProps) {
   /** The prepared session; null while the context loads or no key is set. */
   const [session, setSession] = useState<AiCreateSession | null>(null);
@@ -255,6 +271,9 @@ export default function AiCreateSheet({
   /** A validated draft ready to open in the editor. */
   const [draft, setDraft] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Work signature the "Änderungen verwerfen?" step was armed for; null when
+   *  no discard confirmation is armed (see confirmDiscard below). */
+  const [discardArmedFor, setDiscardArmedFor] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   /** True while mounted — guards late promise resolutions. StrictMode
@@ -441,15 +460,60 @@ export default function AiCreateSheet({
   const refreshing = handoff !== null && session !== null;
   const canSend = !busy && !refreshing && (description.trim() !== '' || source.trim() !== '');
 
+  /** True when leaving would discard started work: text typed into the
+   *  composer, a started conversation, or an AI draft that was never saved.
+   *  The API-key field is deliberately excluded — the key is session-only
+   *  (N6), so leaving it loses nothing. */
+  const hasWork =
+    description.trim() !== '' || source.trim() !== '' || messages.length > 0 || draft !== null;
+
+  /**
+   * Fingerprint of the started work (content and shape, not just presence):
+   * the armed discard confirmation is bound to it, so any later change — typing,
+   * a new message, a new or cleared draft — invalidates the arm during render
+   * ("Behalten") instead of surviving it. This is the effect-free equivalent of
+   * the editor's draft-change guard and keeps the button label honest when the
+   * work is gone again.
+   */
+  const workSignature = `${description}\u0000${source}\u0000${messages.length}\u0000${draft !== null}`;
+
+  /** The "Änderungen verwerfen?" step is armed for the current work state. */
+  const confirmDiscard = discardArmedFor === workSignature;
+
+  /**
+   * Browser-back consumer (see AiCreateSheetHandle and App): started work arms
+   * the "Änderungen verwerfen?" step (the same two-step guard as the header
+   * button), so the browser Back button never silently drops the conversation.
+   */
+  useImperativeHandle(ref, () => ({
+    notifyBack: (): boolean => {
+      if (hasWork && !confirmDiscard) {
+        setDiscardArmedFor(workSignature);
+        return true;
+      }
+      return false;
+    },
+  }));
+
   return (
     <main className="app ai-screen">
       <header className="app-header">
-        <div>
-          <h1>Rezept mit KI anlegen</h1>
-        </div>
-        <button type="button" className="text-button" onClick={onClose}>
-          Zurück
+        {/* Back button on its own line at the top left (editor placement), the
+            screen title below it. */}
+        <button
+          type="button"
+          className={confirmDiscard ? 'text-button danger-text' : 'text-button'}
+          onClick={() => {
+            if (hasWork && !confirmDiscard) {
+              setDiscardArmedFor(workSignature);
+            } else {
+              onClose();
+            }
+          }}
+        >
+          {confirmDiscard ? 'Änderungen verwerfen?' : 'Zurück'}
         </button>
+        <h1>Rezept mit KI anlegen</h1>
       </header>
 
       {showKeyField ? (
@@ -537,7 +601,13 @@ export default function AiCreateSheet({
                     <button
                       type="button"
                       className="primary-button"
-                      onClick={() => onOpenDraft(draft)}
+                      onClick={() => {
+                        // Opening the draft is a deliberate "keep working"
+                        // action — drop any armed discard confirmation so the
+                        // header button reads "Zurück" again on return.
+                        setDiscardArmedFor(null);
+                        onOpenDraft(draft);
+                      }}
                     >
                       Im Editor öffnen
                     </button>

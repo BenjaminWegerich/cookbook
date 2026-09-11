@@ -3,7 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Recipe } from '@cookbook/core';
 
 import { getAccessToken, isGoogleAuthAvailable, requestAccessToken } from './auth/googleAuth';
-import AiCreateSheet, { type AiHandoff } from './components/AiCreateSheet';
+import AiCreateSheet, {
+  type AiCreateSheetHandle,
+  type AiHandoff,
+} from './components/AiCreateSheet';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
@@ -98,6 +101,8 @@ function App() {
   const navRef = useRef<TopScreen | null>(null);
   /** Imperative handle of the mounted RecipeEditor (browser-back consumer). */
   const editorHandleRef = useRef<RecipeEditorHandle | null>(null);
+  /** Imperative handle of the mounted AI-create sheet (browser-back consumer). */
+  const aiCreateHandleRef = useRef<AiCreateSheetHandle | null>(null);
 
   /**
    * Switches the visible layer and keeps the browser history in sync so the
@@ -181,9 +186,10 @@ function App() {
   // Browser Back / Forward: step back one screen at a time instead of leaving
   // the app. The history holds the list (initial entry) plus at most one
   // screen entry, so a pop onto the list entry must close the current screen.
-  // The editor can consume the pop itself (its topmost overlay closes first;
-  // unsaved changes arm the "Änderungen verwerfen?" step like the header button
-  // does) — when it does, the screen entry is re-pushed to cancel the pop.
+  // A screen with internal layers can consume the pop itself: the editor closes
+  // its topmost overlay first and arms the "Änderungen verwerfen?" step on
+  // unsaved changes; the AI-create sheet arms the same step for started work.
+  // When consumed, the screen entry is re-pushed to cancel the pop.
   useEffect(() => {
     const onPopState = (): void => {
       const top = navRef.current;
@@ -200,6 +206,12 @@ function App() {
       if (top === 'editor' && editorHandleRef.current?.notifyBack() === true) {
         // Stay on the editor (an overlay closed or the discard confirmation
         // was armed): undo the pop by re-pushing the screen entry.
+        window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+        return;
+      }
+      if (top === 'ai' && aiCreateHandleRef.current?.notifyBack() === true) {
+        // Stay on the AI-create screen (the discard confirmation was armed):
+        // undo the pop by re-pushing the screen entry.
         window.history.pushState({ appScreen: SCREEN_MARKER }, '');
         return;
       }
@@ -357,6 +369,7 @@ function App() {
       {aiCreateOpen && (
         <div hidden={editorOpen}>
           <AiCreateSheet
+            ref={aiCreateHandleRef}
             token={token ?? ''}
             recipes={recipes ?? []}
             handoff={aiHandoff}
