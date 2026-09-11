@@ -7,10 +7,16 @@
  * (esp. the ingredient-recipes the AI may reference) — is serialized here into
  * one German-labeled context block appended to the system instruction on every
  * call of a create/edit session.
+ *
+ * The block that varies per *request* — the recipe specifications the user sets
+ * on the AI-create screen (Typ, Portionen/Ergiebigkeit, Merkmale, „Die KI soll
+ * …“) — is serialized by {@link buildSpecificationsText} and appended after the
+ * context block, so both live in the system instruction and never appear as a
+ * chat bubble.
  */
 
 import { serializeRecipe } from '@cookbook/core';
-import type { IngredientMappings, Recipe } from '@cookbook/core';
+import type { IngredientMappings, Recipe, RecipeType } from '@cookbook/core';
 
 /**
  * Serializes one ingredient's master-data entry to a compact context line.
@@ -100,4 +106,104 @@ export function buildAiContextText(input: AiContextInput): string {
   }
 
   return sections.join('\n\n');
+}
+
+/**
+ * The recipe specifications of one AI-create request: the values the user sets
+ * on the create screen (editor parity). They constrain the draft for the whole
+ * conversation — including revisions and repair rounds — instead of being sent
+ * as a chat message.
+ */
+export interface RecipeSpecifications {
+  /** „Typ“: the requested recipe type. */
+  type: RecipeType;
+  /** „Portionen“ (`finished_dish`): the requested serving count. */
+  servings: number | null;
+  /** „Ergiebigkeit“ (`ingredient_recipe`): the requested yield amount. */
+  yieldQuantity: number | null;
+  /** „Ergiebigkeit“: the yield's base unit (Gewicht vs. Volumen). */
+  yieldUnit: 'g' | 'ml';
+  /** Merkmal „vegan“: no animal products at all. */
+  vegan: boolean;
+  /** Merkmal „schnell und einfach“: low effort, few simple steps. */
+  fast: boolean;
+  /** Merkmal „günstig“: cheap, common ingredients. */
+  cheap: boolean;
+  /** „Die KI soll …“: ask back when something is unclear, or always draft. */
+  replyMode: 'clarify' | 'draft';
+}
+
+/**
+ * The Merkmale in display order, with the German constraint line each selected
+ * flag adds to the prompt. The wording is instruction text for the AI (not UI),
+ * so it stays a plain line of prose.
+ */
+const MERKMAL_LINES: ReadonlyArray<{
+  key: 'vegan' | 'fast' | 'cheap';
+  line: string;
+}> = [
+  {
+    key: 'vegan',
+    line: 'vegan: ausschließlich pflanzliche Zutaten, keine tierischen Produkte oder Derivate',
+  },
+  {
+    key: 'fast',
+    line: 'schnell und einfach: kurze Zubereitungszeit, wenige, unkomplizierte Schritte',
+  },
+  {
+    key: 'cheap',
+    line: 'günstig: preiswerte, gängige Zutaten, keine teuren Spezialprodukte',
+  },
+];
+
+/**
+ * Serializes the user's recipe specifications into the verbindliche Vorgaben
+ * block of the system instruction. The numbers are stated as the literal front
+ * matter values the AI has to write (`servings: 6`, `yield: 1000`), and the last
+ * line gives the chat precedence over the standing values — otherwise a later
+ * "mach es für 4 Portionen" would fight the Vorgaben block.
+ */
+export function buildSpecificationsText(spec: RecipeSpecifications): string {
+  const lines: string[] = [];
+
+  if (spec.type === 'finished_dish') {
+    lines.push('- Rezept-Typ: `finished_dish` (Gericht) — liefere genau diesen Typ.');
+    if (spec.servings !== null) {
+      lines.push(
+        `- Portionen: ${spec.servings} — setze \`servings: ${spec.servings}\` und skaliere alle ` +
+          'Mengen darauf.',
+      );
+    }
+  } else {
+    lines.push(
+      '- Rezept-Typ: `ingredient_recipe` (Zutaten-Rezept) — liefere genau diesen Typ, ohne ' +
+        '`servings` und ohne `reference`.',
+    );
+    if (spec.yieldQuantity !== null) {
+      lines.push(
+        `- Ergiebigkeit: ${spec.yieldQuantity} ${spec.yieldUnit} — setze ` +
+          `\`yield: ${spec.yieldQuantity}\` und \`yield_unit: ${spec.yieldUnit}\`.`,
+      );
+    }
+  }
+
+  const flags = MERKMAL_LINES.filter((merkmale) => spec[merkmale.key]);
+  if (flags.length === 0) {
+    lines.push('- Merkmale: (keine besonderen Vorgaben)');
+  } else {
+    lines.push(['- Merkmale:', ...flags.map((merkmale) => `  - ${merkmale.line}`)].join('\n'));
+  }
+
+  lines.push(
+    spec.replyMode === 'draft'
+      ? '- Verhalten: Schreibe ohne Rückfragen direkt den Entwurf; entscheide bei Unklarheiten ' +
+          'selbst sinnvoll.'
+      : '- Verhalten: Stelle bei Unklarheiten zuerst eine kurze Rückfrage (das Standardverhalten).',
+  );
+  lines.push(
+    '- Vorrang: Widerspricht eine spätere Nutzernachricht diesen Vorgaben, gilt die neuere ' +
+      'Nutzernachricht.',
+  );
+
+  return `## Vorgaben für dieses Rezept (verbindlich)\n\n${lines.join('\n')}`;
 }

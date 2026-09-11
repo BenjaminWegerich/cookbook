@@ -35,10 +35,10 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 - [ ] AI edit: fill gaps / correct units, preview + accept or reject (user story A3).
 - [ ] AI workflow refinements:
       - [x] More entry fields: servings, „schnell und einfach“ / „günstig“ / „vegan“.
-      - [ ] Wire the entry fields (Typ, Portionen/Ergiebigkeit, Vorgaben, „Die KI soll …“)
+      - [x] Wire the entry fields (Typ, Portionen/Ergiebigkeit, Vorgaben, „Die KI soll …“)
             into the AI prompt.
-      - [ ] Choose between asking clarifying questions first vs. drafting directly.
-      - [ ] Resume the chat after a draft has been created.
+      - [x] Choose between asking clarifying questions first vs. drafting directly.
+      - [x] Resume the chat after a draft has been created.
 
 ## Google Keep — follow-up milestone (depends on: web app)
 

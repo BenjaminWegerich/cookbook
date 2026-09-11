@@ -10,17 +10,22 @@
  * Decisions (agreed with the user):
  * - The conversation is shown as a chat transcript.
  * - The API key is pasted here when none is stored yet — session only, never
- *   persisted (N6).
+ *   persisted (N6). A key that arrives in one piece (autofill, paste) is
+ *   applied immediately; typing it by hand still needs the button, which also
+ *   stays the fallback when a browser fills the field without firing `input`.
  * - No blocking "new ingredient" confirm step: the draft opens in the recipe
  *   editor, where unknown ingredient names / sub-recipes are handled with the
  *   editor's existing flows ("Neue Zutat anlegen", saving an ingredient_recipe).
- * - The first prompt optionally carries recipe specifications below the source
- *   field: the manual editor's Typ and Portionen/Ergiebigkeit controls (defaults:
- *   6 Portionen for a Gericht, Gewicht / 1 kg for a Zutaten-Rezept), the
- *   Merkmale flags "Vorgaben" (vegan — always on for now, schnell und einfach,
- *   günstig) and "Die KI soll …" (ggf. nachfragen vs. direkt den Entwurf
- *   schreiben). The values are collected here; wiring them into the AI prompt is
- *   the next slice.
+ * - The first prompt carries recipe specifications below the source field: the
+ *   manual editor's Typ and Portionen/Ergiebigkeit controls (defaults: 6
+ *   Portionen for a Gericht, Gewicht / 1 kg for a Zutaten-Rezept), the Merkmale
+ *   flags "Vorgaben" (vegan — always on for now, schnell und einfach, günstig)
+ *   and "Die KI soll …" (ggf. nachfragen vs. direkt den Entwurf schreiben).
+ *   They are serialized into the system instruction (aiContext.ts), so they
+ *   constrain the whole conversation — including revisions and repair rounds.
+ * - The conversation does not end with a draft: the composer stays visible, and
+ *   a change request goes to `sendRevision` (rule A4) — the AI revises its own
+ *   draft instead of the user reworking it by hand.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -30,7 +35,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { NNBSP, allIngredientMappings, integerLadderValues } from '@cookbook/core';
 import type { Recipe, RecipeType } from '@cookbook/core';
 
-import { buildAiContextText } from '../ai/aiContext';
+import { buildAiContextText, buildSpecificationsText } from '../ai/aiContext';
+import type { RecipeSpecifications } from '../ai/aiContext';
 import { createAiCreateSession } from '../ai/createRecipeDraft';
 import type { AiCreateSession } from '../ai/createRecipeDraft';
 import { createAiClient } from '../ai/client';
@@ -60,6 +66,28 @@ const DEFAULT_YIELD = 1000;
  *  clarifying question when something is ambiguous, or always draft directly. */
 type ReplyMode = 'clarify' | 'draft';
 
+/** Minimum length of an auto-applied key. Real provider keys are far longer (a
+ *  Gemini key is ~39 characters), so anything shorter is a typing fragment or a
+ *  partial paste and waits for the explicit button. */
+const MIN_API_KEY_LENGTH = 20;
+
+/**
+ * True when the key field just received a plausibly complete key in one piece
+ * — an autofill or a paste — rather than one typed character.
+ *
+ * Chrome reports both password-manager autofill and `insertReplacementText`
+ * completions as a single `input` event, so the bulk check fires the moment the
+ * user taps the mobile suggestion. The fill itself stays out of the page's
+ * control: Chrome on Android gates password autofill on a user gesture, while
+ * the desktop build fills password fields on page load. Auto-apply therefore
+ * removes the "Schlüssel verwenden" tap after the fill, not the fill tap.
+ */
+function shouldAutoApplyKey(previousValue: string, nextValue: string, inputType: string): boolean {
+  if (nextValue.trim().length < MIN_API_KEY_LENGTH) return false;
+  if (inputType === 'insertReplacementText') return true;
+  return nextValue.length - previousValue.length > 1;
+}
+
 interface AiCreateSheetProps {
   /** Drive access token (the Drive connection is required). */
   token: string;
@@ -77,7 +105,10 @@ interface AiCreateSheetProps {
  * contributes its title). Broken files are skipped — like the editor does.
  * Requires a stored session API key (N6).
  */
-async function prepareSession(token: string, stored: readonly StoredRecipe[]): Promise<AiCreateSession> {
+async function prepareSession(
+  token: string,
+  stored: readonly StoredRecipe[],
+): Promise<AiCreateSession> {
   const apiKey = getAiApiKey();
   if (apiKey === null) {
     throw new Error('Kein API-Schlüssel hinterlegt.');
@@ -142,8 +173,9 @@ export default function AiCreateSheet({
   /**
    * Recipe specifications below the source field (editor parity): the Typ
    * toggle, the type-dependent Portionen / Ergiebigkeit input, and the
-   * Merkmale flags. Collected here for the prompt wiring of the next slice —
-   * they have no effect on the AI request yet.
+   * Merkmale flags. They are serialized into the session's system instruction
+   * (see the specification effect below), so they constrain every turn of the
+   * conversation instead of being sent as a chat message.
    */
   const [recipeType, setRecipeType] = useState<RecipeType>('finished_dish');
   /** Finished dish: chosen serving count (defaults to 6, agreed with the user). */
@@ -183,22 +215,25 @@ export default function AiCreateSheet({
   );
 
   /** Applies the prepared session (state updates from promise callbacks). */
-  const applySession = useCallback((activeToken: string): void => {
-    loadSession(activeToken)
-      .then((next) => {
-        if (!mountedRef.current) return;
-        setSession(next);
-        setLoadError(null);
-      })
-      .catch((err) => {
-        if (!mountedRef.current) return;
-        setLoadError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!mountedRef.current) return;
-        setPreparing(false);
-      });
-  }, [loadSession]);
+  const applySession = useCallback(
+    (activeToken: string): void => {
+      loadSession(activeToken)
+        .then((next) => {
+          if (!mountedRef.current) return;
+          setSession(next);
+          setLoadError(null);
+        })
+        .catch((err) => {
+          if (!mountedRef.current) return;
+          setLoadError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => {
+          if (!mountedRef.current) return;
+          setPreparing(false);
+        });
+    },
+    [loadSession],
+  );
 
   // Prepare the session once a key is stored. Re-runs (fresh parent props,
   // StrictMode double-mount) must not replace a session that is already in
@@ -216,10 +251,42 @@ export default function AiCreateSheet({
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
   }, [messages, busy]);
 
-  /** Stores the pasted key for this session and prepares the session. */
-  const handleKeySave = (): void => {
-    if (keyInput.trim() === '') return;
-    setAiApiKey(keyInput);
+  /**
+   * Serializes the current Vorgaben into the session's system instruction. The
+   * session is created without them, so this effect also performs the initial
+   * push; every later control change only rebuilds the system message and takes
+   * effect with the next turn (a change alone never triggers a request).
+   */
+  useEffect(() => {
+    if (session === null) return;
+    session.setSpecifications(
+      buildSpecificationsText({
+        type: recipeType,
+        servings: recipeType === 'finished_dish' ? servings : null,
+        yieldQuantity: recipeType === 'ingredient_recipe' ? yieldQuantity : null,
+        yieldUnit,
+        vegan: wantsVegan,
+        fast: wantsFast,
+        cheap: wantsCheap,
+        replyMode,
+      } satisfies RecipeSpecifications),
+    );
+  }, [
+    session,
+    recipeType,
+    servings,
+    yieldQuantity,
+    yieldUnit,
+    wantsVegan,
+    wantsFast,
+    wantsCheap,
+    replyMode,
+  ]);
+
+  /** Stores the pasted / autofilled key for this session and prepares the session. */
+  const handleKeyApply = (rawKey: string): void => {
+    if (rawKey.trim() === '') return;
+    setAiApiKey(rawKey);
     setKeyInput('');
     setShowKeyField(false);
     setLoadError(null);
@@ -238,15 +305,22 @@ export default function AiCreateSheet({
     if (description.trim() === '' && source.trim() === '') return;
     setError(null);
     const userText = composeUserMessage(description, source);
+    // A draft already exists: this text is a change request for it (rule A4).
+    const revise = draft !== null;
     setMessages((current) => [...current, { role: 'user', content: userText }]);
     setDescription('');
     setSource('');
     setBusy(true);
     try {
-      const result = await session.send(userText);
+      const result = revise ? await session.sendRevision(userText) : await session.send(userText);
       if (result.kind === 'question') {
         setMessages((current) => [...current, { role: 'assistant', content: result.text }]);
       } else if (result.kind === 'draft') {
+        // The AI's own prose before the file (rule A2) belongs in the
+        // transcript; on a revision it is what explains the change.
+        if (result.preamble !== '') {
+          setMessages((current) => [...current, { role: 'assistant', content: result.preamble }]);
+        }
         setDraft(result.recipe);
       } else {
         setError(result.message);
@@ -261,7 +335,7 @@ export default function AiCreateSheet({
   /** True once the user sent the first prompt — from then on only a single
    *  answer field is shown (the two-field description layout is over). */
   const conversationStarted = messages.length > 0;
-  const canSend = !busy && draft === null && (description.trim() !== '' || source.trim() !== '');
+  const canSend = !busy && (description.trim() !== '' || source.trim() !== '');
 
   return (
     <main className="app ai-screen">
@@ -286,14 +360,25 @@ export default function AiCreateSheet({
             autoComplete="off"
             value={keyInput}
             placeholder="API-Schlüssel einfügen"
-            onChange={(event) => setKeyInput(event.target.value)}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              // InputEvent carries the inputType; autofill and paste arrive as
+              // one bulk change (see shouldAutoApplyKey).
+              const inputType =
+                event.nativeEvent instanceof InputEvent ? event.nativeEvent.inputType : '';
+              if (shouldAutoApplyKey(keyInput, nextValue, inputType)) {
+                handleKeyApply(nextValue);
+                return;
+              }
+              setKeyInput(nextValue);
+            }}
           />
           <div className="sheet-actions">
             <button
               type="button"
               className="primary-button"
               disabled={keyInput.trim() === ''}
-              onClick={handleKeySave}
+              onClick={() => handleKeyApply(keyInput)}
             >
               Schlüssel verwenden
             </button>
@@ -313,11 +398,7 @@ export default function AiCreateSheet({
           )}
           {session !== null && (
             <>
-              <section
-                className="ai-transcript"
-                ref={transcriptRef}
-                aria-label="Unterhaltung"
-              >
+              <section className="ai-transcript" ref={transcriptRef} aria-label="Unterhaltung">
                 {messages.length === 0 && (
                   <div className="ai-hint">
                     <p>Beschreibe das Gericht frei und beliebig detailliert.</p>
@@ -340,12 +421,13 @@ export default function AiCreateSheet({
                 )}
               </section>
 
-              {draft !== null ? (
+              {draft !== null && (
                 <section className="editor-card ai-draft-card">
                   <h2 className="editor-card-title">Entwurf erstellt</h2>
                   <p>
                     Ich habe einen Entwurf für „{draft.title}“ erstellt. Du kannst ihn jetzt im
-                    Editor ansehen, ändern und speichern.
+                    Editor ansehen, ändern und speichern — oder unten beschreiben, was die KI am
+                    Entwurf ändern soll.
                   </p>
                   <div className="sheet-actions">
                     <button
@@ -357,187 +439,189 @@ export default function AiCreateSheet({
                     </button>
                   </div>
                 </section>
-              ) : (
-                <form
-                  className="ai-composer"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleSend();
-                  }}
-                >
-                  {conversationStarted ? (
-                    // Follow-up answer: fixed three-line height, scrolls vertically.
+              )}
+
+              <form
+                className="ai-composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleSend();
+                }}
+              >
+                {conversationStarted ? (
+                  // Follow-up answer or change request: fixed three-line height,
+                  // scrolls vertically inside the field.
+                  <textarea
+                    rows={3}
+                    value={description}
+                    placeholder={
+                      draft !== null ? 'Änderung am Entwurf beschreiben …' : 'Antwort eingeben …'
+                    }
+                    onChange={(event) => setDescription(event.target.value)}
+                  />
+                ) : (
+                  <>
+                    {/* First prompt (description): fixed six-line height. */}
                     <textarea
-                      rows={3}
+                      rows={6}
                       value={description}
+                      placeholder="Rezept beschreiben …"
                       onChange={(event) => setDescription(event.target.value)}
                     />
-                  ) : (
-                    <>
-                      {/* First prompt (description): fixed six-line height. */}
-                      <textarea
-                        rows={6}
-                        value={description}
-                        placeholder="Rezept beschreiben …"
-                        onChange={(event) => setDescription(event.target.value)}
-                      />
-                      {/* Optional pasted source text: fixed three-line height. */}
-                      <textarea
-                        rows={3}
-                        value={source}
-                        placeholder="Quelltext von einer Webseite einfügen (optional) …"
-                        onChange={(event) => setSource(event.target.value)}
-                      />
+                    {/* Optional pasted source text: fixed three-line height. */}
+                    <textarea
+                      rows={3}
+                      value={source}
+                      placeholder="Quelltext von einer Webseite einfügen (optional) …"
+                      onChange={(event) => setSource(event.target.value)}
+                    />
 
-                      {/* Rezept-Vorgaben — the manual editor's Typ and
-                          Portionen/Ergiebigkeit controls plus the Merkmale
-                          flags (values collected for the next slice's prompt
-                          wiring; they do not reach the AI yet). */}
-                      <div className="ai-options">
+                    {/* Rezept-Vorgaben — the manual editor's Typ and
+                        Portionen/Ergiebigkeit controls plus the Merkmale
+                        flags. Serialized into the AI prompt (see the
+                        specification effect above). */}
+                    <div className="ai-options">
+                      <div className="field">
+                        <span className="field-label">Typ</span>
+                        <div className="segmented" role="group" aria-label="Rezept-Typ">
+                          <button
+                            type="button"
+                            className={recipeType === 'finished_dish' ? 'segmented-active' : ''}
+                            onClick={() => setRecipeType('finished_dish')}
+                          >
+                            Gericht
+                          </button>
+                          <button
+                            type="button"
+                            className={recipeType === 'ingredient_recipe' ? 'segmented-active' : ''}
+                            onClick={() => setRecipeType('ingredient_recipe')}
+                          >
+                            Zutaten-Rezept
+                          </button>
+                        </div>
+                      </div>
+
+                      {recipeType === 'finished_dish' ? (
                         <div className="field">
-                          <span className="field-label">Typ</span>
-                          <div className="segmented" role="group" aria-label="Rezept-Typ">
-                            <button
-                              type="button"
-                              className={recipeType === 'finished_dish' ? 'segmented-active' : ''}
-                              onClick={() => setRecipeType('finished_dish')}
-                            >
-                              Gericht
-                            </button>
-                            <button
-                              type="button"
-                              className={
-                                recipeType === 'ingredient_recipe' ? 'segmented-active' : ''
-                              }
-                              onClick={() => setRecipeType('ingredient_recipe')}
-                            >
-                              Zutaten-Rezept
-                            </button>
+                          <span className="field-label">Portionen</span>
+                          <div className="quantity-chips" role="group" aria-label="Portionen">
+                            {SERVING_OPTIONS.map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                className={option === servings ? 'chip chip-active' : 'chip'}
+                                onClick={() => setServings(option)}
+                              >
+                                {option}
+                              </button>
+                            ))}
                           </div>
                         </div>
-
-                        {recipeType === 'finished_dish' ? (
-                          <div className="field">
-                            <span className="field-label">Portionen</span>
-                            <div className="quantity-chips" role="group" aria-label="Portionen">
-                              {SERVING_OPTIONS.map((option) => (
-                                <button
-                                  key={option}
-                                  type="button"
-                                  className={option === servings ? 'chip chip-active' : 'chip'}
-                                  onClick={() => setServings(option)}
-                                >
-                                  {option}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="field ai-yield">
-                            <span className="field-label">Ergiebigkeit</span>
-                            <div
-                              className="segmented"
-                              role="group"
-                              aria-label="Einheit der Ergiebigkeit"
-                            >
-                              <button
-                                type="button"
-                                className={yieldUnit !== 'ml' ? 'segmented-active' : ''}
-                                onClick={() => setYieldUnit('g')}
-                              >
-                                Gewicht
-                              </button>
-                              <button
-                                type="button"
-                                className={yieldUnit === 'ml' ? 'segmented-active' : ''}
-                                onClick={() => setYieldUnit('ml')}
-                              >
-                                Volumen
-                              </button>
-                            </div>
-                            <QuantityPicker
-                              value={yieldQuantity}
-                              onChange={setYieldQuantity}
-                              family={yieldUnit === 'ml' ? 'ml' : 'g'}
-                            />
-                          </div>
-                        )}
-
-                        {/* Merkmale, grouped under their own caption. „vegan“ is
-                            permanently on for now (the app's only user is
-                            vegan): it stays an ordinary, enabled-looking
-                            checkbox, but its handler can never turn it off.
-                            The other two are plain toggles, off by default. */}
-                        <div className="field">
-                          <span className="field-label">Vorgaben</span>
-                          <div className="ai-flags">
-                            <label className="checkbox-field">
-                              <input
-                                type="checkbox"
-                                checked={wantsVegan}
-                                onChange={() => setWantsVegan(true)}
-                              />
-                              <span>vegan</span>
-                            </label>
-                            <label className="checkbox-field">
-                              <input
-                                type="checkbox"
-                                checked={wantsFast}
-                                onChange={(event) => setWantsFast(event.target.checked)}
-                              />
-                              <span>schnell und einfach</span>
-                            </label>
-                            <label className="checkbox-field">
-                              <input
-                                type="checkbox"
-                                checked={wantsCheap}
-                                onChange={(event) => setWantsCheap(event.target.checked)}
-                              />
-                              <span>günstig</span>
-                            </label>
-                          </div>
-                        </div>
-
-                        {/* „Die KI soll …“: clarify when needed (current rules
-                            behaviour) or always draft directly. */}
-                        <div className="field">
-                          <span className="field-label">Die KI soll …</span>
+                      ) : (
+                        <div className="field ai-yield">
+                          <span className="field-label">Ergiebigkeit</span>
                           <div
-                            className="segmented ai-mode"
+                            className="segmented"
                             role="group"
-                            aria-label="Verhalten der KI"
+                            aria-label="Einheit der Ergiebigkeit"
                           >
                             <button
                               type="button"
-                              className={replyMode === 'clarify' ? 'segmented-active' : ''}
-                              onClick={() => setReplyMode('clarify')}
+                              className={yieldUnit !== 'ml' ? 'segmented-active' : ''}
+                              onClick={() => setYieldUnit('g')}
                             >
-                              ggf. nachfragen
+                              Gewicht
                             </button>
                             <button
                               type="button"
-                              className={replyMode === 'draft' ? 'segmented-active' : ''}
-                              onClick={() => setReplyMode('draft')}
+                              className={yieldUnit === 'ml' ? 'segmented-active' : ''}
+                              onClick={() => setYieldUnit('ml')}
                             >
-                              direkt den Entwurf schreiben
+                              Volumen
                             </button>
                           </div>
+                          <QuantityPicker
+                            value={yieldQuantity}
+                            onChange={setYieldQuantity}
+                            family={yieldUnit === 'ml' ? 'ml' : 'g'}
+                          />
+                        </div>
+                      )}
+
+                      {/* Merkmale, grouped under their own caption. „vegan“ is
+                          permanently on for now (the app's only user is
+                          vegan): it stays an ordinary, enabled-looking
+                          checkbox, but its handler can never turn it off.
+                          The other two are plain toggles, off by default. */}
+                      <div className="field">
+                        <span className="field-label">Vorgaben</span>
+                        <div className="ai-flags">
+                          <label className="checkbox-field">
+                            <input
+                              type="checkbox"
+                              checked={wantsVegan}
+                              onChange={() => setWantsVegan(true)}
+                            />
+                            <span>vegan</span>
+                          </label>
+                          <label className="checkbox-field">
+                            <input
+                              type="checkbox"
+                              checked={wantsFast}
+                              onChange={(event) => setWantsFast(event.target.checked)}
+                            />
+                            <span>schnell und einfach</span>
+                          </label>
+                          <label className="checkbox-field">
+                            <input
+                              type="checkbox"
+                              checked={wantsCheap}
+                              onChange={(event) => setWantsCheap(event.target.checked)}
+                            />
+                            <span>günstig</span>
+                          </label>
                         </div>
                       </div>
-                    </>
-                  )}
-                  {error !== null && (
-                    <p className="error-message" role="alert">
-                      {error}
-                    </p>
-                  )}
-                  <div className="sheet-actions">
-                    <button type="submit" className="primary-button" disabled={!canSend}>
-                      {busy ? 'Senden …' : 'Senden'}
-                    </button>
-                  </div>
-                </form>
-              )}
+
+                      {/* „Die KI soll …“: clarify when needed (current rules
+                          behaviour) or always draft directly. */}
+                      <div className="field">
+                        <span className="field-label">Die KI soll …</span>
+                        <div
+                          className="segmented ai-mode"
+                          role="group"
+                          aria-label="Verhalten der KI"
+                        >
+                          <button
+                            type="button"
+                            className={replyMode === 'clarify' ? 'segmented-active' : ''}
+                            onClick={() => setReplyMode('clarify')}
+                          >
+                            ggf. nachfragen
+                          </button>
+                          <button
+                            type="button"
+                            className={replyMode === 'draft' ? 'segmented-active' : ''}
+                            onClick={() => setReplyMode('draft')}
+                          >
+                            direkt den Entwurf schreiben
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {error !== null && (
+                  <p className="error-message" role="alert">
+                    {error}
+                  </p>
+                )}
+                <div className="sheet-actions">
+                  <button type="submit" className="primary-button" disabled={!canSend}>
+                    {busy ? 'Senden …' : 'Senden'}
+                  </button>
+                </div>
+              </form>
             </>
           )}
         </>

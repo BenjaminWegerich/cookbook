@@ -220,6 +220,18 @@ may also include a pasted source text from a website). Follow these steps.
   sentences before the `---`; no Markdown, no code fences, no trailing
   commentary. The file text itself is parsed verbatim.
 
+## A4. Revising your own draft
+
+- After you returned a file, the user may ask for a change in the same
+  conversation ("ohne Sahne", "schärfer", "für 8 Portionen"). Revise your own
+  draft: your reply ends with the **complete** corrected file again — never a
+  diff, never an excerpt, never only the changed lines.
+- Keep `title` and `type` unless the request asks for a change.
+- A revision is not a second recipe: the "one recipe per conversation" limit of
+  A2 applies to new recipes, not to changes of the recipe you just wrote.
+- The Vorgaben block ("Vorgaben für dieses Rezept") stays in force for every
+  revision; only the user's change request overrides it.
+
 ---
 
 # Task B — Revise an existing recipe (reserved)
