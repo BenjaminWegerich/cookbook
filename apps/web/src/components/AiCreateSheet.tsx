@@ -30,12 +30,18 @@
  *   continues here: the parent hands the saved recipe back via `handoff`, the
  *   context is re-read (the new sub-recipe is a valid ingredient now) and the
  *   follow-up field is prefilled with the request for the dish that uses it.
+ * - Ctrl+Enter sends from inside a text field (plain Enter stays a line break).
+ *   The shortcut's caption lives *in the field*, not next to the "Senden"
+ *   button: the action row is the last element of a tall composer, so while the
+ *   user types it is normally scrolled out of view, whereas the focused field
+ *   is on screen by definition. The caption is shown only while a field has
+ *   focus and only on pointer/keyboard devices — see .ai-field-hint.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import type { Ref } from 'react';
+import type { KeyboardEvent, Ref } from 'react';
 
 import { NNBSP, allIngredientMappings, integerLadderValues } from '@cookbook/core';
 import type { Recipe, RecipeType } from '@cookbook/core';
@@ -99,6 +105,46 @@ function shouldAutoApplyKey(previousValue: string, nextValue: string, inputType:
   if (nextValue.trim().length < MIN_API_KEY_LENGTH) return false;
   if (inputType === 'insertReplacementText') return true;
   return nextValue.length - previousValue.length > 1;
+}
+
+/** Input `type`s that hold free text — the fields a text cursor can sit in. */
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number']);
+
+/**
+ * En space (U+2002) — the separator around the middot of the field hint. A
+ * plain space (≈ 0.26 em) left the two commands reading as one phrase, so the
+ * widest standard space that still counts as word spacing (0.5 em) is used; the
+ * escape is kept instead of the literal character so the source stays readable
+ * and no irregular-whitespace rule is tripped.
+ */
+const EN_SPACE = '\u2002';
+
+/**
+ * True when a key or focus event happened in a text entry field: a textarea or
+ * a text-holding input. This is the single definition of "the cursor is in a
+ * text field" for the Ctrl+Enter shortcut (see handleComposerKeyDown); the
+ * hint's visibility mirrors it in CSS (`.ai-composer:has(textarea:focus)`),
+ * so the two must be kept in step when the composer gains a new field type.
+ */
+function isTextEntryField(target: EventTarget | null): boolean {
+  if (target instanceof HTMLTextAreaElement) return true;
+  return target instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(target.type);
+}
+
+/**
+ * The Ctrl+Enter caption of one composer field (see handleComposerKeyDown). It
+ * is a sibling of the field's textarea, not a child: a badge painted into the
+ * field would otherwise collide with the last text line and the caret. The CSS
+ * reserves a strip inside the field for it and reveals it only while that field
+ * has focus on a pointer/keyboard device — the same conditions under which the
+ * shortcut works, so the caption never promises a dead key.
+ */
+function FieldHint() {
+  return (
+    <span className="ai-field-hint">
+      Enter: neue Zeile{EN_SPACE}·{EN_SPACE}Strg + Enter: Senden
+    </span>
+  );
 }
 
 /**
@@ -450,6 +496,29 @@ export default function AiCreateSheet({
     }
   };
 
+  /**
+   * Ctrl+Enter sends the current prompt while the cursor sits in a text entry
+   * field: the composer's textareas keep plain Enter for line breaks, so the
+   * shortcut is the keyboard equivalent of the "Senden" button. The keydown
+   * bubbles from the focused field up to the form, so a single handler covers
+   * every field of the composer. `preventDefault` also suppresses the newline
+   * the browser would otherwise insert; the empty/busy/refreshing guards live
+   * in {@link handleSend}.
+   *
+   * The shortcut deliberately does *not* fire outside a text field (see
+   * {@link isTextEntryField}): on the "Senden" button plain Enter already
+   * activates the focused control, so also grabbing Ctrl+Enter there would
+   * submit twice, and on the Typ/Portionen/Merkmale controls the key belongs
+   * to the control itself. This is also the condition the visible hint uses
+   * (`.ai-composer:has(textarea:focus)`), so hint and behaviour agree.
+   */
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLFormElement>): void => {
+    if (event.key !== 'Enter' || !event.ctrlKey) return;
+    if (!isTextEntryField(event.target)) return;
+    event.preventDefault();
+    void handleSend();
+  };
+
   /** True once the user sent the first prompt — from then on only a single
    *  answer field is shown (the two-field description layout is over). */
   const conversationStarted = messages.length > 0;
@@ -617,6 +686,7 @@ export default function AiCreateSheet({
 
               <form
                 className="ai-composer"
+                onKeyDown={handleComposerKeyDown}
                 onSubmit={(event) => {
                   event.preventDefault();
                   void handleSend();
@@ -625,30 +695,39 @@ export default function AiCreateSheet({
                 {conversationStarted ? (
                   // Follow-up answer or change request: fixed three-line height,
                   // scrolls vertically inside the field.
-                  <textarea
-                    rows={3}
-                    value={description}
-                    placeholder={
-                      draft !== null ? 'Änderung am Entwurf beschreiben …' : 'Antwort eingeben …'
-                    }
-                    onChange={(event) => setDescription(event.target.value)}
-                  />
+                  <div className="ai-field">
+                    <textarea
+                      rows={3}
+                      value={description}
+                      placeholder={
+                        draft !== null ? 'Änderung am Entwurf beschreiben …' : 'Antwort eingeben …'
+                      }
+                      onChange={(event) => setDescription(event.target.value)}
+                    />
+                    <FieldHint />
+                  </div>
                 ) : (
                   <>
                     {/* First prompt (description): fixed six-line height. */}
-                    <textarea
-                      rows={6}
-                      value={description}
-                      placeholder="Rezept beschreiben …"
-                      onChange={(event) => setDescription(event.target.value)}
-                    />
+                    <div className="ai-field">
+                      <textarea
+                        rows={6}
+                        value={description}
+                        placeholder="Rezept beschreiben …"
+                        onChange={(event) => setDescription(event.target.value)}
+                      />
+                      <FieldHint />
+                    </div>
                     {/* Optional pasted source text: fixed three-line height. */}
-                    <textarea
-                      rows={3}
-                      value={source}
-                      placeholder="Quelltext von einer Webseite einfügen (optional) …"
-                      onChange={(event) => setSource(event.target.value)}
-                    />
+                    <div className="ai-field">
+                      <textarea
+                        rows={3}
+                        value={source}
+                        placeholder="Quelltext von einer Webseite einfügen (optional) …"
+                        onChange={(event) => setSource(event.target.value)}
+                      />
+                      <FieldHint />
+                    </div>
 
                     {/* Rezept-Vorgaben — the manual editor's Typ and
                         Portionen/Ergiebigkeit controls plus the Merkmale

@@ -128,6 +128,57 @@
   color: var(--color-ink-muted);
 }
 
+/* Ctrl+Enter caption of one composer field (FieldHint, see
+   handleComposerKeyDown). It is anchored to the field's bottom-left corner, on
+   a strip the textarea reserves for it (see the media query below), so it can
+   never sit on a text line or under the caret — the trap of painting a hint
+   into a field. Bottom-*left* and not bottom-right because the field's own
+   vertical scrollbar (a classic, 15 px-wide bar on Windows) is painted over the
+   right edge. The caption starts hidden and is revealed only by the two
+   conditions at the bottom of the file. */
+.ai-field {
+  position: relative;
+}
+
+.ai-field-hint {
+  display: none;
+  position: absolute;
+  inset-block-end: var(--space-3);
+  inset-inline-start: var(--space-4);
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1;
+  /* The reserved strip is exactly one caption line tall, so the caption must
+     never wrap: a wrapped second line would be drawn over the field's text.
+     The field is full width (fluid .app shell), so the nowrap caption fits by a
+     wide margin even in a narrow desktop window. */
+  white-space: nowrap;
+  /* The caption lies on top of the textarea, so a click on it must still put
+     the cursor into the field instead of blurring it. */
+  pointer-events: none;
+}
+
+/* The caption appears only while the cursor is in that field (the condition of
+   handleComposerKeyDown: isTextEntryField) on a pointer/keyboard device — the
+   app's smartphone layout is a first-class target and has no Ctrl key, and
+   outside a text field the shortcut does nothing. The field's reserved strip
+   is created in the same block: the caption must cost the phone nothing, and
+   under @supports because a browser without :has() can never reveal the
+   caption, so it must not pay for the strip either. Both conditions degrade
+   safely — an unsupported one simply leaves the caption hidden. */
+@media (hover: hover) and (pointer: fine) {
+  @supports selector(:has(*)) {
+    /* Existing bottom padding (--space-3) plus one caption line (--text-sm). */
+    .ai-composer textarea {
+      padding-block-end: calc(var(--space-3) + var(--text-sm));
+    }
+
+    .ai-field:has(textarea:focus) .ai-field-hint {
+      display: block;
+    }
+  }
+}
+
 /* ---- Recipe options (Typ, Portionen/Ergiebigkeit, Merkmale) --------------- */
 
 /* The option block reuses the manual editor's Kopfdaten controls (.field,
