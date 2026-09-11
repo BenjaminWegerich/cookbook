@@ -844,25 +844,33 @@
   font-size: var(--text-sm);
 }
 
+/* Caption row and input rows of the manual AU mappings share one column grid:
+   unit name · Menge · Priorität. Both numeric columns are fixed-width instead
+   of stretching — the values are short (a factor like "7,5", a priority like
+   "1"), and a full-width Menge field would dominate the row while saying
+   nothing. The heading sits directly under its caption, so it carries no extra
+   margin: the .field grid gap (--space-2) alone spaces it. */
 .factor-head {
   display: grid;
-  grid-template-columns: var(--space-10) minmax(0, 1fr) minmax(0, 4.5rem);
+  grid-template-columns: var(--space-10) 4.5rem 4.5rem;
   gap: var(--space-3);
-  margin-block-start: var(--space-2);
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
 }
 
 .factor-row {
   display: grid;
-  grid-template-columns: var(--space-10) minmax(0, 1fr) minmax(0, 4.5rem);
+  grid-template-columns: var(--space-10) 4.5rem 4.5rem;
   align-items: center;
   gap: var(--space-3);
 }
 
+/* Tighter inline padding than the generic .field inputs: inside a 4.5 rem
+   column the standard --space-4 gutter would leave very little room for the
+   digits themselves. */
 .factor-row input {
   width: 100%;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-3);
   background: var(--color-bg);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
