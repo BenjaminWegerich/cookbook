@@ -14,8 +14,8 @@
  *   wherever they appear (step rows, master list, text artifacts);
  * - quantities are stored in the family unit g/ml; the display switches to
  *   kg/l at 1000 (chips carry base quantity AND base unit, no steppers);
- * - sections: Kopfdaten (Bild, Titel, Details, Zeiten, Typ, Portionen/
- *   Ergiebigkeit), Zubereitung, Zutaten.
+ * - sections: Kopfdaten (Titel, Details, Typ, Portionen/Ergiebigkeit,
+ *   Zeiten, Bild), Zubereitung, Zutaten.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -1254,63 +1254,10 @@ function RecipeEditor({
           </div>
         )}
 
-        {/* Kopfdaten — Bild, Titel, Details, Zeiten, Typ und Portionen/Ergiebigkeit */}
+        {/* Kopfdaten — Titel, Details, Typ, Portionen/Ergiebigkeit, Zeiten und Bild.
+            Bild ist bewusst das letzte Element. */}
         <section className="editor-card" aria-label="Kopfdaten">
           <h3 className="editor-card-title">Kopfdaten</h3>
-
-          {/* Bild (§2, optional sibling file) */}
-          <div className="field">
-            <span className="field-label">
-              Bild<span className="optional-mark">(optional)</span>
-            </span>
-            <div className="photo-row">
-              {photoUrl !== null ? (
-                <img className="photo-preview" src={photoUrl} alt="Rezeptbild" />
-              ) : (
-                <div className="photo-placeholder">Kein Bild</div>
-              )}
-              <div className="photo-actions">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  hidden
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file !== undefined) void handlePhotoFile(file);
-                    event.target.value = '';
-                  }}
-                />
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {photoUrl !== null ? 'Ersetzen' : 'Auswählen'}
-                </button>
-                {photoUrl !== null && (
-                  <button
-                    type="button"
-                    className="text-button danger-text"
-                    onClick={() => {
-                      if (!confirmRemovePhoto) {
-                        setConfirmRemovePhoto(true);
-                      } else {
-                        handleRemovePhoto();
-                      }
-                    }}
-                  >
-                    {confirmRemovePhoto ? 'Wirklich entfernen?' : 'Entfernen'}
-                  </button>
-                )}
-              </div>
-            </div>
-            {photoError !== null && (
-              <p className="field-error" role="alert">
-                {photoError}
-              </p>
-            )}
-          </div>
 
           <label className="field">
             <span className="field-label">Titel</span>
@@ -1352,37 +1299,6 @@ function RecipeEditor({
               onEnter={() => descriptionFieldRef.current?.blur()}
             />
           </label>
-
-          <div className="field" id="editor-field-prep_time">
-            <span className="field-label">Arbeitszeit</span>
-            <TimeChips
-              value={draft.prep_time}
-              onChange={(label) => patchDraft({ prep_time: label })}
-            />
-          </div>
-          {fieldIssue('prep_time').map((issue, index) => (
-            <p className="field-error" key={`prep-${index}`} role="alert">
-              {issue.message}
-            </p>
-          ))}
-
-          <div className="field" id="editor-field-total_time">
-            <span className="field-label">
-              Gesamtzeit<span className="optional-mark">(optional)</span>
-            </span>
-            <span className="field-hint">nur wenn sie größer als die Arbeitszeit ist</span>
-            <TimeChips
-              value={draft.total_time ?? ''}
-              minMinutes={prepMinutes}
-              allowClear
-              onChange={(label) => patchDraft({ total_time: label })}
-            />
-          </div>
-          {fieldIssue('total_time').map((issue, index) => (
-            <p className="field-error" key={`total-${index}`} role="alert">
-              {issue.message}
-            </p>
-          ))}
 
           {/* Typ — direkt vor den typabhängigen Feldern (Portionen/Ergiebigkeit) */}
           <div className="field">
@@ -1471,6 +1387,91 @@ function RecipeEditor({
                 {issue.message}
               </p>
             ))}
+
+          <div className="field" id="editor-field-prep_time">
+            <span className="field-label">Arbeitszeit</span>
+            <TimeChips
+              value={draft.prep_time}
+              onChange={(label) => patchDraft({ prep_time: label })}
+            />
+          </div>
+          {fieldIssue('prep_time').map((issue, index) => (
+            <p className="field-error" key={`prep-${index}`} role="alert">
+              {issue.message}
+            </p>
+          ))}
+
+          <div className="field" id="editor-field-total_time">
+            <span className="field-label">
+              Gesamtzeit<span className="optional-mark">(optional)</span>
+            </span>
+            <span className="field-hint">nur wenn sie größer als die Arbeitszeit ist</span>
+            <TimeChips
+              value={draft.total_time ?? ''}
+              minMinutes={prepMinutes}
+              allowClear
+              onChange={(label) => patchDraft({ total_time: label })}
+            />
+          </div>
+          {fieldIssue('total_time').map((issue, index) => (
+            <p className="field-error" key={`total-${index}`} role="alert">
+              {issue.message}
+            </p>
+          ))}
+
+          {/* Bild (§2, optional sibling file) — letztes Element der Kopfdaten */}
+          <div className="field">
+            <span className="field-label">
+              Bild<span className="optional-mark">(optional)</span>
+            </span>
+            <div className="photo-row">
+              {photoUrl !== null ? (
+                <img className="photo-preview" src={photoUrl} alt="Rezeptbild" />
+              ) : (
+                <div className="photo-placeholder">Kein Bild</div>
+              )}
+              <div className="photo-actions">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  hidden
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file !== undefined) void handlePhotoFile(file);
+                    event.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {photoUrl !== null ? 'Ersetzen' : 'Auswählen'}
+                </button>
+                {photoUrl !== null && (
+                  <button
+                    type="button"
+                    className="text-button danger-text"
+                    onClick={() => {
+                      if (!confirmRemovePhoto) {
+                        setConfirmRemovePhoto(true);
+                      } else {
+                        handleRemovePhoto();
+                      }
+                    }}
+                  >
+                    {confirmRemovePhoto ? 'Wirklich entfernen?' : 'Entfernen'}
+                  </button>
+                )}
+              </div>
+            </div>
+            {photoError !== null && (
+              <p className="field-error" role="alert">
+                {photoError}
+              </p>
+            )}
+          </div>
         </section>
 
         {/* Zubereitung — steps with their own ingredient lists + prose */}
