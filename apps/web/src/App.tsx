@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Recipe } from '@cookbook/core';
 
 import { getAccessToken, isGoogleAuthAvailable, requestAccessToken } from './auth/googleAuth';
-import AiCreateSheet from './components/AiCreateSheet';
+import AiCreateSheet, { type AiHandoff } from './components/AiCreateSheet';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
@@ -69,6 +69,20 @@ function App() {
   const [editorTarget, setEditorTarget] = useState<StoredRecipe | null>(null);
   /** An already-valid draft (AI create) that opens the editor prefilled. */
   const [editorDraft, setEditorDraft] = useState<Recipe | null>(null);
+  /**
+   * Which screen opened the editor: 'ai' means it was started from a draft of
+   * the AI-create conversation, which then continues underneath (see the
+   * handoff below) instead of the app returning to the list.
+   */
+  const editorOriginRef = useRef<'ai' | 'list' | null>(null);
+  /** The AI draft that opened the editor (null for a list/manual edit). */
+  const pendingDraftRef = useRef<Recipe | null>(null);
+  /**
+   * A Zutaten-Rezept the user saved while the AI conversation is still running:
+   * the chat takes it as the handoff signal (re-read the context, prefill the
+   * request for the dish that uses it) and clears it again.
+   */
+  const [aiHandoff, setAiHandoff] = useState<AiHandoff | null>(null);
   /** The FAB create menu: two extended FABs (manually create vs. AI create). */
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   /** The AI-create conversation screen. */
@@ -100,7 +114,10 @@ function App() {
       return;
     }
     setEditorOpen(next === 'editor');
-    setAiCreateOpen(next === 'ai');
+    // The AI-create conversation stays mounted (hidden) while its own draft is
+    // opened in the editor: transcript, AI context and Vorgaben survive the
+    // trip, so saving a Zutaten-Rezept there can continue the same chat.
+    setAiCreateOpen(next === 'ai' || (next === 'editor' && prev === 'ai'));
     setCreateMenuOpen(next === 'menu');
     if (prev === null) {
       if (next === null) {
@@ -186,6 +203,19 @@ function App() {
         window.history.pushState({ appScreen: SCREEN_MARKER }, '');
         return;
       }
+      // Back out of an AI-created draft returns to the still-running
+      // conversation (mounted underneath) instead of leaving for the list.
+      if (top === 'editor' && editorOriginRef.current === 'ai') {
+        editorOriginRef.current = null;
+        pendingDraftRef.current = null;
+        navRef.current = 'ai';
+        setEditorOpen(false);
+        setAiCreateOpen(true);
+        window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+        return;
+      }
+      editorOriginRef.current = null;
+      pendingDraftRef.current = null;
       navRef.current = null;
       setEditorOpen(false);
       setAiCreateOpen(false);
@@ -249,6 +279,8 @@ function App() {
   /** Opens the editor for a recipe (null = new recipe). */
   const openEditor = useCallback(
     (recipe: StoredRecipe | null): void => {
+      editorOriginRef.current = 'list';
+      pendingDraftRef.current = null;
       setEditorTarget(recipe);
       setEditorDraft(null);
       setNav('editor');
@@ -259,6 +291,9 @@ function App() {
   /** Opens the editor prefilled with an AI-created draft (new recipe). */
   const openEditorWithDraft = useCallback(
     (recipe: Recipe): void => {
+      // Remembered so saving the draft can hand it back to the conversation.
+      editorOriginRef.current = 'ai';
+      pendingDraftRef.current = recipe;
       setEditorTarget(null);
       setEditorDraft(recipe);
       setNav('editor');
@@ -272,14 +307,38 @@ function App() {
   }, [setNav]);
 
   const closeEditor = useCallback((): void => {
-    setNav(null);
+    const fromAi = editorOriginRef.current === 'ai';
+    editorOriginRef.current = null;
+    pendingDraftRef.current = null;
+    // Leaving an AI draft without saving returns to its conversation (the
+    // sheet is still mounted); every other editor closes to the list.
+    setNav(fromAi ? 'ai' : null);
   }, [setNav]);
 
-  /** After a save/delete: refresh the list and return to it. */
-  const handleEditorSaved = useCallback((): void => {
-    if (token !== null) void refreshRecipes(token);
-    setNav(null);
-  }, [token, refreshRecipes, setNav]);
+  /** After a save/delete: refresh the list and leave the editor. */
+  const handleEditorSaved = useCallback(
+    (saved: Recipe | null): void => {
+      if (token !== null) void refreshRecipes(token);
+      const fromAi = editorOriginRef.current === 'ai';
+      editorOriginRef.current = null;
+      pendingDraftRef.current = null;
+      // A saved Zutaten-Rezept continues the conversation: the dish using it is
+      // usually the next request, and the chat must list the new title. A saved
+      // dish is the end of the flow — back to the list like any other save.
+      if (fromAi && saved !== null && saved.type === 'ingredient_recipe') {
+        setAiHandoff({ title: saved.title, type: saved.type });
+        setNav('ai');
+      } else {
+        setNav(null);
+      }
+    },
+    [token, refreshRecipes, setNav],
+  );
+
+  /** The chat applied the handoff (context re-read, request prefilled). */
+  const handleHandoffConsumed = useCallback((): void => {
+    setAiHandoff(null);
+  }, []);
 
   /** Status line under the header, German. */
   const subtitle = !token
@@ -291,7 +350,23 @@ function App() {
         : `${recipes.length} ${recipes.length === 1 ? 'Rezept' : 'Rezepte'}`;
 
   return (
-    <main className="app">
+    <>
+      {/* The AI-create conversation stays mounted while its own draft is edited
+          (hidden): transcript, AI context and Vorgaben survive the trip, so a
+          saved Zutaten-Rezept can continue the same conversation. */}
+      {aiCreateOpen && (
+        <div hidden={editorOpen}>
+          <AiCreateSheet
+            token={token ?? ''}
+            recipes={recipes ?? []}
+            handoff={aiHandoff}
+            onHandoffConsumed={handleHandoffConsumed}
+            onClose={() => setNav(null)}
+            onOpenDraft={openEditorWithDraft}
+          />
+        </div>
+      )}
+
       {editorOpen ? (
         <RecipeEditor
           ref={editorHandleRef}
@@ -303,15 +378,8 @@ function App() {
           onSaved={handleEditorSaved}
           onOpenRecipe={openEditor}
         />
-      ) : aiCreateOpen ? (
-        <AiCreateSheet
-          token={token ?? ''}
-          recipes={recipes ?? []}
-          onClose={() => setNav(null)}
-          onOpenDraft={openEditorWithDraft}
-        />
-      ) : (
-        <>
+      ) : aiCreateOpen ? null : (
+        <main className="app">
           <header className="app-header">
             <div>
               <h1>Cookbook</h1>
@@ -411,9 +479,9 @@ function App() {
               </div>
             </>
           )}
-        </>
+        </main>
       )}
-    </main>
+    </>
   );
 }
 

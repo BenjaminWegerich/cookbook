@@ -174,8 +174,10 @@ interface RecipeEditorProps {
   recipes: StoredRecipe[];
   /** Back without saving (list stays as-is). */
   onClose: () => void;
-  /** After a successful save/delete: the list was changed. */
-  onSaved: () => void;
+  /** After a successful save/delete: the list was changed. `saved` is the
+   *  stored recipe (as saved, so with a possibly renamed title), or null after
+   *  a delete — the AI-create handoff needs the saved title and type. */
+  onSaved: (saved: Recipe | null) => void;
   /** Opens another recipe in the editor (jump to a linked sub-recipe). */
   onOpenRecipe?: (recipe: StoredRecipe) => void;
   /** Browser-back consumer handle (React 19: ref is a regular prop). */
@@ -808,7 +810,7 @@ function RecipeEditor({
         }
       }
       setPhotoChange(null);
-      onSaved();
+      onSaved(savedRecipe);
     } catch (err) {
       setSaving(false);
       setIssues([
@@ -826,7 +828,7 @@ function RecipeEditor({
     setSaving(true);
     try {
       await deleteRecipe(token, target.fileId);
-      onSaved();
+      onSaved(null);
     } catch (err) {
       setSaving(false);
       setIssues([{ path: 'global', message: err instanceof Error ? err.message : String(err) }]);

@@ -26,6 +26,10 @@
  * - The conversation does not end with a draft: the composer stays visible, and
  *   a change request goes to `sendRevision` (rule A4) — the AI revises its own
  *   draft instead of the user reworking it by hand.
+ * - When the user saves a drafted Zutaten-Rezept in the editor, the conversation
+ *   continues here: the parent hands the saved recipe back via `handoff`, the
+ *   context is re-read (the new sub-recipe is a valid ingredient now) and the
+ *   follow-up field is prefilled with the request for the dish that uses it.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -42,7 +46,7 @@ import type { AiCreateSession } from '../ai/createRecipeDraft';
 import { createAiClient } from '../ai/client';
 import { getAiApiKey, setAiApiKey } from '../ai/sessionKey';
 import type { StoredRecipe } from '../drive/recipeStorage';
-import { readRecipe } from '../drive/recipeStorage';
+import { listRecipes, readRecipe } from '../drive/recipeStorage';
 import { loadPersonalRules } from '../drive/personalRules';
 import QuantityPicker from './QuantityPicker';
 
@@ -50,6 +54,14 @@ import QuantityPicker from './QuantityPicker';
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+/** A draft the user saved in the editor, handed back to the running chat. */
+export interface AiHandoff {
+  /** The title as saved (the user may have renamed the draft in the editor). */
+  title: string;
+  /** The saved recipe's type — only a Zutaten-Rezept continues the chat. */
+  type: RecipeType;
 }
 
 /** Integer standard numbers 1–30 — the allowed serving counts, identical to
@@ -93,26 +105,35 @@ interface AiCreateSheetProps {
   token: string;
   /** All recipes of the collection (for the AI context, read lazily). */
   recipes: StoredRecipe[];
+  /**
+   * A draft the user saved in the editor while this sheet was mounted (hidden).
+   * Non-null continues the conversation: the context is re-read and the
+   * follow-up field is prefilled. The parent clears it via the callback below.
+   */
+  handoff: AiHandoff | null;
+  /** Called once the handoff was applied (the parent resets it to null). */
+  onHandoffConsumed: () => void;
   /** Back without saving. */
   onClose: () => void;
   /** A validated AI draft is ready for review — open it in the editor. */
   onOpenDraft: (recipe: Recipe) => void;
 }
 
+/** The AI context block (aiContext.ts) plus the collection facts it was built
+ *  from — the session needs the sub-recipe titles for its proposal list too. */
+interface LoadedContext {
+  /** The serialized runtime context block for the system instruction. */
+  text: string;
+  /** Titles of the collection's ingredient-recipes (valid link targets). */
+  ingredientRecipeTitles: Set<string>;
+}
+
 /**
- * Loads the session prerequisites: personal rules (Drive) + the collection
- * contents (ingredient_recipes are embedded in full; every readable file
- * contributes its title). Broken files are skipped — like the editor does.
- * Requires a stored session API key (N6).
+ * Loads the runtime context: personal rules (Drive) + the collection contents
+ * (ingredient_recipes are embedded in full; every readable file contributes its
+ * title). Broken files are skipped — like the editor does.
  */
-async function prepareSession(
-  token: string,
-  stored: readonly StoredRecipe[],
-): Promise<AiCreateSession> {
-  const apiKey = getAiApiKey();
-  if (apiKey === null) {
-    throw new Error('Kein API-Schlüssel hinterlegt.');
-  }
+async function loadContext(token: string, stored: readonly StoredRecipe[]): Promise<LoadedContext> {
   const personalRules = await loadPersonalRules(token);
   const contextRecipes: Array<{ recipe: Recipe }> = [];
   for (const entry of stored) {
@@ -122,22 +143,59 @@ async function prepareSession(
       // Broken file — never blocks the AI session.
     }
   }
-  const contextText = buildAiContextText({
-    personalRules,
-    masterData: allIngredientMappings(),
-    recipes: contextRecipes,
-  });
   const ingredientRecipeTitles = new Set(
     contextRecipes
       .filter(({ recipe }) => recipe.type === 'ingredient_recipe')
       .map(({ recipe }) => recipe.title),
   );
+  return {
+    text: buildAiContextText({
+      personalRules,
+      masterData: allIngredientMappings(),
+      recipes: contextRecipes,
+    }),
+    ingredientRecipeTitles,
+  };
+}
+
+/**
+ * Loads the session prerequisites and creates the session. Requires a stored
+ * session API key (N6).
+ */
+async function prepareSession(
+  token: string,
+  stored: readonly StoredRecipe[],
+): Promise<AiCreateSession> {
+  const apiKey = getAiApiKey();
+  if (apiKey === null) {
+    throw new Error('Kein API-Schlüssel hinterlegt.');
+  }
+  const context = await loadContext(token, stored);
   return createAiCreateSession({
     client: createAiClient({ provider: 'gemini', apiKey }),
-    contextText,
+    contextText: context.text,
     knownIngredientNames: new Set(Object.keys(allIngredientMappings())),
-    ingredientRecipeTitles,
+    ingredientRecipeTitles: context.ingredientRecipeTitles,
   });
+}
+
+/**
+ * The context note that tells the model a recipe of this conversation has been
+ * saved. Rule A2 sends the user to a *new* AI-create otherwise ("one recipe per
+ * conversation"), so the continuation needs an explicit state note.
+ */
+function handoffNote(title: string): string {
+  return (
+    '## Stand dieser Unterhaltung\n' +
+    `Das Zutaten-Rezept „${title}“ wurde soeben gespeichert und ist jetzt in der Sammlung ` +
+    'vorhanden (siehe „Vorhandene ingredient_recipes“ oben). Du darfst es ab jetzt als Zutat in ' +
+    'einem Gericht verwenden; der Nutzer muss dafür keine neue Anfrage starten.'
+  );
+}
+
+/** The prefilled follow-up request for the dish that uses the saved sub-recipe. */
+function handoffPrompt(title: string): string {
+  return `Erstelle jetzt das eigentliche Gericht und verwende „${title}“ als Zutat.`;
 }
 
 /**
@@ -155,6 +213,8 @@ function composeUserMessage(description: string, source: string): string {
 export default function AiCreateSheet({
   token,
   recipes,
+  handoff,
+  onHandoffConsumed,
   onClose,
   onOpenDraft,
 }: AiCreateSheetProps) {
@@ -283,6 +343,45 @@ export default function AiCreateSheet({
     replyMode,
   ]);
 
+  /**
+   * Continues the conversation after the user saved a drafted sub-recipe in the
+   * editor. The context has to be re-read: the saved file is the AI's proof that
+   * the Zutaten-Rezept exists now (rule A2 forbids inventing one) and the exact
+   * title must appear in the context list. `listRecipes` is used instead of the
+   * `recipes` prop because the parent's refresh is asynchronous.
+   *
+   * The parent's signal is only cleared once the refresh is done — that keeps
+   * {@link refreshing} (derived below) true for the whole re-read.
+   */
+  useEffect(() => {
+    if (handoff === null || session === null) return;
+    listRecipes(token)
+      .then((stored) => loadContext(token, stored))
+      .then((context) => {
+        if (!mountedRef.current) return;
+        session.setContextText(`${context.text}\n\n${handoffNote(handoff.title)}`);
+        session.setIngredientRecipeTitles(context.ingredientRecipeTitles);
+        // The saved draft's card is history now — the next message is the dish.
+        setDraft(null);
+        setMessages((current) => [
+          ...current,
+          {
+            role: 'assistant',
+            content: `„${handoff.title}“ ist gespeichert und steht dir jetzt als Zutat zur Verfügung.`,
+          },
+        ]);
+        if (handoff.type === 'ingredient_recipe') {
+          setDescription(handoffPrompt(handoff.title));
+        }
+        onHandoffConsumed();
+      })
+      .catch((err) => {
+        if (!mountedRef.current) return;
+        setError(err instanceof Error ? err.message : String(err));
+        onHandoffConsumed();
+      });
+  }, [handoff, session, token, onHandoffConsumed]);
+
   /** Stores the pasted / autofilled key for this session and prepares the session. */
   const handleKeyApply = (rawKey: string): void => {
     if (rawKey.trim() === '') return;
@@ -301,7 +400,7 @@ export default function AiCreateSheet({
 
   /** Sends the description / answer and advances the conversation. */
   const handleSend = async (): Promise<void> => {
-    if (session === null || busy || draft !== null) return;
+    if (session === null || busy || refreshing) return;
     if (description.trim() === '' && source.trim() === '') return;
     setError(null);
     const userText = composeUserMessage(description, source);
@@ -335,7 +434,12 @@ export default function AiCreateSheet({
   /** True once the user sent the first prompt — from then on only a single
    *  answer field is shown (the two-field description layout is over). */
   const conversationStarted = messages.length > 0;
-  const canSend = !busy && (description.trim() !== '' || source.trim() !== '');
+  /** True while a saved sub-recipe is being re-read into the AI context — a
+   *  send during that window would reach the model without the new ingredient
+   *  recipe, so the button waits (derived, not state: it mirrors the parent's
+   *  handoff signal, which is cleared when the refresh finished). */
+  const refreshing = handoff !== null && session !== null;
+  const canSend = !busy && !refreshing && (description.trim() !== '' || source.trim() !== '');
 
   return (
     <main className="app ai-screen">
@@ -618,7 +722,7 @@ export default function AiCreateSheet({
                 )}
                 <div className="sheet-actions">
                   <button type="submit" className="primary-button" disabled={!canSend}>
-                    {busy ? 'Senden …' : 'Senden'}
+                    {busy ? 'Senden …' : refreshing ? 'Kontext wird aktualisiert …' : 'Senden'}
                   </button>
                 </div>
               </form>

@@ -192,10 +192,11 @@ may also include a pasted source text from a website). Follow these steps.
   session — create **it** as an `ingredient_recipe` and hand it over. Begin
   your reply with one or two German sentences of explanation ("Ich erstelle
   zuerst die Löffelbiskuits als eigenes Rezept; speichere sie und erstelle dann
-  das Tiramisu in einer neuen Anfrage, das sie als Zutat verwendet."), followed
-  by the canonical file of the base preparation. Do NOT draft the dish yet —
-  the user will ask for it in a second AI-create once the sub-recipe is saved,
-  and that second session's context then lists the new sub-recipe.
+  das Tiramisu, das sie als Zutat verwendet."), followed by the canonical file
+  of the base preparation. Do NOT draft the dish yet. Once the base preparation
+  is saved, the app reports it in your context ("Stand dieser Unterhaltung") and
+  the saved sub-recipe appears in the list of existing ingredient_recipes — the
+  dish then follows either in this same conversation or in a new AI-create.
 - Never invent a sub-recipe inside a dish draft: only ingredient names that
   exist in the master data or are titles of the listed ingredient_recipes may
   appear in a draft, and the app rejects anything else on save.

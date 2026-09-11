@@ -17,14 +17,16 @@
  *
  * The session owns the message history (the AiClient itself is stateless).
  *
- * One extension beyond the first prompt:
+ * Two extensions beyond the first prompt:
  * - **Revisions** (Task A4): once a file has been returned, the caller may keep
  *   the conversation going with {@link AiCreateSession.sendRevision} — the same
  *   history is sent again, so the model revises its own draft.
- * - **Live Vorgaben**: {@link AiCreateSession.setSpecifications} replaces the
- *   user's recipe specifications (Typ, Portionen/Ergiebigkeit, Merkmale, „Die
- *   KI soll …“). It only rebuilds the single system message, which is sent anew
- *   with every request — the AiClient contract stays untouched.
+ * - **Live prompt blocks**: {@link AiCreateSession.setSpecifications} replaces
+ *   the user's recipe specifications (Typ, Portionen/Ergiebigkeit, Merkmale,
+ *   „Die KI soll …“) and {@link AiCreateSession.setContextText} the runtime
+ *   context (used after a sub-recipe was saved mid-conversation). Both only
+ *   rebuild the single system message, which is sent anew with every request —
+ *   the AiClient contract stays untouched.
  */
 
 import { parseRecipe } from '@cookbook/core';
@@ -101,6 +103,12 @@ export interface AiCreateSession {
    * aiContext.buildSpecificationsText). Takes effect with the next request.
    */
   setSpecifications(text: string): void;
+
+  /** Replaces the runtime context block (e.g. after a recipe was saved). */
+  setContextText(text: string): void;
+
+  /** Replaces the valid sub-recipe titles (a saved draft is one of them now). */
+  setIngredientRecipeTitles(titles: ReadonlySet<string>): void;
 }
 
 /** Options for {@link createAiCreateSession}. */
@@ -130,9 +138,12 @@ interface ExtractedFile {
  * context (personal rules, master data, collection) + the user's Vorgaben.
  */
 export function createAiCreateSession(options: AiCreateSessionOptions): AiCreateSession {
-  const contextText = options.contextText;
+  /** The runtime context block (aiContext.ts); replaced after a save. */
+  let contextText = options.contextText;
   /** The user's Vorgaben block; replaced whenever the settings change. */
   let specificationsText = options.specificationsText ?? '';
+  /** Valid sub-recipe titles for the new-ingredient proposal list. */
+  let ingredientRecipeTitles = options.ingredientRecipeTitles;
   const messages: AiMessage[] = [{ role: 'system', content: '' }];
   let repairRounds = 0;
 
@@ -162,7 +173,7 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
     for (const step of recipe.steps) {
       for (const ingredient of step.ingredients) {
         const name = ingredient.name.trim();
-        if (options.knownIngredientNames.has(name) || options.ingredientRecipeTitles.has(name)) {
+        if (options.knownIngredientNames.has(name) || ingredientRecipeTitles.has(name)) {
           continue;
         }
         const existing = byName.get(name);
@@ -304,6 +315,15 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
     setSpecifications(text: string): void {
       specificationsText = text;
       rebuildSystemInstruction();
+    },
+
+    setContextText(text: string): void {
+      contextText = text;
+      rebuildSystemInstruction();
+    },
+
+    setIngredientRecipeTitles(titles: ReadonlySet<string>): void {
+      ingredientRecipeTitles = titles;
     },
   };
 }
