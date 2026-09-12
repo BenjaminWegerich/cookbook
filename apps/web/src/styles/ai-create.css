@@ -30,9 +30,11 @@
 
 /* ---- Chat transcript ------------------------------------------------------ */
 
+/* Transcript: the message bubbles follow each other at one small step
+   (--space-2); the previous --space-4 read as a loose, gappy column. */
 .ai-transcript {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-2);
   align-content: start;
   padding: var(--space-2) 0;
 }
@@ -53,6 +55,10 @@
   margin: 0;
 }
 
+/* Four equal corners on both bubble kinds (decided with the user): a single
+   uniform radius, no flattened "speech tail" corner — the tail made the two
+   bubble kinds look like they pointed in different directions, which reads as
+   noise in a transcript that is a plain question/answer exchange. */
 .ai-bubble {
   max-width: 92%;
   padding: var(--space-4) var(--space-5);
@@ -67,7 +73,6 @@
   justify-self: end;
   background: var(--color-accent);
   color: var(--color-on-accent);
-  border-end-end-radius: var(--radius-sm);
 }
 
 .ai-assistant {
@@ -75,7 +80,6 @@
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   color: var(--color-ink);
-  border-end-start-radius: var(--radius-sm);
 }
 
 /* ---- Draft-ready card ------------------------------------------------------ */
@@ -87,22 +91,36 @@
 /* ---- Composer ------------------------------------------------------------- */
 
 /* Header stack: the Zurück button sits on its own line at the top left (the
-   editor's back placement), the screen title below it. The global .app-header
-   bottom margin (--space-7) would add ~24 px of air on top of the screen's own
-   grid gap, so it is dropped here: the grid gap alone is the intended, tighter
-   break between heading and hint. */
+   editor's back placement), the screen title below it. Two whitespace sources
+   are removed here so the whole screen follows one 14 px rhythm:
+   - the global .app-header bottom margin (--space-7) would add ~24 px of air on
+     top of the screen's own grid gap;
+   - the h1's browser-default margin (~21 px on each side at the 32 px screen
+     title size) would add the same amount again above the title and below it.
+   The stack's own gap (--space-6) is what is left: a clear step between the
+   quiet Zurück button and the title, which is the deliberate break of the
+   pair. */
 .ai-screen .app-header {
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
+  gap: var(--space-6);
   margin-block-end: 0;
 }
 
+.ai-screen .app-header h1 {
+  margin: 0;
+}
+
+/* The composer follows the transcript directly. The former
+   `margin-block-start: auto` pushed it to the window bottom, which opened a
+   viewport-sized void between the newest bubble and the entry field on any
+   window taller than the conversation; with the void gone, the padding is the
+   only separation needed (--space-2, the same step the bubbles use). */
 .ai-composer {
   display: grid;
   gap: var(--space-4);
-  margin-block-start: auto;
-  padding-top: var(--space-5);
+  padding-top: var(--space-2);
 }
 
 /* Fixed-height entry fields: the row counts are set in the component
