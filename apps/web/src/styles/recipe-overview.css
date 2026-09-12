@@ -17,8 +17,9 @@
   margin-inline: auto;
 }
 
-/* Circular close button floating over the top-right corner of the hero photo;
-   its offsets mirror the sheet's own padding so it sits inside the corner. */
+/* Circular close button in the top-right corner of the sheet, level with the
+   hero. The hero is narrower than the sheet, so the button sits on the plain
+   sheet surface — the hairline border keeps it visible against it. */
 .overview-close {
   position: absolute;
   top: var(--space-6);
@@ -29,7 +30,7 @@
   width: var(--space-9); /* 42 px — ladder value */
   height: var(--space-9);
   padding: 0;
-  border: none;
+  border: 1px solid var(--color-line);
   border-radius: 50%; /* structural exception to the ladder: full circle */
   background: color-mix(in srgb, var(--color-surface) 85%, transparent);
   color: var(--color-ink);
@@ -43,6 +44,18 @@
 .overview-close svg {
   width: var(--icon-size);
   height: var(--icon-size);
+}
+
+/* Hero: the size (56 % of the content width — a preferred number like the
+   ladder) lives on this plain wrapper, centered. The wrapper deliberately has
+   no aspect ratio of its own: a grid item that carries the aspect ratio *and*
+   a percentage width does not reserve its row height, so the image overflowed
+   its row and painted over the details. Here the wrapper is an ordinary block
+   item whose height is set by its in-flow child (the square thumb), which sizes
+   the row reliably. */
+.overview-hero {
+  width: 56%;
+  margin-inline: auto;
 }
 
 /* Square photo / letter avatar, rounded like the recipe cards. */
@@ -119,21 +132,27 @@
 
 /* ---- Actions ------------------------------------------------------------- */
 
-/* One full-width stack: the cook action leads in the accent color, the other
-   three are quiet surface buttons. */
+/* Two-by-two action grid in reading order: "Jetzt kochen" (accent) ·
+   "Zur Liste hinzufügen" on the first row, "Manuell bearbeiten" ·
+   "Mit KI bearbeiten" on the second. Both columns are equal and the buttons
+   stretch to the row's tallest label, so a wrapping label keeps the grid even.
+   The horizontal padding is one ladder step tighter than the stacked layout
+   (space-3 instead of space-6): the cells are half as wide, and the labels need
+   the room. */
 .overview-actions {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
 .overview-actions .primary-button {
   width: 100%;
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-3);
 }
 
 .overview-secondary {
   width: 100%;
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-3);
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);

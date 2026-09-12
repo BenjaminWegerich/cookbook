@@ -119,8 +119,12 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           </svg>
         </button>
 
-        {/* List entry data: renders before the file read finishes. */}
-        <RecipeThumb recipe={recipe} token={token} />
+        {/* List entry data: renders before the file read finishes. The wrapper
+            carries the hero size; the square thumb fills it (see the row-sizing
+            note in recipe-overview.css). */}
+        <div className="overview-hero">
+          <RecipeThumb recipe={recipe} token={token} />
+        </div>
 
         <div className="overview-body">
           <h2 className="overview-title" id="overview-title">
@@ -130,6 +134,12 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
             <p className="overview-subtitle">{subtitle}</p>
           )}
 
+          {description !== undefined && description !== '' && (
+            <p className="overview-description">{description}</p>
+          )}
+
+          {/* Times sit below the description (decided with the user): the
+              prose explains the dish first, the timing is the lookup value. */}
           {(prepTime !== null || totalTime !== null) && (
             <dl className="overview-meta">
               {prepTime !== null && (
@@ -145,10 +155,6 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
                 </div>
               )}
             </dl>
-          )}
-
-          {description !== undefined && description !== '' && (
-            <p className="overview-description">{description}</p>
           )}
 
           {details === null && loadError === null && (
