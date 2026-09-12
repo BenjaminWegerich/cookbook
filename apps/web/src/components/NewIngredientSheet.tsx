@@ -180,6 +180,15 @@ function NewIngredientSheet({
   const trimmedName = name.trim();
 
   /**
+   * Whether the name input takes the focus when the sheet opens. On smartphones
+   * a focused input pops up the on-screen keyboard and hides the form, so the
+   * field is only focused when it is empty: this sheet is normally reached via
+   * "Neue Zutat anlegen", which always hands over the already typed name — an
+   * empty field therefore only happens in a genuinely blank create flow.
+   */
+  const focusNameOnOpen = initialName.trim() === '';
+
+  /**
    * Ingredients whose mappings can be copied: master-data ingredients with at
    * least one mapping and the same base-unit family as the current selection
    * (factors are expressed in the ingredient's own base unit, so copying
@@ -301,7 +310,7 @@ function NewIngredientSheet({
               setName(event.target.value);
               markEdited();
             }}
-            autoFocus
+            autoFocus={focusNameOnOpen}
           />
         </label>
 

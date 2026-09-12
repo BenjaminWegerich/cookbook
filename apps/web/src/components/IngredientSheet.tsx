@@ -118,7 +118,10 @@ function IngredientSheet({
   onClose,
   onCreateNewIngredient,
 }: IngredientSheetProps) {
-  const [name, setName] = useState(prefill?.name ?? initial?.name ?? '');
+  /** The name the sheet opens with: a restored create-flow prefill wins over
+   *  the value of an edited row/artifact. */
+  const initialName = prefill?.name ?? initial?.name ?? '';
+  const [name, setName] = useState(initialName);
   const [quantity, setQuantity] = useState(prefill?.quantity ?? initial?.quantity ?? 100);
   /** Inline mode without a name: the author picks Gewicht / Volumen / no unit.
    *  Editing an inline artifact restores its stored unit; fresh inserts start
@@ -128,6 +131,16 @@ function IngredientSheet({
     return initial?.unit === 'ml' ? 'ml' : initial?.unit === 'g' ? 'g' : 'none';
   });
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Whether the name input takes the focus when the sheet opens. On smartphones
+   * a focused input pops up the on-screen keyboard and hides the form, so the
+   * field is only focused when it is empty (same rule as NewIngredientSheet): a
+   * fresh row/artifact starts typing right away, a prefilled name — the
+   * restored create flow (prefill) or an edited row/artifact (initial) — does
+   * not.
+   */
+  const focusNameOnOpen = initialName.trim() === '';
 
   const rowMode = mode === 'row-add' || mode === 'row-edit';
   /** Both inline modes allow quantity-only mentions without a name/unit. */
@@ -305,7 +318,7 @@ function IngredientSheet({
               setName(event.target.value);
               setError(null);
             }}
-            autoFocus
+            autoFocus={focusNameOnOpen}
           />
         </label>
         {suggestions.length > 0 && (
