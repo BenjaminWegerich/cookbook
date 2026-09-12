@@ -1,0 +1,155 @@
+/**
+ * Recipe overview bottom sheet — component styles (see RecipeOverview.tsx).
+ *
+ * The sheet follows the shared bottom-sheet pattern (.sheet / .sheet-backdrop
+ * in editor.css). This file adds the recipe hero, the details block and the
+ * action stack. All pixel values come from the design ladder
+ * (docs/CODING_CONVENTIONS.md); colors and sizes reference styles/tokens.css.
+ */
+
+/* The editor's form sheets are full width; the overview is a content sheet,
+   and a full-bleed square photo would dominate a wide desktop viewport. It is
+   therefore capped to a comfortable reading width and centered. On phones the
+   cap is wider than the viewport, so the sheet stays edge to edge. 42 rem is
+   the layout breakpoint value used by the recipe grid, not a new token. */
+.overview-sheet {
+  max-width: 42rem;
+  margin-inline: auto;
+}
+
+/* Circular close button floating over the top-right corner of the hero photo;
+   its offsets mirror the sheet's own padding so it sits inside the corner. */
+.overview-close {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--app-padding);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: var(--space-9); /* 42 px — ladder value */
+  height: var(--space-9);
+  padding: 0;
+  border: none;
+  border-radius: 50%; /* structural exception to the ladder: full circle */
+  background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.overview-close:active {
+  background: var(--color-surface);
+}
+
+.overview-close svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* Square photo / letter avatar, rounded like the recipe cards. */
+.overview-sheet .recipe-thumb {
+  border-radius: var(--radius-md);
+}
+
+/* ---- Details block ------------------------------------------------------- */
+
+.overview-body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.overview-title {
+  /* margin: 0 — the heading's UA margin would stack on the grid gap and push
+     the subtitle far below the title. */
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.overview-subtitle {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-md);
+}
+
+/* Arbeitszeit / Gesamtzeit as one compact caption/value row. */
+.overview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-7);
+  margin: 0;
+}
+
+.overview-meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.overview-meta dt {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.overview-meta dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.overview-description {
+  margin: 0;
+}
+
+.overview-loading {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.overview-error {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+/* ---- Actions ------------------------------------------------------------- */
+
+/* One full-width stack: the cook action leads in the accent color, the other
+   three are quiet surface buttons. */
+.overview-actions {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.overview-actions .primary-button {
+  width: 100%;
+  padding: var(--space-4) var(--space-6);
+}
+
+.overview-secondary {
+  width: 100%;
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.overview-secondary:active {
+  background: var(--color-line);
+}
+
+/* Feedback line for the placeholder actions (not built yet). */
+.overview-notice {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}

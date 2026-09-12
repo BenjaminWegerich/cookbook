@@ -9,18 +9,21 @@ import AiCreateSheet, {
 } from './components/AiCreateSheet';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
+import RecipeOverview from './components/RecipeOverview';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
 import './styles/ai-create.css';
 import './styles/recipe-list.css';
+import './styles/recipe-overview.css';
 import './styles/editor.css';
 
 /**
- * The app screens above the recipe list (the list itself is the root/bottom
- * layer and has no marker of its own). The create menu is treated like a
- * screen here: the browser Back button closes it first, then leaves the list.
+ * The app layers above the recipe list (the list itself is the root/bottom
+ * layer and has no marker of its own). The create menu and the recipe overview
+ * sheet are treated like screens here: the browser Back button closes them
+ * first, then leaves the list.
  */
-type TopScreen = 'editor' | 'ai' | 'menu';
+type TopScreen = 'editor' | 'ai' | 'menu' | 'overview';
 
 /**
  * Browser-history entry marker for a TopScreen. The recipe list is the app's
@@ -52,8 +55,9 @@ const GIS_POLL_INTERVAL_MS = 200;
  *
  * States: login (not connected), loading, error, empty collection, and the
  * recipe list (adaptive card grid with square photos). The floating action
- * button opens the create menu (manual / AI) and a tap on a recipe card
- * opens the recipe editor. UI language is German
+ * button opens the create menu (manual / AI); a tap on a recipe card opens the
+ * recipe overview sheet, whose "Manuell bearbeiten" action opens the editor.
+ * UI language is German
  * (see docs/CODING_CONVENTIONS.md).
  */
 function App() {
@@ -88,6 +92,9 @@ function App() {
   const [aiHandoff, setAiHandoff] = useState<AiHandoff | null>(null);
   /** The FAB create menu: two extended FABs (manually create vs. AI create). */
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  /** The recipe overview sheet (opened by tapping a recipe card). */
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [overviewTarget, setOverviewTarget] = useState<StoredRecipe | null>(null);
   /** The AI-create conversation screen. */
   const [aiCreateOpen, setAiCreateOpen] = useState(false);
 
@@ -124,6 +131,7 @@ function App() {
     // trip, so saving a Zutaten-Rezept there can continue the same chat.
     setAiCreateOpen(next === 'ai' || (next === 'editor' && prev === 'ai'));
     setCreateMenuOpen(next === 'menu');
+    setOverviewOpen(next === 'overview');
     if (prev === null) {
       if (next === null) {
         return;
@@ -232,6 +240,7 @@ function App() {
       setEditorOpen(false);
       setAiCreateOpen(false);
       setCreateMenuOpen(false);
+      setOverviewOpen(false);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -287,6 +296,20 @@ function App() {
     }, GIS_POLL_INTERVAL_MS);
     return () => window.clearInterval(interval);
   }, [token, handleConnect]);
+
+  /** Opens the overview sheet for a tapped recipe card. */
+  const openOverview = useCallback(
+    (recipe: StoredRecipe): void => {
+      setOverviewTarget(recipe);
+      setNav('overview');
+    },
+    [setNav],
+  );
+
+  /** Closes the overview sheet (backdrop, close button, browser Back). */
+  const closeOverview = useCallback((): void => {
+    setNav(null);
+  }, [setNav]);
 
   /** Opens the editor for a recipe (null = new recipe). */
   const openEditor = useCallback(
@@ -445,7 +468,7 @@ function App() {
               <p>Tippe auf das + unten rechts, um dein erstes Rezept anzulegen.</p>
             </section>
           ) : (
-            <RecipeList recipes={recipes} token={token} onOpenRecipe={openEditor} />
+            <RecipeList recipes={recipes} token={token} onOpenRecipe={openOverview} />
           )}
 
           {token && (
@@ -494,6 +517,22 @@ function App() {
           )}
         </main>
       )}
+
+      {/* The overview is a sheet over the list (not a screen of its own), so it
+          renders as a sibling of the list branch and only while the list is the
+          visible base. "Manuell bearbeiten" replaces the sheet with the editor. */}
+      {!editorOpen &&
+        !aiCreateOpen &&
+        overviewOpen &&
+        overviewTarget !== null &&
+        token !== null && (
+          <RecipeOverview
+            token={token}
+            recipe={overviewTarget}
+            onClose={closeOverview}
+            onEdit={openEditor}
+          />
+        )}
     </>
   );
 }

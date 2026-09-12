@@ -7,7 +7,7 @@ interface RecipeListProps {
   recipes: StoredRecipe[];
   /** Drive access token, forwarded to the card media areas for photo downloads. */
   token: string;
-  /** Called when the user taps a recipe card (opens the recipe editor). */
+  /** Called when the user taps a recipe card (opens the recipe overview). */
   onOpenRecipe: (recipe: StoredRecipe) => void;
 }
 
@@ -16,7 +16,7 @@ interface RecipeListProps {
  * to desktop widths): a sticky search field above the grid, one card per
  * recipe with a square photo and the title below. The search filters recipes
  * by title as you type (case-insensitive); tapping a card opens the recipe
- * editor. UI language is German (see docs/CODING_CONVENTIONS.md).
+ * overview sheet. UI language is German (see docs/CODING_CONVENTIONS.md).
  */
 function RecipeList({ recipes, token, onOpenRecipe }: RecipeListProps) {
   const [query, setQuery] = useState('');
