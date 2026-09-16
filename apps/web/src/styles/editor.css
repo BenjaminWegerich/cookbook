@@ -191,11 +191,23 @@
   color: var(--color-on-accent);
 }
 
-/* Remove/clear chip for optional fields (e.g. Gesamtzeit). */
+/* Remove/clear chip for optional fields (e.g. Gesamtzeit): the × symbol plus
+   the label, as a flex row so both sit on the same line height (the multiplication
+   sign alone sat too high against the surrounding text). */
 .chip-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   background: none;
   border-style: dashed;
   color: var(--color-ink-muted);
+}
+
+/* The multiplication sign is drawn larger than the chip label but optically
+   small in its box; matching the label's font size would make it dominate. */
+.chip-glyph {
+  font-size: var(--text-sm);
+  line-height: 1;
 }
 
 /* ---- QuantityPicker (suggested chips + stepper) ---------------------------- */
@@ -368,6 +380,14 @@
 
 .artifact-remove:active {
   background: var(--color-line);
+}
+
+/* The cross inside the 18 px button (the shared symbol renders at 24 px
+   without a class rule, see components/icons.tsx). */
+.artifact-remove svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 /* ---- Validation feedback ------------------------------------------------ */
@@ -564,15 +584,9 @@
   border-radius: var(--radius-md);
 }
 
-.ingredient-row.is-reference {
-  border-color: var(--color-accent);
-}
-
-.ingredient-row.has-error {
-  border-color: var(--color-danger);
-}
-
-/* Compact reference toggle on a master-list row (☆ off, ★ on). */
+/* Reference toggle — master list only (decided with the user): outline star
+   when off, the same star filled when on, in the reference colour (olive — the
+   colour of the "REFERENZ" badge), so toggle and badge tell the same story. */
 .ref-toggle {
   flex: none;
   display: grid;
@@ -584,13 +598,35 @@
   border: none;
   border-radius: 50%; /* structural exception to the ladder: full circle */
   color: var(--color-ink-muted);
-  font-size: var(--text-lg);
   line-height: 1;
   cursor: pointer;
 }
 
+.star-icon {
+  display: block;
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* Row remove (step rows): the ✕ of one counted ingredient. */
+.row-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.row-remove:active {
+  color: var(--color-ink);
+}
+
 .ref-toggle.on {
-  color: var(--color-accent);
+  color: var(--color-olive);
 }
 
 .ref-toggle:active {
@@ -626,57 +662,43 @@
   color: var(--color-ink-muted);
 }
 
-.badge {
-  padding: var(--space-1) var(--space-3);
-  background: var(--color-accent);
-  border-radius: 100px; /* pill — structural exception to the ladder */
-  color: var(--color-on-accent);
-  font-size: var(--text-sm);
-}
-
-.badge.olive {
-  background: var(--color-olive);
-}
-
-/* Tag on recipe-title suggestions in the ingredient sheet ("Zutaten-Rezept"). */
-.suggestion-tag {
-  margin-left: var(--space-3);
-  font-weight: 600;
-  vertical-align: middle;
-}
-
-/* Jump button for a linked sub-recipe in the Zutaten list (below the row). */
-.link-badge {
-  justify-self: start;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-}
-
 /* ---- Danger zone (delete) ------------------------------------------------ */
 
+/* Danger zone (delete): the delete button and its "Abbrechen" sit next to each
+   other in one row (flex, not grid — a grid would give each child its own row),
+   wrapping only when the label is long on a narrow screen. */
 .danger-zone {
-  justify-items: start;
-  align-content: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-4);
   border-color: var(--color-danger);
 }
 
-.danger-text-button {
-  padding: var(--space-2) var(--space-4);
-  background: none;
-  border: none;
-  color: var(--color-danger);
-  font-size: var(--text-md);
-  text-decoration: underline;
-}
-
+/* Filled danger button: the primary button's geometry in the danger color,
+   used for every destructive action ("Entfernen" in the ingredient sheet,
+   "Rezept löschen") so the two read as the same kind of action. */
 .danger-button {
-  padding: var(--space-3) var(--space-5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
   background: var(--color-danger);
   border: none;
   border-radius: var(--radius-md);
   color: var(--color-on-accent);
   font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.danger-button:active:not(:disabled) {
+  background: var(--color-danger-press);
+}
+
+.danger-button:disabled {
+  opacity: 0.5;
 }
 
 .danger-text {
@@ -798,6 +820,10 @@
 /* ---- Primary button (Speichern / Hinzufügen) ----------------------------- */
 
 .primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-6);
   background: var(--color-accent);
   border: none;
@@ -815,6 +841,20 @@
   opacity: 0.5;
 }
 
+/* Symbols inside labelled buttons (see components/icons.tsx). 18 px (ladder:
+   space-6) instead of the 24 px inline size, so a text button keeps its
+   height. `display: block` is what centers the glyph on the label's line:
+   as an inline box the SVG would sit on the text baseline and look low (and
+   the pot, whose drawing fills its viewBox, would look high). The color
+   follows the button, so the danger and primary variants stay consistent. */
+.button-icon {
+  display: block;
+  flex: none;
+  width: var(--space-6);
+  height: var(--space-6);
+  color: currentColor;
+}
+
 /* ---- Create master-data ingredient (from the ingredient sheet) ----------- */
 
 .not-in-master {
@@ -822,8 +862,16 @@
   gap: var(--space-3);
 }
 
+/* Outlined olive pill that creates the missing master-data ingredient. Lays
+   the plus and the label out as a flex row: the icon is block-level (see
+   .button-icon) so it centers on the label's line, and the gap is one ladder
+   step wider than the default because the plus drawing is optically tight
+   against the following text. */
 .create-ingredient-button {
   justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-6);
   background: var(--color-surface);
   border: 2px solid var(--color-olive);
@@ -889,35 +937,98 @@
 
 /* ---- Step rows (per-step ingredient list) -------------------------------- */
 
-/* A row of a step's own ingredient list: compact, one line per use. */
+/* A row of a step's own ingredient list. Same geometry as the master list row
+   (.ingredient-row) so both lists read the same way, but the step rows sit in a
+   card and keep the light surface that separates them from it. */
 .step-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-surface);
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 }
 
-/* A row whose ingredient is not in the master data / no sub-recipe yet — it
-   blocks the save until it is created as a new ingredient (decided with the
-   user). Highlighted so the required action is visible. */
-.step-row.is-new-ingredient,
-.ingredient-row.is-new-ingredient {
-  border-color: var(--color-danger);
-}
-
-.new-ingredient-tag {
-  display: inline-block;
+/* Ingredient tags ("NEU" / "REZEPT" / "REFERENZ"), one style for all: a small
+   all-caps marker directly after the ingredient name. "NEU" warns that the name
+   is not in the master data yet, "REZEPT" marks a sub-recipe use (tapping it
+   jumps to the ingredient recipe) and "REFERENZ" mirrors the star toggle: its
+   × clears the reference role, exactly like tapping the star again. */
+.ingredient-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   margin-left: var(--space-2);
-  padding: 0 var(--space-2);
-  background: var(--color-danger);
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: none;
   border-radius: var(--radius-sm);
   color: var(--color-on-accent);
+  font: inherit;
   font-size: var(--text-sm);
   font-weight: 600;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.tag-new {
+  background: var(--color-danger);
+}
+
+.tag-recipe {
+  background: var(--color-accent);
+  cursor: pointer;
+}
+
+.tag-recipe:active {
+  opacity: 0.85;
+}
+
+/* The reference badge only exists while the star is set, so it needs no own
+   "active" variant; olive is the reference colour (same as the star). */
+.tag-reference {
+  background: var(--color-olive);
+}
+
+.tag-icon {
+  display: block;
+  flex: none;
+  width: var(--space-5);
+  height: var(--space-5);
+  color: currentColor;
+}
+
+/* The × inside the reference badge: drops the reference role. Inherits the
+   badge's on-accent colour; its hit area grows via ::before, so the glyph can
+   stay small without shrinking the touch target. */
+.tag-remove {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%; /* structural exception to the ladder: full circle */
+  color: currentColor;
+}
+
+.tag-remove::before {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--space-1));
+}
+
+.tag-remove:active {
+  background: color-mix(in srgb, var(--color-on-accent) 25%, transparent);
+}
+
+.tag-remove-icon {
+  display: block;
+  width: var(--space-4);
+  height: var(--space-4);
 }
 
 /* The whole step-row (minus the right-side ✕ / verknüpft actions) is one big
@@ -937,13 +1048,10 @@
   gap: var(--space-2);
 }
 
-.step-row-actions .link-badge {
-  justify-self: auto;
-}
-
 /* Validation message directly under an ingredient row whose name is not in
    the master data (appears after a failed save; the row itself is already
-   highlighted red and tagged "neu"). */
+   tagged "NEU" — the tag carries the warning, the row keeps its normal
+   outline). */
 .row-issue {
   color: var(--color-danger);
   font-size: var(--text-sm);
@@ -961,16 +1069,4 @@
    former extra top margin made the gaps above them uneven, so it is gone. */
 .step-card .add-ingredient {
   margin-block-start: 0;
-}
-
-/* Reference toggle on the (read-only) master list. */
-.badge-toggle {
-  justify-self: start;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-}
-
-.badge-toggle:disabled {
-  opacity: 0.45;
 }

@@ -22,6 +22,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
+import { CLOSE_ICON_SVG } from './icons';
 import {
   artifactToText,
   formatAQValue,
@@ -184,7 +185,10 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         remove.type = 'button';
         remove.className = 'artifact-remove';
         remove.setAttribute('aria-label', 'Menge entfernen');
-        remove.textContent = '×';
+        // The cross comes from the shared symbol set; the SVG string is the
+        // only form usable here (the chip is built imperatively and must stay
+        // outside React's DOM ownership). Keep it in sync with CloseIcon.
+        remove.innerHTML = CLOSE_ICON_SVG;
         span.appendChild(remove);
         div.appendChild(span);
       }

@@ -53,6 +53,7 @@ import {
 } from '@cookbook/core';
 
 import QuantityPicker from './QuantityPicker';
+import { LinkIcon, PlusIcon, TrashIcon } from './icons';
 import type { QuantityFamily } from './quantityChips';
 
 /** One ingredient recipe of the collection, as the sheet needs it for the
@@ -328,7 +329,10 @@ function IngredientSheet({
                 <button type="button" onClick={() => adoptSuggestion(candidate)}>
                   {candidate}
                   {recipeTitles.has(candidate) && (
-                    <span className="badge olive suggestion-tag">Zutaten-Rezept</span>
+                    <span className="ingredient-tag tag-recipe">
+                      <LinkIcon className="tag-icon" />
+                      <span>Rezept</span>
+                    </span>
                   )}
                 </button>
               </li>
@@ -342,7 +346,8 @@ function IngredientSheet({
               className="create-ingredient-button"
               onClick={() => onCreateNewIngredient(trimmedName, pickerQuantity)}
             >
-              Neue Zutat anlegen
+              <PlusIcon className="button-icon" />
+              <span>Neue Zutat anlegen</span>
             </button>
           </div>
         )}
@@ -409,7 +414,8 @@ function IngredientSheet({
               className="danger-button"
               onClick={() => onConfirm(initial!, 'remove')}
             >
-              Entfernen
+              <TrashIcon className="button-icon" />
+              <span>Entfernen</span>
             </button>
           )}
           <button type="button" className="text-button" onClick={onClose}>

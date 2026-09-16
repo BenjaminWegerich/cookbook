@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import type { StoredRecipe } from '../drive/recipeStorage';
+import { SearchIcon } from './icons';
 import RecipeThumb from './RecipeThumb';
 
 interface RecipeListProps {
@@ -37,12 +38,7 @@ function RecipeList({ recipes, token, onOpenRecipe }: RecipeListProps) {
     <>
       <div className="recipe-search" role="search">
         <div className="recipe-search-field">
-          <svg className="recipe-search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M9.5 3a6.5 6.5 0 1 0 4.05 11.55l4.2 4.2 1.5-1.5-4.2-4.2A6.5 6.5 0 0 0 9.5 3zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"
-              fill="currentColor"
-            />
-          </svg>
+          <SearchIcon className="recipe-search-icon" />
           <input
             type="search"
             className="recipe-search-input"

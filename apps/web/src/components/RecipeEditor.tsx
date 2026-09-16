@@ -3,19 +3,28 @@
  *
  * Decided with the user:
  * - every step carries its own counted ingredient list (rows) that appears
- *   above the step text; rows are added/edited per step ("+ Zutat zur Liste") and feed
+ *   above the step text; rows are added/edited per step ("+ Zutat neu anlegen") and feed
  *   the derived master list (order of first use, duplicates merged with the
  *   total, storage_format.md §4);
  * - the step text is free prose; display-only inline artifacts ("+ Menge im
  *   Text") scale with the serving count but are never counted;
  * - the master list (Zutaten section) is read-only except for the reference
- *   role, which can only be set there (both recipe types, no limit);
+ *   role, which can only be set there (both recipe types, no limit); a step row
+ *   shows an existing reference but cannot set one (its "REFERENZ" tag's × can
+ *   only clear it);
  * - sub-recipes are implicit (name == ingredient-recipe title) and clickable
  *   wherever they appear (step rows, master list, text artifacts);
  * - quantities are stored in the family unit g/ml; the display switches to
  *   kg/l at 1000 (chips carry base quantity AND base unit, no steppers);
  * - sections: Kopfdaten (Titel, Details, Typ, Portionen/Ergiebigkeit,
  *   Zeiten, Bild), Zubereitung, Zutaten.
+ * - symbols follow the app-wide icon set (see components/icons.tsx): pencil =
+ *   edit, upload = choose/replace photo, trash = destructive, cross = remove,
+ *   star = reference quantity, arrows = reorder.
+ * - the ingredient tags share one style and always appear in the order
+ *   "NEU" (danger) - "REZEPT" (terracotta, chain link) - "REFERENZ" (olive,
+ *   filled star + ×), so every ingredient row reads the same way in both lists;
+ *   only the master list carries the star toggle.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -75,6 +84,16 @@ import IngredientSheet, {
 import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientSheet';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityPicker from './QuantityPicker';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CloseIcon,
+  LinkIcon,
+  StarFilledIcon,
+  StarIcon,
+  TrashIcon,
+  UploadIcon,
+} from './icons';
 
 /** The draft holds every field except the derived master ingredient list. */
 type EditorDraft = Omit<Recipe, 'ingredients'>;
@@ -445,9 +464,12 @@ function TimeChips({
           type="button"
           className="chip chip-clear"
           onClick={() => onChange('')}
-          aria-label="Gewählte Zeit entfernen"
+          title="Gewählte Zeit entfernen"
         >
-          entfernen
+          <span className="chip-glyph" aria-hidden="true">
+            ×
+          </span>
+          <span>entfernen</span>
         </button>
       )}
     </div>
@@ -471,7 +493,7 @@ function RecipeEditor({
   /**
    * The draft as it is known synchronously at mount: from the content cache
    * when the target was already read (the overview sheet does so before
-   * "Manuell bearbeiten"), or the empty / AI draft. `null` = not cached, the
+   * "Bearbeiten → Manuell"), or the empty / AI draft. `null` = not cached, the
    * load effect fetches it. Rendered on the first paint so the editor never
    * flashes a loading message for an already-read recipe.
    */
@@ -742,7 +764,7 @@ function RecipeEditor({
 
   /**
    * Names used by the draft (rows + named inline mentions) that are not known
-   * to the master data / collection — these rows are highlighted as new
+   * to the master data / collection — these rows carry the "NEU" tag
    * ingredients and block the save (see collectIssues). Computed on every
    * render (not memoized): the master registry is module state that updates
    * when the create-master-data flow saves, and only a fresh read reflects
@@ -967,8 +989,8 @@ function RecipeEditor({
     });
   };
 
-  /** Removes a step from the draft (the armed ✕'s confirming tap, or an
-   *  empty step's immediate ✕). Called only when the step being removed is
+  /** Removes a step from the draft (the armed "remove" button's confirming tap,
+   *  or an empty step's immediate tap). Called only when the step being removed is
    *  the one the armed state refers to. */
   const removeStep = (stepIndex: number): void => {
     setConfirmRemoveStep(null);
@@ -979,9 +1001,9 @@ function RecipeEditor({
   };
 
   /**
-   * ✕ tap on a step (two-step confirm like the photo removal): a content-
-   * bearing step (prose or rows) first swaps the ✕ for a red "Wirklich
-   * entfernen?" button; the second tap on it performs the removal. Any other
+   * Remove tap on a step (two-step confirm like the photo removal): a content-
+   * bearing step (prose or rows) first swaps the remove symbol for a red
+   * "Wirklich entfernen?" button; the second tap on it performs the removal. Any other
    * change (arrows, editing, adding) cancels the armed state = "Behalten"
    * (see the draft-change effect above). A truly empty step has nothing to
    * lose and is removed immediately.
@@ -1574,7 +1596,8 @@ function RecipeEditor({
                   className="text-button"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  {photoUrl !== null ? 'Ersetzen' : 'Auswählen'}
+                  <UploadIcon className="button-icon" />
+                  <span>{photoUrl !== null ? 'Ersetzen' : 'Auswählen'}</span>
                 </button>
                 {photoUrl !== null && (
                   <button
@@ -1587,8 +1610,17 @@ function RecipeEditor({
                         handleRemovePhoto();
                       }
                     }}
+                    onBlur={(event) => {
+                      // Clicking anywhere outside this button (the button itself
+                      // keeps focus while it is used) drops the armed "are you
+                      // sure?" — the same rule as the other confirmations.
+                      if (!event.currentTarget.contains(event.relatedTarget)) {
+                        setConfirmRemovePhoto(false);
+                      }
+                    }}
                   >
-                    {confirmRemovePhoto ? 'Wirklich entfernen?' : 'Entfernen'}
+                    <TrashIcon className="button-icon" />
+                    <span>{confirmRemovePhoto ? 'Wirklich entfernen?' : 'Entfernen'}</span>
                   </button>
                 )}
               </div>
@@ -1632,7 +1664,7 @@ function RecipeEditor({
                       }
                       aria-label="Schritt nach oben"
                     >
-                      ↑
+                      <ArrowUpIcon className="button-icon" />
                     </button>
                     <button
                       type="button"
@@ -1650,13 +1682,20 @@ function RecipeEditor({
                       }
                       aria-label="Schritt nach unten"
                     >
-                      ↓
+                      <ArrowDownIcon className="button-icon" />
                     </button>
                     {confirmRemoveStep === stepIndex ? (
                       <button
                         type="button"
                         className="text-button danger-text step-confirm-remove"
                         onClick={() => removeStep(stepIndex)}
+                        onBlur={(event) => {
+                          // Clicking anywhere outside drops the armed question
+                          // (same rule as the photo removal and the delete).
+                          if (!event.currentTarget.contains(event.relatedTarget)) {
+                            setConfirmRemoveStep(null);
+                          }
+                        }}
                         aria-label="Schritt wirklich entfernen?"
                       >
                         Wirklich entfernen?
@@ -1668,7 +1707,7 @@ function RecipeEditor({
                         onClick={() => toggleRemoveStep(stepIndex)}
                         aria-label="Schritt entfernen"
                       >
-                        ✕
+                        <CloseIcon className="button-icon" />
                       </button>
                     )}
                   </div>
@@ -1680,13 +1719,11 @@ function RecipeEditor({
                     {step.ingredients.map((ingredient, rowIndex) => {
                       const jumpTarget = subRecipeTarget(ingredient.name);
                       const isNewName = unknownUsedNames.has(ingredient.name.trim());
+                      const isReference = referenceNames.has(ingredient.name.trim());
                       const rowError = rowIssue(stepIndex, rowIndex);
                       return (
                         <Fragment key={`${stepIndex}-${rowIndex}`}>
-                          <li
-                            id={`editor-step-${stepIndex}-row-${rowIndex}`}
-                            className={isNewName ? 'step-row is-new-ingredient' : 'step-row'}
-                          >
+                          <li id={`editor-step-${stepIndex}-row-${rowIndex}`} className="step-row">
                             <button
                               type="button"
                               className="ingredient-row-button"
@@ -1704,28 +1741,52 @@ function RecipeEditor({
                                   ingredient.quantity,
                                   ingredient.unit,
                                 )}
-                                {isNewName && <span className="new-ingredient-tag">neu</span>}
+                                {isNewName && <span className="ingredient-tag tag-new">neu</span>}
+                                {jumpTarget !== undefined && (
+                                  <button
+                                    type="button"
+                                    className="ingredient-tag tag-recipe"
+                                    onClick={() => requestJump(jumpTarget)}
+                                    title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
+                                  >
+                                    <LinkIcon className="tag-icon" />
+                                    <span>Rezept</span>
+                                  </button>
+                                )}
+                                {isReference && (
+                                  <span className="ingredient-tag tag-reference">
+                                    <StarFilledIcon className="tag-icon" />
+                                    <span>Referenz</span>
+                                    <button
+                                      type="button"
+                                      className="tag-remove"
+                                      onClick={() => toggleReference(ingredient.name)}
+                                      aria-label={`„${ingredient.name}“ als Referenz-Menge entfernen`}
+                                      title="Referenz-Menge entfernen"
+                                    >
+                                      <CloseIcon className="tag-remove-icon" />
+                                    </button>
+                                  </span>
+                                )}
                               </span>
-                              <span className="ingredient-hint">
-                                {isNewName
-                                  ? 'Nicht in Stammdaten — antippen zum Anlegen'
-                                  : 'Antippen zum Bearbeiten'}
-                              </span>
+                              {/* A hint only where it says something the row
+                                  does not: a normal row is identical to its
+                                  master-list counterpart (no hint there
+                                  either). */}
+                              {isNewName && (
+                                <span className="ingredient-hint">
+                                  Nicht in Stammdaten — antippen zum Anlegen
+                                </span>
+                              )}
                             </button>
                             <div className="step-row-actions">
-                              {jumpTarget !== undefined && (
-                                <button
-                                  type="button"
-                                  className="badge olive link-badge"
-                                  onClick={() => requestJump(jumpTarget)}
-                                  title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
-                                >
-                                  verknüpft
-                                </button>
-                              )}
+                              {/* The reference *toggle* lives on the master
+                                  list only (decided with the user); a step row
+                                  can still drop an existing reference through
+                                  the × in its "REFERENZ" tag. */}
                               <button
                                 type="button"
-                                className="text-button danger-text"
+                                className="row-remove"
                                 onClick={() =>
                                   updateStep(stepIndex, (current) => ({
                                     ...current,
@@ -1736,7 +1797,7 @@ function RecipeEditor({
                                 }
                                 aria-label={`${ingredient.name} aus dem Schritt entfernen`}
                               >
-                                ✕
+                                <CloseIcon className="button-icon" />
                               </button>
                             </div>
                           </li>
@@ -1756,7 +1817,7 @@ function RecipeEditor({
                     className="add-ingredient"
                     onClick={() => openSheet({ kind: 'row-add', stepIndex })}
                   >
-                    + Zutat zur Liste
+                    + Zutat neu anlegen
                   </button>
                 </div>
 
@@ -1810,7 +1871,7 @@ function RecipeEditor({
             );
           })}
 
-          {/* + Schritt — adds a new empty step after the last one. */}
+          {/* + Schritt hinzufügen — adds a new empty step after the last one. */}
           <button
             type="button"
             className="add-step"
@@ -1821,7 +1882,7 @@ function RecipeEditor({
               }))
             }
           >
-            + Schritt
+            + Schritt hinzufügen
           </button>
         </section>
 
@@ -1836,14 +1897,14 @@ function RecipeEditor({
           {computedIngredients.length === 0 ? (
             <p className="empty-hint">
               Die Zutatenliste wird aus den Listen der Zubereitungsschritte zusammengestellt — füge
-              Zutaten über „+ Zutat zur Liste“ in den Schritten hinzu.
+              Zutaten über „+ Zutat neu anlegen“ in den Schritten hinzu.
             </p>
           ) : (
             <>
               {/* The &shy; (U+00AD soft hyphen) lets "zusammengesetzt" break as
                   "zusammen-gesetzt" on narrow widths; invisible when the line fits. */}
               <p className="empty-hint">
-                Liste aus den Zubereitungsschritten zusammen&shy;gesetzt. Zutaten mit ★ als
+                Liste aus den Zubereitungsschritten zusammen&shy;gesetzt. Zutaten über den Stern als
                 Referenz-Menge markieren.
               </p>
               <ul className="ingredient-list">
@@ -1852,27 +1913,37 @@ function RecipeEditor({
                   const isReference = ingredient.reference === true;
                   const isNewName = unknownUsedNames.has(ingredient.name.trim());
                   return (
-                    <li
-                      key={ingredient.name}
-                      className={
-                        isNewName
-                          ? 'ingredient-row is-new-ingredient'
-                          : isReference
-                            ? 'ingredient-row is-reference'
-                            : 'ingredient-row'
-                      }
-                    >
+                    <li key={ingredient.name} className="ingredient-row">
                       <span className="ingredient-line">
                         {safeRenderAQS(ingredient.name, ingredient.quantity, ingredient.unit)}
+                        {isNewName && <span className="ingredient-tag tag-new">neu</span>}
                         {jumpTarget !== undefined && (
                           <button
                             type="button"
-                            className="badge olive link-badge"
+                            className="ingredient-tag tag-recipe"
                             onClick={() => requestJump(jumpTarget)}
                             title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
                           >
-                            verknüpft
+                            <LinkIcon className="tag-icon" />
+                            <span>Rezept</span>
                           </button>
+                        )}
+                        {isReference && (
+                          <span className="ingredient-tag tag-reference">
+                            <StarFilledIcon className="tag-icon" />
+                            <span>Referenz</span>
+                            {/* The × mirrors the star toggle: it drops the
+                                reference role (star unfills, badge vanishes). */}
+                            <button
+                              type="button"
+                              className="tag-remove"
+                              onClick={() => toggleReference(ingredient.name)}
+                              aria-label={`„${ingredient.name}“ als Referenz-Menge entfernen`}
+                              title="Referenz-Menge entfernen"
+                            >
+                              <CloseIcon className="tag-remove-icon" />
+                            </button>
+                          </span>
                         )}
                       </span>
                       <button
@@ -1889,7 +1960,13 @@ function RecipeEditor({
                         }
                         onClick={() => toggleReference(ingredient.name)}
                       >
-                        {isReference ? '★' : '☆'}
+                        {/* Same symbol in both states — only the fill changes
+                            (filled = active), so the icon set stays one family. */}
+                        {isReference ? (
+                          <StarFilledIcon className="star-icon" />
+                        ) : (
+                          <StarIcon className="star-icon" />
+                        )}
                       </button>
                     </li>
                   );
@@ -1904,7 +1981,7 @@ function RecipeEditor({
           <section className="editor-card danger-zone" aria-label="Rezept löschen">
             <button
               type="button"
-              className={confirmDelete ? 'danger-button' : 'danger-text-button'}
+              className="danger-button"
               onClick={() => {
                 if (!confirmDelete) {
                   setConfirmDelete(true);
@@ -1912,9 +1989,19 @@ function RecipeEditor({
                   void handleDelete();
                 }
               }}
+              onBlur={(event) => {
+                // Clicking anywhere outside drops the armed question, so a
+                // "are you sure?" never lingers over the form.
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  setConfirmDelete(false);
+                }
+              }}
               disabled={saving}
             >
-              {confirmDelete ? `„${target.title}“ wirklich löschen?` : 'Rezept löschen'}
+              <TrashIcon className="button-icon" />
+              <span>
+                {confirmDelete ? `„${target.title}“ wirklich löschen?` : 'Rezept löschen'}
+              </span>
             </button>
             {confirmDelete && (
               <button

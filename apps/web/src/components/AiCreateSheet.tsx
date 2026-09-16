@@ -57,6 +57,7 @@ import { listRecipes, readRecipe } from '../drive/recipeStorage';
 import { loadPersonalRules } from '../drive/personalRules';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
 import QuantityPicker from './QuantityPicker';
+import { EyeIcon } from './icons';
 
 /** One bubble of the chat transcript. */
 interface ChatMessage {
@@ -691,7 +692,8 @@ export default function AiCreateSheet({
                         onOpenDraft(draft);
                       }}
                     >
-                      Im Editor öffnen
+                      <EyeIcon className="button-icon" />
+                      <span>Entwurf überprüfen</span>
                     </button>
                   </div>
                 </section>

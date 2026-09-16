@@ -42,6 +42,7 @@
 }
 
 .overview-close svg {
+  display: block;
   width: var(--icon-size);
   height: var(--icon-size);
 }
@@ -126,27 +127,27 @@
 
 /* ---- Actions ------------------------------------------------------------- */
 
-/* Two-by-two action grid in reading order: "Jetzt kochen" (accent) ·
-   "Zur Liste hinzufügen" on the first row, "Manuell bearbeiten" ·
-   "Mit KI bearbeiten" on the second. Both columns are equal and the buttons
-   stretch to the row's tallest label, so a wrapping label keeps the grid even.
-   The horizontal padding is one ladder step tighter than the stacked layout
-   (space-3 instead of space-6): the cells are half as wide, and the labels need
-   the room. */
+/* One row, three equally weighted buttons ("Kochen", "Zur Liste",
+   "Bearbeiten"), each symbol + text. "Kochen" is the primary action (accent
+   fill, white text); the other two stay quiet. All three columns are equal and
+   every button stretches to the row's tallest label, so a wrapping label keeps
+   the row even. The label size matches the edit sub-menu (one body step below
+   the 18 px body size) — the row and its menu must not look like two different
+   scales. */
 .overview-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
 }
 
-.overview-actions .primary-button {
+.overview-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   width: 100%;
-  padding: var(--space-4) var(--space-3);
-}
-
-.overview-secondary {
-  width: 100%;
-  padding: var(--space-4) var(--space-3);
+  min-height: 42px; /* ladder: thumb-reachable action height */
+  padding: var(--space-2);
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
@@ -155,8 +156,102 @@
   font-weight: 600;
 }
 
-.overview-secondary:active {
+.overview-action:active,
+.overview-action.is-open {
   background: var(--color-line);
+}
+
+/* The primary action (Kochen): accent fill, white label and symbol. */
+.overview-action.is-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.overview-action.is-primary:active {
+  background: var(--color-accent-press);
+}
+
+/*
+ * The symbols are 18 px (ladder: space-6) and inherit the button's ink color,
+ * so the open state tints them with the label. `display: block` centers each
+ * glyph on the label's line — as inline boxes they would sit on the text
+ * baseline and look low next to the label.
+ */
+.overview-action svg {
+  display: block;
+  flex: none;
+  width: var(--space-6);
+  height: var(--space-6);
+}
+
+/* The downward triangle after "Bearbeiten": the affordance for the sub-menu.
+   A touch narrower than the 18 px action symbols — it reads as punctuation
+   after the label, not as a third glyph with equal weight. */
+.overview-action .overview-caret {
+  width: var(--space-4);
+  height: var(--space-4);
+  color: var(--color-ink-muted);
+  transition: transform 180ms ease-out;
+}
+
+.overview-action.is-open .overview-caret {
+  transform: rotate(180deg);
+}
+
+/* Wrapper of the third button + its popover: the sub-menu anchors to it, so
+   it participates in the three-column grid like the other two buttons. */
+.overview-edit {
+  position: relative;
+  display: grid;
+}
+
+/* The sub-menu itself pops directly above its trigger instead of floating
+   anywhere in the sheet: the entry a tap lands on is always the one next to
+   the button just pressed. Right-aligned to the trigger, which is the last
+   column of the action row. An outside tap closes it (document listener in
+   the component), so no backdrop layer is needed. */
+.overview-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  z-index: 41;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 100%;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.overview-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.overview-menu button:active {
+  background: var(--color-line);
+}
+
+.overview-menu svg {
+  display: block;
+  flex: none;
+  width: var(--space-6);
+  height: var(--space-6);
+  color: var(--color-ink-muted);
 }
 
 /* Feedback line for the placeholder actions (not built yet). */

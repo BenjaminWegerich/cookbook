@@ -21,8 +21,13 @@
   font-size: var(--text-sm);
 }
 
-/* Small quiet text buttons (editor headers: Zurück / Abbrechen / …). */
+/* Small quiet text buttons (editor headers: Zurück / Abbrechen / …). They lay
+   their content out inline, so a symbol + label pair (photo "Auswählen",
+   danger "Entfernen") centers on one line without extra markup. */
 .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   background: none;
   border: none;
   border-radius: var(--radius-sm);
@@ -60,6 +65,7 @@
   top: 50%;
   left: var(--space-6);
   translate: 0 -50%;
+  display: block;
   width: var(--icon-size);
   height: var(--icon-size);
   color: var(--color-ink-muted);
@@ -294,6 +300,7 @@
 }
 
 .fab-extended-icon {
+  display: block;
   width: var(--icon-size);
   height: var(--icon-size);
   flex-shrink: 0;

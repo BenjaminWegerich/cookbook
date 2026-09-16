@@ -25,6 +25,7 @@
   --color-accent-press: #9d4a2c; /* pressed state */
   --color-olive: #6b7a4a; /* secondary "herb" accent */
   --color-danger: #a63b2c; /* delete / errors */
+  --color-danger-press: #8a2f23; /* pressed state of a filled danger button */
   --color-on-accent: #fffcf6; /* text on accent surfaces */
 
   /* ---- Typography ------------------------------------------------------- */

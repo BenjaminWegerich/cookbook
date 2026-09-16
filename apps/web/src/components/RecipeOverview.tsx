@@ -9,23 +9,33 @@
  * - modal bottom sheet over the list (not a full-screen view);
  * - large square 1:1 photo (recipe photos are stored square, nothing is cropped);
  * - times (Arbeitszeit / Gesamtzeit) are shown, but not servings/yield or type;
- * - action order and weight: "Jetzt kochen" is the primary action, the other
- *   three are quiet secondary buttons, in the order "Zur Liste hinzufügen",
- *   "Manuell bearbeiten", "Mit KI bearbeiten".
- *
- * Only "Manuell bearbeiten" is wired (it opens the editor). The other three are
- * placeholders for now: they report that the feature is not built yet instead
- * of silently doing nothing.
+ * - one action row with three equally weighted buttons, each symbol + text:
+ *   "Kochen" (pot), "Zur Liste" (list with plus) and "Bearbeiten" (pencil).
+ *   "Kochen" and "Zur Liste" are placeholders for now: they report that the
+ *   feature is not built yet instead of silently doing nothing.
+ * - "Bearbeiten" opens a small sub-menu (popover above the row) that will hold
+ *   the manual and the AI edit path; the downward triangle in the button is the
+ *   affordance for it. "Manuell" opens the editor, "Mit KI" is still a
+ *   placeholder. The sub-menu is closed by an outside tap, Escape and any
+ *   chosen entry.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { displayTimeText, type Recipe } from '@cookbook/core';
 
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
+import {
+  CaretDownIcon,
+  CloseIcon,
+  ListPlusIcon,
+  PencilIcon,
+  SkilletIcon,
+  SparkleIcon,
+} from './icons';
 import RecipeThumb from './RecipeThumb';
 
 interface RecipeOverviewProps {
@@ -35,7 +45,7 @@ interface RecipeOverviewProps {
   recipe: StoredRecipe;
   /** Closes the sheet (backdrop, close button, browser Back). */
   onClose: () => void;
-  /** Opens the recipe in the editor ("Manuell bearbeiten"). */
+  /** Opens the recipe in the editor ("Bearbeiten" → "Manuell"). */
   onEdit: (recipe: StoredRecipe) => void;
 }
 
@@ -50,6 +60,13 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
   const [loadError, setLoadError] = useState<string | null>(null);
   /** Feedback line for the placeholder actions (null = nothing tapped yet). */
   const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * The "Bearbeiten" sub-menu (popover above the action row). Closed by an
+   * outside tap, Escape, choosing an entry or closing the whole sheet.
+   */
+  const [editMenuOpen, setEditMenuOpen] = useState(false);
+  /** The "Bearbeiten" button + popover: the wrapper the outside-tap check uses. */
+  const editWrapRef = useRef<HTMLDivElement | null>(null);
 
   // Read the recipe file for the details the list entry does not carry. The
   // sheet unmounts when it closes, so every open starts from the initial null
@@ -75,9 +92,52 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
   // close it as well. No confirmation: the overview is read-only.
   useEscapeTrigger(onClose);
 
+  // Escape closes the sub-menu before it reaches the sheet: the shared escape
+  // trigger closes whatever layer it is wired to, so the popover installs its
+  // own listener (capture) that consumes the key while it is open. The cleanup
+  // order guarantees the menu listener is removed before the sheet's.
+  useEffect(() => {
+    if (!editMenuOpen) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setEditMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, { capture: true });
+    };
+  }, [editMenuOpen]);
+
+  // A tap anywhere outside the sub-menu (and outside its trigger) closes it.
+  // This runs after the click finished its own handling, so the tapped element
+  // — the sheet's close button, the backdrop, another action — still does its
+  // job once and only the menu additionally closes (decided with the user:
+  // progressive dismissal, the tap is never swallowed).
+  useEffect(() => {
+    if (!editMenuOpen) return;
+    const onDocumentClick = (event: MouseEvent): void => {
+      const target = event.target;
+      if (target instanceof Node && editWrapRef.current?.contains(target) === true) return;
+      setEditMenuOpen(false);
+    };
+    document.addEventListener('click', onDocumentClick);
+    return () => {
+      document.removeEventListener('click', onDocumentClick);
+    };
+  }, [editMenuOpen]);
+
   /** Reports a not-yet-built action instead of letting the tap do nothing. */
   const notBuiltYet = (label: string): void => {
     setNotice(`„${label}“ folgt in einer späteren Version.`);
+  };
+
+  /** "Manuell": closes the sub-menu and hands over to the editor. */
+  const openManualEdit = (): void => {
+    setEditMenuOpen(false);
+    onEdit(recipe);
   };
 
   const title = details?.title ?? recipe.title;
@@ -107,12 +167,7 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           onClick={onClose}
           autoFocus
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z"
-              fill="currentColor"
-            />
-          </svg>
+          <CloseIcon />
         </button>
 
         {/* List entry data: renders before the file read finishes. The wrapper
@@ -162,31 +217,60 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           )}
         </div>
 
+        {/* One action row: three equally weighted buttons, each symbol + text.
+            "Bearbeiten" opens its sub-menu as a popover directly above the row,
+            so the sub-menu sits next to its trigger instead of floating
+            anywhere in the sheet. */}
         <div className="overview-actions">
           <button
             type="button"
-            className="primary-button"
-            onClick={() => notBuiltYet('Jetzt kochen')}
+            className="overview-action is-primary"
+            onClick={() => notBuiltYet('Kochen')}
           >
-            Jetzt kochen
+            <SkilletIcon />
+            <span>Kochen</span>
           </button>
           <button
             type="button"
-            className="overview-secondary"
-            onClick={() => notBuiltYet('Zur Liste hinzufügen')}
+            className="overview-action"
+            onClick={() => notBuiltYet('Zur Liste')}
           >
-            Zur Liste hinzufügen
+            <ListPlusIcon />
+            <span>Zur Liste</span>
           </button>
-          <button type="button" className="overview-secondary" onClick={() => onEdit(recipe)}>
-            Manuell bearbeiten
-          </button>
-          <button
-            type="button"
-            className="overview-secondary"
-            onClick={() => notBuiltYet('Mit KI bearbeiten')}
-          >
-            Mit KI bearbeiten
-          </button>
+          <div className="overview-edit" ref={editWrapRef}>
+            <button
+              type="button"
+              className={editMenuOpen ? 'overview-action is-open' : 'overview-action'}
+              aria-haspopup="menu"
+              aria-expanded={editMenuOpen}
+              onClick={() => setEditMenuOpen((open) => !open)}
+            >
+              <PencilIcon />
+              <span>Bearbeiten</span>
+              <CaretDownIcon />
+            </button>
+
+            {editMenuOpen && (
+              <div className="overview-menu" role="menu" aria-label="Bearbeiten">
+                <button type="button" role="menuitem" onClick={openManualEdit}>
+                  <PencilIcon />
+                  <span>Manuell</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    notBuiltYet('Mit KI bearbeiten');
+                  }}
+                >
+                  <SparkleIcon />
+                  <span>Mit KI</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {notice !== null && (

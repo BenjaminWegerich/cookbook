@@ -15,6 +15,7 @@ import AiCreateSheet, {
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
 import RecipeOverview from './components/RecipeOverview';
+import { PencilIcon, PlusIcon, SparkleIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
@@ -63,7 +64,7 @@ const GIS_POLL_INTERVAL_MS = 200;
  * States: login (not connected), loading, error, empty collection, and the
  * recipe list (adaptive card grid with square photos). The floating action
  * button opens the create menu (manual / AI); a tap on a recipe card opens the
- * recipe overview sheet, whose "Manuell bearbeiten" action opens the editor.
+ * recipe overview sheet, whose "Bearbeiten → Manuell" entry opens the editor.
  * UI language is German
  * (see docs/CODING_CONVENTIONS.md).
  */
@@ -542,9 +543,7 @@ function App() {
               aria-expanded={createMenuOpen}
               onClick={() => setNav(createMenuOpen ? null : 'menu')}
             >
-              <svg className="fab-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor" />
-              </svg>
+              <PlusIcon className="fab-icon" />
             </button>
           )}
 
@@ -558,21 +557,11 @@ function App() {
               />
               <div className="fab-menu" role="group" aria-label="Neues Rezept anlegen">
                 <button type="button" className="fab-extended" onClick={() => openEditor(null)}>
-                  <svg className="fab-extended-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <PencilIcon className="fab-extended-icon" />
                   <span>Rezept manuell anlegen</span>
                 </button>
                 <button type="button" className="fab-extended" onClick={openAiCreate}>
-                  <svg className="fab-extended-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <SparkleIcon className="fab-extended-icon" />
                   <span>Rezept mit KI anlegen</span>
                 </button>
               </div>
@@ -583,7 +572,7 @@ function App() {
 
       {/* The overview is a sheet over the list (not a screen of its own), so it
           renders as a sibling of the list branch and only while the list is the
-          visible base. "Manuell bearbeiten" replaces the sheet with the editor. */}
+          visible base. "Bearbeiten → Manuell" replaces the sheet with the editor. */}
       {!editorOpen &&
         !aiCreateOpen &&
         overviewOpen &&
