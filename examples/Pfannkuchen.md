@@ -1,7 +1,6 @@
 ---
 title: Pfannkuchen
 type: finished_dish
-subtitle: Dicke Pfannkuchen mit Apfelmus
 description: Klassisches Sonntagsfrühstück für die ganze Familie.
 servings: 2
 prep_time: 20 min

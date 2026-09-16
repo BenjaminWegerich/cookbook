@@ -72,17 +72,11 @@
 
 .overview-title {
   /* margin: 0 — the heading's UA margin would stack on the grid gap and push
-     the subtitle far below the title. */
+     the following element far below the title. */
   margin: 0;
   font-size: var(--text-xl);
   font-weight: 600;
   line-height: 1.3;
-}
-
-.overview-subtitle {
-  margin: 0;
-  color: var(--color-ink-muted);
-  font-size: var(--text-md);
 }
 
 /* Arbeitszeit / Gesamtzeit as one compact caption/value row. */

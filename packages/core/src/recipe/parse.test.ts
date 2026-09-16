@@ -21,7 +21,6 @@ import { parseRecipe } from './parse.js';
 const FINISHED_DISH = `---
 title: Shredded Tofu Wraps
 type: finished_dish
-subtitle: Tortilla Wraps mit Shredded Tofu, Pico de Gallo und Joghurt-Dip
 description: Knusprige Wraps mit mariniertem Tofu und frischem Gemüse.
 servings: 6
 prep_time: 25 min
@@ -87,7 +86,6 @@ describe('parseRecipe — happy paths', () => {
     const recipe = parseRecipe(FINISHED_DISH);
     expect(recipe.title).toBe('Shredded Tofu Wraps');
     expect(recipe.type).toBe('finished_dish');
-    expect(recipe.subtitle).toContain('Tortilla Wraps');
     expect(recipe.description).toContain('Knusprige Wraps');
     expect(recipe.prep_time).toBe('25 min');
     expect(recipe.total_time).toBe('40 min');
@@ -145,7 +143,6 @@ describe('parseRecipe — happy paths', () => {
         '---\n## Zubereitung\n1. Backen.\n',
     );
     expect(recipe.ingredients).toEqual([]);
-    expect('subtitle' in recipe).toBe(false);
     expect('description' in recipe).toBe(false);
     expect('total_time' in recipe).toBe(false);
     expect('reference' in recipe).toBe(false);

@@ -1,7 +1,7 @@
 /**
  * AutoGrowTextarea — a wrapping text field that grows to fit its content.
  *
- * Used for the Kopf data text fields (Titel, Untertitel, Beschreibung): the
+ * Used for the Kopf data text fields (Titel, Beschreibung): the
  * field starts one line tall (three with `tall`, matching the step text) and
  * grows so the whole text stays visible — no vertical or horizontal scrolling.
  * The text may wrap across visual lines, but a line break is never *data*:

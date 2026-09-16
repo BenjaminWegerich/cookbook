@@ -1,7 +1,6 @@
 ---
 title: Tofu-Bolognese
 type: finished_dish
-subtitle: Vegane Bolognese mit Räuchertofu
 description: Herzhaftes Nudelgericht für die ganze Familie.
 servings: 4
 prep_time: 35 min

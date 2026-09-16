@@ -1,7 +1,6 @@
 ---
 title: Hähnchen-Curry
 type: finished_dish
-subtitle: Mildes Curry mit Kokosmilch und Reis
 description: Cremiges Curry, das sich gut vorbereiten und aufwärmen lässt.
 servings: 4
 prep_time: 30 min

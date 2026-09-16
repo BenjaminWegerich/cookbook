@@ -1,7 +1,6 @@
 ---
 title: Shredded Tofu Wraps
 type: finished_dish
-subtitle: Tortilla Wraps mit Shredded Tofu, Pico de Gallo und Joghurt-Dip
 description: Knusprige Wraps mit mariniertem Tofu und frischem Gemüse.
 servings: 6
 prep_time: 25 min

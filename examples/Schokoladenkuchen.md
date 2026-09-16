@@ -1,7 +1,6 @@
 ---
 title: Schokoladenkuchen
 type: finished_dish
-subtitle: Saftiger Schokoladenkuchen mit Zuckerguss
 description: Einfacher Rührkuchen für Geburtstage und Kaffeetafeln.
 servings: 8
 prep_time: 25 min

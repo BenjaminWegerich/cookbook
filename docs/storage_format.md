@@ -51,7 +51,6 @@ The app writes YAML through a serializer; hand-written files are validated on re
 |---|---|---|---|
 | `title` | string | yes | Unique within the whole collection; the stable identifier (see §6). Example: `Shredded Tofu Wraps`. |
 | `type` | enum | yes | `finished_dish` or `ingredient_recipe` — never derived, set by the author. |
-| `subtitle` | string | no | Display-only extension of the title. |
 | `description` | string | no | A single paragraph; may suggest side dishes or other uses. |
 | `prep_time` | string | yes | Free-text display value, e.g. `25 min`, `1 h 30 min`. The editor offers the standard values 1/3/5/10/15/20/30/45 min and 1/1.5/2/3/6/12/24/48 h as chips. |
 | `total_time` | string | no | Only if it is larger than `prep_time`. |
@@ -181,7 +180,6 @@ layout). The rows are written in a natural, amount-first phrase:
      `ingredient_recipe` titles are referenced this way, and only those trigger
      updates (finished-dish titles never are).
 - The app provides a rename tool that performs all three steps.
-- The `subtitle` is display-only and plays no role in identification.
 
 ## 7. Validation
 
@@ -224,7 +222,6 @@ Finished dish:
 ---
 title: Shredded Tofu Wraps
 type: finished_dish
-subtitle: Tortilla Wraps mit Shredded Tofu, Pico de Gallo und Joghurt-Dip
 description: Knusprige Wraps mit mariniertem Tofu und frischem Gemüse.
 servings: 6
 prep_time: 25 min

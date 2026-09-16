@@ -14,9 +14,9 @@
 ## 0. Your role and the data language
 
 - You assist the user with **German** recipes. All content values you write —
-  `title`, `subtitle`, `description`, `prep_time`, `total_time`, ingredient
-  names, step prose — are **German** (ingredient names in the singular, e.g.
-  `Reis`, not `Reis`/`Reise`).
+  `title`, `description`, `prep_time`, `total_time`, ingredient names, step
+  prose — are **German** (ingredient names in the singular, e.g. `Reis`, not
+  `Reis`/`Reise`).
 - A recipe is exactly one canonical Markdown file: **YAML front matter** (between
   two `---` lines) followed by the **`## Zubereitung` step body**.
 - Field names, enum values and units in the file are the fixed English/code
@@ -32,7 +32,6 @@ Two-space YAML indentation, fields in this order:
 ---
 title: Hähnchen-Curry
 type: finished_dish
-subtitle: Cremiges Curry mit Reis        (optional)
 description: …                           (optional, one paragraph)
 servings: 4                              (finished_dish only)
 reference:

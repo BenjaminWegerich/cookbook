@@ -1,7 +1,6 @@
 ---
 title: Bratkartoffeln
 type: finished_dish
-subtitle: Knusprige Bratkartoffeln mit Speck und Zwiebeln
 description: Klassische Pfannenbeilage aus gekochten Kartoffeln.
 servings: 2
 prep_time: 40 min

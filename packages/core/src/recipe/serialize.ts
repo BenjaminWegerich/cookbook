@@ -39,7 +39,6 @@ function buildFrontMatter(recipe: Recipe): Record<string, unknown> {
     title: recipe.title,
     type: recipe.type,
   };
-  if (recipe.subtitle !== undefined) frontMatter.subtitle = recipe.subtitle;
   if (recipe.description !== undefined) frontMatter.description = recipe.description;
   if (recipe.type === 'finished_dish') {
     frontMatter.servings = recipe.servings;
@@ -70,7 +69,7 @@ function buildFrontMatter(recipe: Recipe): Record<string, unknown> {
  *   parser trims on read, §5, so these would silently corrupt the file), a
  *   step whose prose starts with "- " (reserved for ingredient rows, §5),
  *   non-finite numbers, or an empty step list / empty step text. Multi-line
- *   free-text fields (subtitle, description, times) are written as YAML block
+ *   free-text fields (description, times) are written as YAML block
  *   scalars and round-trip approximately (whitespace folding) — acceptable
  *   for display-only fields.
  */

@@ -76,8 +76,6 @@ export interface Recipe {
   /** Unique within the whole collection; the stable identifier (§6). */
   title: string;
   type: RecipeType;
-  /** Display-only extension of the title. */
-  subtitle?: string;
   /** A single paragraph; may suggest side dishes or other uses. */
   description?: string;
   /** Free-text display value, e.g. `25 min`, `1 h 30 min`; required. */

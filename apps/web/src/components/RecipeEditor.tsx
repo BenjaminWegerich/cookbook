@@ -313,7 +313,6 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
   const base = {
     title: draft.title.trim(),
     type: draft.type,
-    subtitle: draft.subtitle?.trim() !== '' ? draft.subtitle?.trim() : undefined,
     description: draft.description?.trim() !== '' ? draft.description?.trim() : undefined,
     prep_time: draft.prep_time.trim(),
     total_time:
@@ -486,7 +485,6 @@ function RecipeEditor({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   /** Kopf text fields — Enter (the phone keyboard's "next") walks this chain. */
   const titleFieldRef = useRef<HTMLTextAreaElement | null>(null);
-  const subtitleFieldRef = useRef<HTMLTextAreaElement | null>(null);
   const descriptionFieldRef = useRef<HTMLTextAreaElement | null>(null);
   const stepEditorRefs = useRef<(StepEditorHandle | null)[]>([]);
 
@@ -1263,7 +1261,7 @@ function RecipeEditor({
               id="editor-field-title"
               value={draft.title}
               onChange={(title) => patchDraft({ title })}
-              onEnter={() => focusEditorField(subtitleFieldRef.current)}
+              onEnter={() => focusEditorField(descriptionFieldRef.current)}
             />
           </label>
           {fieldIssue('title').map((issue, index) => (
@@ -1272,17 +1270,6 @@ function RecipeEditor({
             </p>
           ))}
 
-          <label className="field">
-            <span className="field-label">
-              Untertitel<span className="optional-mark">(optional)</span>
-            </span>
-            <AutoGrowTextarea
-              ref={subtitleFieldRef}
-              value={draft.subtitle ?? ''}
-              onChange={(subtitle) => patchDraft({ subtitle })}
-              onEnter={() => focusEditorField(descriptionFieldRef.current)}
-            />
-          </label>
           <label className="field">
             <span className="field-label">
               Beschreibung<span className="optional-mark">(optional)</span>

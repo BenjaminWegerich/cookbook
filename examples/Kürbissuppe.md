@@ -1,7 +1,6 @@
 ---
 title: Kürbissuppe
 type: finished_dish
-subtitle: Cremige Hokkaido-Kürbissuppe mit Ingwer
 description: Schnelle Herbstsuppe, die ganz ohne Schälen auskommt.
 servings: 4
 prep_time: 30 min

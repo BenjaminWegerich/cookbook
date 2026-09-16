@@ -251,7 +251,6 @@ const STYLES = `
   body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
          line-height: 1.5; max-width: 40rem; margin: 0 auto; padding: 1rem; }
   h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 0.2rem; }
-  .subtitle { font-size: 1.1rem; margin: 0 0 0.8rem; }
   .description { margin: 0.6rem 0; }
   .meta { color: #666; margin: 0.4rem 0 1.2rem; }
   .servings { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
@@ -296,9 +295,6 @@ export function generateRecipeHtml(
   const header =
     `<header>\n` +
     `  <h1>${escapeHtml(recipe.title)}</h1>\n` +
-    (recipe.subtitle !== undefined
-      ? `  <p class="subtitle">${escapeHtml(recipe.subtitle)}</p>\n`
-      : '') +
     (recipe.description !== undefined
       ? `  <p class="description">${escapeHtml(recipe.description)}</p>\n`
       : '') +

@@ -3,7 +3,7 @@
  *
  * Tapping a recipe card no longer jumps straight into the editor: it opens this
  * bottom sheet over the list with the recipe's photo (large square), title,
- * subtitle, times and description, plus the actions for the recipe.
+ * times and description, plus the actions for the recipe.
  *
  * Decided with the user:
  * - modal bottom sheet over the list (not a full-screen view);
@@ -40,7 +40,7 @@ interface RecipeOverviewProps {
 
 /**
  * The overview sheet (see file header). The list entry already carries title and
- * photo, so the hero renders immediately; subtitle, times and description are
+ * photo, so the hero renders immediately; times and description are
  * read from the recipe file and fill in when the load finishes.
  */
 function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps) {
@@ -84,7 +84,6 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
   };
 
   const title = details?.title ?? recipe.title;
-  const subtitle = details?.subtitle;
   const description = details?.description;
   // Times use the core display helper, so number and unit are joined with the
   // narrow no-break space like everywhere else (docs/CODING_CONVENTIONS.md).
@@ -130,9 +129,6 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           <h2 className="overview-title" id="overview-title">
             {title}
           </h2>
-          {subtitle !== undefined && subtitle !== '' && (
-            <p className="overview-subtitle">{subtitle}</p>
-          )}
 
           {description !== undefined && description !== '' && (
             <p className="overview-description">{description}</p>

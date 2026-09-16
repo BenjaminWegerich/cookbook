@@ -63,7 +63,6 @@ const UNITS: readonly Unit[] = ['g', 'kg', 'ml', 'l'];
 const COMMON_FIELDS: ReadonlySet<string> = new Set([
   'title',
   'type',
-  'subtitle',
   'description',
   'reference',
   'prep_time',
@@ -253,7 +252,6 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   const title = readString(data, 'title', issues, 'title');
   if (title !== undefined) checkTitle(title, issues);
 
-  const subtitle = readOptionalString(data, 'subtitle', issues, 'subtitle');
   const description = readOptionalString(data, 'description', issues, 'description');
   const prepTime = readString(data, 'prep_time', issues, 'prep_time');
   const totalTime = readOptionalString(data, 'total_time', issues, 'total_time');
@@ -362,7 +360,6 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     type,
     // Filled by the caller from the derived master list.
     ingredients: [],
-    ...(subtitle !== undefined ? { subtitle } : {}),
     ...(description !== undefined ? { description } : {}),
     prep_time: prepTime,
     ...(totalTime !== undefined ? { total_time: totalTime } : {}),

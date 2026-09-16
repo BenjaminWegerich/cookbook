@@ -13,7 +13,6 @@ function makeDish(overrides: Partial<Recipe> = {}): Recipe {
   return {
     title: 'Shredded Tofu Wraps',
     type: 'finished_dish',
-    subtitle: 'Tortilla Wraps',
     description: 'Knusprig.',
     prep_time: '25 min',
     total_time: '40 min',
@@ -40,7 +39,6 @@ describe('serializeRecipe', () => {
       '---\n' +
         'title: Shredded Tofu Wraps\n' +
         'type: finished_dish\n' +
-        'subtitle: Tortilla Wraps\n' +
         'description: Knusprig.\n' +
         'servings: 6\n' +
         'reference:\n' +
