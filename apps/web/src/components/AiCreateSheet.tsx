@@ -55,6 +55,7 @@ import { getAiApiKey, setAiApiKey } from '../ai/sessionKey';
 import type { StoredRecipe } from '../drive/recipeStorage';
 import { listRecipes, readRecipe } from '../drive/recipeStorage';
 import { loadPersonalRules } from '../drive/personalRules';
+import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
 import QuantityPicker from './QuantityPicker';
 
 /** One bubble of the chat transcript. */
@@ -148,10 +149,11 @@ function FieldHint() {
 }
 
 /**
- * Imperative handle for the browser-back integration (owned by App), mirroring
- * the recipe editor: the sheet is asked whether it consumes a browser Back
- * before the app closes the AI-create screen. Consumed means the
- * "Änderungen verwerfen?" step was armed.
+ * Imperative handle for the exit-trigger integration (owned by App), mirroring
+ * the recipe editor: the sheet is asked whether it consumes a browser Back (or
+ * a swipe-back, which arrives as one) before the app closes the AI-create
+ * screen. Consumed means the "Änderungen verwerfen?" step was armed. Escape is
+ * handled by the sheet itself and shares the same guard.
  */
 export interface AiCreateSheetHandle {
   /** True when the back was handled inside the sheet; false when the sheet may
@@ -162,6 +164,13 @@ export interface AiCreateSheetHandle {
 interface AiCreateSheetProps {
   /** Drive access token (the Drive connection is required). */
   token: string;
+  /**
+   * True while this screen is the visible one. The sheet deliberately stays
+   * mounted (hidden) while its own draft is edited, so its Escape trigger must
+   * be off in that state — otherwise Escape would hit the editor and this sheet
+   * at once.
+   */
+  visible: boolean;
   /** All recipes of the collection (for the AI context, read lazily). */
   recipes: StoredRecipe[];
   /**
@@ -273,6 +282,7 @@ function composeUserMessage(description: string, source: string): string {
 
 export default function AiCreateSheet({
   token,
+  visible,
   recipes,
   handoff,
   onHandoffConsumed,
@@ -317,9 +327,6 @@ export default function AiCreateSheet({
   /** A validated draft ready to open in the editor. */
   const [draft, setDraft] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** Work signature the "Änderungen verwerfen?" step was armed for; null when
-   *  no discard confirmation is armed (see confirmDiscard below). */
-  const [discardArmedFor, setDiscardArmedFor] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   /** True while mounted — guards late promise resolutions. StrictMode
@@ -537,31 +544,43 @@ export default function AiCreateSheet({
     description.trim() !== '' || source.trim() !== '' || messages.length > 0 || draft !== null;
 
   /**
-   * Fingerprint of the started work (content and shape, not just presence):
-   * the armed discard confirmation is bound to it, so any later change — typing,
-   * a new message, a new or cleared draft — invalidates the arm during render
-   * ("Behalten") instead of surviving it. This is the effect-free equivalent of
-   * the editor's draft-change guard and keeps the button label honest when the
-   * work is gone again.
+   * Fingerprint of the started work (content and shape, not just presence): the
+   * shared exit guard binds the armed discard confirmation to it, so any later
+   * change — typing, a new message, a new or cleared draft — invalidates the
+   * arm during render ("Behalten") instead of surviving it. This keeps the
+   * button label honest when the work is gone again (see useLeaveGuard).
    */
-  const workSignature = `${description}\u0000${source}\u0000${messages.length}\u0000${draft !== null}`;
+  const guard = useLeaveGuard({
+    workSignature: `${description}\u0000${source}\u0000${messages.length}\u0000${draft !== null}`,
+    needsConfirm: hasWork,
+  });
 
-  /** The "Änderungen verwerfen?" step is armed for the current work state. */
-  const confirmDiscard = discardArmedFor === workSignature;
+  /** Leaves the AI screen for the recipe list. */
+  const executeLeave = useCallback((): void => {
+    guard.reset();
+    onClose();
+  }, [guard, onClose]);
+
+  /** The one exit hop every trigger uses (see useLeaveGuard). */
+  const requestLeave = useCallback(
+    (reason: LeaveReason): boolean => guard.request(reason, executeLeave),
+    [guard, executeLeave],
+  );
+
+  // Escape is the keyboard equivalent of the browser Back button: it arms the
+  // same two-step confirmation instead of leaving the screen. Off while the
+  // editor covers this sheet (see AiCreateSheetProps.visible).
+  useEscapeTrigger(() => void requestLeave('escape'), visible);
 
   /**
    * Browser-back consumer (see AiCreateSheetHandle and App): started work arms
-   * the "Änderungen verwerfen?" step (the same two-step guard as the header
-   * button), so the browser Back button never silently drops the conversation.
+   * the "Änderungen verwerfen?" step through the shared guard (the same
+   * two-step confirmation as the header button and Escape), so neither the
+   * browser / device Back button nor the swipe-back gesture silently drops the
+   * conversation.
    */
   useImperativeHandle(ref, () => ({
-    notifyBack: (): boolean => {
-      if (hasWork && !confirmDiscard) {
-        setDiscardArmedFor(workSignature);
-        return true;
-      }
-      return false;
-    },
+    notifyBack: (): boolean => requestLeave('browser-back'),
   }));
 
   return (
@@ -571,16 +590,10 @@ export default function AiCreateSheet({
             screen title below it. */}
         <button
           type="button"
-          className={confirmDiscard ? 'text-button danger-text' : 'text-button'}
-          onClick={() => {
-            if (hasWork && !confirmDiscard) {
-              setDiscardArmedFor(workSignature);
-            } else {
-              onClose();
-            }
-          }}
+          className={guard.armed ? 'text-button danger-text' : 'text-button'}
+          onClick={() => void requestLeave('button')}
         >
-          {confirmDiscard ? 'Änderungen verwerfen?' : 'Zurück'}
+          {guard.armed ? 'Änderungen verwerfen?' : 'Zurück'}
         </button>
         <h1>Rezept mit KI anlegen</h1>
       </header>
@@ -674,7 +687,7 @@ export default function AiCreateSheet({
                         // Opening the draft is a deliberate "keep working"
                         // action — drop any armed discard confirmation so the
                         // header button reads "Zurück" again on return.
-                        setDiscardArmedFor(null);
+                        guard.reset();
                         onOpenDraft(draft);
                       }}
                     >

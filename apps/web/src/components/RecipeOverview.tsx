@@ -25,6 +25,7 @@ import { useEffect, useState } from 'react';
 import { displayTimeText, type Recipe } from '@cookbook/core';
 
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
+import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import RecipeThumb from './RecipeThumb';
 
 interface RecipeOverviewProps {
@@ -68,15 +69,11 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
     };
   }, [token, recipe.fileId]);
 
-  // Escape closes the sheet for keyboard users (backdrop tap and the browser
-  // Back button — App's history integration — close it as well).
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  // Escape closes the sheet for keyboard users through the shared exit trigger
+  // (useLeaveGuard), the same one the editor, the AI screen and the create menu
+  // use — backdrop tap and the browser Back button (App's history integration)
+  // close it as well. No confirmation: the overview is read-only.
+  useEscapeTrigger(onClose);
 
   /** Reports a not-yet-built action instead of letting the tap do nothing. */
   const notBuiltYet = (label: string): void => {

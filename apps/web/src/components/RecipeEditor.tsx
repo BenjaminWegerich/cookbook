@@ -20,7 +20,15 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { Fragment, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { Ref } from 'react';
 
 import {
@@ -57,6 +65,7 @@ import {
 } from '../drive/recipeStorage';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
 import { loadRecipePhoto } from '../drive/recipePhoto';
+import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
 import AutoGrowTextarea from './AutoGrowTextarea';
 import IngredientSheet, {
   type IngredientRecipeOption,
@@ -171,10 +180,12 @@ function unknownMentionNames(text: string, isKnown: (name: string) => boolean): 
 const SERVING_OPTIONS = integerLadderValues(1, 30);
 
 /**
- * Imperative handle for the browser-back integration (owned by App): the
- * editor is asked whether it consumes a browser Back before the app closes
- * the editor screen. Consumed means a layer inside the editor was closed
- * (topmost overlay first, or the "Änderungen verwerfen?" step was armed).
+ * Imperative handle for the exit-trigger integration (owned by App): the editor
+ * is asked whether it consumes a browser Back (or a swipe-back, which arrives
+ * as one) before the app closes the editor screen. Consumed means a layer
+ * inside the editor was closed (topmost overlay first, or the "Änderungen
+ * verwerfen?" step was armed). Escape is handled by the editor itself and
+ * follows the same order.
  */
 export interface RecipeEditorHandle {
   /** True when the back was handled inside the editor; false when the editor
@@ -484,8 +495,10 @@ function RecipeEditor({
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  /** Two-step confirmations for discarding changes / deleting / photo removal. */
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  /** Two-step confirmations for deleting / photo removal. The "Änderungen
+   *  verwerfen?" step is not state here: it belongs to the shared exit guard
+   *  below, which every exit trigger (button, Escape, browser Back) goes
+   *  through. */
   const [confirmDelete, setConfirmDelete] = useState(false);
   /** Two-step "Wirklich entfernen?" before the queued photo removal (§2). */
   const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
@@ -633,14 +646,37 @@ function RecipeEditor({
     [draft, original, photoChange],
   );
 
-  // Any change cancels the two-step "verwerfen" and "Schritt entfernen?"
-  // confirmations: an armed confirm must never outlive the state it refers
-  // to — reordering or removing steps shifts the armed step index, and
-  // editing elsewhere means the user moved on ("Behalten").
+  // Any change cancels the "Schritt entfernen?" confirmation: an armed confirm
+  // must never outlive the state it refers to — reordering or removing steps
+  // shifts the armed step index. (The discard confirmation is invalidated by
+  // the exit guard's work signature instead; see useLeaveGuard.)
   useEffect(() => {
-    setConfirmDiscard(false);
     setConfirmRemoveStep(null);
   }, [draft]);
+
+  /**
+   * Shared exit guard (useLeaveGuard): owns the "Änderungen verwerfen?" step
+   * for *every* way out of the editor — the header's Zurück button, Escape, the
+   * browser Back button and the sub-recipe jump. The signature is the draft
+   * content plus the queued photo change, so any edit disarms a standing
+   * confirmation. Reset whenever a modal opens or closes: dismissing the
+   * ingredient sheet is "keep working", and must not leave a stale discard arm
+   * behind.
+   */
+  const guard = useLeaveGuard({
+    workSignature: `${draft === null ? '' : JSON.stringify(normalizeRecipe(draft))}\u0000${photoChange === null ? '' : photoChange.kind}`,
+    needsConfirm: dirty,
+  });
+
+  /**
+   * Leaves the editor for good (list, or back to the AI conversation when the
+   * draft came from there). Every exit trigger ends here, so the guard state is
+   * cleared exactly once, no matter which trigger confirmed.
+   */
+  const executeLeave = useCallback((): void => {
+    guard.reset();
+    onClose();
+  }, [guard, onClose]);
 
   // Gesamtzeit must be larger than Vorbereitungszeit: clear it when it isn't.
   useEffect(() => {
@@ -977,17 +1013,15 @@ function RecipeEditor({
 
   /**
    * Jump to a linked sub-recipe (a step row, the master list or an artifact).
-   * Unsaved changes are guarded by the same two-step "verwerfen" confirmation
-   * as the back button: the first tap arms it, the second tap (label "Wirklich
-   * verwerfen?") jumps.
+   * Unsaved changes are guarded by the shared exit guard — the same two-step
+   * "Änderungen verwerfen?" confirmation as the back button: the first tap arms
+   * it, the second tap jumps.
    */
   const requestJump = (recipe: StoredRecipe): void => {
-    if (dirty && !confirmDiscard) {
-      setConfirmDiscard(true);
-      return;
-    }
-    setConfirmDiscard(false);
-    onOpenRecipe?.(recipe);
+    guard.request('button', () => {
+      guard.reset();
+      onOpenRecipe?.(recipe);
+    });
   };
 
   /** The StoredRecipe of a sub-recipe title, when it is an ingredient recipe. */
@@ -1069,11 +1103,35 @@ function RecipeEditor({
     }
   };
 
+  /** Closes the ingredient sheet without applying it — the transient form
+   *  fields are dropped (decided with the user: cancel means cancel). The exit
+   *  guard is reset, so dismissing the sheet never leaves a standing discard
+   *  confirmation behind. */
+  const handleCloseSheet = useCallback((): void => {
+    setSheet(null);
+    setSheetPrefill(null);
+    guard.reset();
+  }, [guard]);
+
+  /**
+   * Opens the ingredient sheet. Opening disarms a standing "Änderungen
+   * verwerfen?" confirmation: the user is working inside the editor again, so
+   * the next exit must ask fresh instead of discarding (this is the leak the
+   * shared guard closes — the confirmation used to survive a sheet).
+   */
+  const openSheet = useCallback(
+    (next: SheetState): void => {
+      guard.reset();
+      setSheet(next);
+    },
+    [guard],
+  );
+
   /** Closes the create sheet without saving — restore the ingredient sheet.
    *  Guarded against closing while a save runs: the backdrop stays disabled
    *  then (NewIngredientSheet), so a late error is never reported into an
    *  unmounted sheet (the restore would swallow it). */
-  const handleCreateClose = (): void => {
+  const handleCreateClose = useCallback((): void => {
     if (createSaving) return;
     setCreateError(null);
     setCreateSheet(null);
@@ -1082,7 +1140,38 @@ function RecipeEditor({
       // Restore the typed name+quantity so nothing is lost on cancel.
       setSheetPrefill({ name: sheetContext.name, quantity: sheetContext.quantity });
     }
-  };
+  }, [createSaving, sheetContext]);
+
+  /**
+   * The one exit hop every trigger uses (see useLeaveGuard). Layers inside the
+   * editor consume the request first, in the order of the visible stack; only a
+   * bare unsaved draft reaches the discard confirmation.
+   */
+  const requestLeave = useCallback(
+    (reason: LeaveReason): boolean => {
+      if (saving) {
+        // A Drive write is in flight — do not unmount the editor mid-save
+        // (a late error would be reported into a dead component).
+        return true;
+      }
+      if (createSheet !== null) {
+        // handleCreateClose guards against closing while a save runs.
+        handleCreateClose();
+        return true;
+      }
+      if (sheet !== null) {
+        handleCloseSheet();
+        return true;
+      }
+      return guard.request(reason, executeLeave);
+    },
+    [saving, createSheet, sheet, guard, executeLeave, handleCreateClose, handleCloseSheet],
+  );
+
+  // Escape is the keyboard equivalent of the browser Back button and follows
+  // the same layer order as notifyBack below (create sheet, ingredient sheet,
+  // then the discard confirmation).
+  useEscapeTrigger(() => void requestLeave('escape'));
 
   /** Toggles the reference role of a master-list row (§4; both recipe types). */
   const toggleReference = (name: string): void => {
@@ -1144,37 +1233,13 @@ function RecipeEditor({
   };
 
   /**
-   * Browser-back consumer (see RecipeEditorHandle and App): closes the
-   * topmost layer and reports whether the back was consumed, mirroring the
-   * order of the visible stack — NewIngredientSheet first (closing restores
-   * the ingredient sheet underneath), then the IngredientSheet, and only then
-   * does an unsaved draft arm the "Änderungen verwerfen?" step (the same
-   * two-step guard as the header back button). Fresh every render, so it
-   * always sees the current state.
+   * Browser-back consumer (see RecipeEditorHandle and App). Both the browser /
+   * device Back button and the swipe-back gesture arrive here and are routed
+   * through the same `requestLeave` as the header button and Escape, so all
+   * four triggers share one layer order and one armed confirmation.
    */
   useImperativeHandle(ref, () => ({
-    notifyBack: (): boolean => {
-      if (saving) {
-        // A Drive write is in flight — do not unmount the editor mid-save
-        // (a late error would be reported into a dead component).
-        return true;
-      }
-      if (createSheet !== null) {
-        // handleCreateClose guards against closing while a save runs.
-        handleCreateClose();
-        return true;
-      }
-      if (sheet !== null) {
-        setSheet(null);
-        setSheetPrefill(null);
-        return true;
-      }
-      if (dirty && !confirmDiscard) {
-        setConfirmDiscard(true);
-        return true;
-      }
-      return false;
-    },
+    notifyBack: (): boolean => requestLeave('browser-back'),
   }));
 
   // ---- Render -------------------------------------------------------------
@@ -1184,7 +1249,11 @@ function RecipeEditor({
       <main className="app">
         <section className="editor" aria-label="Rezept-Editor">
           <div className="editor-header">
-            <button type="button" className="text-button" onClick={onClose}>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => void requestLeave('button')}
+            >
               Zurück
             </button>
           </div>
@@ -1296,16 +1365,10 @@ function RecipeEditor({
         <div className="editor-header">
           <button
             type="button"
-            className={confirmDiscard ? 'text-button danger-text' : 'text-button'}
-            onClick={() => {
-              if (dirty && !confirmDiscard) {
-                setConfirmDiscard(true);
-              } else {
-                onClose();
-              }
-            }}
+            className={guard.armed ? 'text-button danger-text' : 'text-button'}
+            onClick={() => void requestLeave('button')}
           >
-            {confirmDiscard ? 'Änderungen verwerfen?' : 'Zurück'}
+            {guard.armed ? 'Änderungen verwerfen?' : 'Zurück'}
           </button>
           <button
             type="button"
@@ -1628,7 +1691,7 @@ function RecipeEditor({
                               type="button"
                               className="ingredient-row-button"
                               onClick={() =>
-                                setSheet({
+                                openSheet({
                                   kind: 'row-edit',
                                   stepIndex,
                                   rowIndex,
@@ -1691,7 +1754,7 @@ function RecipeEditor({
                   <button
                     type="button"
                     className="add-ingredient"
-                    onClick={() => setSheet({ kind: 'row-add', stepIndex })}
+                    onClick={() => openSheet({ kind: 'row-add', stepIndex })}
                   >
                     + Zutat zur Liste
                   </button>
@@ -1706,7 +1769,7 @@ function RecipeEditor({
                     updateStep(stepIndex, (current) => ({ ...current, text: next }))
                   }
                   onArtifactEdit={(artifact, at) =>
-                    setSheet({ kind: 'inline-edit', stepIndex, at, artifact })
+                    openSheet({ kind: 'inline-edit', stepIndex, at, artifact })
                   }
                   onEnterNext={() => {
                     // Enter advances to the next step's text (phone keyboard
@@ -1733,7 +1796,7 @@ function RecipeEditor({
                   type="button"
                   className="add-ingredient"
                   onClick={() =>
-                    setSheet({
+                    openSheet({
                       kind: 'inline',
                       stepIndex,
                       insertAt:
@@ -1880,14 +1943,11 @@ function RecipeEditor({
           prefill={sheetPrefill ?? undefined}
           ingredientRecipes={ingredientRecipes}
           onConfirm={handleSheetConfirm}
-          onClose={() => {
-            setSheet(null);
-            setSheetPrefill(null);
-          }}
+          onClose={handleCloseSheet}
           onCreateNewIngredient={(name, quantity) => {
             if (sheet === null) return;
             setSheetContext({ sheet, mode: sheetMode(sheet), name, quantity });
-            setSheet(null);
+            handleCloseSheet();
             // A fresh create flow must not start with the stale Drive error of
             // a previous (failed or cancelled) attempt.
             setCreateError(null);

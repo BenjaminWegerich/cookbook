@@ -18,6 +18,7 @@ import RecipeOverview from './components/RecipeOverview';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
+import { useEscapeTrigger } from './hooks/useLeaveGuard';
 import './styles/ai-create.css';
 import './styles/recipe-list.css';
 import './styles/recipe-overview.css';
@@ -213,10 +214,12 @@ function App() {
   // Browser Back / Forward: step back one screen at a time instead of leaving
   // the app. The history holds the list (initial entry) plus at most one
   // screen entry, so a pop onto the list entry must close the current screen.
-  // A screen with internal layers can consume the pop itself: the editor closes
-  // its topmost overlay first and arms the "Änderungen verwerfen?" step on
-  // unsaved changes; the AI-create sheet arms the same step for started work.
-  // When consumed, the screen entry is re-pushed to cancel the pop.
+  // A screen with internal layers can consume the pop itself: both the editor
+  // and the AI-create sheet route it through their shared exit guard
+  // (useLeaveGuard) — topmost overlay first, then the "Änderungen verwerfen?"
+  // step. The device's swipe-back gesture arrives as the same popstate, so it
+  // gets the identical guard. When consumed, the screen entry is re-pushed to
+  // cancel the pop.
   useEffect(() => {
     const onPopState = (): void => {
       const top = navRef.current;
@@ -264,6 +267,12 @@ function App() {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
+
+  // Escape closes the FAB create menu. It is the keyboard equivalent of the
+  // menu's backdrop tap and of the browser Back button (which App's popstate
+  // handler covers when the menu is a screen entry). No discard confirmation is
+  // needed: the menu holds no state of its own.
+  useEscapeTrigger(() => setNav(null), createMenuOpen);
 
   /**
    * Logs in — triggered by the login button (user gesture) or by the
@@ -447,6 +456,7 @@ function App() {
           <AiCreateSheet
             ref={aiCreateHandleRef}
             token={token ?? ''}
+            visible={!editorOpen}
             recipes={recipes ?? []}
             handoff={aiHandoff}
             onHandoffConsumed={handleHandoffConsumed}

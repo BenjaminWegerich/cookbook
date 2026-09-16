@@ -70,3 +70,19 @@
   closes exactly the topmost layer (NewIngredient sheet → Ingredient sheet → editor → list).
   New full-screen views/sheets must go through App's navigation helper (`setNav` + the
   editor's `notifyBack`) instead of toggling React booleans directly.
+- **The exit guard is shared by every exit trigger (`useLeaveGuard`):** a screen with unsaved
+  work asks its "Änderungen verwerfen?" confirmation through this one hook — never with its own
+  dirty check — so all five triggers behave identically: the header's „Zurück" button, a
+  backdrop tap, Escape, the browser / device Back button, and the swipe-back gesture (which
+  arrives as a browser Back). Two rules keep the confirmation honest, and both live in the hook
+  rather than at the call sites:
+  - An armed confirmation belongs to the exact work state it was armed for (the
+    `workSignature`); any later change invalidates it during render, so the label never claims
+    changes will be discarded after they are gone.
+  - Closing a modal is "keep working": the screen clears the arm (`reset()`) when it opens or
+    closes a transient layer, so a standing confirmation can never be spent by an unrelated
+    trigger. Modal form fields are themselves transient — dismissing a modal discards them
+    without asking; the screen's committed draft is the unit that gets a confirmation.
+  Escape is the keyboard equivalent of the browser Back button: a screen-level Escape trigger
+  is registered only while the screen is the visible one (a hidden-but-mounted sheet, e.g. the
+  AI screen under the editor, passes `enabled: false`).
