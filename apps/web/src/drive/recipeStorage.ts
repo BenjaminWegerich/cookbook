@@ -39,6 +39,7 @@ import {
   updateFileWithContent,
   type DriveFile,
 } from './driveClient';
+import { cacheRecipePhoto, invalidateRecipePhoto } from './recipePhoto';
 
 /** Name of the folder that holds the collection (user-visible in Drive). */
 const RECIPE_FOLDER_NAME = 'Cookbook';
@@ -130,10 +131,70 @@ export async function listRecipes(token: string): Promise<StoredRecipe[]> {
   return recipes;
 }
 
-/** Reads and parses one recipe file; parse errors carry precise issues (§7). */
+/**
+ * Page-session cache of recipe file contents, keyed by Drive file id.
+ *
+ * The same text is read again and again: the overview sheet reads a recipe,
+ * the editor reads it once more, and the editor additionally reads every other
+ * recipe of the collection for the sub-recipe checks. Each read is a separate
+ * Drive round-trip, so caching the raw text removes that duplication. The
+ * cache is invalidated by every write through this module and lives only as
+ * long as the page (the access token is memory-only, so a reload starts clean).
+ */
+const contentCache = new Map<string, string>();
+
+/**
+ * In-flight content reads, keyed by file id. Concurrent callers (e.g. the
+ * overview sheet and an editor opening right after it) share one Drive request
+ * instead of firing two.
+ */
+const pendingContent = new Map<string, Promise<string>>();
+
+/** Stores the canonical text that was written for a file (after a write). */
+function cacheRecipeContent(fileId: string, content: string): void {
+  contentCache.set(fileId, content);
+}
+
+/** Drops the cached content of a file after it was changed or deleted. */
+function invalidateRecipeContent(fileId: string): void {
+  contentCache.delete(fileId);
+}
+
+/**
+ * Returns the cached raw content of a recipe file without touching Drive, or
+ * `undefined` when it is not cached yet. The editor uses this to render a
+ * recipe that was already read (e.g. by the overview sheet) on its first paint,
+ * so "Manuell bearbeiten" never shows a loading state.
+ */
+export function peekRecipeContent(fileId: string): string | undefined {
+  return contentCache.get(fileId);
+}
+
+/** Reads the raw content of a recipe file, cached and de-duplicated. */
+async function readRecipeContent(token: string, fileId: string): Promise<string> {
+  const cached = contentCache.get(fileId);
+  if (cached !== undefined) return cached;
+  const pending = pendingContent.get(fileId);
+  if (pending !== undefined) return pending;
+  const request = getFileContent(token, fileId)
+    .then((content) => {
+      contentCache.set(fileId, content);
+      return content;
+    })
+    .finally(() => {
+      pendingContent.delete(fileId);
+    });
+  pendingContent.set(fileId, request);
+  return request;
+}
+
+/**
+ * Reads and parses one recipe file (cached content, see above); parse errors
+ * carry precise issues (§7). Every call parses freshly, so no caller can
+ * mutate a cached object — only the raw text is shared.
+ */
 export async function readRecipe(token: string, fileId: string): Promise<Recipe> {
-  const content = await getFileContent(token, fileId);
-  return parseRecipe(content);
+  return parseRecipe(await readRecipeContent(token, fileId));
 }
 
 /**
@@ -180,12 +241,16 @@ export async function createRecipe(
   options?: RecipeWriteOptions,
 ): Promise<DriveFile> {
   const folderId = await ensureRecipeFolder(token);
+  const content = canonicalText(recipe);
   const file = await createFileWithContent(token, {
     name: `${recipe.title}${RECIPE_EXTENSION}`,
     mimeType: RECIPE_MIME_TYPE,
-    content: canonicalText(recipe),
+    content,
     parents: [folderId],
   });
+  // The written text is the new truth — cache it so an immediate re-read (e.g.
+  // reopening the new recipe) does not hit Drive again.
+  cacheRecipeContent(file.id, content);
   if (options?.regenerateExport !== false) {
     await writeRecipeExportSafely(token, recipe);
   }
@@ -202,11 +267,15 @@ export async function updateRecipe(
   recipe: Recipe,
   options?: RecipeWriteOptions,
 ): Promise<DriveFile> {
+  const content = canonicalText(recipe);
   const file = await updateFileWithContent(token, fileId, {
     name: `${recipe.title}${RECIPE_EXTENSION}`,
     mimeType: RECIPE_MIME_TYPE,
-    content: canonicalText(recipe),
+    content,
   });
+  // The write is the new truth: refresh the cache so a re-read (reopening the
+  // editor) does not fetch the old content from Drive.
+  cacheRecipeContent(fileId, content);
   if (options?.regenerateExport !== false) {
     await writeRecipeExportSafely(token, recipe);
   }
@@ -297,6 +366,10 @@ export async function deleteRecipe(token: string, fileId: string): Promise<void>
 
   // 1. The recipe file itself — this is what "deleted" means.
   await deleteFile(token, fileId);
+  // Drop the cached text (and the photo blob below) so a deleted recipe can
+  // never be served from memory afterwards.
+  invalidateRecipeContent(fileId);
+  if (photo !== undefined) invalidateRecipePhoto(photo.id);
 
   // 2. Best-effort cleanup of the photo and export siblings; a failure here
   //    must not surface as a failed delete (retrying would 404 on the .md).
@@ -336,17 +409,22 @@ export async function uploadRecipeImage(
   const existing = findPhotoIn(files, title);
   if (existing !== undefined && existing.name.toLowerCase() === fileName.toLowerCase()) {
     await updateFileWithContent(token, existing.id, { name: fileName, mimeType, content: blob });
+    // The freshly uploaded blob is what the file now holds — cache it so the
+    // list/overview/editor show the new photo without re-downloading it.
+    cacheRecipePhoto(existing.id, blob);
     return;
   }
   // Different extension: create the new file first, then remove the old one —
   // a failure during creation must never leave the recipe without a photo.
-  await createFileWithContent(token, {
+  const created = await createFileWithContent(token, {
     name: fileName,
     mimeType,
     content: blob,
     parents: [folderId],
   });
+  cacheRecipePhoto(created.id, blob);
   if (existing !== undefined) {
+    invalidateRecipePhoto(existing.id);
     await deleteFile(token, existing.id);
   }
 }
@@ -362,6 +440,7 @@ export async function removeRecipeImage(token: string, fileId: string): Promise<
   const files = await listFilesInFolder(token, folderId);
   const photo = findPhotoIn(files, title);
   if (photo !== undefined) {
+    invalidateRecipePhoto(photo.id);
     await deleteFile(token, photo.id);
   }
 }

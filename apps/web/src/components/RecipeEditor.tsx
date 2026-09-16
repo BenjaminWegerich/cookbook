@@ -48,6 +48,7 @@ import {
 import {
   createRecipe,
   deleteRecipe,
+  peekRecipeContent,
   readRecipe,
   removeRecipeImage,
   saveRecipe,
@@ -55,6 +56,7 @@ import {
   type StoredRecipe,
 } from '../drive/recipeStorage';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
+import { loadRecipePhoto } from '../drive/recipePhoto';
 import AutoGrowTextarea from './AutoGrowTextarea';
 import IngredientSheet, {
   type IngredientRecipeOption,
@@ -88,6 +90,27 @@ function toDraft(recipe: Recipe): EditorDraft {
 /** Rebuilds a full Recipe from a draft (the master list is derived, §4). */
 function withIngredients(draft: EditorDraft): Recipe {
   return { ...draft, ingredients: deriveIngredients(draft.steps, draft.reference ?? []) };
+}
+
+/**
+ * The draft the editor can show before any Drive read: the cached text of the
+ * target recipe (e.g. the overview sheet already read it, so "Manuell
+ * bearbeiten" opens instantly) or the empty / AI draft for a new recipe.
+ * `null` means the target is not cached yet — the load effect fetches it.
+ */
+function initialDraftFor(target: StoredRecipe | null, initialDraft?: Recipe): EditorDraft | null {
+  if (target === null) {
+    return initialDraft !== undefined ? toDraft(initialDraft) : newRecipeDraft();
+  }
+  const cached = peekRecipeContent(target.fileId);
+  if (cached === undefined) return null;
+  try {
+    return toDraft(parseRecipe(cached));
+  } catch {
+    // Invalid cached text (should not happen — only canonical writes are
+    // cached) is left to the load effect, which reports the parse error.
+    return null;
+  }
 }
 
 /** Maps a confirmed sheet value to the display-only artifact stored in text. */
@@ -434,12 +457,29 @@ function RecipeEditor({
   onOpenRecipe,
   ref,
 }: RecipeEditorProps) {
-  /** The working draft; null while the recipe + collection are loading. */
-  const [draft, setDraft] = useState<EditorDraft | null>(null);
+  /**
+   * The draft as it is known synchronously at mount: from the content cache
+   * when the target was already read (the overview sheet does so before
+   * "Manuell bearbeiten"), or the empty / AI draft. `null` = not cached, the
+   * load effect fetches it. Rendered on the first paint so the editor never
+   * flashes a loading message for an already-read recipe.
+   */
+  const [initialEditorDraft] = useState<EditorDraft | null>(() =>
+    initialDraftFor(target, initialDraft),
+  );
+  /** The working draft; null while the target recipe is still loading. */
+  const [draft, setDraft] = useState<EditorDraft | null>(initialEditorDraft);
   /** The recipe as loaded from Drive — rollback target and dirty check. */
-  const [original, setOriginal] = useState<EditorDraft | null>(null);
+  const [original, setOriginal] = useState<EditorDraft | null>(initialEditorDraft);
   /** Every other recipe of the collection (parse errors skipped). */
   const [collection, setCollection] = useState<Recipe[]>([]);
+  /**
+   * True once the collection load finished — gates the "neue Zutat"
+   * highlighting, so a sub-recipe name is never flagged as new while its file
+   * is still being read (the parse decides whether a title is an ingredient
+   * recipe, which the file list alone cannot tell).
+   */
+  const [collectionReady, setCollectionReady] = useState(false);
   /** Issues from the last save attempt; shown inline + in the banner. */
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -487,8 +527,17 @@ function RecipeEditor({
   const titleFieldRef = useRef<HTMLTextAreaElement | null>(null);
   const descriptionFieldRef = useRef<HTMLTextAreaElement | null>(null);
   const stepEditorRefs = useRef<(StepEditorHandle | null)[]>([]);
+  /**
+   * The in-flight collection load. `handleSave` awaits it before validating,
+   * so a valid sub-recipe name is never rejected just because its file was
+   * still loading (the state update alone would not reach the save closure).
+   */
+  const collectionPromiseRef = useRef<Promise<Recipe[]> | null>(null);
 
-  // Load the recipe (or the empty draft) and the rest of the collection.
+  // Load the target recipe (or the empty/AI draft). The content cache makes
+  // this a no-op read for a recipe that was read before (e.g. by the overview
+  // sheet), so the form is already on screen via `initialEditorDraft` and this
+  // effect only confirms it / fills it in on a cold open.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -499,23 +548,10 @@ function RecipeEditor({
             : initialDraft !== undefined
               ? toDraft(initialDraft)
               : newRecipeDraft();
-        const others: Recipe[] = [];
-        for (const entry of recipes) {
-          if (entry.fileId === target?.fileId) continue;
-          try {
-            others.push(await readRecipe(token, entry.fileId));
-          } catch {
-            // A broken file is the user's pre-existing problem, not this
-            // editor's — skip it (it also never appears in the link picker).
-            console.warn(
-              `Rezept "${entry.title}" konnte nicht gelesen werden — wird übersprungen.`,
-            );
-          }
-        }
         if (cancelled) return;
         setDraft(loaded);
         setOriginal(loaded);
-        setCollection(others);
+        setLoadError(null);
       } catch (err) {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
       }
@@ -523,34 +559,58 @@ function RecipeEditor({
     return () => {
       cancelled = true;
     };
-  }, [token, target, initialDraft, recipes]);
+  }, [token, target, initialDraft]);
 
-  // Load the photo preview (edit mode) and revoke object URLs on unmount.
+  // Load the rest of the collection in parallel. It is only needed for the
+  // sub-recipe link checks and the ingredient picker, so it must not block the
+  // form: the editor is already usable while this fills in behind it. The
+  // content cache makes repeat opens free and de-duplicates a read that
+  // another screen already started.
   useEffect(() => {
-    const image = target?.image;
-    if (image === undefined) return;
+    let cancelled = false;
+    const entries = recipes.filter((entry) => entry.fileId !== target?.fileId);
+    const load = Promise.all(
+      entries.map(async (entry): Promise<Recipe | null> => {
+        try {
+          return await readRecipe(token, entry.fileId);
+        } catch {
+          // A broken file is the user's pre-existing problem, not this
+          // editor's — skip it (it also never appears in the link picker).
+          console.warn(`Rezept "${entry.title}" konnte nicht gelesen werden — wird übersprungen.`);
+          return null;
+        }
+      }),
+    ).then((loaded) => loaded.filter((recipe): recipe is Recipe => recipe !== null));
+    collectionPromiseRef.current = load;
+    void load.then((others) => {
+      if (cancelled) return;
+      setCollection(others);
+      setCollectionReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, recipes, target?.fileId]);
+
+  // Load the photo preview (edit mode) through the shared photo cache, so a
+  // photo already downloaded by the list card or the overview sheet does not
+  // get fetched again. Object URLs are revoked on unmount (effect below).
+  useEffect(() => {
+    const imageFileId = target?.image?.fileId;
+    if (imageFileId === undefined) return;
     let cancelled = false;
     void (async () => {
-      try {
-        const response = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(image.fileId)}?alt=media`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (!response.ok) return;
-        const blob = await response.blob();
-        if (cancelled) return;
-        if (photoUrlRef.current !== null) URL.revokeObjectURL(photoUrlRef.current);
-        const url = URL.createObjectURL(blob);
-        photoUrlRef.current = url;
-        setPhotoUrl(url);
-      } catch {
-        // The photo is optional (§2) — show the placeholder silently.
-      }
+      const blob = await loadRecipePhoto(token, imageFileId);
+      if (cancelled || blob === null) return;
+      if (photoUrlRef.current !== null) URL.revokeObjectURL(photoUrlRef.current);
+      const url = URL.createObjectURL(blob);
+      photoUrlRef.current = url;
+      setPhotoUrl(url);
     })();
     return () => {
       cancelled = true;
     };
-  }, [token, target?.image]);
+  }, [token, target?.image?.fileId]);
 
   useEffect(
     () => () => {
@@ -628,15 +688,21 @@ function RecipeEditor({
   /**
    * A name a row or named inline mention may reference: it exists in the
    * ingredient master data (runtime registry, incl. entries created during
-   * this session) or it is the title of an ingredient_recipe of the
+   * this session) or it is the title of an ingredient_recipe of the given
    * collection (implicit sub-recipe link). Read fresh on every call — the
    * registry updates when the create-master-data flow saves (see
    * ingredientRegistry.ts), and newly saved sub-recipes appear in
-   * `ingredientRecipes`.
+   * `ingredientRecipes`. The collection is passed in because the save path
+   * awaits the load and must validate against what it resolved, not against
+   * the (possibly not yet rendered) state.
    */
-  const isKnownIngredientName = (name: string): boolean =>
+  const isKnownIngredientNameIn = (collectionNow: Recipe[], name: string): boolean =>
     masterIngredientNames().includes(name.trim()) ||
-    ingredientRecipes.some((recipe) => recipe.title === name.trim());
+    collectionNow.some((recipe) => recipe.title === name.trim());
+
+  /** Same check against the currently rendered collection. */
+  const isKnownIngredientName = (name: string): boolean =>
+    isKnownIngredientNameIn(collection, name);
 
   /**
    * Names used by the draft (rows + named inline mentions) that are not known
@@ -644,14 +710,16 @@ function RecipeEditor({
    * ingredients and block the save (see collectIssues). Computed on every
    * render (not memoized): the master registry is module state that updates
    * when the create-master-data flow saves, and only a fresh read reflects
-   * that new ingredient immediately.
+   * that new ingredient immediately. While the collection is still loading the
+   * set stays empty: whether a title is an ingredient recipe can only be told
+   * once its file is parsed, so nothing may be flagged as new in the meantime.
    */
-  const unknownUsedNames = unknownIngredientNames(draft?.steps ?? [], (name) =>
-    isKnownIngredientName(name),
-  );
+  const unknownUsedNames = collectionReady
+    ? unknownIngredientNames(draft?.steps ?? [], (name) => isKnownIngredientName(name))
+    : new Set<string>();
 
   /** All issues for the saved form (core per-file + editor + §7.2 cross checks). */
-  const collectIssues = (savedRecipe: Recipe): ValidationIssue[] => {
+  const collectIssues = (savedRecipe: Recipe, collectionNow: Recipe[]): ValidationIssue[] => {
     const list: ValidationIssue[] = [];
     if (savedRecipe.prep_time === '') {
       list.push({ path: 'prep_time', message: 'Bitte die Arbeitszeit angeben.' });
@@ -679,14 +747,16 @@ function RecipeEditor({
         });
       }
       step.ingredients.forEach((ingredient, rowIndex) => {
-        if (!isKnownIngredientName(ingredient.name)) {
+        if (!isKnownIngredientNameIn(collectionNow, ingredient.name)) {
           list.push({
             path: `steps[${index}].ingredients[${rowIndex}]`,
             message: 'Bitte diese Zutat anlegen oder ersetzen.',
           });
         }
       });
-      const unknownMentions = unknownMentionNames(step.text, (name) => isKnownIngredientName(name));
+      const unknownMentions = unknownMentionNames(step.text, (name) =>
+        isKnownIngredientNameIn(collectionNow, name),
+      );
       if (unknownMentions.size > 0) {
         const names = [...unknownMentions].map((name) => `„${name}“`).join(', ');
         list.push({
@@ -707,10 +777,12 @@ function RecipeEditor({
         else throw err;
       }
     }
-    // §7.2: title unique across the collection (collection excludes this file).
+    // §7.2: title unique across the collection. The file list already carries
+    // every title, so this check does not depend on the parsed collection
+    // (which may still be loading); it excludes the edited file itself.
     if (
       savedRecipe.title !== '' &&
-      collection.some((recipe) => recipe.title === savedRecipe.title)
+      recipes.some((entry) => entry.fileId !== target?.fileId && entry.title === savedRecipe.title)
     ) {
       list.push({
         path: 'title',
@@ -769,7 +841,14 @@ function RecipeEditor({
   const handleSave = async (): Promise<void> => {
     if (draft === null || saving) return;
     const savedRecipe = normalizeRecipe(draft);
-    const list = collectIssues(savedRecipe);
+    // The name checks need the parsed collection (sub-recipe titles). It loads
+    // in parallel with the form; a save started before it finished waits here,
+    // so a valid sub-recipe name is never rejected just because its file was
+    // still in flight. The awaited array is used directly — the state update
+    // may not have rendered yet.
+    const collectionNow =
+      collectionPromiseRef.current !== null ? await collectionPromiseRef.current : collection;
+    const list = collectIssues(savedRecipe, collectionNow);
     if (list.length > 0) {
       setIssues(list);
       focusFirstIssue(list, draft);
@@ -1157,7 +1236,9 @@ function RecipeEditor({
           let applicable: Set<string>;
           try {
             applicable = new Set(
-              collectIssues(saved).map((issue) => `${issue.path}\u0000${issue.message}`),
+              collectIssues(saved, collection).map(
+                (issue) => `${issue.path}\u0000${issue.message}`,
+              ),
             );
           } catch {
             // A thrown core validation must not crash the render — keep the

@@ -111,6 +111,12 @@
   read and edit (Markdown + YAML, see [storage_format.md](storage_format.md)).
 - **Framework-free core:** all deterministic logic lives outside the UI framework so it can be
   unit-tested and reused (web app, HTML export, future backend).
+- **Client-side read-through cache:** the web app keeps the recipes and photos it has read in
+  memory for the page session, keyed by Drive file id, and de-duplicates concurrent reads. The
+  recipe overview therefore warms the editor, and reopening a recipe costs no Drive round-trips.
+  Every write through the storage layer refreshes or drops the affected entries. The cache is
+  limited to the session: a page reload starts clean, and changes made outside the app are
+  picked up on the next load.
 
 ## Open questions
 

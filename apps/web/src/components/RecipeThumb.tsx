@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
-import { getFileDownloadUrl } from '../drive/driveClient';
+import { loadRecipePhoto } from '../drive/recipePhoto';
 import type { StoredRecipe } from '../drive/recipeStorage';
 
 /** Number of letter-avatar variants in tokens.css (--avatar-0 … --avatar-3). */
@@ -27,9 +27,11 @@ interface RecipeThumbProps {
 /**
  * Recipe photo area of a home-screen card: the recipe photo when one exists
  * (§2, optional sibling file), otherwise a warm letter avatar (initial letter
- * on a deterministic color from tokens.css). The photo is downloaded via the
- * Drive API and shown as an object URL. The square format of the media area
- * is set in CSS (aspect-ratio 1/1, see recipe-list.css).
+ * on a deterministic color from tokens.css). The photo is downloaded through
+ * the shared photo cache (../drive/recipePhoto) and shown as an object URL, so
+ * the overview sheet and the editor preview reuse the same download. The square
+ * format of the media area is set in CSS (aspect-ratio 1/1, see
+ * recipe-list.css).
  *
  * The currently shown object URL is tracked in a ref so it is only revoked
  * when it is actually replaced (or on unmount): a failed re-download must
@@ -40,10 +42,11 @@ function RecipeThumb({ recipe, token }: RecipeThumbProps) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   /** Object URL currently displayed, so it can be revoked when replaced. */
   const photoUrlRef = useRef<string | null>(null);
+  /** Photo file id of the recipe (undefined = no photo). */
+  const imageFileId = recipe.image?.fileId;
 
   useEffect(() => {
-    const image = recipe.image;
-    if (image === undefined) {
+    if (imageFileId === undefined) {
       // No photo: drop a stale photo if one was displayed (e.g. the photo
       // sibling was deleted on Drive).
       if (photoUrlRef.current !== null) {
@@ -55,29 +58,25 @@ function RecipeThumb({ recipe, token }: RecipeThumbProps) {
     }
     let cancelled = false;
     void (async () => {
-      try {
-        const response = await fetch(getFileDownloadUrl(image.fileId), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) throw new Error(`Drive API ${response.status}`);
-        const blob = await response.blob();
-        if (cancelled) return;
-        const url = URL.createObjectURL(blob);
-        // Replace the previously shown URL only on success; on failure the
-        // old photo (or avatar) stays visible instead of a broken image.
-        if (photoUrlRef.current !== null) URL.revokeObjectURL(photoUrlRef.current);
-        photoUrlRef.current = url;
-        setPhotoUrl(url);
-      } catch {
-        // The photo is optional (§2) — keep the current fallback silently.
-      }
+      const blob = await loadRecipePhoto(token, imageFileId);
+      if (cancelled || blob === null) return;
+      const url = URL.createObjectURL(blob);
+      // Replace the previously shown URL only on success; on failure the
+      // old photo (or avatar) stays visible instead of a broken image.
+      if (photoUrlRef.current !== null) URL.revokeObjectURL(photoUrlRef.current);
+      photoUrlRef.current = url;
+      setPhotoUrl(url);
     })();
     return () => {
       // Cancel an in-flight download; the object URL itself is revoked on
       // unmount (below) or when replaced on a later successful download.
       cancelled = true;
     };
-  }, [recipe.image, token]);
+    // `recipe.image` (not its id) is the dependency on purpose: a list refresh
+    // hands over a fresh object after a save, so a photo that was replaced in
+    // place (same file id) is picked up from the updated cache. The cache
+    // makes that re-run free — no second download.
+  }, [recipe.image, imageFileId, token]);
 
   // Revoke the object URL on unmount so a long-lived app session does not
   // leak them.
