@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Recipe } from '@cookbook/core';
 
-import { getAccessToken, isGoogleAuthAvailable, requestAccessToken } from './auth/googleAuth';
+import {
+  getAccessToken,
+  isGoogleAuthAvailable,
+  requestAccessToken,
+  revokeAccessToken,
+} from './auth/googleAuth';
 import AiCreateSheet, {
   type AiCreateSheetHandle,
   type AiHandoff,
@@ -10,6 +15,7 @@ import AiCreateSheet, {
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
 import RecipeOverview from './components/RecipeOverview';
+import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
 import './styles/ai-create.css';
@@ -110,6 +116,14 @@ function App() {
   const editorHandleRef = useRef<RecipeEditorHandle | null>(null);
   /** Imperative handle of the mounted AI-create sheet (browser-back consumer). */
   const aiCreateHandleRef = useRef<AiCreateSheetHandle | null>(null);
+  /**
+   * True while a 401 recovery is running (and after it ran for the current
+   * token). Guards two hazards: the startup list load and the master-data load
+   * fail together, so without it several re-logins would start at once; and if
+   * the fresh token is rejected too, it stops an endless revoke/log-in loop.
+   * An explicit click on "Mit Google verbinden" resets it (see handleConnect).
+   */
+  const authRecoveryRef = useRef(false);
 
   /**
    * Switches the visible layer and keeps the browser history in sync so the
@@ -156,6 +170,9 @@ function App() {
       setRecipes(await listRecipes(activeToken));
       setError(null);
     } catch (err) {
+      // A 401 is handled by the re-auth hook (below); showing the raw Drive
+      // error would only flash before the login panel reappears.
+      if (isDriveAuthError(err)) return;
       setError(err instanceof Error ? err.message : String(err));
     }
   }, []);
@@ -176,6 +193,7 @@ function App() {
       })
       .catch((err) => {
         if (cancelled) return;
+        if (isDriveAuthError(err)) return; // re-auth hook handles it
         setError(err instanceof Error ? err.message : String(err));
       });
     void loadIngredientMasterData(token)
@@ -184,6 +202,7 @@ function App() {
       })
       .catch((err) => {
         if (cancelled) return;
+        if (isDriveAuthError(err)) return; // re-auth hook handles it
         setMasterDataWarning(err instanceof Error ? err.message : String(err));
       });
     return () => {
@@ -253,6 +272,9 @@ function App() {
    * the token is set (recipes === null shows the loading message meanwhile).
    */
   const handleConnect = useCallback(async (options?: { automatic?: boolean }): Promise<void> => {
+    // An explicit login opens a new auth generation: allow one automatic
+    // recovery again in case the new token is rejected as well.
+    if (options?.automatic !== true) authRecoveryRef.current = false;
     setError(null);
     setConnecting(true);
     let aborted = false;
@@ -270,6 +292,37 @@ function App() {
       if (!aborted) setConnecting(false);
     }
   }, []);
+
+  /**
+   * Reaction to a Drive 401 (registered on the Drive client just below): the
+   * cached access token is stale — Google rejects it while Google Identity
+   * Services keeps handing the same dead token back. Drop it for good and start
+   * one fresh login. Revoking at Google is the step that matters: it invalidates
+   * the cached token and forces the next token request to ask for consent again
+   * instead of returning the cached one. The fresh request carries no user
+   * gesture, so the browser may block its popup — then the login panel stays and
+   * a single click on "Mit Google verbinden" completes the login.
+   */
+  const recoverFromAuthError = useCallback(async (): Promise<void> => {
+    if (authRecoveryRef.current) return; // already recovering / already ran
+    authRecoveryRef.current = true;
+    await revokeAccessToken();
+    setToken(null);
+    setRecipes(null);
+    setError(null);
+    setMasterDataWarning(null);
+    await handleConnect({ automatic: true });
+  }, [handleConnect]);
+
+  // Register the Drive client's 401 hook for the lifetime of the app. Every
+  // Drive call funnels through that client, so this covers the startup loads,
+  // list refreshes and the editor alike.
+  useEffect(() => {
+    setDriveUnauthorizedHandler(() => {
+      void recoverFromAuthError();
+    });
+    return () => setDriveUnauthorizedHandler(null);
+  }, [recoverFromAuthError]);
 
   /**
    * Best-effort auto-login: the access token is memory-only (googleAuth.ts),

@@ -28,6 +28,55 @@ export interface DriveFile {
   mimeType: string;
 }
 
+/**
+ * Thrown when the Drive API answers 401 (the access token is invalid, expired
+ * or revoked). Unlike a generic failure this is *recoverable*: the app drops
+ * the stale token and logs in again (see the unauthorized handler below and
+ * App.tsx). Detect it with {@link isDriveAuthError}.
+ */
+export class DriveAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DriveAuthError';
+  }
+}
+
+/** True for the recoverable 401 error of {@link DriveAuthError}. */
+export function isDriveAuthError(error: unknown): error is DriveAuthError {
+  return error instanceof DriveAuthError;
+}
+
+/**
+ * Re-authentication hook. The app registers a handler here; on every detected
+ * 401 the client calls it once (fire-and-forget) so the app can revoke the
+ * stale token and start a fresh login. Keeping the reaction behind a callback
+ * keeps this module free of React/App dependencies. `null` = not registered.
+ */
+let onUnauthorized: (() => void) | null = null;
+
+/** Registers (or, with `null`, clears) the re-authentication handler. */
+export function setDriveUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
+/**
+ * Turns a failed Drive response into the error to throw: a
+ * {@link DriveAuthError} for 401 (after notifying the re-auth handler), a plain
+ * Error otherwise. Never returns — typed `Promise<never>` so call sites read as
+ * a guard.
+ */
+async function failDriveResponse(response: Response): Promise<never> {
+  const detail = await response.text().catch(() => '');
+  const message = `Drive API ${response.status}: ${detail || 'unbekannter Fehler'}`;
+  if (response.status === 401) {
+    // Notify first: the app's handler clears the token and re-logs in, so the
+    // error below is only a fallback for callers that still see it.
+    onUnauthorized?.();
+    throw new DriveAuthError(message);
+  }
+  throw new Error(message);
+}
+
 /** Authenticated JSON request against the Drive API. */
 async function driveRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${DRIVE_API_BASE}${path}`, {
@@ -39,8 +88,7 @@ async function driveRequest<T>(token: string, path: string, init: RequestInit = 
   });
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Drive API ${response.status}: ${detail || 'unbekannter Fehler'}`);
+    await failDriveResponse(response);
   }
   return (await response.json()) as T;
 }
@@ -107,8 +155,7 @@ export async function getFileContent(token: string, fileId: string): Promise<str
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Drive API ${response.status}: ${detail || 'unbekannter Fehler'}`);
+    await failDriveResponse(response);
   }
   return response.text();
 }
@@ -175,8 +222,7 @@ async function uploadFile(
     body,
   });
   if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Drive API ${response.status}: ${detail || 'unbekannter Fehler'}`);
+    await failDriveResponse(response);
   }
   return (await response.json()) as DriveFile;
 }
@@ -224,7 +270,6 @@ export async function deleteFile(token: string, fileId: string): Promise<void> {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Drive API ${response.status}: ${detail || 'unbekannter Fehler'}`);
+    await failDriveResponse(response);
   }
 }
