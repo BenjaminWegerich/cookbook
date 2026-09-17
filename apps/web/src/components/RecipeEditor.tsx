@@ -1719,7 +1719,6 @@ function RecipeEditor({
                     {step.ingredients.map((ingredient, rowIndex) => {
                       const jumpTarget = subRecipeTarget(ingredient.name);
                       const isNewName = unknownUsedNames.has(ingredient.name.trim());
-                      const isReference = referenceNames.has(ingredient.name.trim());
                       const rowError = rowIssue(stepIndex, rowIndex);
                       return (
                         <Fragment key={`${stepIndex}-${rowIndex}`}>
@@ -1753,21 +1752,6 @@ function RecipeEditor({
                                     <span>Rezept</span>
                                   </button>
                                 )}
-                                {isReference && (
-                                  <span className="ingredient-tag tag-reference">
-                                    <StarFilledIcon className="tag-icon" />
-                                    <span>Referenz</span>
-                                    <button
-                                      type="button"
-                                      className="tag-remove"
-                                      onClick={() => toggleReference(ingredient.name)}
-                                      aria-label={`„${ingredient.name}“ als Referenz-Menge entfernen`}
-                                      title="Referenz-Menge entfernen"
-                                    >
-                                      <CloseIcon className="tag-remove-icon" />
-                                    </button>
-                                  </span>
-                                )}
                               </span>
                               {/* A hint only where it says something the row
                                   does not: a normal row is identical to its
@@ -1780,10 +1764,10 @@ function RecipeEditor({
                               )}
                             </button>
                             <div className="step-row-actions">
-                              {/* The reference *toggle* lives on the master
-                                  list only (decided with the user); a step row
-                                  can still drop an existing reference through
-                                  the × in its "REFERENZ" tag. */}
+                              {/* The reference role lives on the master
+                                  list only (decided with the user): neither
+                                  the toggle nor the "REFERENZ" badge appears
+                                  on a step row. */}
                               <button
                                 type="button"
                                 className="row-remove"
