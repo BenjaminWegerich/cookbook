@@ -75,9 +75,14 @@
   as a lowercase sentence continuation.
 - **Browser Back steps one screen:** every layer above the recipe list (editor, AI-create,
   create menu) and every modal sheet is reflected in the browser history, and the Back button
-  closes exactly the topmost layer (NewIngredient sheet → Ingredient sheet → editor → list).
-  New full-screen views/sheets must go through App's navigation helper (`setNav` + the
-  editor's `notifyBack`) instead of toggling React booleans directly.
+  closes exactly the topmost layer (NewIngredient sheet → Ingredient sheet → sub-recipe level
+  → editor → list). New full-screen views/sheets must go through App's navigation helper
+  (`setNav` + the editor's `notifyBack`) instead of toggling React booleans directly.
+- **Sub-recipe levels stay mounted:** the „REZEPT" badge opens a sub-recipe as another editor
+  level above the current one; App keeps every open level mounted and hides the ones below
+  (`hidden` on a plain wrapper, plus `visible` to gate Escape). A jump therefore never discards
+  unsaved work — Back / „Zurück" reveals the parent level again with its draft intact, and the
+  discard confirmation belongs to the level being left, not to the jump.
 - **The exit guard is shared by every exit trigger (`useLeaveGuard`):** a screen with unsaved
   work asks its "Änderungen verwerfen?" confirmation through this one hook — never with its own
   dirty check — so all five triggers behave identically: the header's „Zurück" button, a

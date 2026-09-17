@@ -86,6 +86,17 @@ button:active:not(:disabled):not(.fab-backdrop) {
   background-image: linear-gradient(var(--color-press-overlay), var(--color-press-overlay));
 }
 
+/* An outer button that contains an inner one (the „REZEPT" badge inside a step
+   row's tap target) defers to it: pressing the inner action must light up the
+   inner button only, never the whole row. Part of the same single pressed
+   definition — no component stylesheet carries a pressed state. Guarded by
+   @supports, so a browser without :has() keeps the whole-row feedback above. */
+@supports selector(:has(*)) {
+  button:active:not(:disabled):not(.fab-backdrop):has(button:active) {
+    background-image: none;
+  }
+}
+
 /* Universal "cannot press this right now" look: one definition for every button
    variant, so no component stylesheet defines its own :disabled styling (see
    docs/CODING_CONVENTIONS.md, Design Conventions). Muting is only allowed while

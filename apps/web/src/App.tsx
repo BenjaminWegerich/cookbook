@@ -85,6 +85,13 @@ function App() {
   /** An already-valid draft (AI create) that opens the editor prefilled. */
   const [editorDraft, setEditorDraft] = useState<Recipe | null>(null);
   /**
+   * Sub-recipes opened from the editor with the "Rezept" badge, innermost last.
+   * Every level stays mounted (hidden) underneath the one above it, so the
+   * parent's unsaved draft survives the jump and is simply there again when the
+   * user comes back — a jump never discards or asks to discard.
+   */
+  const [editorSubRecipes, setEditorSubRecipes] = useState<StoredRecipe[]>([]);
+  /**
    * Which screen opened the editor: 'ai' means it was started from a draft of
    * the AI-create conversation, which then continues underneath (see the
    * handoff below) instead of the app returning to the list.
@@ -114,10 +121,21 @@ function App() {
    * React state and the history never drift apart.
    */
   const navRef = useRef<TopScreen | null>(null);
-  /** Imperative handle of the mounted RecipeEditor (browser-back consumer). */
-  const editorHandleRef = useRef<RecipeEditorHandle | null>(null);
+  /**
+   * Imperative handles of the mounted editor levels, indexed by level: 0 is the
+   * base editor (list or AI draft), 1..n are the sub-recipes. A slot is null
+   * while its level is unmounted; `topEditorHandle` returns the current one.
+   */
+  const editorHandleRefs = useRef<(RecipeEditorHandle | null)[]>([]);
   /** Imperative handle of the mounted AI-create sheet (browser-back consumer). */
   const aiCreateHandleRef = useRef<AiCreateSheetHandle | null>(null);
+  /**
+   * Ref mirror of `editorSubRecipes` and `editorTarget` for the synchronous
+   * event handlers (history popstate, sub-recipe jump): their closures would
+   * otherwise see the state of the render they were created in.
+   */
+  const editorSubRecipesRef = useRef<StoredRecipe[]>([]);
+  const editorTargetRef = useRef<StoredRecipe | null>(null);
   /**
    * True while a 401 recovery is running (and after it ran for the current
    * token). Guards two hazards: the startup list load and the master-data load
@@ -126,6 +144,30 @@ function App() {
    * An explicit click on "Mit Google verbinden" resets it (see handleConnect).
    */
   const authRecoveryRef = useRef(false);
+
+  /**
+   * The imperative handle of the editor level currently on top (the deepest
+   * mounted sub-recipe, or the base editor). Called from the popstate listener,
+   * so it reads the ref array directly — the highest non-null slot is the
+   * visible level.
+   */
+  const topEditorHandle = (): RecipeEditorHandle | null => {
+    const handles = editorHandleRefs.current;
+    for (let index = handles.length - 1; index >= 0; index -= 1) {
+      const handle = handles[index];
+      if (handle !== null && handle !== undefined) return handle;
+    }
+    return null;
+  };
+
+  /**
+   * Replaces the open sub-recipe levels and keeps the ref mirror in sync, so the
+   * synchronous handlers (popstate, jump) see the current stack immediately.
+   */
+  const replaceSubRecipes = useCallback((next: StoredRecipe[]): void => {
+    editorSubRecipesRef.current = next;
+    setEditorSubRecipes(next);
+  }, []);
 
   /**
    * Switches the visible layer and keeps the browser history in sync so the
@@ -234,11 +276,23 @@ function App() {
         }
         return;
       }
-      if (top === 'editor' && editorHandleRef.current?.notifyBack() === true) {
-        // Stay on the editor (an overlay closed or the discard confirmation
-        // was armed): undo the pop by re-pushing the screen entry.
-        window.history.pushState({ appScreen: SCREEN_MARKER }, '');
-        return;
+      if (top === 'editor') {
+        // The open-level count before the editor sees the pop: `notifyBack` may
+        // step back to the parent level of a sub-recipe chain, which consumes
+        // the pop although it reports false (the parent stays mounted).
+        const levelCount = editorSubRecipesRef.current.length;
+        if (topEditorHandle()?.notifyBack() === true) {
+          // Stay on the editor (an overlay closed or the discard confirmation
+          // was armed): undo the pop by re-pushing the screen entry.
+          window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+          return;
+        }
+        if (editorSubRecipesRef.current.length < levelCount) {
+          // Back stepped from a sub-recipe to its parent level: the editor
+          // stays open, so cancel the pop exactly like a consumed overlay.
+          window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+          return;
+        }
       }
       if (top === 'ai' && aiCreateHandleRef.current?.notifyBack() === true) {
         // Stay on the AI-create screen (the discard confirmation was armed):
@@ -251,16 +305,22 @@ function App() {
       if (top === 'editor' && editorOriginRef.current === 'ai') {
         editorOriginRef.current = null;
         pendingDraftRef.current = null;
+        editorSubRecipesRef.current = [];
+        editorTargetRef.current = null;
         navRef.current = 'ai';
         setEditorOpen(false);
+        setEditorSubRecipes([]);
         setAiCreateOpen(true);
         window.history.pushState({ appScreen: SCREEN_MARKER }, '');
         return;
       }
       editorOriginRef.current = null;
       pendingDraftRef.current = null;
+      editorSubRecipesRef.current = [];
+      editorTargetRef.current = null;
       navRef.current = null;
       setEditorOpen(false);
+      setEditorSubRecipes([]);
       setAiCreateOpen(false);
       setCreateMenuOpen(false);
       setOverviewOpen(false);
@@ -374,16 +434,27 @@ function App() {
     setNav(null);
   }, [setNav]);
 
+  /**
+   * Shows the base recipe in the editor (`draft` prefills a brand-new recipe)
+   * and keeps the target ref mirror in sync, so the synchronous event handlers
+   * (sub-recipe jump, history popstate) see the recipe that is on screen.
+   */
+  const showInEditor = useCallback((recipe: StoredRecipe | null, draft: Recipe | null): void => {
+    editorTargetRef.current = recipe;
+    setEditorTarget(recipe);
+    setEditorDraft(draft);
+  }, []);
+
   /** Opens the editor for a recipe (null = new recipe). */
   const openEditor = useCallback(
     (recipe: StoredRecipe | null): void => {
       editorOriginRef.current = 'list';
       pendingDraftRef.current = null;
-      setEditorTarget(recipe);
-      setEditorDraft(null);
+      replaceSubRecipes([]);
+      showInEditor(recipe, null);
       setNav('editor');
     },
-    [setNav],
+    [setNav, showInEditor, replaceSubRecipes],
   );
 
   /** Opens the editor prefilled with an AI-created draft (new recipe). */
@@ -392,11 +463,34 @@ function App() {
       // Remembered so saving the draft can hand it back to the conversation.
       editorOriginRef.current = 'ai';
       pendingDraftRef.current = recipe;
-      setEditorTarget(null);
-      setEditorDraft(recipe);
+      replaceSubRecipes([]);
+      showInEditor(null, recipe);
       setNav('editor');
     },
-    [setNav],
+    [setNav, showInEditor, replaceSubRecipes],
+  );
+
+  /**
+   * Opens a linked sub-recipe from the editor (the "Rezept" badge). The level
+   * above is pushed onto the open stack and stays mounted (hidden) underneath,
+   * so its unsaved draft survives the jump — a jump never discards or asks to
+   * discard. The whole chain shares the editor's single history entry: Back is
+   * consumed to drop one level (the popstate handler re-pushes the entry).
+   */
+  const openSubRecipe = useCallback(
+    (recipe: StoredRecipe): void => {
+      // Defensive: a jump without the editor on top behaves like a normal open.
+      if (navRef.current !== 'editor') {
+        openEditor(recipe);
+        return;
+      }
+      const open = editorSubRecipesRef.current;
+      const top = open.length > 0 ? open[open.length - 1]! : editorTargetRef.current;
+      // Skip a no-op jump (same file) so Back never steps onto the same recipe.
+      if (top !== null && top.fileId === recipe.fileId) return;
+      replaceSubRecipes([...open, recipe]);
+    },
+    [openEditor, replaceSubRecipes],
   );
 
   /** Opens the AI-create conversation screen. */
@@ -404,22 +498,43 @@ function App() {
     setNav('ai');
   }, [setNav]);
 
+  /**
+   * Leaves the editor one step: first back to the parent level of an open
+   * sub-recipe chain (the level stays mounted, so nothing is lost), and only
+   * from the base level out of the editor (to the list, or back to the AI
+   * conversation of an AI draft). Every exit trigger — header button, Escape,
+   * browser Back — ends here, so they all follow the same order.
+   */
   const closeEditor = useCallback((): void => {
+    const open = editorSubRecipesRef.current;
+    if (open.length > 0) {
+      replaceSubRecipes(open.slice(0, -1));
+      return;
+    }
     const fromAi = editorOriginRef.current === 'ai';
     editorOriginRef.current = null;
     pendingDraftRef.current = null;
+    editorTargetRef.current = null;
     // Leaving an AI draft without saving returns to its conversation (the
     // sheet is still mounted); every other editor closes to the list.
     setNav(fromAi ? 'ai' : null);
-  }, [setNav]);
+  }, [setNav, replaceSubRecipes]);
 
   /** After a save/delete: refresh the list and leave the editor. */
   const handleEditorSaved = useCallback(
     (saved: Recipe | null): void => {
       if (token !== null) void refreshRecipes(token);
+      // A saved sub-recipe returns to its parent level, whose unsaved draft is
+      // still mounted underneath — not all the way to the list.
+      const open = editorSubRecipesRef.current;
+      if (open.length > 0) {
+        replaceSubRecipes(open.slice(0, -1));
+        return;
+      }
       const fromAi = editorOriginRef.current === 'ai';
       editorOriginRef.current = null;
       pendingDraftRef.current = null;
+      editorTargetRef.current = null;
       // A saved Zutaten-Rezept continues the conversation: the dish using it is
       // usually the next request, and the chat must list the new title. A saved
       // dish is the end of the flow — back to the list like any other save.
@@ -430,7 +545,7 @@ function App() {
         setNav(null);
       }
     },
-    [token, refreshRecipes, setNav],
+    [token, refreshRecipes, setNav, replaceSubRecipes],
   );
 
   /** The chat applied the handoff (context re-read, request prefilled). */
@@ -468,16 +583,50 @@ function App() {
       )}
 
       {editorOpen ? (
-        <RecipeEditor
-          ref={editorHandleRef}
-          token={token ?? ''}
-          target={editorTarget}
-          initialDraft={editorDraft ?? undefined}
-          recipes={recipes ?? []}
-          onClose={closeEditor}
-          onSaved={handleEditorSaved}
-          onOpenRecipe={openEditor}
-        />
+        <>
+          {/* The base level (recipe from the list, or the AI draft). It stays
+              mounted while a sub-recipe is open above it (hidden), so its
+              unsaved draft is still there when the user comes back. The
+              wrapper carries `hidden` (a plain div, like the AI sheet below),
+              because the editor's own `.app` display would beat [hidden]. */}
+          <div hidden={editorSubRecipes.length !== 0}>
+            <RecipeEditor
+              key={`base:${editorTarget?.fileId ?? 'new-recipe'}`}
+              ref={(handle) => {
+                editorHandleRefs.current[0] = handle;
+              }}
+              visible={editorSubRecipes.length === 0}
+              token={token ?? ''}
+              target={editorTarget}
+              initialDraft={editorDraft ?? undefined}
+              recipes={recipes ?? []}
+              onClose={closeEditor}
+              onSaved={handleEditorSaved}
+              onOpenRecipe={openSubRecipe}
+            />
+          </div>
+          {/* One mounted level per jumped sub-recipe: only the deepest is
+              visible, the levels below stay mounted (hidden) with their work. */}
+          {editorSubRecipes.map((recipe, index) => (
+            <div
+              key={`sub:${index}:${recipe.fileId}`}
+              hidden={index !== editorSubRecipes.length - 1}
+            >
+              <RecipeEditor
+                ref={(handle) => {
+                  editorHandleRefs.current[index + 1] = handle;
+                }}
+                visible={index === editorSubRecipes.length - 1}
+                token={token ?? ''}
+                target={recipe}
+                recipes={recipes ?? []}
+                onClose={closeEditor}
+                onSaved={handleEditorSaved}
+                onOpenRecipe={openSubRecipe}
+              />
+            </div>
+          ))}
+        </>
       ) : aiCreateOpen ? null : (
         <main className="app">
           <header className="app-header">

@@ -13,7 +13,13 @@
  *   shows an existing reference but cannot set one (its "REFERENZ" tag's × can
  *   only clear it);
  * - sub-recipes are implicit (name == ingredient-recipe title) and clickable
- *   wherever they appear (step rows, master list, text artifacts);
+ *   wherever they appear (step rows, master list, text artifacts). Tapping the
+ *   "REZEPT" badge opens the sub-recipe as a new level above the current one
+ *   (App keeps every open level mounted): the parent stays hidden with its
+ *   draft, so a jump never asks to discard and Back / „Zurück" lands on the
+ *   parent exactly as it was left. The "Änderungen verwerfen?" question only
+ *   appears when a level is left whose own draft is unsaved — a popped
+ *   sub-recipe discards its own draft, the parent below keeps its own;
  * - quantities are stored in the family unit g/ml; the display switches to
  *   kg/l at 1000 (chips carry base quantity AND base unit, no steppers);
  * - sections: Kopfdaten (Titel, Details, Typ, Portionen/Ergiebigkeit,
@@ -233,6 +239,12 @@ interface RecipeEditorProps {
   onSaved: (saved: Recipe | null) => void;
   /** Opens another recipe in the editor (jump to a linked sub-recipe). */
   onOpenRecipe?: (recipe: StoredRecipe) => void;
+  /**
+   * True while this level is the visible one. The editor chain mounts every
+   * open level (the parent stays underneath, hidden), and only the visible one
+   * may react to Escape.
+   */
+  visible?: boolean;
   /** Browser-back consumer handle (React 19: ref is a regular prop). */
   ref?: Ref<RecipeEditorHandle>;
 }
@@ -488,6 +500,7 @@ function RecipeEditor({
   onClose,
   onSaved,
   onOpenRecipe,
+  visible = true,
   ref,
 }: RecipeEditorProps) {
   /**
@@ -1035,15 +1048,13 @@ function RecipeEditor({
 
   /**
    * Jump to a linked sub-recipe (a step row, the master list or an artifact).
-   * Unsaved changes are guarded by the shared exit guard — the same two-step
-   * "Änderungen verwerfen?" confirmation as the back button: the first tap arms
-   * it, the second tap jumps.
+   * The jump opens the sub-recipe as a new level above this one, which stays
+   * mounted (hidden) with its draft — no discard confirmation, and Back lands
+   * here again exactly as it was left.
    */
   const requestJump = (recipe: StoredRecipe): void => {
-    guard.request('button', () => {
-      guard.reset();
-      onOpenRecipe?.(recipe);
-    });
+    guard.reset();
+    onOpenRecipe?.(recipe);
   };
 
   /** The StoredRecipe of a sub-recipe title, when it is an ingredient recipe. */
@@ -1192,8 +1203,9 @@ function RecipeEditor({
 
   // Escape is the keyboard equivalent of the browser Back button and follows
   // the same layer order as notifyBack below (create sheet, ingredient sheet,
-  // then the discard confirmation).
-  useEscapeTrigger(() => void requestLeave('escape'));
+  // then the discard confirmation). Only the visible level listens: the levels
+  // below stay mounted (hidden) and must not react.
+  useEscapeTrigger(() => void requestLeave('escape'), visible);
 
   /** Toggles the reference role of a master-list row (§4; both recipe types). */
   const toggleReference = (name: string): void => {
@@ -1746,7 +1758,13 @@ function RecipeEditor({
                                   <button
                                     type="button"
                                     className="ingredient-tag tag-recipe"
-                                    onClick={() => requestJump(jumpTarget)}
+                                    onClick={(event) => {
+                                      // The row is one big button that opens the
+                                      // ingredient sheet — the badge must
+                                      // navigate without also triggering it.
+                                      event.stopPropagation();
+                                      requestJump(jumpTarget);
+                                    }}
                                     title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
                                   >
                                     <LinkIcon className="tag-icon" />
@@ -1906,7 +1924,13 @@ function RecipeEditor({
                           <button
                             type="button"
                             className="ingredient-tag tag-recipe"
-                            onClick={() => requestJump(jumpTarget)}
+                            onClick={(event) => {
+                              // Keep the badge a self-contained navigation
+                              // control (no row handler here, but unchanged
+                              // behaviour if one is ever added).
+                              event.stopPropagation();
+                              requestJump(jumpTarget);
+                            }}
                             title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
                           >
                             <LinkIcon className="tag-icon" />
