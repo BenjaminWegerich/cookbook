@@ -58,7 +58,7 @@ export function SkilletIcon({ className }: IconProps) {
   );
 }
 
-/** Playlist with a plus — the "Zur Liste" action (shopping list transfer). */
+/** Playlist with a plus — the "Zur Liste hinzufügen" action (shopping list transfer). */
 export function ListPlusIcon({ className }: IconProps) {
   return (
     <svg className={className} {...ICON_PROPS}>

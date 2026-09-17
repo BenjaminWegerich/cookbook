@@ -981,9 +981,9 @@
   font-size: var(--text-sm);
 }
 
-/* "+ Zutat zur Liste" (step-add-row): the pill hugs the ingredient rows above
-   it (only the card's own grid gap stays above), while keeping a clearly
-   larger gap to the step text field below: 8 px card gap + 10 px margin =
+/* "+ Zutat zur Liste hinzufügen" (step-add-row): the pill hugs the ingredient
+   rows above it (only the card's own grid gap stays above), while keeping a
+   clearly larger gap to the step text field below: 8 px card gap + 10 px margin =
    18 px (space-6). The pill reads as an extension of its list. */
 .step-add-row {
   margin-block-end: var(--space-4);

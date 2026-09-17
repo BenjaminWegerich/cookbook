@@ -9,14 +9,14 @@
  * - modal bottom sheet over the list (not a full-screen view);
  * - large square 1:1 photo (recipe photos are stored square, nothing is cropped);
  * - times (Arbeitszeit / Gesamtzeit) are shown, but not servings/yield or type;
- * - one action row: "Kochen" (pot) and "Zur Liste" (list with plus) as label
- *   buttons, plus a compact "Mehr" button (vertical three dots) that only takes
- *   the width of its own label. Decided with the user: on a narrow phone the
+ * - one action row: "Kochen" (pot) and "Zur Liste hinzufügen" (list with plus)
+ *   as label buttons, plus a compact "Mehr" button (vertical three dots) that only
+ *   takes the width of its own label. Decided with the user: on a narrow phone the
  *   third, equally wide "Bearbeiten" column was the longest label in the row and
  *   wrapped to two lines, which made the whole row taller. The overflow button
  *   is content-sized instead, so all three fit even at 320 px.
- *   "Kochen" and "Zur Liste" are placeholders for now: they report that the
- *   feature is not built yet instead of silently doing nothing.
+ *   "Kochen" and "Zur Liste hinzufügen" are placeholders for now: they report that
+ *   the feature is not built yet instead of silently doing nothing.
  * - "Mehr" opens the actions that do not earn a full row column as a small
  *   popover above the row: "Manuell bearbeiten" opens the editor, "Mit KI
  *   bearbeiten" is still a placeholder. The kebab itself is the affordance, and
@@ -221,10 +221,10 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           )}
         </div>
 
-        {/* One action row: "Kochen" and "Zur Liste" as label buttons plus the
-            content-sized "Mehr" overflow button. "Mehr" opens its menu as a
-            popover directly above the row, so the menu sits next to its trigger
-            instead of floating anywhere in the sheet. */}
+        {/* One action row: "Kochen" and "Zur Liste hinzufügen" as label buttons
+            plus the content-sized "Mehr" overflow button. "Mehr" opens its menu
+            as a popover directly above the row, so the menu sits next to its
+            trigger instead of floating anywhere in the sheet. */}
         <div className="overview-actions">
           <button
             type="button"
@@ -237,10 +237,10 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           <button
             type="button"
             className="overview-action"
-            onClick={() => notBuiltYet('Zur Liste')}
+            onClick={() => notBuiltYet('Zur Liste hinzufügen')}
           >
             <ListPlusIcon />
-            <span>Zur Liste</span>
+            <span>Zur Liste hinzufügen</span>
           </button>
           <div className="overview-more" ref={moreWrapRef}>
             <button

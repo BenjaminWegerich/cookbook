@@ -123,14 +123,14 @@
 
 /* ---- Actions ------------------------------------------------------------- */
 
-/* One row: "Kochen", "Zur Liste" and the "Mehr" overflow button, each symbol +
-   text. "Kochen" (accent fill, white text) and "Zur Liste" share the space
-   evenly; "Mehr" takes only the width of its own label (`auto` column), because
-   it is the shortest label and must not force the other two to wrap — with three
-   equal columns the long "Bearbeiten" label wrapped to two lines on a phone and
-   made the whole row taller. The label size matches the overflow menu (one body
-   step below the 18 px body size) — the row and its menu must not look like two
-   different scales. */
+/* One row: "Kochen", "Zur Liste hinzufügen" and the "Mehr" overflow button, each
+   symbol + text. "Kochen" (accent fill, white text) and "Zur Liste hinzufügen"
+   share the space evenly; "Mehr" takes only the width of its own label (`auto`
+   column), because it is the shortest label and must not force the other two to
+   wrap — with three equal columns the long "Bearbeiten" label wrapped to two
+   lines on a phone and made the whole row taller. The label size matches the
+   overflow menu (one body step below the 18 px body size) — the row and its menu
+   must not look like two different scales. */
 .overview-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
