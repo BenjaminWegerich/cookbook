@@ -384,7 +384,7 @@ function IngredientSheet({
                 className={freeUnit === 'none' ? 'segmented-active' : ''}
                 onClick={() => setFreeUnit('none')}
               >
-                ohne Einheit
+                Ohne Einheit
               </button>
             </div>
           </div>

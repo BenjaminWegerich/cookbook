@@ -9,8 +9,8 @@
  * call of a create/edit session.
  *
  * The block that varies per *request* — the recipe specifications the user sets
- * on the AI-create screen (Typ, Portionen/Ergiebigkeit, Merkmale, „Die KI soll
- * …“) — is serialized by {@link buildSpecificationsText} and appended after the
+ * on the AI-create screen (Typ, Portionen/Ergiebigkeit, Merkmale, „KI-Verhalten“)
+ * — is serialized by {@link buildSpecificationsText} and appended after the
  * context block, so both live in the system instruction and never appear as a
  * chat bubble.
  */
@@ -129,7 +129,7 @@ export interface RecipeSpecifications {
   fast: boolean;
   /** Merkmal „günstig“: cheap, common ingredients. */
   cheap: boolean;
-  /** „Die KI soll …“: ask back when something is unclear, or always draft. */
+  /** „KI-Verhalten“: ask back when something is unclear, or always draft. */
   replyMode: 'clarify' | 'draft';
 }
 

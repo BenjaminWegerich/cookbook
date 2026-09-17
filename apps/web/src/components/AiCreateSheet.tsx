@@ -20,7 +20,7 @@
  *   manual editor's Typ and Portionen/Ergiebigkeit controls (defaults: 6
  *   Portionen for a Gericht, Gewicht / 1 kg for a Zutaten-Rezept), the Merkmale
  *   flags "Vorgaben" (vegan — always on for now, schnell und einfach, günstig)
- *   and "Die KI soll …" (ggf. nachfragen vs. direkt den Entwurf schreiben).
+ *   and "KI-Verhalten" (Bei Bedarf nachfragen vs. Direkt entwerfen).
  *   They are serialized into the system instruction (aiContext.ts), so they
  *   constrain the whole conversation — including revisions and repair rounds.
  * - The conversation does not end with a draft: the composer stays visible, and
@@ -322,7 +322,7 @@ export default function AiCreateSheet({
   const [wantsVegan, setWantsVegan] = useState(true);
   const [wantsFast, setWantsFast] = useState(false);
   const [wantsCheap, setWantsCheap] = useState(false);
-  /** „Die KI soll …“: ask for clarification by default (current behaviour). */
+  /** „KI-Verhalten“: ask for clarification by default (current behaviour). */
   const [replyMode, setReplyMode] = useState<ReplyMode>('clarify');
   const [busy, setBusy] = useState(false);
   /** A validated draft ready to open in the editor. */
@@ -851,10 +851,10 @@ export default function AiCreateSheet({
                         </div>
                       </div>
 
-                      {/* „Die KI soll …“: clarify when needed (current rules
+                      {/* „KI-Verhalten“: clarify when needed (current rules
                           behaviour) or always draft directly. */}
                       <div className="field">
-                        <span className="field-label">Die KI soll …</span>
+                        <span className="field-label">KI-Verhalten</span>
                         <div
                           className="segmented ai-mode"
                           role="group"
@@ -865,14 +865,14 @@ export default function AiCreateSheet({
                             className={replyMode === 'clarify' ? 'segmented-active' : ''}
                             onClick={() => setReplyMode('clarify')}
                           >
-                            ggf. nachfragen
+                            Bei Bedarf nachfragen
                           </button>
                           <button
                             type="button"
                             className={replyMode === 'draft' ? 'segmented-active' : ''}
                             onClick={() => setReplyMode('draft')}
                           >
-                            direkt den Entwurf schreiben
+                            Direkt entwerfen
                           </button>
                         </div>
                       </div>

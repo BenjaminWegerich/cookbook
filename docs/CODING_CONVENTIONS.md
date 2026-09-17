@@ -65,6 +65,14 @@
   stored strings in normal German case (`"Titel"`, not `"TITEL"`) — the caps are purely
   visual, so source text stays readable and screen readers announce the normal form. The
   muted `(optional)` marker stays lowercase.
+- **Button labels are sentence case:** a button's visible text is normal German prose
+  starting with a capital letter; nouns keep their capitals, nothing else is forced. No
+  all-lowercase, no Title Case, no all-caps in the source string — ALL CAPS stays a
+  CSS-only effect for data badges and `.field-label`. A leading symbol (`+`, `×`) or icon
+  is not a letter and never replaces the capital (`+ Zutat neu anlegen`, `× Entfernen`);
+  icon-only buttons carry no visible text, only an `aria-label`. A caption above a button
+  group is a noun (`.field-label`), never a sentence fragment — so no option ever reads
+  as a lowercase sentence continuation.
 - **Browser Back steps one screen:** every layer above the recipe list (editor, AI-create,
   create menu) and every modal sheet is reflected in the browser history, and the Back button
   closes exactly the topmost layer (NewIngredient sheet → Ingredient sheet → editor → list).

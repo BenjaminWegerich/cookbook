@@ -469,7 +469,7 @@ function TimeChips({
           <span className="chip-glyph" aria-hidden="true">
             ×
           </span>
-          <span>entfernen</span>
+          <span>Entfernen</span>
         </button>
       )}
     </div>

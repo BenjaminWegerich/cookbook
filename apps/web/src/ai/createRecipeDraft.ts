@@ -23,7 +23,7 @@
  *   history is sent again, so the model revises its own draft.
  * - **Live prompt blocks**: {@link AiCreateSession.setSpecifications} replaces
  *   the user's recipe specifications (Typ, Portionen/Ergiebigkeit, Merkmale,
- *   „Die KI soll …“) and {@link AiCreateSession.setContextText} the runtime
+ *   „KI-Verhalten“) and {@link AiCreateSession.setContextText} the runtime
  *   context (used after a sub-recipe was saved mid-conversation). Both only
  *   rebuild the single system message, which is sent anew with every request —
  *   the AiClient contract stays untouched.
