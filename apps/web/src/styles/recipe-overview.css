@@ -37,10 +37,6 @@
   box-shadow: var(--shadow-sm);
 }
 
-.overview-close:active {
-  background: var(--color-surface);
-}
-
 .overview-close svg {
   display: block;
   width: var(--icon-size);
@@ -157,7 +153,8 @@
   font-weight: 600;
 }
 
-.overview-action:active,
+/* Persistent "menu is open" state (the trigger stays highlighted while its menu
+   is on screen). Pressing is handled by the shared overlay in index.css. */
 .overview-action.is-open {
   background: var(--color-line);
 }
@@ -167,10 +164,6 @@
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-on-accent);
-}
-
-.overview-action.is-primary:active {
-  background: var(--color-accent-press);
 }
 
 /*
@@ -229,10 +222,6 @@
   font-weight: 600;
   text-align: start;
   white-space: nowrap;
-}
-
-.overview-menu button:active {
-  background: var(--color-line);
 }
 
 .overview-menu svg {

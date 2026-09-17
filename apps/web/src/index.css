@@ -72,8 +72,18 @@ button {
   cursor: pointer;
 }
 
-button:active:not(:disabled) {
-  background: var(--color-accent-press);
+/* The one pressed look, defined once for every button (see
+   docs/CODING_CONVENTIONS.md, Design Conventions): a translucent ink layer on top
+   of the button's own background. `background-image` (rather than `background`)
+   stacks over whichever fill the button already has, so accent, outline, surface
+   and borderless buttons darken by exactly the same amount and keep their colour
+   identity while pressed. It covers the whole border-box — the light-up traces
+   the click area, not just the label. No transitions: feedback must appear with
+   the finger, not after it.
+   Single exception: `.fab-backdrop`, a full-screen scrim that must not visibly
+   react to the tap that dismisses the create menu. */
+button:active:not(:disabled):not(.fab-backdrop) {
+  background-image: linear-gradient(var(--color-press-overlay), var(--color-press-overlay));
 }
 
 /* Universal "cannot press this right now" look: one definition for every button

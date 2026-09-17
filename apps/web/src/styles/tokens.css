@@ -22,10 +22,8 @@
   --color-ink-muted: #6e6255; /* secondary text */
   --color-line: #e6dbc8; /* hairlines / dividers */
   --color-accent: #b85c38; /* primary clay/terracotta */
-  --color-accent-press: #9d4a2c; /* pressed state */
   --color-olive: #6b7a4a; /* secondary "herb" accent */
   --color-danger: #a63b2c; /* delete / errors */
-  --color-danger-press: #8a2f23; /* pressed state of a filled danger button */
   --color-on-accent: #fffcf6; /* text on accent surfaces */
 
   /* ---- State ------------------------------------------------------------ */
@@ -33,6 +31,14 @@
      (see docs/CODING_CONVENTIONS.md, Design Conventions). The value is
      deliberately mid-range: clearly weaker than normal, still readable. */
   --opacity-disabled: 0.5;
+
+  /* The one pressed look, shared by every button (see docs/CODING_CONVENTIONS.md,
+     Design Conventions): a translucent ink wash painted as a background *layer*
+     on top of whatever the button already is, so a filled, an outlined and a
+     borderless button all react with the same perceptual amount. 12 % reproduces
+     the previously subtle surface wash (--color-line sits at roughly 12–15 % ink),
+     and it always darkens toward the ink — never lightens, never swaps the hue. */
+  --color-press-overlay: color-mix(in srgb, var(--color-ink) 12%, transparent);
 
   /* ---- Typography ------------------------------------------------------- */
   /* Self-hosted via @fontsource (bundled at build, no runtime fetch). */

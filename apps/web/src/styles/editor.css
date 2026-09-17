@@ -181,10 +181,6 @@
   color: var(--color-ink);
 }
 
-.chip:active {
-  background: var(--color-line);
-}
-
 .chip-active {
   background: var(--color-accent);
   border-color: var(--color-accent);
@@ -262,10 +258,6 @@
   border-radius: 50%; /* structural exception to the ladder: full circle */
   font-size: var(--text-lg);
   color: var(--color-ink);
-}
-
-.step-button:active:not(:disabled) {
-  background: var(--color-line);
 }
 
 /* Optical centering for the +/− glyphs inside the circle: grid + line-height
@@ -372,10 +364,6 @@
   content: '';
   position: absolute;
   inset: -5px;
-}
-
-.artifact-remove:active {
-  background: var(--color-line);
 }
 
 /* The cross inside the 18 px button (the shared symbol renders at 24 px
@@ -491,10 +479,6 @@
   line-height: 1;
 }
 
-.icon-button:active:not(:disabled) {
-  background: var(--color-line);
-}
-
 .icon-button.danger-text {
   color: var(--color-danger);
 }
@@ -541,11 +525,6 @@
   color: var(--color-olive);
   font-size: var(--text-md);
   font-weight: 600;
-}
-
-.add-step:active {
-  background: var(--color-olive);
-  color: var(--color-on-accent);
 }
 
 /* ---- Computed ingredient list ------------------------------------------- */
@@ -612,16 +591,8 @@
   cursor: pointer;
 }
 
-.row-remove:active {
-  color: var(--color-ink);
-}
-
 .ref-toggle.on {
   color: var(--color-olive);
-}
-
-.ref-toggle:active:not(:disabled) {
-  background: var(--color-line);
 }
 
 .ingredient-row-button {
@@ -677,10 +648,6 @@
   color: var(--color-on-accent);
   font-size: var(--text-md);
   font-weight: 600;
-}
-
-.danger-button:active:not(:disabled) {
-  background: var(--color-danger-press);
 }
 
 .danger-text {
@@ -751,10 +718,6 @@
   font-size: var(--text-md);
 }
 
-.suggestions button:active {
-  background: var(--color-line);
-}
-
 .aqs-preview {
   /* margin: 0 — like .field-hint: this paragraph often sits directly under a
      .field-label caption, and UA margins would push it far below the caption
@@ -815,10 +778,6 @@
   font-weight: 600;
 }
 
-.primary-button:active:not(:disabled) {
-  background: var(--color-accent-press);
-}
-
 /* Symbols inside labelled buttons (see components/icons.tsx). 18 px (ladder:
    space-6) instead of the 24 px inline size, so a text button keeps its
    height. `display: block` is what centers the glyph on the label's line:
@@ -857,11 +816,6 @@
   color: var(--color-olive);
   font-size: var(--text-md);
   font-weight: 600;
-}
-
-.create-ingredient-button:active {
-  background: var(--color-olive);
-  color: var(--color-on-accent);
 }
 
 .sheet-subtitle {
@@ -959,10 +913,6 @@
   cursor: pointer;
 }
 
-.tag-recipe:active {
-  opacity: 0.85;
-}
-
 /* The reference badge only exists while the star is set, so it needs no own
    "active" variant; olive is the reference colour (same as the star). */
 .tag-reference {
@@ -997,10 +947,6 @@
   content: '';
   position: absolute;
   inset: calc(-1 * var(--space-1));
-}
-
-.tag-remove:active {
-  background: color-mix(in srgb, var(--color-on-accent) 25%, transparent);
 }
 
 .tag-remove-icon {

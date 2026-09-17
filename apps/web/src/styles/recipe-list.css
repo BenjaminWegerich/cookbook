@@ -36,12 +36,6 @@
   font-size: var(--text-sm);
 }
 
-/* Scoped :not(:disabled): the shared button:disabled rule in index.css mutes a
-   disabled button, which must not also show the pressed color. */
-.text-button:active:not(:disabled) {
-  color: var(--color-ink);
-}
-
 /* ---- Recipe search (sticky above the list) ------------------------------ */
 
 .recipe-search {
@@ -126,10 +120,6 @@
   line-height: 1;
 }
 
-.recipe-search-clear:active {
-  color: var(--color-ink);
-}
-
 .recipe-search-empty {
   color: var(--color-ink-muted);
 }
@@ -178,10 +168,6 @@
   color: var(--color-ink);
   text-align: start;
   box-shadow: var(--shadow-sm);
-}
-
-.recipe-card:active {
-  background: var(--color-bg);
 }
 
 .recipe-card-title {
@@ -234,10 +220,6 @@
   box-shadow: var(--shadow-md);
 }
 
-.fab:active {
-  background: var(--color-accent-press);
-}
-
 /* The plus rotates into an × while the create menu is open. */
 .fab .fab-icon {
   transition: transform 180ms ease-out;
@@ -264,9 +246,9 @@
   background: rgba(43, 36, 29, 0.4);
 }
 
-.fab-backdrop:active {
-  background: rgba(43, 36, 29, 0.4);
-}
+/* No rule for this pressed state: the create-menu backdrop is the single button
+   excluded from the shared press overlay in index.css — a full-screen scrim must
+   not visibly react to the tap that dismisses it. */
 
 /* Extended-FAB stack: two accent-colored pills with label + icon, floating
    above the main FAB and right-aligned with it. */
@@ -307,10 +289,6 @@
   font-weight: 600;
   white-space: nowrap;
   box-shadow: var(--shadow-md);
-}
-
-.fab-extended:active {
-  background: var(--color-accent-press);
 }
 
 .fab-extended-icon {

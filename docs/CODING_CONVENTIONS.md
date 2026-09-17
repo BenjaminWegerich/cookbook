@@ -94,13 +94,35 @@
   Escape is the keyboard equivalent of the browser Back button: a screen-level Escape trigger
   is registered only while the screen is the visible one (a hidden-but-mounted sheet, e.g. the
   AI screen under the editor, passes `enabled: false`).
+- **One pressed look for every button: the whole click area gets the same translucent ink wash.**
+  A press is not a second colour per variant but one shared overlay, defined once in `index.css`
+  and driven by a single token: `--color-press-overlay`
+  (`color-mix(in srgb, var(--color-ink) 12%, transparent)`), painted as a background *layer*
+  (`background-image: linear-gradient(...)`) so it stacks on top of whatever fill the button
+  already has — accent, outline, surface or none. A filled clay button, an outlined button and a
+  borderless text button therefore darken by the same perceptual amount and keep their own colour
+  identity while pressed. The wash covers the full border-box (padding included), so the light-up
+  traces the click area and not just the label.
+  - **No per-component pressed states.** Component stylesheets define no `:active` rules at all; a
+    component that seems to need one is a sign that its base look is wrong, not that the press
+    needs a special colour. Variant press tokens (`--color-accent-press`, `--color-danger-press`)
+    are gone for the same reason.
+  - **Always darker toward the ink** — never lighter, never a hue swap, never a whole-button
+    transparency change, never a fill or border swap, and no geometry change (no scale, translate
+    or shadow) while pressed. Feedback appears immediately with the finger, not after a
+    transition; a fade-out on release is allowed but stays ≤ 120 ms.
+  - **Disabled buttons never show it** (`:active:not(:disabled)`), matching the shared unavailable
+    look below.
+  - **One explicit exception, kept in the shared rule:** `.fab-backdrop` is excluded via
+    `:not(.fab-backdrop)` — a full-screen scrim must not visibly react to the tap that dismisses
+    the create menu. Buttons whose fill encodes a persistent state (`.chip-active`,
+    `.tag-reference`, `.overview-action.is-open`) keep that fill and take the same overlay on top.
 - **A button that cannot be pressed right now says so — but only when the reason is already
   visible on screen.** Otherwise it stays fully enabled and explains itself when pressed.
   - **One shared unavailable look, no per-component variants:** every genuinely `disabled`
     button renders with `opacity: var(--opacity-disabled)` and `cursor: default`, and shows no
-    press feedback (the base and per-component `:active` rules are scoped with
-    `:not(:disabled)`). The rule lives once in `index.css`; component stylesheets never define
-    their own `:disabled` styling.
+    press feedback (the shared `:active` rule is scoped with `:not(:disabled)`). The rule lives
+    once in `index.css`; component stylesheets never define their own `:disabled` styling.
   - **Disabling is only allowed when the cause is visible next to the button:** a control at its
     boundary (the first step cannot move up, the quantity sits at the end of its ladder) or an
     input in the same card that is still empty (the API-key field). The label stays unchanged —
