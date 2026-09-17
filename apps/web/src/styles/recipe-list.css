@@ -55,6 +55,18 @@
   background: var(--color-bg);
 }
 
+/* The sticky bar stops one screen padding below the viewport top, so scrolling
+   cards would otherwise stay visible in that gap. Cover it with the page
+   background, so only blank page shows above the search field. */
+.recipe-search::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 100%;
+  height: var(--app-padding);
+  background: var(--color-bg);
+}
+
 .recipe-search-field {
   position: relative;
   min-width: 0;
