@@ -69,7 +69,7 @@
   starting with a capital letter; nouns keep their capitals, nothing else is forced. No
   all-lowercase, no Title Case, no all-caps in the source string — ALL CAPS stays a
   CSS-only effect for data badges and `.field-label`. A leading symbol (`+`, `×`) or icon
-  is not a letter and never replaces the capital (`+ Zutat neu anlegen`, `× Entfernen`);
+  is not a letter and never replaces the capital (`+ Zutat zur Liste`, `× Entfernen`);
   icon-only buttons carry no visible text, only an `aria-label`. A caption above a button
   group is a noun (`.field-label`), never a sentence fragment — so no option ever reads
   as a lowercase sentence continuation.

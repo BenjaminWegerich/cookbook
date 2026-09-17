@@ -3,7 +3,7 @@
  *
  * Decided with the user:
  * - every step carries its own counted ingredient list (rows) that appears
- *   above the step text; rows are added/edited per step ("+ Zutat neu anlegen") and feed
+ *   above the step text; rows are added/edited per step ("+ Zutat zur Liste") and feed
  *   the derived master list (order of first use, duplicates merged with the
  *   total, storage_format.md §4);
  * - the step text is free prose; display-only inline artifacts ("+ Menge im
@@ -1802,7 +1802,7 @@ function RecipeEditor({
                     className="add-ingredient"
                     onClick={() => openSheet({ kind: 'row-add', stepIndex })}
                   >
-                    + Zutat neu anlegen
+                    + Zutat zur Liste
                   </button>
                 </div>
 
@@ -1882,7 +1882,7 @@ function RecipeEditor({
           {computedIngredients.length === 0 ? (
             <p className="empty-hint">
               Die Zutatenliste wird aus den Listen der Zubereitungsschritte zusammengestellt — füge
-              Zutaten über „+ Zutat neu anlegen“ in den Schritten hinzu.
+              Zutaten über „+ Zutat zur Liste“ in den Schritten hinzu.
             </p>
           ) : (
             <>
