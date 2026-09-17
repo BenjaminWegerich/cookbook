@@ -1397,6 +1397,7 @@ function RecipeEditor({
             className="primary-button"
             onClick={() => void handleSave()}
             disabled={saving}
+            aria-busy={saving}
           >
             {saving ? 'Speichert …' : 'Speichern'}
           </button>

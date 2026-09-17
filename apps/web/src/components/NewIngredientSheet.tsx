@@ -406,7 +406,13 @@ function NewIngredientSheet({
           <button type="button" className="text-button" onClick={onClose} disabled={saving}>
             Abbrechen
           </button>
-          <button type="button" className="primary-button" onClick={handleSave} disabled={saving}>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={handleSave}
+            disabled={saving}
+            aria-busy={saving}
+          >
             {saving ? 'Speichert …' : 'Speichern'}
           </button>
         </div>

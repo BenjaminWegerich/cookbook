@@ -72,8 +72,18 @@ button {
   cursor: pointer;
 }
 
-button:active {
+button:active:not(:disabled) {
   background: var(--color-accent-press);
+}
+
+/* Universal "cannot press this right now" look: one definition for every button
+   variant, so no component stylesheet defines its own :disabled styling (see
+   docs/CODING_CONVENTIONS.md, Design Conventions). Muting is only allowed while
+   the reason is visible on screen; a busy button keeps this look and adds an
+   ellipsis label plus aria-busy. */
+button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
 }
 
 /* Visible, warm focus ring for keyboard users. */

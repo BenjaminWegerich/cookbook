@@ -94,3 +94,22 @@
   Escape is the keyboard equivalent of the browser Back button: a screen-level Escape trigger
   is registered only while the screen is the visible one (a hidden-but-mounted sheet, e.g. the
   AI screen under the editor, passes `enabled: false`).
+- **A button that cannot be pressed right now says so — but only when the reason is already
+  visible on screen.** Otherwise it stays fully enabled and explains itself when pressed.
+  - **One shared unavailable look, no per-component variants:** every genuinely `disabled`
+    button renders with `opacity: var(--opacity-disabled)` and `cursor: default`, and shows no
+    press feedback (the base and per-component `:active` rules are scoped with
+    `:not(:disabled)`). The rule lives once in `index.css`; component stylesheets never define
+    their own `:disabled` styling.
+  - **Disabling is only allowed when the cause is visible next to the button:** a control at its
+    boundary (the first step cannot move up, the quantity sits at the end of its ladder) or an
+    input in the same card that is still empty (the API-key field). The label stays unchanged —
+    the muted look alone carries the message.
+  - **A cause that is not local never disables.** When the reason lies elsewhere on the screen
+    (a form with missing fields), the button keeps its full-strength look: pressing it runs the
+    check, shows the validation banner and focuses/scrolls to the first problem. Disabled buttons
+    cannot take focus and are skipped by screen readers, so a muted button that cannot explain
+    itself is a dead end.
+  - **Busy is a second label, not a second look.** While a save / send / delete is running, the
+    button keeps the one unavailable look, swaps in an ellipsis label (`Speichert …`,
+    `Senden …`) and sets `aria-busy="true"`. The ellipsis means "running", never "not allowed".

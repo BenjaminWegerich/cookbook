@@ -28,6 +28,12 @@
   --color-danger-press: #8a2f23; /* pressed state of a filled danger button */
   --color-on-accent: #fffcf6; /* text on accent surfaces */
 
+  /* ---- State ------------------------------------------------------------ */
+  /* The one "cannot press this right now" look, used by every disabled button
+     (see docs/CODING_CONVENTIONS.md, Design Conventions). The value is
+     deliberately mid-range: clearly weaker than normal, still readable. */
+  --opacity-disabled: 0.5;
+
   /* ---- Typography ------------------------------------------------------- */
   /* Self-hosted via @fontsource (bundled at build, no runtime fetch). */
   --font-sans: 'Source Sans 3 Variable', 'Source Sans 3', system-ui, sans-serif;

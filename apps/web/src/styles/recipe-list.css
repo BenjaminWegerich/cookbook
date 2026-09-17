@@ -36,7 +36,9 @@
   font-size: var(--text-sm);
 }
 
-.text-button:active {
+/* Scoped :not(:disabled): the shared button:disabled rule in index.css mutes a
+   disabled button, which must not also show the pressed color. */
+.text-button:active:not(:disabled) {
   color: var(--color-ink);
 }
 

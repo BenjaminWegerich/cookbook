@@ -885,7 +885,12 @@ export default function AiCreateSheet({
                   </p>
                 )}
                 <div className="sheet-actions">
-                  <button type="submit" className="primary-button" disabled={!canSend}>
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={!canSend}
+                    aria-busy={busy || refreshing}
+                  >
                     {busy ? 'Senden …' : refreshing ? 'Kontext wird aktualisiert …' : 'Senden'}
                   </button>
                 </div>

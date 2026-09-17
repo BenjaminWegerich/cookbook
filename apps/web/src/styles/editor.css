@@ -280,10 +280,6 @@
   transform: translateY(1px);
 }
 
-.step-button:disabled {
-  opacity: 0.4;
-}
-
 .quantity-value {
   min-width: 74px;
   text-align: center;
@@ -495,13 +491,8 @@
   line-height: 1;
 }
 
-.icon-button:active {
+.icon-button:active:not(:disabled) {
   background: var(--color-line);
-}
-
-.icon-button:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .icon-button.danger-text {
@@ -629,13 +620,8 @@
   color: var(--color-olive);
 }
 
-.ref-toggle:active {
+.ref-toggle:active:not(:disabled) {
   background: var(--color-line);
-}
-
-.ref-toggle:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 
 .ingredient-row-button {
@@ -695,10 +681,6 @@
 
 .danger-button:active:not(:disabled) {
   background: var(--color-danger-press);
-}
-
-.danger-button:disabled {
-  opacity: 0.5;
 }
 
 .danger-text {
@@ -835,10 +817,6 @@
 
 .primary-button:active:not(:disabled) {
   background: var(--color-accent-press);
-}
-
-.primary-button:disabled {
-  opacity: 0.5;
 }
 
 /* Symbols inside labelled buttons (see components/icons.tsx). 18 px (ladder:

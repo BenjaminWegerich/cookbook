@@ -272,7 +272,9 @@ const STYLES = `
   .step-nav { display: flex; align-items: center; gap: 0.8rem; margin-top: 1rem; }
   .step-nav button { font: inherit; padding: 0.6rem 1rem; border-radius: 0.4rem;
                      border: 1px solid #888; background: transparent; }
-  .step-nav button:disabled { opacity: 0.4; }
+  /* Same unavailable look as the app (--opacity-disabled is a web-app token;
+     the self-contained export copies the value). */
+  .step-nav button:disabled { opacity: 0.5; cursor: default; }
   footer { margin-top: 2rem; color: #888; font-size: 0.85rem; }
   [hidden] { display: none !important; }
 `;
