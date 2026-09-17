@@ -9,15 +9,19 @@
  * - modal bottom sheet over the list (not a full-screen view);
  * - large square 1:1 photo (recipe photos are stored square, nothing is cropped);
  * - times (Arbeitszeit / Gesamtzeit) are shown, but not servings/yield or type;
- * - one action row with three equally weighted buttons, each symbol + text:
- *   "Kochen" (pot), "Zur Liste" (list with plus) and "Bearbeiten" (pencil).
+ * - one action row: "Kochen" (pot) and "Zur Liste" (list with plus) as label
+ *   buttons, plus a compact "Mehr" button (vertical three dots) that only takes
+ *   the width of its own label. Decided with the user: on a narrow phone the
+ *   third, equally wide "Bearbeiten" column was the longest label in the row and
+ *   wrapped to two lines, which made the whole row taller. The overflow button
+ *   is content-sized instead, so all three fit even at 320 px.
  *   "Kochen" and "Zur Liste" are placeholders for now: they report that the
  *   feature is not built yet instead of silently doing nothing.
- * - "Bearbeiten" opens a small sub-menu (popover above the row) that will hold
- *   the manual and the AI edit path; the downward triangle in the button is the
- *   affordance for it. "Manuell" opens the editor, "Mit KI" is still a
- *   placeholder. The sub-menu is closed by an outside tap, Escape and any
- *   chosen entry.
+ * - "Mehr" opens the actions that do not earn a full row column as a small
+ *   popover above the row: "Manuell bearbeiten" opens the editor, "Mit KI
+ *   bearbeiten" is still a placeholder. The kebab itself is the affordance, and
+ *   the entries carry the full wording because the trigger no longer names the
+ *   feature. The menu is closed by an outside tap, Escape and any chosen entry.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -29,9 +33,9 @@ import { displayTimeText, type Recipe } from '@cookbook/core';
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import {
-  CaretDownIcon,
   CloseIcon,
   ListPlusIcon,
+  MoreVertIcon,
   PencilIcon,
   SkilletIcon,
   SparkleIcon,
@@ -45,7 +49,7 @@ interface RecipeOverviewProps {
   recipe: StoredRecipe;
   /** Closes the sheet (backdrop, close button, browser Back). */
   onClose: () => void;
-  /** Opens the recipe in the editor ("Bearbeiten" → "Manuell"). */
+  /** Opens the recipe in the editor ("Mehr" → "Manuell bearbeiten"). */
   onEdit: (recipe: StoredRecipe) => void;
 }
 
@@ -61,12 +65,12 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
   /** Feedback line for the placeholder actions (null = nothing tapped yet). */
   const [notice, setNotice] = useState<string | null>(null);
   /**
-   * The "Bearbeiten" sub-menu (popover above the action row). Closed by an
+   * The "Mehr" overflow menu (popover above the action row). Closed by an
    * outside tap, Escape, choosing an entry or closing the whole sheet.
    */
-  const [editMenuOpen, setEditMenuOpen] = useState(false);
-  /** The "Bearbeiten" button + popover: the wrapper the outside-tap check uses. */
-  const editWrapRef = useRef<HTMLDivElement | null>(null);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  /** The "Mehr" button + popover: the wrapper the outside-tap check uses. */
+  const moreWrapRef = useRef<HTMLDivElement | null>(null);
 
   // Read the recipe file for the details the list entry does not carry. The
   // sheet unmounts when it closes, so every open starts from the initial null
@@ -92,51 +96,51 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
   // close it as well. No confirmation: the overview is read-only.
   useEscapeTrigger(onClose);
 
-  // Escape closes the sub-menu before it reaches the sheet: the shared escape
-  // trigger closes whatever layer it is wired to, so the popover installs its
-  // own listener (capture) that consumes the key while it is open. The cleanup
-  // order guarantees the menu listener is removed before the sheet's.
+  // Escape closes the overflow menu before it reaches the sheet: the shared
+  // escape trigger closes whatever layer it is wired to, so the popover installs
+  // its own listener (capture) that consumes the key while it is open. The
+  // cleanup order guarantees the menu listener is removed before the sheet's.
   useEffect(() => {
-    if (!editMenuOpen) return;
+    if (!moreMenuOpen) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        setEditMenuOpen(false);
+        setMoreMenuOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => {
       window.removeEventListener('keydown', onKeyDown, { capture: true });
     };
-  }, [editMenuOpen]);
+  }, [moreMenuOpen]);
 
-  // A tap anywhere outside the sub-menu (and outside its trigger) closes it.
-  // This runs after the click finished its own handling, so the tapped element
-  // — the sheet's close button, the backdrop, another action — still does its
-  // job once and only the menu additionally closes (decided with the user:
-  // progressive dismissal, the tap is never swallowed).
+  // A tap anywhere outside the overflow menu (and outside its trigger) closes
+  // it. This runs after the click finished its own handling, so the tapped
+  // element — the sheet's close button, the backdrop, another action — still
+  // does its job once and only the menu additionally closes (decided with the
+  // user: progressive dismissal, the tap is never swallowed).
   useEffect(() => {
-    if (!editMenuOpen) return;
+    if (!moreMenuOpen) return;
     const onDocumentClick = (event: MouseEvent): void => {
       const target = event.target;
-      if (target instanceof Node && editWrapRef.current?.contains(target) === true) return;
-      setEditMenuOpen(false);
+      if (target instanceof Node && moreWrapRef.current?.contains(target) === true) return;
+      setMoreMenuOpen(false);
     };
     document.addEventListener('click', onDocumentClick);
     return () => {
       document.removeEventListener('click', onDocumentClick);
     };
-  }, [editMenuOpen]);
+  }, [moreMenuOpen]);
 
   /** Reports a not-yet-built action instead of letting the tap do nothing. */
   const notBuiltYet = (label: string): void => {
     setNotice(`„${label}“ folgt in einer späteren Version.`);
   };
 
-  /** "Manuell": closes the sub-menu and hands over to the editor. */
+  /** "Manuell bearbeiten": closes the menu and hands over to the editor. */
   const openManualEdit = (): void => {
-    setEditMenuOpen(false);
+    setMoreMenuOpen(false);
     onEdit(recipe);
   };
 
@@ -217,10 +221,10 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           )}
         </div>
 
-        {/* One action row: three equally weighted buttons, each symbol + text.
-            "Bearbeiten" opens its sub-menu as a popover directly above the row,
-            so the sub-menu sits next to its trigger instead of floating
-            anywhere in the sheet. */}
+        {/* One action row: "Kochen" and "Zur Liste" as label buttons plus the
+            content-sized "Mehr" overflow button. "Mehr" opens its menu as a
+            popover directly above the row, so the menu sits next to its trigger
+            instead of floating anywhere in the sheet. */}
         <div className="overview-actions">
           <button
             type="button"
@@ -238,35 +242,34 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
             <ListPlusIcon />
             <span>Zur Liste</span>
           </button>
-          <div className="overview-edit" ref={editWrapRef}>
+          <div className="overview-more" ref={moreWrapRef}>
             <button
               type="button"
-              className={editMenuOpen ? 'overview-action is-open' : 'overview-action'}
+              className={moreMenuOpen ? 'overview-action is-open' : 'overview-action'}
               aria-haspopup="menu"
-              aria-expanded={editMenuOpen}
-              onClick={() => setEditMenuOpen((open) => !open)}
+              aria-expanded={moreMenuOpen}
+              onClick={() => setMoreMenuOpen((open) => !open)}
             >
-              <PencilIcon />
-              <span>Bearbeiten</span>
-              <CaretDownIcon />
+              <MoreVertIcon />
+              <span>Mehr</span>
             </button>
 
-            {editMenuOpen && (
-              <div className="overview-menu" role="menu" aria-label="Bearbeiten">
+            {moreMenuOpen && (
+              <div className="overview-menu" role="menu" aria-label="Weitere Aktionen">
                 <button type="button" role="menuitem" onClick={openManualEdit}>
                   <PencilIcon />
-                  <span>Manuell</span>
+                  <span>Manuell bearbeiten</span>
                 </button>
                 <button
                   type="button"
                   role="menuitem"
                   onClick={() => {
-                    setEditMenuOpen(false);
+                    setMoreMenuOpen(false);
                     notBuiltYet('Mit KI bearbeiten');
                   }}
                 >
                   <SparkleIcon />
-                  <span>Mit KI</span>
+                  <span>Mit KI bearbeiten</span>
                 </button>
               </div>
             )}

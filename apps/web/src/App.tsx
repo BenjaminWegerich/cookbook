@@ -64,7 +64,7 @@ const GIS_POLL_INTERVAL_MS = 200;
  * States: login (not connected), loading, error, empty collection, and the
  * recipe list (adaptive card grid with square photos). The floating action
  * button opens the create menu (manual / AI); a tap on a recipe card opens the
- * recipe overview sheet, whose "Bearbeiten → Manuell" entry opens the editor.
+ * recipe overview sheet, whose "Mehr → Manuell bearbeiten" entry opens the editor.
  * UI language is German
  * (see docs/CODING_CONVENTIONS.md).
  */
@@ -572,7 +572,7 @@ function App() {
 
       {/* The overview is a sheet over the list (not a screen of its own), so it
           renders as a sibling of the list branch and only while the list is the
-          visible base. "Bearbeiten → Manuell" replaces the sheet with the editor. */}
+          visible base. "Mehr → Manuell bearbeiten" replaces the sheet with the editor. */}
       {!editorOpen &&
         !aiCreateOpen &&
         overviewOpen &&
