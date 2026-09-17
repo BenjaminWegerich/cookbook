@@ -35,7 +35,7 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 - [ ] AI edit: fill gaps / correct units, preview + accept or reject (user story A3).
 - [x] AI workflow refinements:
       - [x] More entry fields: servings, „schnell und einfach“ / „günstig“ / „vegan“.
-      - [x] Wire the entry fields (Typ, Portionen/Ergiebigkeit, Vorgaben, „Die KI soll …“)
+      - [x] Wire the entry fields (Typ, Portionen/Ergiebigkeit, Vorgaben, „KI-Verhalten“)
             into the AI prompt.
       - [x] Choose between asking clarifying questions first vs. drafting directly.
       - [x] Resume the chat after a draft has been created: change requests go to the AI, and a
