@@ -46,7 +46,7 @@ const ICON_PROPS = {
   focusable: 'false',
 } as const;
 
-/** Skillet — the "Kochen" action. */
+/** Skillet — the "Jetzt kochen" action. */
 export function SkilletIcon({ className }: IconProps) {
   return (
     <svg className={className} {...ICON_PROPS}>

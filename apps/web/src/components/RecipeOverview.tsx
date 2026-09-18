@@ -9,14 +9,17 @@
  * - modal bottom sheet over the list (not a full-screen view);
  * - large square 1:1 photo (recipe photos are stored square, nothing is cropped);
  * - times (Arbeitszeit / Gesamtzeit) are shown, but not servings/yield or type;
- * - one action row: "Kochen" (pot) and "Zur Liste hinzufügen" (list with plus)
- *   as label buttons, plus a compact "Mehr" button (vertical three dots) that only
- *   takes the width of its own label. Decided with the user: on a narrow phone the
- *   third, equally wide "Bearbeiten" column was the longest label in the row and
- *   wrapped to two lines, which made the whole row taller. The overflow button
- *   is content-sized instead, so all three fit even at 320 px.
- *   "Kochen" and "Zur Liste hinzufügen" are placeholders for now: they report that
- *   the feature is not built yet instead of silently doing nothing.
+ * - two action rows: "Jetzt kochen" (pot) as the primary action across the full
+ *   width, then "Zur Liste hinzufügen" (list with plus) and the "Mehr" button
+ *   (vertical three dots). Decided with the user: while all three sat in one row,
+ *   the even split gave "Kochen" as much room as the much longer "Zur Liste
+ *   hinzufügen", which wrapped to two lines on a narrow phone; the primary now
+ *   owns its own row. The two buttons of the second row share its leftover width
+ *   equally (decided with the user), so both labels sit on the same cushion —
+ *   before, the stretched label had far more air around it than "Mehr", which
+ *   only had its own padding.
+ *   "Jetzt kochen" and "Zur Liste hinzufügen" are placeholders for now: they
+ *   report that the feature is not built yet instead of silently doing nothing.
  * - "Mehr" opens the actions that do not earn a full row column as a small
  *   popover above the row: "Manuell bearbeiten" opens the editor, "Mit KI
  *   bearbeiten" is still a placeholder. The kebab itself is the affordance, and
@@ -221,18 +224,20 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           )}
         </div>
 
-        {/* One action row: "Kochen" and "Zur Liste hinzufügen" as label buttons
-            plus the content-sized "Mehr" overflow button. "Mehr" opens its menu
-            as a popover directly above the row, so the menu sits next to its
-            trigger instead of floating anywhere in the sheet. */}
+        {/* Two action rows (decided with the user): "Jetzt kochen" is the
+            primary action and spans the full width; "Zur Liste hinzufügen" and
+            the "Mehr" overflow button share the row below and split its leftover
+            width equally. "Mehr" opens its menu as a popover directly above the
+            row, so the menu sits next to its trigger instead of floating
+            anywhere in the sheet. */}
         <div className="overview-actions">
           <button
             type="button"
             className="overview-action is-primary"
-            onClick={() => notBuiltYet('Kochen')}
+            onClick={() => notBuiltYet('Jetzt kochen')}
           >
             <SkilletIcon />
-            <span>Kochen</span>
+            <span>Jetzt kochen</span>
           </button>
           <button
             type="button"

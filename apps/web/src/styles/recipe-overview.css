@@ -123,17 +123,25 @@
 
 /* ---- Actions ------------------------------------------------------------- */
 
-/* One row: "Kochen", "Zur Liste hinzufügen" and the "Mehr" overflow button, each
-   symbol + text. "Kochen" (accent fill, white text) and "Zur Liste hinzufügen"
-   share the space evenly; "Mehr" takes only the width of its own label (`auto`
-   column), because it is the shortest label and must not force the other two to
-   wrap — with three equal columns the long "Bearbeiten" label wrapped to two
-   lines on a phone and made the whole row taller. The label size matches the
+/* Two rows, each symbol + text. "Jetzt kochen" is the sheet's one primary
+   action and takes a row of its own; below it "Zur Liste hinzufügen" and the
+   "Mehr" overflow button split the second row's leftover width equally
+   (`flex: 1 1 auto` on both). Decided with the user: in the previous single row
+   of two equal 1fr columns plus `auto`, the even split ignored that "Zur Liste
+   hinzufügen" needs roughly twice the room of "Kochen" — on a narrow phone it
+   wrapped to two lines — and all three buttons carried the same visual weight
+   although "Jetzt kochen" is the main action. Decided with the user on top of
+   that: the second row's free width is shared between its two buttons instead of
+   going wholly to the label button, because a stretched label sat on ~30-57 px
+   of air per side while the content-sized "Mehr" had only its own padding — two
+   different cushions on one row. Equal growth keeps the row filled edge to edge
+   and gives both labels the same cushion at every width; the leftover, not the
+   labels, is what shrinks as the viewport narrows. The label size matches the
    overflow menu (one body step below the 18 px body size) — the row and its menu
    must not look like two different scales. */
 .overview-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap; /* the full-basis primary owns the first line */
   gap: var(--space-2);
 }
 
@@ -142,7 +150,11 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  width: 100%;
+  /* Content width plus an equal share of the row's leftover space: as the only
+     item of its line the primary stretches across the full width, and in the
+     second line both buttons grow by the same amount, so neither label ends up
+     with more air around it than the other. */
+  flex: 1 1 auto;
   min-height: 42px; /* ladder: thumb-reachable action height */
   padding: var(--space-2);
   background: var(--color-surface);
@@ -159,8 +171,11 @@
   background: var(--color-line);
 }
 
-/* The primary action (Kochen): accent fill, white label and symbol. */
+/* The primary action (Jetzt kochen): accent fill, white label and symbol. Its
+   full-width basis fills the first line on its own, so the two secondary actions
+   start on the next one (see the row comment above). */
 .overview-action.is-primary {
+  flex: 1 1 100%;
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-on-accent);
@@ -180,18 +195,20 @@
 }
 
 /* Wrapper of the "Mehr" button + its overflow menu: the menu anchors to it, so
-   it participates in the action row's `auto` column (only as wide as the
-   button). The vertical three dots are the affordance for the menu — unlike the
-   label buttons this one carries no caret. */
+   it is the second item of the action row and grows with the same share of the
+   leftover width as the label button next to it (`flex: 1 1 auto`); the button
+   inside fills the wrapper. The vertical three dots are the affordance for the
+   menu — unlike the label buttons this one carries no caret. */
 .overview-more {
   position: relative;
   display: grid;
+  flex: 1 1 auto;
 }
 
 /* The overflow menu pops directly above its trigger instead of floating
    anywhere in the sheet: the entry a tap lands on is always the one next to
    the button just pressed. Right-aligned to the trigger, which is the last
-   column of the action row. An outside tap closes it (document listener in
+   item of the action row. An outside tap closes it (document listener in
    the component), so no backdrop layer is needed. */
 .overview-menu {
   position: absolute;
