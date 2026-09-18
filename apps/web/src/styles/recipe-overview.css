@@ -19,7 +19,9 @@
 
 /* Circular close button in the top-right corner of the sheet, level with the
    hero. The hero is narrower than the sheet, so the button sits on the plain
-   sheet surface — the hairline border keeps it visible against it. */
+   sheet surface and takes the opaque surface token like every other surface
+   (docs/CODING_CONVENTIONS.md, Design Conventions); the hairline border keeps it
+   visible against that same-coloured sheet. */
 .overview-close {
   position: absolute;
   top: var(--space-6);
@@ -32,7 +34,7 @@
   padding: 0;
   border: 1px solid var(--color-line);
   border-radius: 50%; /* structural exception to the ladder: full circle */
-  background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+  background: var(--color-surface);
   color: var(--color-ink);
   box-shadow: var(--shadow-sm);
 }

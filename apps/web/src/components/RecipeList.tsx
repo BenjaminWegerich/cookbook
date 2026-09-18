@@ -47,17 +47,20 @@ function RecipeList({ recipes, token, onOpenRecipe }: RecipeListProps) {
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Rezept suchen"
           />
+          {/* The clear button is an overlay inside the field, not a second grid
+              column: the field keeps the full content width (the same width as
+              the recipe grid below) whether or not the button is shown. */}
+          {query !== '' && (
+            <button
+              type="button"
+              className="recipe-search-clear"
+              aria-label="Suche löschen"
+              onClick={() => setQuery('')}
+            >
+              ×
+            </button>
+          )}
         </div>
-        {query !== '' && (
-          <button
-            type="button"
-            className="recipe-search-clear"
-            aria-label="Suche löschen"
-            onClick={() => setQuery('')}
-          >
-            ×
-          </button>
-        )}
       </div>
 
       {filtered.length === 0 ? (

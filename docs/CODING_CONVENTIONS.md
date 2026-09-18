@@ -38,6 +38,16 @@
   `100%` radii (circles, e.g. the floating action button).
 - **Single source of truth:** design tokens live in `apps/web/src/styles/tokens.css` as CSS
   custom properties; components reference the tokens, never raw values.
+- **Surfaces are flat, filled and opaque.** Every surface — page, card, sticky bar,
+  sheet — is one fully opaque colour from the token palette, painted over its whole
+  footprint, edge to edge. Nothing shows through a surface: no translucent or gradient
+  surface fills and no blur. A bar that sticks over scrolling content (the recipe search,
+  the editor header) therefore covers the screen gutters too (negative inline margin plus
+  the app padding as its own) and masks the gap it leaves above itself, so a card
+  scrolling up can never peek around the bar's left or right edge. Translucency stays
+  reserved for the layers that are *meant* to lie over content: the shared press wash
+  (`--color-press-overlay`), the modal scrims (`.fab-backdrop`, `.sheet-backdrop`) and the
+  warm shadows.
 - **Warm palette:** warm, appetizing colors ("kitchen / durable surfaces"); no cold or blue
   hues. Primary text is espresso ink, accents are clay/terracotta and olive.
 - **Typography:** readability first; body text is `18px` (the ladder has no `16px`). One

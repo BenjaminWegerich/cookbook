@@ -42,18 +42,22 @@
   position: sticky;
   top: var(--app-padding);
   z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: var(--space-2);
+  /* Full-bleed surface: the negative inline margin + the app padding as its own
+     makes the bar paint edge to edge. A bar that sticks over scrolling content
+     must cover its whole footprint, screen gutters included — otherwise the
+     cards scrolling up peek past its left and right edge and the surface looks
+     slightly see-through. Flat, filled and opaque (see the "Surfaces are flat,
+     filled and opaque" rule in docs/CODING_CONVENTIONS.md). */
+  margin-inline: calc(-1 * var(--app-padding));
+  padding: var(--space-2) var(--app-padding);
   margin-block-end: var(--space-7);
-  padding-block: var(--space-2);
   background: var(--color-bg);
 }
 
 /* The sticky bar stops one screen padding below the viewport top, so scrolling
    cards would otherwise stay visible in that gap. Cover it with the page
-   background, so only blank page shows above the search field. */
+   background — full-bleed like the bar itself, so only blank page shows above
+   the search field. */
 .recipe-search::before {
   content: '';
   position: absolute;
@@ -63,9 +67,10 @@
   background: var(--color-bg);
 }
 
+/* Positioning context for the input's two overlays (the search icon and the
+   clear button); the field itself is a plain block and spans the full width. */
 .recipe-search-field {
   position: relative;
-  min-width: 0;
 }
 
 .recipe-search-icon {
@@ -83,7 +88,10 @@
 .recipe-search-input {
   font: inherit;
   width: 100%;
-  padding: var(--space-4) var(--space-6) var(--space-4) calc(var(--space-6) + var(--icon-size));
+  /* The inline-end padding reserves the clear button's overlay (space-2 inset +
+     space-9 button + space-2 gap), so the value never runs underneath it. */
+  padding: var(--space-4) calc(var(--space-2) + var(--space-9) + var(--space-2)) var(--space-4)
+    calc(var(--space-6) + var(--icon-size));
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -105,14 +113,22 @@
   appearance: none;
 }
 
-/* Match the input's vertical rhythm and padding on the clear button. */
+/* Overlays the input's right end instead of owning a grid column: the field
+   keeps the full content width (exactly the width of the recipe grid below)
+   with or without the button, and the surface stays one flat fill — the button
+   paints no background of its own, only the shared press overlay. Its size is
+   a ladder value, small enough to sit inside the input. */
 .recipe-search-clear {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  translate: 0 -50%;
   display: grid;
   place-items: center;
-  width: var(--thumb-size);
-  height: var(--thumb-size);
+  width: var(--space-9); /* 42 px — ladder value */
+  height: var(--space-9);
   padding: 0;
-  background: var(--color-bg);
+  background: none;
   color: var(--color-ink-muted);
   border: none;
   border-radius: var(--radius-sm);

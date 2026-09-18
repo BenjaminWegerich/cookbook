@@ -73,7 +73,6 @@
   /* ---- Layout constants -------------------------------------------------- */
   --app-padding: 18px; /* screen gutters */
   --fab-size: 56px; /* floating action button */
-  --thumb-size: 56px; /* clear button on the search field (was the list thumbnail) */
   --icon-size: 24px; /* inline icons */
 
   /* ---- Letter-avatar palette --------------------------------------------- */
