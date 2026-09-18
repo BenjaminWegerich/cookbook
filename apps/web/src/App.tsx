@@ -20,6 +20,7 @@ import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClie
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
 import { useEscapeTrigger } from './hooks/useLeaveGuard';
+import { useScrollMemory } from './hooks/useScrollMemory';
 import './styles/ai-create.css';
 import './styles/recipe-list.css';
 import './styles/recipe-overview.css';
@@ -48,6 +49,17 @@ function isScreenEntry(state: unknown): boolean {
     state !== null &&
     (state as { appScreen?: unknown }).appScreen === SCREEN_MARKER
   );
+}
+
+/**
+ * Scroll-memory key of one editor level (see useScrollMemory): level 0 is the
+ * base editor, levels 1..n are the sub-recipe levels in the order of
+ * `editorSubRecipes`. Levels are a stack, so the index alone identifies a page
+ * instance within one open chain; a popped level is forgotten, which is what
+ * makes a later jump to the same recipe open at the top again.
+ */
+function editorLevelKey(level: number): string {
+  return `editor:${level}`;
 }
 
 /** Auto-login on page load waits at most this long for the async-loaded GIS
@@ -146,6 +158,20 @@ function App() {
   const authRecoveryRef = useRef(false);
 
   /**
+   * The full-screen page that owns the window scroll right now, for the scroll
+   * memory below. Only pages that replace the whole viewport get their own key:
+   * the sheets that overlay the list (overview, create menu) keep the list key,
+   * so opening them never scrolls the list behind them.
+   */
+  const visiblePageKey = editorOpen
+    ? editorLevelKey(editorSubRecipes.length)
+    : aiCreateOpen
+      ? 'ai'
+      : 'list';
+  /** Remembers/restores the window scroll per page (see useScrollMemory). */
+  const scrollMemory = useScrollMemory(visiblePageKey);
+
+  /**
    * The imperative handle of the editor level currently on top (the deepest
    * mounted sub-recipe, or the base editor). Called from the popstate listener,
    * so it reads the ref array directly — the highest non-null slot is the
@@ -163,11 +189,34 @@ function App() {
   /**
    * Replaces the open sub-recipe levels and keeps the ref mirror in sync, so the
    * synchronous handlers (popstate, jump) see the current stack immediately.
+   * Dropped levels are page instances that no longer exist, so their remembered
+   * scroll is forgotten: jumping to the same recipe again opens it at the top.
    */
-  const replaceSubRecipes = useCallback((next: StoredRecipe[]): void => {
-    editorSubRecipesRef.current = next;
-    setEditorSubRecipes(next);
-  }, []);
+  const replaceSubRecipes = useCallback(
+    (next: StoredRecipe[]): void => {
+      // The level that is on top right now is still visible: capture its offset
+      // before this commit hides it (see useScrollMemory).
+      scrollMemory.remember();
+      const previous = editorSubRecipesRef.current;
+      for (let level = next.length + 1; level <= previous.length; level += 1) {
+        scrollMemory.forget(editorLevelKey(level));
+      }
+      editorSubRecipesRef.current = next;
+      setEditorSubRecipes(next);
+    },
+    [scrollMemory],
+  );
+
+  /**
+   * Starts a fresh editor chain (from the list, the overview or the AI
+   * conversation). The base level is a new page instance, so its remembered
+   * scroll is dropped and it opens at the top; `replaceSubRecipes([])` also
+   * drops the levels of a previous chain. Both editor entry points share this.
+   */
+  const startEditorChain = useCallback((): void => {
+    scrollMemory.forget(editorLevelKey(0));
+    replaceSubRecipes([]);
+  }, [replaceSubRecipes, scrollMemory]);
 
   /**
    * Switches the visible layer and keeps the browser history in sync so the
@@ -177,36 +226,42 @@ function App() {
    * - screen → list: pop via history.back() — the popstate listener then
    *   finds the layer already closed and does nothing.
    */
-  const setNav = useCallback((next: TopScreen | null): void => {
-    const prev = navRef.current;
-    navRef.current = next;
-    if (next === prev) {
-      return;
-    }
-    setEditorOpen(next === 'editor');
-    // The AI-create conversation stays mounted (hidden) while its own draft is
-    // opened in the editor: transcript, AI context and Vorgaben survive the
-    // trip, so saving a Zutaten-Rezept there can continue the same chat.
-    setAiCreateOpen(next === 'ai' || (next === 'editor' && prev === 'ai'));
-    setCreateMenuOpen(next === 'menu');
-    setOverviewOpen(next === 'overview');
-    if (prev === null) {
-      if (next === null) {
+  const setNav = useCallback(
+    (next: TopScreen | null): void => {
+      const prev = navRef.current;
+      navRef.current = next;
+      if (next === prev) {
         return;
       }
-      // Collapse a stale screen entry (e.g. left behind by a browser Forward)
-      // instead of stacking a duplicate on top of it.
-      if (isScreenEntry(window.history.state)) {
-        window.history.replaceState({ appScreen: SCREEN_MARKER }, '');
+      // The screen that is visible right now is still in the DOM: capture its
+      // scroll offset before this commit replaces it (see useScrollMemory).
+      scrollMemory.remember();
+      setEditorOpen(next === 'editor');
+      // The AI-create conversation stays mounted (hidden) while its own draft is
+      // opened in the editor: transcript, AI context and Vorgaben survive the
+      // trip, so saving a Zutaten-Rezept there can continue the same chat.
+      setAiCreateOpen(next === 'ai' || (next === 'editor' && prev === 'ai'));
+      setCreateMenuOpen(next === 'menu');
+      setOverviewOpen(next === 'overview');
+      if (prev === null) {
+        if (next === null) {
+          return;
+        }
+        // Collapse a stale screen entry (e.g. left behind by a browser Forward)
+        // instead of stacking a duplicate on top of it.
+        if (isScreenEntry(window.history.state)) {
+          window.history.replaceState({ appScreen: SCREEN_MARKER }, '');
+        } else {
+          window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+        }
+      } else if (next === null) {
+        window.history.back();
       } else {
-        window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+        window.history.replaceState({ appScreen: SCREEN_MARKER }, '');
       }
-    } else if (next === null) {
-      window.history.back();
-    } else {
-      window.history.replaceState({ appScreen: SCREEN_MARKER }, '');
-    }
-  }, []);
+    },
+    [scrollMemory],
+  );
 
   /** Refreshes the recipe list from the Google Drive recipe folder. */
   const refreshRecipes = useCallback(async (activeToken: string): Promise<void> => {
@@ -265,6 +320,11 @@ function App() {
   // cancel the pop.
   useEffect(() => {
     const onPopState = (): void => {
+      // A Back / Forward may change the visible page below: capture the offset
+      // of the page that is on screen right now while it still is (see
+      // useScrollMemory). A pop that an inner layer consumes only re-stores the
+      // same offset and changes no key.
+      scrollMemory.remember();
       const top = navRef.current;
       if (top === null) {
         // A screen entry must not outlive its (now closed) screen — this can
@@ -327,7 +387,9 @@ function App() {
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+    // `scrollMemory` is referentially stable (memoized by the hook), so the
+    // listener is registered once.
+  }, [scrollMemory]);
 
   // Escape closes the FAB create menu. It is the keyboard equivalent of the
   // menu's backdrop tap and of the browser Back button (which App's popstate
@@ -450,11 +512,11 @@ function App() {
     (recipe: StoredRecipe | null): void => {
       editorOriginRef.current = 'list';
       pendingDraftRef.current = null;
-      replaceSubRecipes([]);
+      startEditorChain();
       showInEditor(recipe, null);
       setNav('editor');
     },
-    [setNav, showInEditor, replaceSubRecipes],
+    [setNav, showInEditor, startEditorChain],
   );
 
   /** Opens the editor prefilled with an AI-created draft (new recipe). */
@@ -463,11 +525,11 @@ function App() {
       // Remembered so saving the draft can hand it back to the conversation.
       editorOriginRef.current = 'ai';
       pendingDraftRef.current = recipe;
-      replaceSubRecipes([]);
+      startEditorChain();
       showInEditor(null, recipe);
       setNav('editor');
     },
-    [setNav, showInEditor, replaceSubRecipes],
+    [setNav, showInEditor, startEditorChain],
   );
 
   /**

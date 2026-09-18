@@ -107,6 +107,16 @@
   (`hidden` on a plain wrapper, plus `visible` to gate Escape). A jump therefore never discards
   unsaved work — Back / „Zurück" reveals the parent level again with its draft intact, and the
   discard confirmation belongs to the level being left, not to the jump.
+- **Scroll position belongs to the page, not to the window:** opening a page starts at the
+  top, and returning to a page reveals it exactly where it was left. The app swaps pages in
+  place in one document, so the browser's single window offset would otherwise carry over;
+  App therefore tracks it per page (`useScrollMemory`, keys `list` / `ai` /
+  `editor:<level>`) and restores it in a layout effect before paint. The navigation handlers
+  capture the leaving page's offset before they change the visible page, and the browser's
+  own history scroll restoration stays off (`scrollRestoration = 'manual'`). A page instance
+  that no longer exists (a popped sub-recipe level) is forgotten, so opening the same recipe
+  again starts at the top. Sheets that overlay the list (recipe overview, create menu) keep
+  the list's key — they never move the list scroll behind them.
 - **The exit guard is shared by every exit trigger (`useLeaveGuard`):** a screen with unsaved
   work asks its "Änderungen verwerfen?" confirmation through this one hook — never with its own
   dirty check — so all five triggers behave identically: the header's „Zurück" button, a
