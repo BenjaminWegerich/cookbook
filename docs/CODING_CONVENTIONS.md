@@ -38,6 +38,15 @@
   `100%` radii (circles, e.g. the floating action button).
 - **Single source of truth:** design tokens live in `apps/web/src/styles/tokens.css` as CSS
   custom properties; components reference the tokens, never raw values.
+- **The app icon reuses the app's own symbol source.** `apps/web/public/favicon.svg` draws the
+  Material Symbols Rounded "skillet" — the same glyph as `SkilletIcon` in
+  `apps/web/src/components/icons.tsx` (the "Jetzt kochen" button) — on the paper tile
+  (`#faf5ec`) in the clay accent (`#b85c38`). It is the one deliberate exception to that
+  file's rule "every icon is weight 400 and unfilled": at favicon sizes the weight-400 steam
+  curls collapse into a single blob, so the icon uses Google's own weight-500 drawing of the
+  same symbol (`skillet_wght500_24px.svg`, same repository, same settings). The path data
+  stays verbatim and the deviation is recorded in the file's header comment. In-app UI icons
+  keep weight 400.
 - **Surfaces are flat, filled and opaque.** Every surface — page, card, sticky bar,
   sheet — is one fully opaque colour from the token palette, painted over its whole
   footprint, edge to edge. Nothing shows through a surface: no translucent or gradient
