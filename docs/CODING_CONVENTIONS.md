@@ -111,6 +111,11 @@
   closes exactly the topmost layer (NewIngredient sheet → Ingredient sheet → sub-recipe level
   → editor → list). New full-screen views/sheets must go through App's navigation helper
   (`setNav` + the editor's `notifyBack`) instead of toggling React booleans directly.
+  The recipe list always keeps one guard entry of its own above the page-load entry, so a
+  screen is never the shallowest history entry: a swipe-back then always lands on an entry the
+  app owns, and a pop the app consumes re-establishes the entry it consumed. Without that
+  guard the browser takes over the gesture, navigates the tab away and the reload lands on the
+  login screen (the Drive session is memory-only).
 - **Sub-recipe levels stay mounted:** the „REZEPT" badge opens a sub-recipe as another editor
   level above the current one; App keeps every open level mounted and hides the ones below
   (`hidden` on a plain wrapper, plus `visible` to gate Escape). A jump therefore never discards

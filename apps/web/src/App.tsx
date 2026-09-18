@@ -35,11 +35,14 @@ import './styles/editor.css';
 type TopScreen = 'editor' | 'ai' | 'menu' | 'overview';
 
 /**
- * Browser-history entry marker for a TopScreen. The recipe list is the app's
- * initial entry (state `null`); each screen above it is a single history
- * entry carrying this marker.
+ * Browser-history markers of the two entries a TopScreen is layered between.
+ * The recipe list is the entry the app was loaded on (state `null`); every
+ * screen above it is one entry carrying SCREEN_MARKER, and the list keeps one
+ * guard entry of its own (LIST_MARKER) underneath, so a screen is never the
+ * app's shallowest entry (see guardCurrentEntry).
  */
 const SCREEN_MARKER = 'above-list';
+const LIST_MARKER = 'recipe-list';
 
 /** True when `state` belongs to one of our screen entries (history.state is a
  *  structured clone, so this must be a value check, never an identity check). */
@@ -49,6 +52,62 @@ function isScreenEntry(state: unknown): boolean {
     state !== null &&
     (state as { appScreen?: unknown }).appScreen === SCREEN_MARKER
   );
+}
+
+/** True for the list's own guard entry (never for a screen entry). */
+function isListEntry(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { appScreen?: unknown }).appScreen === LIST_MARKER
+  );
+}
+
+/**
+ * True when the current entry is the app's shallowest own entry — the entry
+ * the document happened to be loaded on, whose Back navigates the tab away
+ * (to the previous page, or out of the app). Everything the app keeps beneath
+ * the list instead carries LIST_MARKER.
+ */
+function isOwnRootEntry(state: unknown): boolean {
+  return state === null || state === undefined;
+}
+
+/**
+ * Owns one screen entry above the app's own entries: at least one marked entry
+ * (the list's guard, see guardCurrentEntry) sits underneath, so the native Back
+ * has something the app owns to pop. A screen opened while the app was already
+ * sitting on its shallowest entry — possible after a Back on the list or a
+ * restored Forward trail — gets the list guard first, so no screen is ever the
+ * app's shallowest entry.
+ */
+function ownScreenEntry(): void {
+  if (isOwnRootEntry(window.history.state)) {
+    window.history.pushState({ appScreen: LIST_MARKER }, '');
+  }
+  window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+}
+
+/**
+ * Makes sure the *current* entry is a marked one, i.e. that the next native
+ * Back has an app entry to pop instead of reaching the document below the app.
+ * Called whenever a layer must survive the Back that just popped it (the
+ * discard confirmation stays armed, the parent sub-recipe level is revealed):
+ * the pop already happened, so the entry has to be put back.
+ *
+ * Why this guard exists: when a swipe-back pops the app's last entry, Chrome
+ * for Android does not hand the gesture to the document — it navigates the tab
+ * away, the app reloads at the login screen and the in-memory Drive/OAuth
+ * session (googleAuth.ts) is gone. Together with the list guard entry pushed at
+ * startup, the app's shallowest entry is therefore never the visible one: a
+ * swipe always steps exactly one layer back, whatever made the trail shallow
+ * (a Forward trail, a reload while a screen was open, a stale entry collapsed
+ * on open).
+ */
+function guardCurrentEntry(): void {
+  if (!isScreenEntry(window.history.state) && !isListEntry(window.history.state)) {
+    ownScreenEntry();
+  }
 }
 
 /**
@@ -171,6 +230,23 @@ function App() {
   /** Remembers/restores the window scroll per page (see useScrollMemory). */
   const scrollMemory = useScrollMemory(visiblePageKey);
 
+  // Give the recipe list an own guard entry (LIST_MARKER) directly above the
+  // entry the app was loaded on. The list is the bottom layer and stays the
+  // visible one across the guard, so nothing changes on screen; the point is
+  // that from here on a screen entry always has a marked entry underneath.
+  // Without it, a swipe-back that pops the app's last entry leaves the app
+  // (Chrome for Android closes the tab or navigates back) and the reload lands
+  // on the login screen — the in-memory Drive session is gone (see
+  // guardCurrentEntry). The entry check keeps this to one entry per page load:
+  // a re-run (a dev remount) must not stack another guard, and the entry that
+  // gives up is the app's own root, so a Back onto that root still leaves the
+  // app as before.
+  useEffect(() => {
+    if (!isListEntry(window.history.state)) {
+      window.history.pushState({ appScreen: LIST_MARKER }, '');
+    }
+  }, []);
+
   /**
    * The imperative handle of the editor level currently on top (the deepest
    * mounted sub-recipe, or the base editor). Called from the popstate listener,
@@ -248,11 +324,12 @@ function App() {
           return;
         }
         // Collapse a stale screen entry (e.g. left behind by a browser Forward)
-        // instead of stacking a duplicate on top of it.
+        // instead of stacking a duplicate on top of it: the current entry is
+        // reused, so the list guard entry below it stays where it is.
         if (isScreenEntry(window.history.state)) {
           window.history.replaceState({ appScreen: SCREEN_MARKER }, '');
         } else {
-          window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+          ownScreenEntry();
         }
       } else if (next === null) {
         window.history.back();
@@ -309,15 +386,21 @@ function App() {
     };
   }, [token]);
 
-  // Browser Back / Forward: step back one screen at a time instead of leaving
-  // the app. The history holds the list (initial entry) plus at most one
-  // screen entry, so a pop onto the list entry must close the current screen.
-  // A screen with internal layers can consume the pop itself: both the editor
-  // and the AI-create sheet route it through their shared exit guard
+  // Browser Back / Forward: step back exactly one layer instead of leaving the
+  // app. The history holds the list's own guard entry (LIST_MARKER) plus at most
+  // one screen entry above it, so a pop onto the guard closes the current
+  // screen. A screen with internal layers can consume the pop itself: both the
+  // editor and the AI-create sheet route it through their shared exit guard
   // (useLeaveGuard) — topmost overlay first, then the "Änderungen verwerfen?"
   // step. The device's swipe-back gesture arrives as the same popstate, so it
-  // gets the identical guard. When consumed, the screen entry is re-pushed to
-  // cancel the pop.
+  // gets the identical guard.
+  //
+  // The guard entry is what makes the gesture safe on Android: a swipe-back that
+  // pops the app's last entry does not reach this listener at all — Chrome for
+  // Android then navigates the tab away, the app reloads at the login screen and
+  // the memory-only session is lost ("the gesture closed the whole app"). With
+  // the guard underneath, a swipe always lands on an entry the app owns, and a
+  // pop the app consumes is undone by guardCurrentEntry.
   useEffect(() => {
     const onPopState = (): void => {
       // A Back / Forward may change the visible page below: capture the offset
@@ -336,6 +419,16 @@ function App() {
         }
         return;
       }
+      // Safety net for a guard entry that was lost anyway (e.g. a restored
+      // Forward trail): the pop reached the entry the app was loaded on while a
+      // screen is open. Rebuild the list's own entry here and reserve a screen
+      // entry above it, so the next swipe is consumed inside the app instead of
+      // leaving it. The visible layer already occupies one entry of the tab's
+      // history, hence the replace before the push.
+      if (isOwnRootEntry(window.history.state)) {
+        window.history.replaceState({ appScreen: LIST_MARKER }, '');
+        ownScreenEntry();
+      }
       if (top === 'editor') {
         // The open-level count before the editor sees the pop: `notifyBack` may
         // step back to the parent level of a sub-recipe chain, which consumes
@@ -343,21 +436,21 @@ function App() {
         const levelCount = editorSubRecipesRef.current.length;
         if (topEditorHandle()?.notifyBack() === true) {
           // Stay on the editor (an overlay closed or the discard confirmation
-          // was armed): undo the pop by re-pushing the screen entry.
-          window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+          // was armed): make sure the Back the guard consumed left an entry.
+          guardCurrentEntry();
           return;
         }
         if (editorSubRecipesRef.current.length < levelCount) {
           // Back stepped from a sub-recipe to its parent level: the editor
           // stays open, so cancel the pop exactly like a consumed overlay.
-          window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+          guardCurrentEntry();
           return;
         }
       }
       if (top === 'ai' && aiCreateHandleRef.current?.notifyBack() === true) {
         // Stay on the AI-create screen (the discard confirmation was armed):
-        // undo the pop by re-pushing the screen entry.
-        window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+        // make sure the Back the guard consumed left an entry.
+        guardCurrentEntry();
         return;
       }
       // Back out of an AI-created draft returns to the still-running
@@ -371,7 +464,7 @@ function App() {
         setEditorOpen(false);
         setEditorSubRecipes([]);
         setAiCreateOpen(true);
-        window.history.pushState({ appScreen: SCREEN_MARKER }, '');
+        guardCurrentEntry();
         return;
       }
       editorOriginRef.current = null;
