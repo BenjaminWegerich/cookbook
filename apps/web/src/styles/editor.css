@@ -187,9 +187,8 @@
   color: var(--color-on-accent);
 }
 
-/* Remove/clear chip for optional fields (e.g. Gesamtzeit): the × symbol plus
-   the label, as a flex row so both sit on the same line height (the multiplication
-   sign alone sat too high against the surrounding text). */
+/* Remove/clear chip for optional fields (e.g. Gesamtzeit): the "close" symbol
+   plus the label, as a flex row so both sit on the same line. */
 .chip-clear {
   display: inline-flex;
   align-items: center;
@@ -199,11 +198,15 @@
   color: var(--color-ink-muted);
 }
 
-/* The multiplication sign is drawn larger than the chip label but optically
-   small in its box; matching the label's font size would make it dominate. */
-.chip-glyph {
-  font-size: var(--text-sm);
-  line-height: 1;
+/* The clear chip's close symbol (Material Symbols "close", see
+   components/icons.tsx): 14 px (ladder: --space-5), the same size as a tag
+   icon, so it does not dominate the chip label. */
+.chip-icon {
+  display: block;
+  flex: none;
+  width: var(--space-5);
+  height: var(--space-5);
+  color: currentColor;
 }
 
 /* ---- QuantityPicker (suggested chips + stepper) ---------------------------- */
@@ -240,13 +243,11 @@
 .step-button {
   width: 42px;
   height: 42px;
-  /* Override the base button padding (8px 14px): it would push the sign out
-     of the circle's center into the bottom-right corner. line-height 1 keeps
-     the glyph box compact so grid centering is exact. */
+  /* Override the base button padding (8px 14px): it would push the symbol out
+     of the circle's center into the bottom-right corner. */
   padding: 0;
   display: grid;
   place-items: center;
-  line-height: 1;
   /* Press-and-hold stepper: no text selection/magnifier and no double-tap
      zoom delay on touch, so a long press reads purely as a hold. */
   -webkit-user-select: none;
@@ -256,20 +257,18 @@
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: 50%; /* structural exception to the ladder: full circle */
-  font-size: var(--text-lg);
   color: var(--color-ink);
 }
 
-/* Optical centering for the +/− glyphs inside the circle: grid + line-height
-   center the *line box*, not the ink. The font draws +/− slightly above the
-   em's geometric middle (it reserves room for descenders below the baseline,
-   which a circle button does not need), so the signs read ~1 px too high.
-   translateY(1px) — the smallest ladder step — pulls the ink onto the visual
-   center. Identical on every platform: the self-hosted font renders both
-   glyphs (U+002B, U+2212) from the same file. */
-.step-glyph {
+/* The stepper's symbols (Material Symbols "add" / "remove", see
+   components/icons.tsx): 24 px (ladder: --icon-size) inside the 42 px circle.
+   Both drawings are optically centered in their own 960-unit box, so grid
+   centering needs no extra nudge. */
+.step-icon {
   display: block;
-  transform: translateY(1px);
+  width: var(--icon-size);
+  height: var(--icon-size);
+  color: currentColor;
 }
 
 .quantity-value {

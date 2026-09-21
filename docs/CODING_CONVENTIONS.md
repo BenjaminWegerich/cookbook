@@ -38,15 +38,23 @@
   `100%` radii (circles, e.g. the floating action button).
 - **Single source of truth:** design tokens live in `apps/web/src/styles/tokens.css` as CSS
   custom properties; components reference the tokens, never raw values.
-- **The app icon reuses the app's own symbol source.** `apps/web/public/favicon.svg` draws the
-  Material Symbols Rounded "skillet" — the same glyph as `SkilletIcon` in
+- **One symbol library for every icon: Material Symbols (Rounded), weight 400.** Every symbol
+  and icon comes from Material Symbols — the new Material Design Symbols set
+  (`symbols/.../materialsymbolsrounded/` in `google/material-design-icons`), never the older
+  Material Icons set, never a hand-drawn or third-party glyph. All share one style (Rounded),
+  one 24 dp / 960-unit grid and the same **weight 400** (grade 0, optical size 24); a state
+  difference is shown by colour or by the same symbol's fill, never by a different weight or
+  style. Single source: `apps/web/src/components/icons.tsx` (import from there, never inline
+  an `<svg>`). Font characters (`+`, `−`, `×`) are never used in place of a symbol: wherever a
+  symbol acts as an icon, it comes from that file.
+- **The app icon (favicon) is the one weight exception.** `apps/web/public/favicon.svg` draws
+  the Material Symbols Rounded "skillet" — the same glyph as `SkilletIcon` in
   `apps/web/src/components/icons.tsx` (the "Jetzt kochen" button) — on the paper tile
-  (`#faf5ec`) in the clay accent (`#b85c38`). It is the one deliberate exception to that
-  file's rule "every icon is weight 400 and unfilled": at favicon sizes the weight-400 steam
-  curls collapse into a single blob, so the icon uses Google's own weight-500 drawing of the
-  same symbol (`skillet_wght500_24px.svg`, same repository, same settings). The path data
-  stays verbatim and the deviation is recorded in the file's header comment. In-app UI icons
-  keep weight 400.
+  (`#faf5ec`) in the clay accent (`#b85c38`). It is the one deliberate deviation from the
+  weight rule above: at favicon sizes the weight-400 steam curls collapse into a single blob,
+  so the icon uses Google's own weight-500 drawing of the same symbol
+  (`skillet_wght500_24px.svg`, same repository, same settings). The path data stays verbatim
+  and the deviation is recorded in the file's header comment. In-app UI icons keep weight 400.
 - **Surfaces are flat, filled and opaque.** Every surface — page, card, sticky bar,
   sheet — is one fully opaque colour from the token palette, painted over its whole
   footprint, edge to edge. Nothing shows through a surface: no translucent or gradient
@@ -87,9 +95,9 @@
 - **Button labels are sentence case:** a button's visible text is normal German prose
   starting with a capital letter; nouns keep their capitals, nothing else is forced. No
   all-lowercase, no Title Case, no all-caps in the source string — ALL CAPS stays a
-  CSS-only effect for data badges and `.field-label`. A leading symbol (`+`, `×`) or icon
-  is not a letter and never replaces the capital (`+ Zutat zur Liste hinzufügen`,
-  `× Entfernen`);
+  CSS-only effect for data badges and `.field-label`. A leading icon is not a letter and
+  never replaces the capital (the add icon in front of `Zutat zur Liste hinzufügen`, the
+  close icon in front of `Entfernen`);
   icon-only buttons carry no visible text, only an `aria-label`. A caption above a button
   group is a noun (`.field-label`), never a sentence fragment — so no option ever reads
   as a lowercase sentence continuation.

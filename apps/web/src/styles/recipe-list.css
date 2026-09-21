@@ -132,8 +132,15 @@
   color: var(--color-ink-muted);
   border: none;
   border-radius: var(--radius-sm);
-  font-size: var(--text-lg);
-  line-height: 1;
+}
+
+/* The clear button's close symbol (Material Symbols "close", see
+   components/icons.tsx), at the shared inline icon size. */
+.recipe-search-clear-icon {
+  display: block;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  color: currentColor;
 }
 
 .recipe-search-empty {

@@ -7,19 +7,25 @@
  *
  *   google/material-design-icons -> symbols/android/<name>/materialsymbolsrounded/<name>_24px.xml
  *
- * i.e. **Material Symbols, Rounded style, 24 dp grid, weight 400, grade 0,
- * optical size 24, unfilled** — the same settings for every icon. The paths
- * use that family's native 960 x 960 coordinate system (viewBox
- * `0 0 960 960`; the drawables' y values run 0..960 top-down, so a negative
- * y origin would place every glyph outside the visible box), and
- * `fill="currentColor"` makes each glyph follow the
+ * i.e. **Material Symbols (the new Material Design Symbols set), Rounded
+ * style, 24 dp grid, weight 400, grade 0, optical size 24** — the same
+ * library, style and weight for every icon. This is the successor of the older
+ * "Material Icons" set: never mix in a glyph from that library or from any
+ * other icon set, and never change the weight. The one documented weight
+ * exception is the app icon (favicon, weight 500) — see
+ * docs/CODING_CONVENTIONS.md. The paths use the family's native 960 x 960
+ * coordinate system (viewBox `0 0 960 960`; the drawables' y values run
+ * 0..960 top-down, so a negative y origin would place every glyph outside the
+ * visible box), and `fill="currentColor"` makes each glyph follow the
  * text color of its button or tag.
  *
  * Rules:
  * - an icon is always decorative (`aria-hidden`): it either sits next to a
  *   visible label or its button carries an `aria-label`;
- * - never mix in a filled or differently weighted glyph (e.g. no filled star
- *   next to an outlined one) — if a state must differ, express it with color;
+ * - the only fill change is the star's own filled/unfilled pair (the same
+ *   symbol in the same weight, `star` + `star_fill1`); every other icon is
+ *   unfilled, and a state is never shown by a glyph from another style or
+ *   weight;
  * - the rendered size comes from the pixel ladder via CSS (`--space-5` = 14 px
  *   inside tags, `--space-6` = 18 px inside buttons, `--icon-size` = 24 px for
  *   standalone symbols).
@@ -153,12 +159,24 @@ export function LinkIcon({ className }: IconProps) {
   );
 }
 
-/** Plus — "create / add" beside a label. */
+/** Add (plus) — "create / add" beside a label and the quantity stepper's "+". */
 export function PlusIcon({ className }: IconProps) {
   return (
     <svg className={className} {...ICON_PROPS}>
       <path
         d="M440,520L240,520Q223,520 211.5,508.5Q200,497 200,480Q200,463 211.5,451.5Q223,440 240,440L440,440L440,240Q440,223 451.5,211.5Q463,200 480,200Q497,200 508.5,211.5Q520,223 520,240L520,440L720,440Q737,440 748.5,451.5Q760,463 760,480Q760,497 748.5,508.5Q737,520 720,520L520,520L520,720Q520,737 508.5,748.5Q497,760 480,760Q463,760 451.5,748.5Q440,737 440,720L440,520Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/** Remove (minus) — the quantity stepper's "−". */
+export function RemoveIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M240,520Q223,520 211.5,508.5Q200,497 200,480Q200,463 211.5,451.5Q223,440 240,440L720,440Q737,440 748.5,451.5Q760,463 760,480Q760,497 748.5,508.5Q737,520 720,520L240,520Z"
         fill="currentColor"
       />
     </svg>

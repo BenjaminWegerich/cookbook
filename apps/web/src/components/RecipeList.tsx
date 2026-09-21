@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import type { StoredRecipe } from '../drive/recipeStorage';
-import { SearchIcon } from './icons';
+import { CloseIcon, SearchIcon } from './icons';
 import RecipeThumb from './RecipeThumb';
 
 interface RecipeListProps {
@@ -57,7 +57,7 @@ function RecipeList({ recipes, token, onOpenRecipe }: RecipeListProps) {
               aria-label="Suche löschen"
               onClick={() => setQuery('')}
             >
-              ×
+              <CloseIcon className="recipe-search-clear-icon" />
             </button>
           )}
         </div>

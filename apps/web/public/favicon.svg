@@ -8,10 +8,11 @@
   Settings: weight 500, grade 0, optical size 24, unfilled (fill 0).
   The path data below is that file's `d` attribute, verbatim.
 
-  Deliberate deviation from the app's icon rules (docs/CODING_CONVENTIONS.md,
-  "ONE symbol source": every icon is weight 400 and unfilled): at favicon sizes
-  the weight-400 steam curls collapse into a single blob, so this file uses
-  Google's own weight-500 drawing of the same symbol instead.
+  The one documented deviation from the app's icon rule
+  (docs/CODING_CONVENTIONS.md, "One symbol library for every icon": every icon
+  is Material Symbols, Rounded, weight 400): at favicon sizes the weight-400
+  steam curls collapse into a single blob, so this file uses Google's own
+  weight-500 drawing of the same symbol instead.
 
   Coordinates: the Material file uses viewBox "0 -960 960 960", i.e. y runs
   upwards from 0 to -960. The inner transform shifts the glyph by +960 on y

@@ -29,6 +29,7 @@ import {
   suggestedChips,
   type QuantityFamily,
 } from './quantityChips';
+import { PlusIcon, RemoveIcon } from './icons';
 
 /** Press-and-hold cadence for the stepper buttons: the first auto-repeat fires
  *  after this delay, later repeats follow at this interval. The values mimic a
@@ -162,7 +163,7 @@ function QuantityPicker({ value, onChange, family }: QuantityPickerProps) {
           disabled={minReached || value === undefined}
           aria-label="Menge um eine Stufe verringern"
         >
-          <span className="step-glyph">−</span>
+          <RemoveIcon className="step-icon" />
         </button>
         <span className="quantity-value">
           {value === undefined ? '—' : quantityLabel(value, family)}
@@ -180,7 +181,7 @@ function QuantityPicker({ value, onChange, family }: QuantityPickerProps) {
           disabled={maxReached || value === undefined}
           aria-label="Menge um eine Stufe erhöhen"
         >
-          <span className="step-glyph">+</span>
+          <PlusIcon className="step-icon" />
         </button>
       </div>
     </div>

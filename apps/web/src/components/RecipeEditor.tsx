@@ -479,9 +479,7 @@ function TimeChips({
           onClick={() => onChange('')}
           title="Gewählte Zeit entfernen"
         >
-          <span className="chip-glyph" aria-hidden="true">
-            ×
-          </span>
+          <CloseIcon className="chip-icon" />
           <span>Entfernen</span>
         </button>
       )}
