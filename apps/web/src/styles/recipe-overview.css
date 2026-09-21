@@ -125,25 +125,24 @@
 
 /* ---- Actions ------------------------------------------------------------- */
 
-/* Two rows, each symbol + text. "Jetzt kochen" is the sheet's one primary
-   action and takes a row of its own; below it "Zur Liste hinzufügen" and the
-   "Mehr" overflow button split the second row's leftover width equally
-   (`flex: 1 1 auto` on both). Decided with the user: in the previous single row
-   of two equal 1fr columns plus `auto`, the even split ignored that "Zur Liste
-   hinzufügen" needs roughly twice the room of "Kochen" — on a narrow phone it
-   wrapped to two lines — and all three buttons carried the same visual weight
-   although "Jetzt kochen" is the main action. Decided with the user on top of
-   that: the second row's free width is shared between its two buttons instead of
-   going wholly to the label button, because a stretched label sat on ~30-57 px
-   of air per side while the content-sized "Mehr" had only its own padding — two
-   different cushions on one row. Equal growth keeps the row filled edge to edge
-   and gives both labels the same cushion at every width; the leftover, not the
-   labels, is what shrinks as the viewport narrows. The label size matches the
-   overflow menu (one body step below the 18 px body size) — the row and its menu
-   must not look like two different scales. */
+/* One row, each item symbol + text. Decided with the user: "Jetzt kochen" is the
+   sheet's one primary action and grows into every free pixel (`flex: 1 1 auto`),
+   so it is as wide as possible; "Einplanen" and the "Mehr" overflow button keep
+   their content width (`flex: 0 0 auto`) — they are only as wide as their labels
+   need. This replaces the earlier stacked layout: back then "Zur Liste
+   hinzufügen" was long enough that an even split wrapped it to two lines on a
+   narrow phone, so the primary owned a row of its own. With the shorter
+   "Einplanen" label all three fit on one line again, and letting only the primary
+   grow gives the primary its emphasis without stretching the secondary labels
+   (the old even split put a stretched label on ~30-57 px of air per side while
+   the content-sized "Mehr" had only its own padding — two different cushions on
+   one row). The primary is the only item that shrinks when the viewport narrows,
+   so the secondary cushions stay constant. The label size matches the overflow
+   menu (one body step below the 18 px body size) — the row and its menu must not
+   look like two different scales. */
 .overview-actions {
   display: flex;
-  flex-wrap: wrap; /* the full-basis primary owns the first line */
+  flex-wrap: nowrap; /* the three actions always share one line */
   gap: var(--space-2);
 }
 
@@ -152,11 +151,9 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  /* Content width plus an equal share of the row's leftover space: as the only
-     item of its line the primary stretches across the full width, and in the
-     second line both buttons grow by the same amount, so neither label ends up
-     with more air around it than the other. */
-  flex: 1 1 auto;
+  /* Content width only: no growth, no shrink, so the label always has exactly
+     its own padding. The primary overrides this below. */
+  flex: 0 0 auto;
   min-height: 42px; /* ladder: thumb-reachable action height */
   padding: var(--space-2);
   background: var(--color-surface);
@@ -173,11 +170,15 @@
   background: var(--color-line);
 }
 
-/* The primary action (Jetzt kochen): accent fill, white label and symbol. Its
-   full-width basis fills the first line on its own, so the two secondary actions
-   start on the next one (see the row comment above). */
+/* The primary action (Jetzt kochen): accent fill, white label and symbol, and the
+   row's only growing item. `flex: 1 1 auto` lets it absorb every free pixel left
+   over by the content-sized "Einplanen"/"Mehr" buttons, so it is as wide as
+   possible; being the only shrinkable item, it also gives width back first when
+   the viewport narrows. `min-width: 0` allows it to shrink below its content
+   width, so the row can never overflow the sheet. */
 .overview-action.is-primary {
-  flex: 1 1 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-on-accent);
@@ -197,14 +198,14 @@
 }
 
 /* Wrapper of the "Mehr" button + its overflow menu: the menu anchors to it, so
-   it is the second item of the action row and grows with the same share of the
-   leftover width as the label button next to it (`flex: 1 1 auto`); the button
-   inside fills the wrapper. The vertical three dots are the affordance for the
-   menu — unlike the label buttons this one carries no caret. */
+   it is the third item of the action row and — like "Einplanen" — keeps its
+   content width (`flex: 0 0 auto`); the button inside fills the wrapper. The
+   vertical three dots are the affordance for the menu — unlike the label buttons
+   this one carries no caret. */
 .overview-more {
   position: relative;
   display: grid;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
 }
 
 /* The overflow menu pops directly above its trigger instead of floating

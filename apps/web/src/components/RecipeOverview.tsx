@@ -9,17 +9,21 @@
  * - modal bottom sheet over the list (not a full-screen view);
  * - large square 1:1 photo (recipe photos are stored square, nothing is cropped);
  * - times (Arbeitszeit / Gesamtzeit) are shown, but not servings/yield or type;
- * - two action rows: "Jetzt kochen" (pot) as the primary action across the full
- *   width, then "Zur Liste hinzufügen" (list with plus) and the "Mehr" button
- *   (vertical three dots). Decided with the user: while all three sat in one row,
- *   the even split gave "Kochen" as much room as the much longer "Zur Liste
- *   hinzufügen", which wrapped to two lines on a narrow phone; the primary now
- *   owns its own row. The two buttons of the second row share its leftover width
- *   equally (decided with the user), so both labels sit on the same cushion —
- *   before, the stretched label had far more air around it than "Mehr", which
- *   only had its own padding.
- *   "Jetzt kochen" and "Zur Liste hinzufügen" are placeholders for now: they
- *   report that the feature is not built yet instead of silently doing nothing.
+ * - one action row: "Jetzt kochen" (skillet) as the primary action, growing to
+ *   fill the row so it is as wide as possible, next to "Einplanen" (calendar with
+ *   plus) and the "Mehr" button (vertical three dots), which stay only as wide as
+ *   their labels need. Decided with the user, replacing the earlier stacked
+ *   layout: the old "Zur Liste hinzufügen" label was so long that an even split
+ *   wrapped it to two lines on a narrow phone, but the shorter "Einplanen" lets
+ *   all three share one line, and only the primary grows. The two secondary
+ *   labels consequently sit on their own natural padding instead of on a
+ *   stretched cushion.
+ *   "Jetzt kochen" and "Einplanen" are placeholders for now: they report that the
+ *   feature is not built yet instead of silently doing nothing.
+ * - "Einplanen" is the meal-plan action: it puts the dish on the meal plan.
+ *   Building the shopping list is deliberately not its job — that is a separate
+ *   flow over several recipes at once (decided with the user), so the overview's
+ *   per-recipe action must not be named "Zur Liste hinzufügen".
  * - "Mehr" opens the actions that do not earn a full row column as a small
  *   popover above the row: "Manuell bearbeiten" opens the editor, "Mit KI
  *   bearbeiten" is still a placeholder. The kebab itself is the affordance, and
@@ -36,8 +40,8 @@ import { displayTimeText, type Recipe } from '@cookbook/core';
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import {
+  CalendarAddIcon,
   CloseIcon,
-  ListPlusIcon,
   MoreVertIcon,
   PencilIcon,
   SkilletIcon,
@@ -224,12 +228,11 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           )}
         </div>
 
-        {/* Two action rows (decided with the user): "Jetzt kochen" is the
-            primary action and spans the full width; "Zur Liste hinzufügen" and
-            the "Mehr" overflow button share the row below and split its leftover
-            width equally. "Mehr" opens its menu as a popover directly above the
-            row, so the menu sits next to its trigger instead of floating
-            anywhere in the sheet. */}
+        {/* One action row (decided with the user): "Jetzt kochen" is the primary
+            action and grows to fill the row; "Einplanen" and the "Mehr" overflow
+            button stay at their content width. "Mehr" opens its menu as a popover
+            directly above the row, so the menu sits next to its trigger instead of
+            floating anywhere in the sheet. */}
         <div className="overview-actions">
           <button
             type="button"
@@ -242,10 +245,10 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
           <button
             type="button"
             className="overview-action"
-            onClick={() => notBuiltYet('Zur Liste hinzufügen')}
+            onClick={() => notBuiltYet('Einplanen')}
           >
-            <ListPlusIcon />
-            <span>Zur Liste hinzufügen</span>
+            <CalendarAddIcon />
+            <span>Einplanen</span>
           </button>
           <div className="overview-more" ref={moreWrapRef}>
             <button
