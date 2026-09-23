@@ -1,0 +1,20 @@
+# Never upload local secrets or state as build source.
+#
+# `gcloud builds submit` tars this directory and uploads it before building anything. gcloud
+# derives a default ignore list from `.gitignore` when no `.gcloudignore` exists, which is an
+# implicit dependency: edit `.gitignore` one day and the master token in `.env` could silently
+# end up in the upload bucket.
+#
+# This file makes the exclusions explicit and independent of `.gitignore`.
+# `.dockerignore` is a separate mechanism and does not cover the upload.
+.env
+.env.*
+!.env.example
+.venv/
+.tools/
+state.json
+before-write.json
+*.snapshot.json
+gate2-log.jsonl
+__pycache__/
+*.pyc

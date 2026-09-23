@@ -1,0 +1,8 @@
+# Dependencies for the Google Keep feasibility spike.
+#
+# Python 3.10+ is required by gkeepapi. Verified working on Python 3.14.4:
+# pycryptodomex ships an abi3 manylinux wheel, so no C toolchain and no
+# `python3-venv`/`build-essential` packages are needed.
+gkeepapi==0.17.1
+gpsoauth==2.0.0
+requests==2.34.2

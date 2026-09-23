@@ -76,11 +76,67 @@
   shared links stay valid).
 - Friends open it in any browser and pick a serving count — no app, no server.
 
-### Backend module (later)
+### Keep gateway (backend module)
 
-- Synchronizes ingredients to the Google Keep "shopping list" (e.g., via Python `gkeepapi`).
-- Isolated behind a clean HTTP boundary; language decided when it is built.
-- Applies the intelligent shopping-list filtering (always-in-stock vs. may-be-in-stock).
+- Synchronizes the meal plan and the shopping list with Google Keep, and applies the
+  intelligent shopping-list filtering (always-in-stock vs. may-be-in-stock).
+- **Language: Python**, using [`gkeepapi`](https://github.com/kiwiz/gkeepapi). For a personal
+  Google account this is the only route: the official Keep API is Workspace-only and has no
+  `update` method at all, so it cannot edit a list even in principle.
+- **Hosting: Google Cloud Run**, scale-to-zero (`min-instances 0`), in its own Google Cloud
+  project. Cost and latency both measured well — a cold sync is ~0.7 s, so scale-to-zero is
+  invisible, and the free tier covers this workload by orders of magnitude.
+- **The master token must be minted from the cloud, not from the home machine.** This is the
+  one non-obvious rule and it is load-bearing: Google refuses to exchange a *home-minted*
+  master token for an OAuth token from its datacenter network (`BadAuthentication`), but
+  accepts a token that was itself minted from that network. See "Why the token must be minted
+  in the cloud" below. `spike/keep-feasibility/mint-in-cloud.py` performs that exchange.
+- **No state cache.** Resuming `gkeepapi` from cached state saved ~0.14 s over a cold sync, so
+  the cache and the storage behind it are not worth having; a cold sync of the live collection
+  (135 shopping + 248 meal-plan items) takes under a second anyway, and dropping the cache
+  removes the ephemeral-filesystem problem entirely.
+- Isolated behind a clean HTTP boundary, with its own Google auth and secret handling. The web
+  app degrades to "Keep features off" when no gateway is reachable (N5 in
+  [user_stories.md](user_stories.md)).
+- **Credential model: a dedicated throwaway Google account** whose master token the gateway
+  holds, with the two notes shared *into* it per note. This bounds the blast radius of a
+  leaked token to exactly those two notes, and keeps a suspension of the automating account
+  away from the real one. A master token grants full account access, so it is kept out of the
+  frontend entirely — a static public bundle cannot keep a secret, and no browser can obtain a
+  master token in the first place.
+- Sorting is applied server-side (`List.sort_items`) from the ingredient category master
+  data, never in the client.
+
+#### Why the token must be minted in the cloud
+
+Measured in `spike/keep-feasibility/` (see its `findings.md`), and worth recording because the
+failure is confusing in the opposite direction from the usual one:
+
+- **A home-minted token is refused from the cloud.** The same account, token and device id that
+  authenticated from home were rejected as `BadAuthentication` from three Google Cloud addresses
+  across two regions. The refusal happens at Google's account-auth endpoint, before any Keep
+  request, so no scope, retry or Keep-side setting can work around it.
+- **A cloud-minted token is accepted from the cloud.** Running the `oauth_token` →
+  master-token exchange *from a Cloud Run job*, then authenticating with the result from the
+  same job, returned `outcome: ok` immediately.
+
+So what Google binds is **where the token was created**, not where it is used. Two consequences
+belong in the runbook rather than in a footnote: setup and **every re-mint have to run in the
+cloud**, and the `oauth_token` cookie they need is a short-lived, full-access session
+credential — used once, written to a dedicated secret, and deleted immediately afterwards.
+
+#### Why not an always-free VM
+
+The VM tiers were rejected on their own merits before authentication was ever tested:
+
+- **GCE `e2-micro`** — the free tier covers the instance and a 30 GB disk, but an external IPv4
+  address is free for only one hour per month and then costs $0.005/h, i.e. ~$3.65 per month.
+  Omitting the address is no escape: without it the VM has no outbound internet, so a tunnel
+  needs Cloud NAT, whose address is charged at the same rate.
+- **Oracle Always Free** — genuinely free and available in a European region, but Oracle may
+  reclaim compute instances that stay below 20% CPU, network and memory over a 7-day window.
+  A service answering a few requests a day meets every one of those criteria, and the policy
+  has no carve-out for Pay-as-You-Go tenancies.
 
 ### Gemini for Home integration (later)
 
@@ -120,8 +176,9 @@
 
 ## Open questions
 
-- Backend implementation for Google Keep (Python `gkeepapi` is a candidate, not a decision);
-  language and hosting decided when it is built.
+- Google Keep backend is decided: a Python `gkeepapi` gateway on Cloud Run, using a dedicated
+  throwaway account (see the Keep gateway section). The one rule that must not be lost is that
+  the master token has to be minted from the cloud — a home-minted token is refused there.
 - Gemini Home / read-aloud integration details (product/API chosen when that milestone is built).
 - Recipe-editing AI is decided: Google Gemini via browser-direct REST (`generateContent`), key
   pasted per session; see the ROADMAP Phase 3 note and `apps/web/src/ai/`.

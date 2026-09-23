@@ -1,0 +1,17 @@
+# Gate 2 sampling timer: run the health check every six hours.
+#
+# Six hours is a deliberate compromise. Lockouts and IP-level blocks tend to appear
+# hours or days after the first success, while 20 auth calls a day is far too little
+# traffic to look like abuse. Persistent=true catches up a missed run after reboot,
+# so gaps in gate2-log.jsonl always mean something real.
+[Unit]
+Description=Sample the Gate 2 Keep health check every 6 hours
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=6h
+Persistent=true
+Unit=keep-gate2-healthcheck.service
+
+[Install]
+WantedBy=timers.target

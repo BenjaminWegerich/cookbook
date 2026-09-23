@@ -1,0 +1,27 @@
+# Gate 2 health check: runs the auth test once and exits.
+#
+# Install on the candidate VM (see README.md, "Gate 2" section). Run it manually
+# first, then enable the timer so it samples the host every few hours.
+#
+# The working directory holds:
+#   .env                    master token + device id, mode 0600, owned by the service user
+#   gate2-healthcheck.py    the check itself
+#   keep-spike.py           reused for auth and the failure diagnosis
+[Unit]
+Description=Gate 2 health check for the Google Keep backend spike
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/keep-feasibility
+ExecStart=/opt/keep-feasibility/.venv/bin/python /opt/keep-feasibility/gate2-healthcheck.py
+# Run as an unprivileged user that owns .env. Never run this as root: the process
+# holds a credential with full access to the throwaway Google account.
+User=keepspike
+Group=keepspike
+
+# Hardening: the check only needs to make outbound HTTPS requests and write its log.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/keep-feasibility

@@ -1,0 +1,13 @@
+# Never upload local secrets or state as build context.
+#
+# `gcloud builds submit` tars this directory and uploads it before building, so without
+# this file the master token in `.env` would leave the machine and land in the build
+# service. `.gitignore` does not cover this - it is a different mechanism.
+.env
+.venv/
+state.json
+before-write.json
+*.snapshot.json
+gate2-log.jsonl
+__pycache__/
+*.pyc
