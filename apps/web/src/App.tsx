@@ -141,7 +141,7 @@ const GIS_POLL_INTERVAL_MS = 200;
  */
 function App() {
   const [token, setToken] = useState<string | null>(() => getAccessToken());
-  /** True while the Google sign-in popup is being requested (auto-login or
+  /** True while a token request is running (the silent one on page load or
    *  the login button); shows a status line on the login panel meanwhile. */
   const [connecting, setConnecting] = useState(false);
   const [recipes, setRecipes] = useState<StoredRecipe[] | null>(null);
@@ -492,25 +492,29 @@ function App() {
 
   /**
    * Logs in — triggered by the login button (user gesture) or by the
-   * auto-login effect below (`{ automatic: true }`, best-effort, may be
-   * popup-blocked). The mount effect refreshes the recipe list as soon as
-   * the token is set (recipes === null shows the loading message meanwhile).
+   * auto-login effect below (`{ silent: true }`, no UI). The mount effect
+   * refreshes the recipe list as soon as the token is set (recipes === null
+   * shows the loading message meanwhile).
+   *
+   * A silent attempt that does not get a token is *not* an error the user
+   * should see: no screen was ever shown (googleAuth.ts sends `prompt: 'none'`
+   * for it), so the login panel simply stays and the button is the retry.
    */
-  const handleConnect = useCallback(async (options?: { automatic?: boolean }): Promise<void> => {
+  const handleConnect = useCallback(async (options?: { silent?: boolean }): Promise<void> => {
     // An explicit login opens a new auth generation: allow one automatic
     // recovery again in case the new token is rejected as well.
-    if (options?.automatic !== true) authRecoveryRef.current = false;
+    if (options?.silent !== true) authRecoveryRef.current = false;
     setError(null);
     setConnecting(true);
     let aborted = false;
     try {
       setToken(await requestAccessToken(options));
     } catch (err) {
-      // A superseded automatic attempt (user clicked during page-load login)
+      // A superseded silent attempt (user clicked during page-load login)
       // is aborted without a user-visible error — the fresh gesture attempt
       // takes over. Keep the `connecting` flag: it belongs to that attempt.
       aborted = err instanceof Error && err.name === 'AbortError';
-      if (!aborted) {
+      if (!aborted && options?.silent !== true) {
         setError(err instanceof Error ? err.message : String(err));
       }
     } finally {
@@ -524,9 +528,10 @@ function App() {
    * Services keeps handing the same dead token back. Drop it for good and start
    * one fresh login. Revoking at Google is the step that matters: it invalidates
    * the cached token and forces the next token request to ask for consent again
-   * instead of returning the cached one. The fresh request carries no user
-   * gesture, so the browser may block its popup — then the login panel stays and
-   * a single click on "Mit Google verbinden" completes the login.
+   * instead of returning the cached one. The fresh request is a silent one (no
+   * UI, no gesture) and the revoked grant can no longer satisfy it, so it ends
+   * without an error message and the login panel appears, where a single click
+   * on "Mit Google verbinden" completes the login.
    */
   const recoverFromAuthError = useCallback(async (): Promise<void> => {
     if (authRecoveryRef.current) return; // already recovering / already ran
@@ -536,7 +541,7 @@ function App() {
     setRecipes(null);
     setError(null);
     setMasterDataWarning(null);
-    await handleConnect({ automatic: true });
+    await handleConnect({ silent: true });
   }, [handleConnect]);
 
   // Register the Drive client's 401 hook for the lifetime of the app. Every
@@ -550,13 +555,15 @@ function App() {
   }, [recoverFromAuthError]);
 
   /**
-   * Best-effort auto-login: the access token is memory-only (googleAuth.ts),
-   * so every page load starts logged out. To skip the intro screen, request
-   * the token flow without a click once the GIS script is ready. Browsers
-   * only allow the account-chooser popup after a user gesture, so this
-   * attempt may be blocked — GIS then reports an error (or the request times
-   * out) and the login panel stays, where a single click retries with a
-   * gesture. The GIS script loads `async`, so poll until it is usable.
+   * Cold-start login: the access token is memory-only (googleAuth.ts), so every
+   * page load starts logged out. To skip the intro screen, ask for a token
+   * silently once the GIS script is ready — `{ silent: true }` sends
+   * `prompt: 'none'`, so Google shows nothing and only answers from the
+   * browser's Google session plus the grant it already remembers. That works
+   * without a user gesture, which is what a page load cannot provide; when it
+   * fails, the login panel stays and one tap on "Mit Google verbinden" opens
+   * the account chooser. The GIS script loads `async`, so poll until it is
+   * usable.
    */
   useEffect(() => {
     if (token) {
@@ -566,7 +573,7 @@ function App() {
     const interval = window.setInterval(() => {
       if (isGoogleAuthAvailable()) {
         window.clearInterval(interval);
-        void handleConnect({ automatic: true });
+        void handleConnect({ silent: true });
       } else if (Date.now() >= deadline) {
         // GIS still unavailable — give up silently; the button keeps working.
         window.clearInterval(interval);
@@ -813,7 +820,7 @@ function App() {
               </button>
               {connecting && (
                 <p className="login-status" role="status">
-                  Google-Anmeldefenster wird geöffnet …
+                  Anmeldung bei Google läuft …
                 </p>
               )}
               {!connecting && error !== null && (

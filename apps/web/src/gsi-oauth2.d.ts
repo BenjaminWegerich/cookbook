@@ -20,8 +20,12 @@ declare namespace google.accounts.oauth2 {
     /** Called with the token response (or error) when the flow completes. */
     callback: (response: TokenResponse) => void;
     /** Called when the flow fails before a token response exists. */
-    error_callback?: (error: { type: string; message: string }) => void;
-    /** Forces the consent screen on every request when set to "consent". */
+    error_callback?: (error: { type?: string; message?: string }) => void;
+    /**
+     * Prompt behaviour: "none" suppresses every authentication and consent
+     * screen (the request then succeeds from the browser's Google session
+     * alone), an empty string prompts only on the first request.
+     */
     prompt?: string;
     enable_serial_consent?: boolean;
     /** Email address or unique ID of the Google Account to preselect. */

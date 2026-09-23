@@ -9,7 +9,11 @@
  *
  * The access token is held in memory only (never persisted to localStorage),
  * so a page reload requires a fresh login. This avoids storing credentials
- * in a place where a future XSS could read them.
+ * in a place where a future XSS could read them. What *does* survive a reload
+ * is the grant Google remembers per user and client ID (Users → third-party
+ * access, plus the browser's Google session cookie): the silent request below
+ * turns that into a fresh access token without any UI, which is what keeps the
+ * login panel out of the way on a cold start.
  */
 
 import { GOOGLE_CLIENT_ID } from '../config';
@@ -41,17 +45,25 @@ let attempt: TokenAttempt | null = null;
 let pendingRequest: Promise<string> | null = null;
 
 /** Whether the in-flight request was started by a user gesture (button) or
- *  automatically at page load (which browsers may popup-block). */
+ *  automatically at page load (silent, no UI allowed). */
 let pendingByGesture = false;
 
 /**
  * How long a token attempt may stay unresolved before it is aborted. A
  * safety net only: normally GIS reports a blocked or closed popup through
- * `error_callback` (and a user gesture supersedes an automatic attempt, see
+ * `error_callback` (and a user gesture supersedes a silent attempt, see
  * `requestAccessToken`), so this timer just bounds the undocumented case in
  * which a silently blocked popup never fires any callback.
  */
 const TOKEN_REQUEST_TIMEOUT_MS = 60_000;
+
+/**
+ * Shorter bound for the *silent* page-load attempt. It shows no UI, so it can
+ * only end in a token, in a reported OAuth error or in nothing at all — the
+ * latter must not keep the login panel in its "connecting" state for a minute.
+ * A pending silent attempt is superseded by a tap on the login button anyway.
+ */
+const SILENT_REQUEST_TIMEOUT_MS = 10_000;
 
 /** True when the GIS script (index.html) has loaded and the API is usable. */
 export function isGoogleAuthAvailable(): boolean {
@@ -73,14 +85,21 @@ export function getAccessToken(): string | null {
  * without UI. Resolves with the access token.
  *
  * By default the request counts as *user-gesture driven* (login button) and
- * reuses an in-flight request so double-clicks do not open two popups. Pass
- * `{ automatic: true }` for the best-effort page-load attempt: browsers only
- * allow the popup after a gesture, so such an attempt may be blocked. A later
- * real gesture then *supersedes* the still-pending automatic attempt — it is
- * aborted and a fresh gesture-driven request reopens the popup — instead of
+ * reuses an in-flight request so double-clicks do not open two popups.
+ *
+ * `{ silent: true }` is the page-load attempt: it sends `prompt: 'none'`, so
+ * Google is not allowed to show any screen. It succeeds only when the user is
+ * still signed in to Google *and* has already granted the scope; then no popup
+ * — and no user gesture — is needed at all, which is exactly what a cold start
+ * requires. Otherwise the request fails with an OAuth error (typically
+ * `interaction_required`) and no popup was shown; callers treat that as "not
+ * connected" rather than as an error (see App.handleConnect).
+ *
+ * A later real gesture *supersedes* the still-pending silent attempt — it is
+ * aborted and a fresh gesture-driven request opens the chooser — instead of
  * being swallowed by the dedupe.
  */
-export function requestAccessToken(options?: { automatic?: boolean }): Promise<string> {
+export function requestAccessToken(options?: { silent?: boolean }): Promise<string> {
   if (!GOOGLE_CLIENT_ID) {
     throw new Error('VITE_GOOGLE_CLIENT_ID ist nicht gesetzt — siehe apps/web/.env.example.');
   }
@@ -91,12 +110,13 @@ export function requestAccessToken(options?: { automatic?: boolean }): Promise<s
   // Narrowed copy: after the guard above this is definitely a string.
   const clientId: string = GOOGLE_CLIENT_ID;
 
-  const byGesture = options?.automatic !== true;
+  const byGesture = options?.silent !== true;
+  const silent = !byGesture;
 
-  // Reuse the in-flight request for double-clicks and for any automatic call
+  // Reuse the in-flight request for double-clicks and for any silent call
   // while a request is running. Only a genuine gesture may supersede a still
-  // pending *automatic* attempt — its popup is likely blocked, so the gesture
-  // must start a fresh request instead of waiting on a dead one.
+  // pending *silent* attempt — its request shows no UI, so the tap must start
+  // a fresh request instead of waiting on it.
   if (pendingRequest !== null) {
     if (pendingByGesture || !byGesture) {
       return pendingRequest;
@@ -114,10 +134,13 @@ export function requestAccessToken(options?: { automatic?: boolean }): Promise<s
 
   let ownAttempt: TokenAttempt | null = null;
   const request = new Promise<string>((resolve, reject) => {
-    // Abort attempts that never settle (see TOKEN_REQUEST_TIMEOUT_MS).
-    const timeout = window.setTimeout(() => {
-      reject(new Error('Die Google-Anmeldung hat zu lange gedauert. Bitte versuche es erneut.'));
-    }, TOKEN_REQUEST_TIMEOUT_MS);
+    // Abort attempts that never settle (see the timeout constants above).
+    const timeout = window.setTimeout(
+      () => {
+        reject(new Error('Die Google-Anmeldung hat zu lange gedauert. Bitte versuche es erneut.'));
+      },
+      silent ? SILENT_REQUEST_TIMEOUT_MS : TOKEN_REQUEST_TIMEOUT_MS,
+    );
     ownAttempt = { resolve, reject, timeout };
     attempt = ownAttempt;
     pendingByGesture = byGesture;
@@ -130,7 +153,11 @@ export function requestAccessToken(options?: { automatic?: boolean }): Promise<s
         error_callback: handleTokenError,
       });
     }
-    tokenClient.requestAccessToken();
+    // The prompt is set per request, never on the client: the client is created
+    // once and reused for both attempts. "none" keeps the silent attempt free
+    // of any screen; "select_account" keeps the tap on the login button showing
+    // the account chooser as before.
+    tokenClient.requestAccessToken({ prompt: silent ? 'none' : 'select_account' });
   });
 
   // Clearing the module state on settle is guarded by an identity check: a
@@ -150,25 +177,29 @@ export function requestAccessToken(options?: { automatic?: boolean }): Promise<s
 
 /**
  * Handles the GIS error callback: non-OAuth failures such as a popup that
- * could not open (typically blocked by the browser, e.g. for the automatic
- * login attempt on page load) or was closed before a response arrived. Maps
- * the documented GIS error types to German UI messages; unknown types fall
- * back to the original message. Called by GIS — do not call directly.
+ * could not open (typically blocked by the browser) or was closed before a
+ * response arrived. Maps the documented GIS error types to German UI
+ * messages; unknown types fall back to the original message. Called by GIS —
+ * do not call directly.
  */
-function handleTokenError(error: { type: string; message: string }): void {
+function handleTokenError(error: { type?: string; message?: string }): void {
   const message =
     error.type === 'popup_failed_to_open'
       ? 'Das Google-Anmeldefenster konnte nicht geöffnet werden — vermutlich blockiert dein Browser ' +
         'Pop-ups. Klicke erneut auf „Mit Google verbinden“.'
       : error.type === 'popup_closed'
         ? 'Das Anmeldefenster wurde geschlossen, bevor die Anmeldung abgeschlossen war.'
-        : error.message;
+        : (error.message ?? 'Unbekannter OAuth-Fehler');
   attempt?.reject(new Error(message));
 }
 
 /**
- * Handles the GIS token-response callback, settling the pending request.
- * Called by GIS itself — do not call directly.
+ * Handles the GIS token-response callback, settling the pending request. An
+ * error response is the *normal* outcome of a silent request (no Google
+ * session or no grant yet, `interaction_required`), so it is reported as a
+ * plain rejection and the caller decides whether it is worth showing — the
+ * silent caller in App stays quiet about it. Called by GIS itself — do not
+ * call directly.
  */
 function handleTokenResponse(response: google.accounts.oauth2.TokenResponse): void {
   if (response.error || !response.access_token) {

@@ -344,8 +344,8 @@
   font-size: var(--text-sm);
 }
 
-/* Failed sign-in attempt (e.g. popup blocked on the automatic login) —
-   shown on the login panel below the button. */
+/* Failed user-driven sign-in attempt (e.g. popup blocked) — shown on the login
+   panel below the button. The silent page-load attempt never reports here. */
 .login-error {
   padding: var(--space-4);
   border: 1px solid var(--color-danger);

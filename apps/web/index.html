@@ -5,6 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/cookbook/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cookbook</title>
+    <!-- Web app manifest: makes the app installable, so on Android it can be
+         started from the home screen in its own window (standalone) instead of
+         as a Chrome tab. Paths stay relative to the Vite base (/cookbook/). -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <!-- Android tints the status bar with this colour while the app is open
+         (the paper background token of the app shell). -->
+    <meta name="theme-color" content="#faf5ec" />
     <!-- Google Identity Services: OAuth 2.0 token flow for Google Drive -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
