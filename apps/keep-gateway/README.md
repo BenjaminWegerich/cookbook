@@ -10,12 +10,12 @@ this service instead and the app talks to a clean, action-shaped HTTP boundary. 
 rationale: [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) ("Keep gateway"); the feasibility
 spike that proved the approach is in [`spike/keep-feasibility/`](../../spike/keep-feasibility/).
 
-**Status: skeleton.** The service and its boundary exist (former roadmap steps 2–3), the
-read path is verified against the live account, and the three write actions deliberately
-answer `501 not_implemented` until their prerequisites exist (the ingredient-category and
-write-action steps). It is **not deployed yet**: the scripts, the metric and the runbook are
-in place (`deploy/cloud-run/`), so deploying is one command — but it creates real cloud
-resources and has not been run.
+**Status: deployed and verified.** The service runs on Cloud Run in `europe-west3`
+(scale-to-zero), `GET /health` answers, and the read path returns both real Keep lists end to
+end. The three write actions deliberately answer `501 not_implemented` until their
+prerequisites exist (the ingredient-category and write-action steps). Deployment, the
+credential alert and the €1 spend guardrail are all in place — see
+[`deploy/cloud-run/README.md`](deploy/cloud-run/README.md).
 
 ## Endpoints
 

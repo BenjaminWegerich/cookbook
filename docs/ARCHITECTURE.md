@@ -80,12 +80,15 @@
 
 ### Keep gateway (backend module)
 
-- **Built as a skeleton in `apps/keep-gateway/`** (Python, Flask + gunicorn):
-  `GET /keep/state` reads the meal plan and the shopping list; the three write actions are
-  defined but answer `501` until their prerequisites exist. The service is not deployed
-  yet. The boundary fails closed (no gateway token ⇒ every Keep route refuses) and the
-  browser origin allowlist is explicit. The Keep code lives in the component rather than in
-  the spike, so the image is self-contained.
+- **Built and deployed** as `apps/keep-gateway/` (Python, Flask + gunicorn) on Cloud Run in
+  `europe-west3`, scale-to-zero. `GET /health` is the liveness probe — deliberately not
+  `/healthz`, which Google's frontend answers itself before a `run.app` request reaches the
+  container — and `GET /keep/state` reads the meal plan and the shopping list. The three write
+  actions are defined but answer `501` until their prerequisites exist. A log-based alert
+  watches for a rejected credential, and a €1 budget guardrail detaches billing if the project
+  ever spends it (both in `deploy/cloud-run/`). The boundary fails closed (no gateway token ⇒
+  every Keep route refuses) and the browser origin allowlist is explicit. The Keep code lives
+  in the component rather than in the spike, so the image is self-contained.
 - Synchronizes the meal plan and the shopping list with Google Keep, and applies the
   intelligent shopping-list filtering (always-in-stock vs. may-be-in-stock).
 - **Language: Python**, using [`gkeepapi`](https://github.com/kiwiz/gkeepapi). For a personal

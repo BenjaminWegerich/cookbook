@@ -3,13 +3,25 @@
 Everything needed to put the gateway on Cloud Run, to hand the app its token, and — the part
 that matters most — to bring the integration back when Google stops accepting the credential.
 
-Three scripts, in the order you need them:
+**The gateway is already deployed** (`keep-gateway`, `europe-west3`); these scripts are
+idempotent, so they are also the update path. To see the live state without re-deriving it:
+
+```sh
+gcloud run services list --region europe-west3   # keep-gateway (the service)
+gcloud secrets list                              # keep-master-token-cloud, keep-gateway-token
+gcloud run jobs list --region europe-west3       # keep-gate2-probe (durability sampler), keep-mint
+gcloud functions describe stop-billing --region europe-west3   # the spend guardrail
+gcloud scheduler jobs list --location europe-west3             # keep-gate2-probe-6h
+```
+
+Scripts, in the order you need them:
 
 | Script | When | What it does |
 | ------ | ---- | ------------ |
 | `provision.sh` | first deploy, and every later release | builds the image, creates the gateway token secret, deploys/rolls the service, wires the metric + alert, re-points the mint job |
 | `mint-token.sh` | once at setup, then only when the credential dies | exchanges a browser cookie for a cloud-minted master token and stores it |
 | `setup_monitoring.py` | called by `provision.sh`; runnable alone | log-based metric + email alert (idempotent, `--dry-run` prints the payloads) |
+| `setup_budget_guardrail.sh` | once, then only to re-test or re-arm | the €1 budget, its Pub/Sub topic, and the function that detaches billing when the budget is spent (`setup_budget.py` builds the budget itself) |
 
 ## Prerequisites
 

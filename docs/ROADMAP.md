@@ -51,9 +51,11 @@ A feasibility spike in `spike/keep-feasibility/` validated the approach against 
 account: shared-note writes and ordering pass, a cold sync is ~0.7 s, and the write strategy
 was proven non-destructive on the real 135-item list.
 
-The gateway skeleton is built in `apps/keep-gateway/`: the HTTP boundary and the read path
-are done (former steps 2–3), and it owns its copy of the spike's authentication and
-failure-diagnosis code so the deployed image stays self-contained. It is not deployed yet.
+The gateway is built and deployed (`apps/keep-gateway/`, Cloud Run, `europe-west3`): the HTTP
+boundary and the read path are done and verified against the live account, a log-based alert
+watches for a rejected credential, and a €1 budget guardrail caps the project's spend. It owns
+its copy of the spike's authentication and failure-diagnosis code, so the deployed image stays
+self-contained. What remains is the frontend and the three write actions.
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -61,12 +63,6 @@ endpoint from Google Cloud's network (`BadAuthentication`), while a token minted
 Run and then used there works immediately. What Google binds is where the token was created,
 not where it is used.
 
-- [ ] Token minting: fold `spike/keep-feasibility/mint-in-cloud.py` into the gateway's setup
-      and recovery path. The `oauth_token` cookie it needs is a short-lived, full-access session
-      credential — used once, held in a dedicated secret, deleted immediately afterwards.
-- [ ] Token handling: storage outside the repository, an alert on authentication failure, and a
-      documented re-auth runbook. A re-mint needs a browser cookie *and* a cloud-side exchange,
-      so the runbook is the difference between a recoverable outage and a lost integration.
 - [ ] Confirm durability: the 6-hourly sampler is running, but a first success is not a token
       that survives weeks. Watch the log for `rejected` before treating the setup as settled.
 - [ ] Add a dish to the meal plan (the "Essensplan" list in Google Keep).
@@ -78,9 +74,9 @@ not where it is used.
 
 ### Next steps, in order
 
-The feasibility work is finished and the gateway skeleton is built (`apps/keep-gateway/`);
-everything below is building, not investigating. Step 1 guards the foundation, steps 2-3 make
-the service safe to leave running, steps 4-6 are the actual features.
+The feasibility work is finished and the gateway is built, deployed and guarded; everything
+below is building, not investigating. Step 1 keeps an eye on the foundation; the rest is the
+frontend and the actual features.
 
 1. **Confirm durability before building on it.** The gateway is worthless if the token dies
    after a week. Check the sampler's log — `keep-gate2-probe-6h` runs every 6 hours and records
@@ -89,16 +85,14 @@ the service safe to leave running, steps 4-6 are the actual features.
    `gcloud logging read 'resource.labels.job_name="keep-gate2-probe"' --limit 200 --format='value(textPayload)' --freshness=7d`
 2. **Frontend integration with graceful degradation** (N5): detect whether a gateway is
    reachable; if not, hide the Keep actions and keep the app fully usable. The core must not
-   depend on Keep — this is a documented non-functional requirement, not a nicety.
-3. **Operational safety**: token in Secret Manager (done for the probe), an alert on
-   authentication failure, and the re-auth runbook kept current. A re-mint needs a browser
-   cookie *and* a cloud-side exchange, so a stale runbook is the difference between a
-   recoverable outage and a lost integration.
-4. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
+   depend on Keep — this is a documented non-functional requirement, not a nicety. This one
+   starts with agreeing the UI with Ben (where the actions live, how the gateway token is
+   entered) rather than with code.
+3. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
    needs a category. Extend `docs/ingredients.csv` (and the Drive `zutaten.csv`) with it.
-5. **Implement the three Keep actions**: add a dish to the meal plan, add a recipe's scaled
+4. **Implement the three Keep actions**: add a dish to the meal plan, add a recipe's scaled
    ingredients to the shopping list (including linked Zutaten-Rezepte), and sort by category.
-6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
+5. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
    query may-be-in-stock), which builds on the same gateway.
 
 Two things to carry over rather than rediscover:
