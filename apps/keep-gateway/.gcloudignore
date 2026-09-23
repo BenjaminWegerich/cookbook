@@ -1,0 +1,17 @@
+# What `gcloud builds submit` uploads from this directory.
+#
+# This file takes precedence over the .gitignore fallback, so it is the explicit guard that
+# keeps the local virtualenv and any local .env out of the upload - the build context is
+# uploaded in full before Docker ever sees it. The image needs only the package, ops/ and
+# wsgi.py, so the tests, the deploy scripts and the docs do not travel.
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+deploy/
+tests/
+README.md
+.gitignore
+.gcloudignore
+.dockerignore

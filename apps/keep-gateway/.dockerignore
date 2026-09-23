@@ -1,0 +1,12 @@
+# Keep the image and the upload small, and never ship a local secret or virtualenv into a
+# build. `gcloud builds submit` uploads the whole context before building, so this file (with
+# .gcloudignore) is the guard that keeps .env and .venv out of it.
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+tests/
+deploy/
+README.md
+.gitignore

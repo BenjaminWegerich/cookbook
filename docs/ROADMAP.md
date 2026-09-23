@@ -51,14 +51,16 @@ A feasibility spike in `spike/keep-feasibility/` validated the approach against 
 account: shared-note writes and ordering pass, a cold sync is ~0.7 s, and the write strategy
 was proven non-destructive on the real 135-item list.
 
+The gateway skeleton is built in `apps/keep-gateway/`: the HTTP boundary and the read path
+are done (former steps 2–3), and it owns its copy of the spike's authentication and
+failure-diagnosis code so the deployed image stays self-contained. It is not deployed yet.
+
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
 endpoint from Google Cloud's network (`BadAuthentication`), while a token minted *from* Cloud
 Run and then used there works immediately. What Google binds is where the token was created,
 not where it is used.
 
-- [ ] Keep gateway: HTTP boundary on Cloud Run, graceful degradation to "Keep features off"
-      when unreachable. No state cache (a cold sync is ~0.7 s).
 - [ ] Token minting: fold `spike/keep-feasibility/mint-in-cloud.py` into the gateway's setup
       and recovery path. The `oauth_token` cookie it needs is a short-lived, full-access session
       credential — used once, held in a dedicated secret, deleted immediately afterwards.
@@ -76,41 +78,27 @@ not where it is used.
 
 ### Next steps, in order
 
-The feasibility work is finished; everything below is building, not investigating. Steps 1-3
-are the gateway's skeleton and can be done in one pass; 4-6 are what make it safe to leave
-running; 7-9 are the actual features.
+The feasibility work is finished and the gateway skeleton is built (`apps/keep-gateway/`);
+everything below is building, not investigating. Step 1 guards the foundation, steps 2-3 make
+the service safe to leave running, steps 4-6 are the actual features.
 
 1. **Confirm durability before building on it.** The gateway is worthless if the token dies
    after a week. Check the sampler's log — `keep-gate2-probe-6h` runs every 6 hours and records
    one JSON line per run. Anything other than `ok` means stop and fix the token path first.
    Verify with:
    `gcloud logging read 'resource.labels.job_name="keep-gate2-probe"' --limit 200 --format='value(textPayload)' --freshness=7d`
-2. **Build the gateway service itself** (new component, e.g. `apps/keep-gateway/`, Python):
-   a small HTTP service over `gkeepapi`, reusing the spike's modules rather than duplicating
-   them (`keep-spike.py` already owns authentication and the failure diagnosis). Runs as a
-   Cloud Run *service* (not a job), `min-instances 0`, no state cache.
-3. **Define the HTTP boundary** and keep it thin — one endpoint per user action, so the
-   frontend never learns Keep's shape:
-   - `GET  /keep/state` — the meal plan and shopping list, for app start
-   - `POST /keep/mealplan` — add a dish to "Essensplan"
-   - `POST /keep/shopping` — add a recipe's scaled ingredients to "Einkaufsliste"
-   - `POST /keep/shopping/sort` — reorder by category/aisle
-4. **Decide the endpoint's authentication.** The service is reachable from a public URL and
-   its credential can write to Keep, so it cannot be open. Note the constraint that makes this
-   non-trivial: the frontend is a *public static bundle*, so no shared secret can be embedded
-   in it — the mechanism has to be something the user supplies at runtime or a real sign-in.
-5. **Frontend integration with graceful degradation** (N5): detect whether a gateway is
+2. **Frontend integration with graceful degradation** (N5): detect whether a gateway is
    reachable; if not, hide the Keep actions and keep the app fully usable. The core must not
    depend on Keep — this is a documented non-functional requirement, not a nicety.
-6. **Operational safety**: token in Secret Manager (done for the probe), an alert on
+3. **Operational safety**: token in Secret Manager (done for the probe), an alert on
    authentication failure, and the re-auth runbook kept current. A re-mint needs a browser
    cookie *and* a cloud-side exchange, so a stale runbook is the difference between a
    recoverable outage and a lost integration.
-7. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
+4. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
    needs a category. Extend `docs/ingredients.csv` (and the Drive `zutaten.csv`) with it.
-8. **Implement the three Keep actions**: add a dish to the meal plan, add a recipe's scaled
+5. **Implement the three Keep actions**: add a dish to the meal plan, add a recipe's scaled
    ingredients to the shopping list (including linked Zutaten-Rezepte), and sort by category.
-9. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
+6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
    query may-be-in-stock), which builds on the same gateway.
 
 Two things to carry over rather than rediscover:
@@ -120,7 +108,9 @@ Two things to carry over rather than rediscover:
   rather than reinvented.
 - **`spike/keep-feasibility/` is a spike, not the product.** Its tooling, tests and the
   `mint-in-cloud.py` recovery script are worth keeping; the rest exists to answer questions
-  that are now answered.
+  that are now answered. The gateway keeps that authentication and diagnosis logic in
+  `apps/keep-gateway/keep_gateway/keep_client.py` rather than importing `keep-spike.py`, so
+  the deployed image is self-contained.
 
 ## Integrations (depends on: web app, storage)
 

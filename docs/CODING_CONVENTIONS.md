@@ -10,11 +10,14 @@
 
 ## Coding Conventions
 
-- **Programming Languages:** TypeScript for the web app and the core logic module. The future
-  Google Keep backend may use Python (isolated, see [ARCHITECTURE.md](ARCHITECTURE.md)).
+- **Programming Languages:** TypeScript for the web app and the core logic module. The
+  Google Keep backend is Python (isolated, see [ARCHITECTURE.md](ARCHITECTURE.md)).
   Recipe content is German data.
 - **Naming Conventions and Casing:** camelCase for variables and functions, PascalCase for
   React components and types, kebab-case for file names, UPPER_SNAKE_CASE for constants.
+  Python is the one exception: an importable package needs snake_case modules
+  (`apps/keep-gateway/keep_gateway/keep_client.py`), while standalone Python scripts loaded
+  by path keep kebab-case names (`keep-spike.py`).
 - **Quantity-domain abbreviations:** identifiers for the quantity-domain terms use the
   abbreviations defined in [additional_quantity_specifications.md](additional_quantity_specifications.md)
   §2 — `aq` (additional quantity), `au` (additional unit), `bq` (base quantity), `bu` (base

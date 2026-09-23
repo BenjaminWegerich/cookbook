@@ -1,0 +1,294 @@
+#!/usr/bin/env bash
+# Provision (or update) the Keep gateway on Cloud Run.
+#
+# Creates and updates, idempotently, so this is also the "deploy a new build" path:
+#
+#   1. the gateway token secret (a random value the web app is asked to paste)
+#   2. the Cloud Run *service* (public URL, scale-to-zero, token-gated)
+#   3. the log-based metric and the email alert for a rejected credential
+#   4. the mint job's image, when the mint has been set up before
+#
+# Deliberately NOT done here: seeding the master token. A home-minted token is refused from
+# Google Cloud's network (`BadAuthentication`), so the secret may only be filled by the mint
+# job - see ./mint-token.sh and the README.
+#
+# Usage, from apps/keep-gateway:
+#
+#   ./deploy/cloud-run/provision.sh
+#   ./deploy/cloud-run/provision.sh --allowed-origin https://user.github.io
+#   ./deploy/cloud-run/provision.sh --skip-build          # redeploy the current revision
+#
+# Environment variables override every default: PROJECT, REGION, SERVICE, REPO,
+# MASTER_SECRET, TOKEN_SECRET, MINT_JOB, ALLOWED_ORIGINS, ALERT_EMAIL, TAG.
+
+set -euo pipefail
+
+PROJECT="${PROJECT:-cookbook-keep}"
+REGION="${REGION:-europe-west3}"
+SERVICE="${SERVICE:-keep-gateway}"
+REPO="${REPO:-keep-probe}"
+MASTER_SECRET="${MASTER_SECRET:-keep-master-token-cloud}"
+TOKEN_SECRET="${TOKEN_SECRET:-keep-gateway-token}"
+MINT_JOB="${MINT_JOB:-keep-mint}"
+COOKIE_SECRET="${COOKIE_SECRET:-keep-oauth-token}"
+
+# The browser origin allowed to call the gateway. This is the exact scheme+host, no path:
+# the Vite app is served from the repository's GitHub Pages site. Add more with a comma.
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://benjaminwegerich.github.io}"
+
+# Where the "credential rejected" alert goes. Must be an address Google can send to.
+ALERT_EMAIL="${ALERT_EMAIL:-benjaminwegerich@gmail.com}"
+
+SKIP_BUILD=0
+KEEP_EMAIL="${KEEP_EMAIL:-}"
+KEEP_DEVICE_ID="${KEEP_DEVICE_ID:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project)         PROJECT="$2";         shift 2 ;;
+    --region)          REGION="$2";          shift 2 ;;
+    --allowed-origin)  ALLOWED_ORIGINS="$2"; shift 2 ;;
+    --alert-email)     ALERT_EMAIL="$2";     shift 2 ;;
+    --keep-email)      KEEP_EMAIL="$2";      shift 2 ;;
+    --keep-device-id)  KEEP_DEVICE_ID="$2";  shift 2 ;;
+    --skip-build)      SKIP_BUILD=1;         shift ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+step() { printf '\n=== %s\n' "$1"; }
+
+# --- Locate gcloud and the component's own paths ---------------------------------------
+GATEWAY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REPO_ROOT="$(cd "$GATEWAY_DIR/../.." && pwd)"
+SPIKE_DIR="$REPO_ROOT/spike/keep-feasibility"
+
+# The SDK lives unpacked in the spike directory rather than system-wide, so a bare `gcloud`
+# may well not be on PATH. Prepend it (resolved from this script's location) so every call
+# below just works.
+if [[ -x "$SPIKE_DIR/.tools/google-cloud-sdk/bin/gcloud" ]]; then
+  PATH="$SPIKE_DIR/.tools/google-cloud-sdk/bin:$PATH"
+fi
+command -v gcloud >/dev/null || { echo "gcloud not found - see the README's prerequisites." >&2; exit 1; }
+
+# --- Preconditions ---------------------------------------------------------------------
+ACTIVE_ACCOUNT="$(gcloud config get-value account --quiet 2>/dev/null || true)"
+if [[ -z "$ACTIVE_ACCOUNT" || "$ACTIVE_ACCOUNT" == "(unset)" ]]; then
+  echo "Not authenticated. Run:  gcloud auth login" >&2
+  exit 1
+fi
+echo "Authenticated as ${ACTIVE_ACCOUNT}"
+
+# The throwaway account's identifiers live in the spike's .env. They are not secrets (only
+# the master token is), but they must match the token exactly: a different device id makes
+# Google treat the deployment as a new device.
+if [[ -f "$SPIKE_DIR/.env" ]]; then
+  [[ -n "$KEEP_EMAIL" ]] || KEEP_EMAIL="$(grep '^KEEP_EMAIL=' "$SPIKE_DIR/.env" | cut -d= -f2- || true)"
+  [[ -n "$KEEP_DEVICE_ID" ]] || KEEP_DEVICE_ID="$(grep '^KEEP_DEVICE_ID=' "$SPIKE_DIR/.env" | cut -d= -f2- || true)"
+fi
+[[ -n "$KEEP_EMAIL" ]] || { echo "KEEP_EMAIL unknown: pass --keep-email or keep it in $SPIKE_DIR/.env" >&2; exit 1; }
+[[ -n "$KEEP_DEVICE_ID" ]] || { echo "KEEP_DEVICE_ID unknown: pass --keep-device-id or keep it in $SPIKE_DIR/.env" >&2; exit 1; }
+
+# --- Project and APIs ------------------------------------------------------------------
+step "Project ${PROJECT}"
+gcloud config set project "$PROJECT" --quiet
+
+step "Enabling APIs (no-op when already enabled)"
+gcloud services enable \
+  run.googleapis.com \
+  cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com \
+  secretmanager.googleapis.com \
+  logging.googleapis.com \
+  monitoring.googleapis.com \
+  --quiet
+
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+# --- Master token secret ---------------------------------------------------------------
+step "Master token secret (${MASTER_SECRET})"
+if ! gcloud secrets describe "$MASTER_SECRET" >/dev/null 2>&1; then
+  cat >&2 <<EOF
+${MASTER_SECRET} does not exist.
+It is created by the mint (see ./mint-token.sh), because only a cloud-minted token works
+from Cloud Run. Run the mint first, or check the secret name.
+EOF
+  exit 1
+fi
+VERSIONS="$(gcloud secrets versions list "$MASTER_SECRET" --format='value(name)' 2>/dev/null | wc -l)"
+if [[ "$VERSIONS" -eq 0 ]]; then
+  echo "${MASTER_SECRET} has no version yet - run ./mint-token.sh before relying on the service." >&2
+else
+  echo "present with ${VERSIONS} version(s)"
+fi
+
+gcloud secrets add-iam-policy-binding "$MASTER_SECRET" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/secretmanager.secretAccessor" --quiet >/dev/null
+echo "read access granted to ${RUN_SA}"
+
+# --- Gateway token secret --------------------------------------------------------------
+step "Gateway token secret (${TOKEN_SECRET})"
+# A token the user pastes into the app, one per session. It is generated here and never
+# printed: read it out with
+#   gcloud secrets versions access latest --secret=${TOKEN_SECRET}
+# and store it in Google Passwords, which is where the app's user keeps it.
+if gcloud secrets describe "$TOKEN_SECRET" >/dev/null 2>&1; then
+  echo "already exists - leaving the value alone (rotation is in the README)"
+else
+  gcloud secrets create "$TOKEN_SECRET" --replication-policy=automatic --quiet
+  # token_urlsafe(32) is 43 characters of URL-safe base64 - long enough that guessing is not
+  # a threat model, short enough to paste by hand on a phone.
+  python3 -c 'import secrets; print(secrets.token_urlsafe(32), end="")' | \
+    gcloud secrets versions add "$TOKEN_SECRET" --data-file=- --quiet >/dev/null
+  echo "created with a new random token"
+fi
+
+gcloud secrets add-iam-policy-binding "$TOKEN_SECRET" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/secretmanager.secretAccessor" --quiet >/dev/null
+echo "read access granted to ${RUN_SA}"
+
+# --- Image -----------------------------------------------------------------------------
+step "Image"
+gcloud artifacts repositories create "$REPO" \
+  --repository-format=docker --location="$REGION" --quiet 2>/dev/null || true
+
+if [[ "$SKIP_BUILD" -eq 1 ]]; then
+  # Reuse the tag of the current service revision, so a redeploy without a rebuild is exact.
+  TAG="${TAG:-$(gcloud run services describe "$SERVICE" --region "$REGION" \
+    --format='value(spec.template.spec.containers[0].image)' 2>/dev/null | awk -F: '{print $NF}')}"
+  [[ -n "$TAG" ]] || { echo "--skip-build needs an existing service or an explicit TAG" >&2; exit 1; }
+  echo "reusing tag ${TAG}"
+else
+  # A unique tag per build: with ":latest" there is no way to tell from the service
+  # description which build is actually running, which is how a failed fix looks identical.
+  TAG="${TAG:-$(date -u +%Y%m%d-%H%M%S)}"
+fi
+IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/keep-gateway:${TAG}"
+
+if [[ "$SKIP_BUILD" -eq 0 ]]; then
+  echo "building ${IMAGE}"
+  # No --file flag exists: gcloud builds the Dockerfile at the build-context root, which is
+  # why the gateway directory holds its own Dockerfile.
+  ( cd "$GATEWAY_DIR" && gcloud builds submit --tag "$IMAGE" . --quiet )
+fi
+
+# --- Service ---------------------------------------------------------------------------
+step "Cloud Run service (${SERVICE})"
+# Two flags deserve their reasoning:
+#
+#   --allow-unauthenticated  The web app is a static bundle in a browser: it cannot hold a
+#                            Cloud Run IAM credential. The gate is the gateway token the app
+#                            sends, checked inside the service - so the URL itself is public
+#                            and useless without a token.
+#   --min-instances 0        Scale to zero. A cold Keep sync is ~1s, so the cold start is
+#                            invisible and the free tier covers this workload.
+#
+# Environment goes through a temporary YAML file rather than `--set-env-vars`. That flag
+# splits on a delimiter, and no natural delimiter survives here: the throwaway address
+# contains "@" and the origin list contains ",". A file has no delimiter rules.
+ENV_FILE="$(mktemp --suffix=.yaml)"
+trap 'rm -f "$ENV_FILE"' EXIT
+cat > "$ENV_FILE" <<EOF
+KEEP_EMAIL: "${KEEP_EMAIL}"
+KEEP_DEVICE_ID: "${KEEP_DEVICE_ID}"
+KEEP_GATEWAY_ALLOWED_ORIGINS: "${ALLOWED_ORIGINS}"
+EOF
+
+SERVICE_ARGS=(
+  --image "$IMAGE"
+  --region "$REGION"
+  --allow-unauthenticated
+  --min-instances 0
+  --max-instances 2
+  --cpu 1
+  --memory 512Mi
+  --concurrency 8
+  --timeout 30
+  --env-vars-file "$ENV_FILE"
+  --set-secrets "KEEP_MASTER_TOKEN=${MASTER_SECRET}:latest,KEEP_GATEWAY_TOKEN=${TOKEN_SECRET}:latest"
+  --quiet
+)
+
+# `gcloud run deploy` creates the service or rolls a new revision for an existing one, so
+# this is both the first deploy and the update path - one code path, no drift between them.
+gcloud run deploy "$SERVICE" "${SERVICE_ARGS[@]}"
+
+SERVICE_URL="$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')"
+echo "url: ${SERVICE_URL}"
+
+# --- Monitoring ------------------------------------------------------------------------
+step "Log-based metric and alert"
+# A failure here must not hide the successful deploy above: the service is already serving,
+# and a brand-new log-based metric can take minutes to become referenceable by Monitoring.
+# So this step reports, continues to the summary, and makes the script exit non-zero at the
+# very end.
+MONITORING_FAILED=0
+GOOGLE_ACCESS_TOKEN="$(gcloud auth print-access-token)" \
+  python3 "$GATEWAY_DIR/deploy/cloud-run/setup_monitoring.py" \
+    --project "$PROJECT" --service "$SERVICE" --email "$ALERT_EMAIL" || MONITORING_FAILED=1
+
+if [[ "$MONITORING_FAILED" -ne 0 ]]; then
+  cat >&2 <<EOF
+
+The metric and the notification channel are in place, but the alert policy is not.
+Re-run just this part (no rebuild needed), with a longer wait:
+
+  cd ${GATEWAY_DIR}
+  GOOGLE_ACCESS_TOKEN="\$(gcloud auth print-access-token)" \\
+    python3 deploy/cloud-run/setup_monitoring.py \\
+      --project ${PROJECT} --service ${SERVICE} --email ${ALERT_EMAIL} \\
+      --policy-retries 12 --policy-retry-delay 60
+EOF
+fi
+
+# --- Mint job --------------------------------------------------------------------------
+step "Mint job (${MINT_JOB})"
+# The mint job shares the service image and only overrides the container command, so the
+# credential logic and its diagnosis exist in one place. It is (re)pointed at the new image
+# only once the cookie secret exists: Cloud Run refuses a job that references a secret with
+# no versions, and that secret is deliberately created only for the minutes a mint needs.
+if gcloud secrets describe "$COOKIE_SECRET" >/dev/null 2>&1; then
+  if gcloud run jobs describe "$MINT_JOB" --region "$REGION" >/dev/null 2>&1; then
+    gcloud run jobs update "$MINT_JOB" --region "$REGION" --image "$IMAGE" --quiet
+    echo "updated to ${TAG}"
+  else
+    echo "cookie secret exists but no ${MINT_JOB} job - run ./mint-token.sh to create it"
+  fi
+else
+  echo "no ${COOKIE_SECRET} secret, so the job is left alone (./mint-token.sh sets it up)"
+fi
+
+# --- Summary ---------------------------------------------------------------------------
+cat <<EOF
+
+=== Provisioned
+
+  project    ${PROJECT}
+  region     ${REGION}
+  service    ${SERVICE}
+  url        ${SERVICE_URL}
+  image      ${IMAGE}
+  origins    ${ALLOWED_ORIGINS}
+  alert to   ${ALERT_EMAIL}
+
+NEXT
+  1. The app's token. Store it in Google Passwords, then paste it into the app:
+       gcloud secrets versions access latest --secret=${TOKEN_SECRET}
+  2. The master token. If the service logs keep the credential is rejected, or nothing has
+     been minted yet, run:
+       ./deploy/cloud-run/mint-token.sh
+  3. Check the deployment:
+       curl -s ${SERVICE_URL}/health
+  4. Budget guardrail, if not set already (free tier is a discount, not a cap):
+       https://console.cloud.google.com/billing/budgets
+
+Teardown is in the README (section "Teardown").
+EOF
+
+if [[ "$MONITORING_FAILED" -ne 0 ]]; then
+  echo "NOTE: the alert policy is still missing - see the instructions above." >&2
+fi
+exit "$MONITORING_FAILED"

@@ -1,0 +1,10 @@
+# Local virtualenv for the gateway (created locally, never committed).
+.venv/
+
+# Local secrets: the master token, the device id and the gateway token. A master token
+# grants full access to the account it belongs to, so this file must never be committed.
+.env
+
+# Python bytecode caches.
+__pycache__/
+*.py[cod]

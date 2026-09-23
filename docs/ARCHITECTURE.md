@@ -8,7 +8,9 @@
 > ingredient rows above a free-prose text, and the master ingredient list is derived from
 > the rows (the step text may contain display-only inline artifacts for scaled
 > quantities, see [storage_format.md](storage_format.md) §4/§5). AI-assisted create/edit,
-> Google Keep, Gemini and sharing integrations follow in the upcoming roadmap tasks.
+> Gemini and sharing integrations follow in the upcoming roadmap tasks. The Google Keep
+> integration has started: its gateway skeleton (`apps/keep-gateway/`) reads both Keep
+> lists over a thin HTTP boundary.
 
 ## Components
 
@@ -78,6 +80,12 @@
 
 ### Keep gateway (backend module)
 
+- **Built as a skeleton in `apps/keep-gateway/`** (Python, Flask + gunicorn):
+  `GET /keep/state` reads the meal plan and the shopping list; the three write actions are
+  defined but answer `501` until their prerequisites exist. The service is not deployed
+  yet. The boundary fails closed (no gateway token ⇒ every Keep route refuses) and the
+  browser origin allowlist is explicit. The Keep code lives in the component rather than in
+  the spike, so the image is self-contained.
 - Synchronizes the meal plan and the shopping list with Google Keep, and applies the
   intelligent shopping-list filtering (always-in-stock vs. may-be-in-stock).
 - **Language: Python**, using [`gkeepapi`](https://github.com/kiwiz/gkeepapi). For a personal
@@ -98,6 +106,14 @@
 - Isolated behind a clean HTTP boundary, with its own Google auth and secret handling. The web
   app degrades to "Keep features off" when no gateway is reachable (N5 in
   [user_stories.md](user_stories.md)).
+- **Endpoint authentication: a pasted gateway token.** The app asks for a shared token when
+  the user turns Keep features on, keeps it in memory only (the same pattern as the AI API
+  key, N6) and sends it as `Authorization: Bearer`; the gateway compares it in constant time
+  against `KEEP_GATEWAY_TOKEN`. Nothing is embedded in the static bundle, and the check is
+  one function, so a later move to a real sign-in touches no Keep code. Rejected for now:
+  reusing the Drive access token (it would hand the gateway a Drive credential), a
+  service-account key in the bundle, Firebase Auth, and IAP in front of Cloud Run (new
+  infrastructure for a single household).
 - **Credential model: a dedicated throwaway Google account** whose master token the gateway
   holds, with the two notes shared *into* it per note. This bounds the blast radius of a
   leaked token to exactly those two notes, and keeps a suspension of the automating account

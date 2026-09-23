@@ -1,0 +1,6 @@
+# The Cloud Functions runtime for the budget guardrail.
+#
+# Deliberately the only dependency: the Cloud Billing call is plain HTTP through urllib, so
+# there is no client library and no credential plumbing to get wrong. `functions-framework`
+# supplies the `@functions_framework.cloud_event` decorator the runtime entry point needs.
+functions-framework>=3.0,<4.0
