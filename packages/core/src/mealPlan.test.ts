@@ -29,8 +29,16 @@ import { YIELD_VIEW_STEPS, yieldViewQuantities } from './recipe/yieldViews.js';
 /** Narrow no-break space (U+202F) — the app's number/unit separator. */
 const NNBSP = '\u202F';
 
-/** One export URL as the app builds it (the fragment is added per entry). */
-const EXPORT_URL = 'https://drive.google.com/file/d/FILE_ID/view';
+/**
+ * The Drive fallback URL as it looks without a size: the app appends
+ * `#portionen=6` / `#menge=500g` to it.
+ */
+const DRIVE_URL = 'https://drive.google.com/file/d/FILE_ID/view';
+/**
+ * An export-host URL as the app builds it: it already carries the file as a
+ * query parameter, so the size joins it as another parameter (`&portionen=6`).
+ */
+const HOST_URL = 'https://script.google.com/macros/s/DEPLOYMENT_ID/exec?f=FILE_ID';
 
 const FINISHED_DISH: MealPlanRecipeInfo = { type: 'finished_dish' };
 const G_RECIPE: MealPlanRecipeInfo = { type: 'ingredient_recipe', yieldUnit: 'g' };
@@ -133,26 +141,42 @@ describe('parseMealPlanText — linkless shape', () => {
 
 describe('parseMealPlanText — link shape', () => {
   it('splits the title from a trailing export URL', () => {
-    expect(parseMealPlanText(`Kürbissuppe: ${EXPORT_URL}#portionen=6`)).toEqual({
-      text: `Kürbissuppe: ${EXPORT_URL}#portionen=6`,
+    expect(parseMealPlanText(`Kürbissuppe: ${DRIVE_URL}#portionen=6`)).toEqual({
+      text: `Kürbissuppe: ${DRIVE_URL}#portionen=6`,
       title: 'Kürbissuppe',
       planned: { kind: 'servings', servings: 6 },
-      link: `${EXPORT_URL}#portionen=6`,
+      link: `${DRIVE_URL}#portionen=6`,
+    });
+  });
+
+  it('reads the size out of an export-host URL as a query parameter', () => {
+    // The host form the app writes: the file is already a query parameter, so
+    // the size joins it.
+    expect(parseMealPlanText(`Kürbissuppe: ${HOST_URL}&portionen=6`)).toEqual({
+      text: `Kürbissuppe: ${HOST_URL}&portionen=6`,
+      title: 'Kürbissuppe',
+      planned: { kind: 'servings', servings: 6 },
+      link: `${HOST_URL}&portionen=6`,
+    });
+    expect(parseMealPlanText(`Béchamelsauce: ${HOST_URL}&menge=500g`).planned).toEqual({
+      kind: 'yield',
+      quantity: 500,
+      baseUnit: 'g',
     });
   });
 
   it('reads a yield out of the fragment and normalizes kg/l', () => {
-    expect(parseMealPlanText(`Béchamelsauce: ${EXPORT_URL}#menge=500g`).planned).toEqual({
+    expect(parseMealPlanText(`Béchamelsauce: ${DRIVE_URL}#menge=500g`).planned).toEqual({
       kind: 'yield',
       quantity: 500,
       baseUnit: 'g',
     });
-    expect(parseMealPlanText(`Béchamelsauce: ${EXPORT_URL}#menge=0,5kg`).planned).toEqual({
+    expect(parseMealPlanText(`Béchamelsauce: ${DRIVE_URL}#menge=0,5kg`).planned).toEqual({
       kind: 'yield',
       quantity: 500,
       baseUnit: 'g',
     });
-    expect(parseMealPlanText(`Gemüsebrühe: ${EXPORT_URL}#menge=1.5l`).planned).toEqual({
+    expect(parseMealPlanText(`Gemüsebrühe: ${DRIVE_URL}#menge=1.5l`).planned).toEqual({
       kind: 'yield',
       quantity: 1500,
       baseUnit: 'ml',
@@ -160,33 +184,33 @@ describe('parseMealPlanText — link shape', () => {
   });
 
   it('accepts a link without a size: the recipe keeps its written size', () => {
-    const parsed = parseMealPlanText(`Kürbissuppe: ${EXPORT_URL}`);
+    const parsed = parseMealPlanText(`Kürbissuppe: ${DRIVE_URL}`);
     expect(parsed.title).toBe('Kürbissuppe');
     expect(parsed.planned).toBeNull();
-    expect(parsed.link).toBe(EXPORT_URL);
+    expect(parsed.link).toBe(DRIVE_URL);
   });
 
   it('accepts a link separated by whitespace only', () => {
-    expect(parseMealPlanText(`Kürbissuppe ${EXPORT_URL}#portionen=4`).title).toBe('Kürbissuppe');
+    expect(parseMealPlanText(`Kürbissuppe ${DRIVE_URL}#portionen=4`).title).toBe('Kürbissuppe');
   });
 
   it('keeps a colon inside the title', () => {
-    expect(parseMealPlanText(`Ragù: klassisch: ${EXPORT_URL}#portionen=4`).title).toBe(
+    expect(parseMealPlanText(`Ragù: klassisch: ${DRIVE_URL}#portionen=4`).title).toBe(
       'Ragù: klassisch',
     );
   });
 
   it('leaves a line that is nothing but a URL unrecognized', () => {
-    expect(parseMealPlanText(EXPORT_URL)).toEqual({
-      text: EXPORT_URL,
-      title: EXPORT_URL,
+    expect(parseMealPlanText(DRIVE_URL)).toEqual({
+      text: DRIVE_URL,
+      title: DRIVE_URL,
       planned: null,
       link: null,
     });
   });
 
   it('does not split a URL that is not the last token', () => {
-    const text = `Kürbissuppe: ${EXPORT_URL} und mehr`;
+    const text = `Kürbissuppe: ${DRIVE_URL} und mehr`;
     expect(parseMealPlanText(text)).toEqual({
       text,
       title: text,
@@ -196,7 +220,7 @@ describe('parseMealPlanText — link shape', () => {
   });
 
   it('still reads a parenthetical size in front of a hand-written link', () => {
-    expect(parseMealPlanText(`Kürbissuppe (6 Portionen): ${EXPORT_URL}`).planned).toEqual({
+    expect(parseMealPlanText(`Kürbissuppe (6 Portionen): ${DRIVE_URL}`).planned).toEqual({
       kind: 'servings',
       servings: 6,
     });
@@ -361,23 +385,32 @@ describe('mealPlanEntryText', () => {
   });
 
   it('writes the link entry with the size in the URL fragment', () => {
-    expect(mealPlanEntryText('Kürbissuppe', { kind: 'servings', servings: 6 }, EXPORT_URL)).toBe(
-      `Kürbissuppe: ${EXPORT_URL}#portionen=6`,
+    expect(mealPlanEntryText('Kürbissuppe', { kind: 'servings', servings: 6 }, DRIVE_URL)).toBe(
+      `Kürbissuppe: ${DRIVE_URL}#portionen=6`,
     );
     expect(
       mealPlanEntryText(
         'Béchamelsauce',
         { kind: 'yield', quantity: 500, baseUnit: 'g' },
-        EXPORT_URL,
+        DRIVE_URL,
       ),
-    ).toBe(`Béchamelsauce: ${EXPORT_URL}#menge=500g`);
+    ).toBe(`Béchamelsauce: ${DRIVE_URL}#menge=500g`);
     expect(
       mealPlanEntryText(
         'Gemüsebrühe',
         { kind: 'yield', quantity: 1500, baseUnit: 'ml' },
-        EXPORT_URL,
+        DRIVE_URL,
       ),
-    ).toBe(`Gemüsebrühe: ${EXPORT_URL}#menge=1500ml`);
+    ).toBe(`Gemüsebrühe: ${DRIVE_URL}#menge=1500ml`);
+  });
+
+  it('writes the size as a query parameter on an export-host URL', () => {
+    expect(mealPlanEntryText('Kürbissuppe', { kind: 'servings', servings: 6 }, HOST_URL)).toBe(
+      `Kürbissuppe: ${HOST_URL}&portionen=6`,
+    );
+    expect(
+      mealPlanEntryText('Béchamelsauce', { kind: 'yield', quantity: 500, baseUnit: 'g' }, HOST_URL),
+    ).toBe(`Béchamelsauce: ${HOST_URL}&menge=500g`);
   });
 
   it('drops a fragment the URL already carries', () => {
@@ -385,9 +418,19 @@ describe('mealPlanEntryText', () => {
       mealPlanEntryText(
         'Kürbissuppe',
         { kind: 'servings', servings: 4 },
-        `${EXPORT_URL}#portionen=9`,
+        `${DRIVE_URL}#portionen=9`,
       ),
-    ).toBe(`Kürbissuppe: ${EXPORT_URL}#portionen=4`);
+    ).toBe(`Kürbissuppe: ${DRIVE_URL}#portionen=4`);
+  });
+
+  it('drops a size the host URL already carries', () => {
+    expect(
+      mealPlanEntryText(
+        'Kürbissuppe',
+        { kind: 'servings', servings: 4 },
+        `${HOST_URL}&portionen=9`,
+      ),
+    ).toBe(`Kürbissuppe: ${HOST_URL}&portionen=4`);
   });
 
   it('falls back to the parenthetical shape for an empty URL', () => {
@@ -407,10 +450,11 @@ describe('mealPlanEntryText', () => {
       expect(linkless.planned).toEqual(size);
       expect(linkless.link).toBeNull();
 
-      const linked = parseMealPlanText(mealPlanEntryText('Soljanka', size, EXPORT_URL));
-      expect(linked.title).toBe('Soljanka');
-      expect(linked.planned).toEqual(size);
-      expect(linked.link).toContain('#');
+      for (const url of [DRIVE_URL, HOST_URL]) {
+        const linked = parseMealPlanText(mealPlanEntryText('Soljanka', size, url));
+        expect(linked.title).toBe('Soljanka');
+        expect(linked.planned).toEqual(size);
+      }
     }
   });
 });
@@ -448,10 +492,10 @@ describe('mealPlanEntriesForTitle', () => {
   it('collects the link shape too, so a re-plan replaces the linked entry', () => {
     expect(
       mealPlanEntriesForTitle(
-        [`Kürbissuppe: ${EXPORT_URL}#portionen=6`, 'Kürbiscremesuppe'],
+        [`Kürbissuppe: ${DRIVE_URL}#portionen=6`, 'Kürbiscremesuppe'],
         'Kürbissuppe',
       ),
-    ).toEqual([`Kürbissuppe: ${EXPORT_URL}#portionen=6`]);
+    ).toEqual([`Kürbissuppe: ${DRIVE_URL}#portionen=6`]);
   });
 
   it('does not filter by the fit check: any stated size counts as an instance', () => {

@@ -239,15 +239,17 @@ constraints.
    ingredient recipe bakes the ladder yields within ±2 decades of its written yield, so it can be
    cooked at another size just like a dish.
    A small embedded script is permitted for step-by-step navigation (the size picker, step
-   forward/back) and to open the view the URL fragment asks for, so the exported file also
+   forward/back) and to open the view the URL asks for, so the exported file also
    serves as the cooking view (ROADMAP, Phase 1). A meal-plan entry in Google Keep links the
-   export with the chosen size in that fragment, so a planned dish opens at exactly the amount it
-   was planned for.
+   export with the chosen size, so a planned dish opens at exactly the amount it was planned for.
+   The delivery link is a small Apps Script web app that serves the file from Drive
+   (`apps/export-host/`): a Drive viewer renders the stored file without running its script and
+   drops the URL fragment, which left the cooking view's buttons dead inside Google Keep.
    The app regenerates the export
    automatically whenever the canonical recipe is saved, updating the file in place (same
    Drive file ID), so a shared link always shows the current version and never breaks.
    Friends need no app install; they open the HTML in any browser and pick a size.
-   No reachable server required.
+   No server to run or maintain — the host is a Google-hosted Apps Script web app.
 8. **Canonical recipe format — Markdown + YAML front matter, one file per recipe.** Each
    recipe is a single Markdown file: YAML front matter holds the metadata and the ingredient
    list, the Markdown body holds the preparation steps. The format must support both

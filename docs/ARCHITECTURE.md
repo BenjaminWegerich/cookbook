@@ -80,10 +80,31 @@
     (`packages/core/src/recipe/yieldViews.ts`), the same range the meal plan accepts.
 - Generated from the core logic and a recipe file, stored in Drive and regenerated automatically
   on every recipe save (updated in place, so shared links stay valid).
-- The page opens on the written size or on the size its URL fragment asks for
-  (`#portionen=6`, `#menge=500g`); a meal-plan entry links the export with that fragment, so a
-  planned dish opens at exactly the amount it was planned for.
-- Friends open it in any browser and pick a size — no app, no server.
+- The page opens on the written size or on the size the URL asks for (`?portionen=6`,
+  `&menge=500g`); a meal-plan entry links the export with that size, so a planned dish opens at
+  exactly the amount it was planned for.
+- **Served by the export host, not by Drive.** A Drive viewer renders the stored file without
+  running its script and drops the URL fragment, so the size picker and step navigation stay dead
+  there (observed in Google Keep's in-app browser). With no host configured the app falls back to
+  the Drive link — fine in a desktop browser and in Chrome on Android, unusable inside Keep.
+- Friends open it in any browser and pick a size — no app, no server of our own.
+
+### Export host (Apps Script)
+
+- A small Google Apps Script web app (`apps/export-host/`) that serves a recipe's `<title>.html`
+  from the cookbook owner's Drive as an ordinary page, so the export's embedded script runs.
+- Request shape: `<web-app-url>?f=<exportFileId>` plus the planned size as a query parameter
+  (`&portionen=6`, `&menge=500g` — `packages/core/src/planLink.ts` owns the names).
+- The size is delivered two ways: injected as `window.__COOKBOOK_PLAN_SIZE__` (an Apps Script page
+  runs in a sandbox iframe that hides the outer URL) and as a `<style>` element that shows only the
+  promised view until the script takes over, so the page is right even before it runs.
+- **Fails closed on what it serves:** only a `*.html` file whose parent folder is named `Cookbook`;
+  a known file id is not enough. Deployed "execute as me, anyone with the link" — the same trust
+  level as link-shared Drive files, with nothing to host and no credential in the web app.
+- The URL is the build variable `VITE_EXPORT_HOST_URL` (repository variable for the Pages build).
+  Apps Script has no bundler, so `Code.gs` repeats the parameter names and the element id — they
+  change together with `planLink.ts`.
+- Deployment and recovery: [apps/export-host/README.md](../apps/export-host/README.md).
 
 ### Keep gateway (backend module)
 
@@ -173,11 +194,10 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
 - **Meal-plan write.** „Zum Essensplan hinzufügen“ sends the complete entry line and the exact
   texts of every line naming the same recipe — checked or not, and whatever size it states
   (`mealPlanEntriesForTitle` next to the parser). The line is built by `mealPlanEntryText` and
-  carries the recipe's export link with the chosen size in its fragment: „Kürbissuppe:
-  https://drive.google.com/file/d/<id>/view#portionen=6“. Keep has no hyperlink-with-text, so
-  the raw URL has to stand in the item, and the fragment is what makes the tapped cooking view
-  open at the planned amount (the same keys in `packages/core/src/planLink.ts` are read by the
-  export's embedded script). A recipe without an export file falls back to the linkless
+  carries the recipe's export link with the chosen size: „Kürbissuppe:
+  https://<export-host>/exec?f=<id>&portionen=6“. Keep has no hyperlink-with-text, so the raw URL
+  has to stand in the item; the fragment on a Drive fallback link is the same size in the shape
+  that page could read. A recipe without an export file falls back to the linkless
   „Kürbissuppe (6 Portionen)“.
   The app owns that rule; the gateway only executes the action. It places the new line above
   every remaining item with the spike's sort-id rule, deletes the replaced entries, syncs once

@@ -32,10 +32,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The Google OAuth client ID and the Keep gateway URL are public data
-      # (both ship in the browser), but they are kept out of the repository: the
-      # CI build reads them from the repository variables set in the GitHub
-      # settings. An unset VITE_KEEP_GATEWAY_URL simply switches Keep off.
+      # The Google OAuth client ID, the Keep gateway URL and the export host URL
+      # are public data (all three ship in the browser), but they are kept out of
+      # the repository: the CI build reads them from the repository variables set
+      # in the GitHub settings. An unset VITE_KEEP_GATEWAY_URL simply switches
+      # Keep off; an unset VITE_EXPORT_HOST_URL falls back to Drive export links.
       - name: Configure build environment
         run: |
           : > apps/web/.env
@@ -44,6 +45,9 @@ jobs:
           fi
           if [ -n "${{ vars.VITE_KEEP_GATEWAY_URL }}" ]; then
             echo "VITE_KEEP_GATEWAY_URL=${{ vars.VITE_KEEP_GATEWAY_URL }}" >> apps/web/.env
+          fi
+          if [ -n "${{ vars.VITE_EXPORT_HOST_URL }}" ]; then
+            echo "VITE_EXPORT_HOST_URL=${{ vars.VITE_EXPORT_HOST_URL }}" >> apps/web/.env
           fi
 
       - name: Typecheck core module

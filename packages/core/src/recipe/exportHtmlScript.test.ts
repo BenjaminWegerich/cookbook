@@ -91,7 +91,7 @@ function attributesOf(source: string): Record<string, string> {
 }
 
 /** Scrapes the generated HTML into the stub page the script runs against. */
-function buildPage(html: string, hash: string): Page {
+function buildPage(html: string, hash: string, injected?: string): Page {
   const views: ElementStub[] = [];
   for (const match of html.matchAll(/<div class="(serving-view[^"]*)"([^>]*)>/g)) {
     views.push(new ElementStub(match[1]!, attributesOf(match[2]!)));
@@ -141,16 +141,29 @@ function buildPage(html: string, hash: string): Page {
           return null;
       }
     },
+    // The export's script removes the host's preselect style; the stub serves a
+    // page without one.
+    getElementById: (): ElementStub | null => null,
   };
-  return { document, window: { location: { hash } }, views, valueLabel };
+  const window = {
+    location: { hash, search: '' },
+    ...(injected === undefined ? {} : { __COOKBOOK_PLAN_SIZE__: injected }),
+  };
+  return { document, window, views, valueLabel };
 }
 
-/** The `data-servings` / `data-yield` values of the views that stay visible. */
-function visibleSizes(recipe: Recipe, hash: string): (string | null)[] {
+/**
+ * The `data-servings` / `data-yield` values of the views that stay visible.
+ *
+ * `injected` is the size the export host passes to the page as
+ * `window.__COOKBOOK_PLAN_SIZE__`; `hash` stands in for the page's own URL,
+ * which a bare Drive link uses.
+ */
+function visibleSizes(recipe: Recipe, hash: string, injected?: string): (string | null)[] {
   const html = generateRecipeHtml(recipe);
   const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
   if (script === undefined) throw new Error('the export embeds no script');
-  const page = buildPage(html, hash);
+  const page = buildPage(html, hash, injected);
   new Function('document', 'window', script)(page.document, page.window);
   return page.views
     .filter((view) => !view.hidden)
@@ -190,6 +203,18 @@ describe('embedded script — finished dish', () => {
 
   it('falls back to the written view when the fragment names no view', () => {
     expect(visibleSizes(DISH, '#portionen=11')).toEqual(['4']);
+  });
+});
+
+describe('embedded script — size injected by the export host', () => {
+  it('takes the host-injected serving size over the page URL', () => {
+    // The Apps Script host injects window.__COOKBOOK_PLAN_SIZE__ because its
+    // sandbox iframe hides the outer URL; the page then has no query to read.
+    expect(visibleSizes(DISH, '', 'portionen=9')).toEqual(['9']);
+  });
+
+  it('takes the host-injected yield size', () => {
+    expect(visibleSizes(SAUCE, '', 'menge=2.5l')).toEqual(['2500']);
   });
 });
 

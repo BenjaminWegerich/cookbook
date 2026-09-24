@@ -12,14 +12,15 @@
  * a link to the cooking view (Keep has no hyperlink-with-text, so the raw URL
  * has to stand in the line):
  *
+ *     Kürbissuppe: https://<export-host>/exec?f=<id>&portionen=6
+ *     Béchamelsauce: https://<export-host>/exec?f=<id>&menge=500g
  *     Kürbissuppe: https://drive.google.com/file/d/<id>/view#portionen=6
- *     Béchamelsauce: https://drive.google.com/file/d/<id>/view#menge=500g
  *
  * The title is everything before the trailing URL, which is separated by a
- * colon; the chosen size rides in the URL's fragment and is read back through
- * `plannedFromUrl` (planLink.ts). A link without a fragment (`Titel: <url>`)
- * names the dish without a size, and the export opens at the recipe's written
- * size.
+ * colon; the chosen size rides in the URL — a query parameter on the export
+ * host, a fragment on a bare Drive link — and is read back through
+ * `plannedFromUrl` (planLink.ts). A link without a size (`Titel: <url>`) names
+ * the dish without one, and the export opens at the recipe's written size.
  *
  * **Without the link** — the shape written before the link existed, and still
  * used when a recipe has no export file:
@@ -55,7 +56,14 @@
 
 import { NNBSP, formatBQ, formatDecimal } from './additionalUnits.js';
 import { integerLadderValues, pos } from './ladder.js';
-import { convertYieldUnit, planFragment, plannedFromUrl, type PlannedAmount } from './planLink.js';
+import {
+  convertYieldUnit,
+  PLAN_FRAGMENT_SERVINGS,
+  PLAN_FRAGMENT_YIELD,
+  planSizeQuery,
+  plannedFromUrl,
+  type PlannedAmount,
+} from './planLink.js';
 import { yieldViewFitsWrittenYield } from './recipe/yieldViews.js';
 import type { RecipeType, Unit } from './recipe/types.js';
 
@@ -253,22 +261,39 @@ export function mealPlanEntryLabel(title: string, planned: PlannedAmount | null)
 }
 
 /**
- * Replaces a URL's fragment with the fragment of `planned`. An existing
- * fragment (a hand-edited line) is dropped: the size of this write is the only
- * truth, and two fragments would let the reader pick the stale one.
+ * Gives `url` the size of `planned`, replacing a size the URL already carries
+ * (a hand-edited link): this write's size is the only truth, and two would let
+ * the reader pick the stale one.
+ *
+ * The separator follows the URL's shape. An export-host URL already has a query
+ * (`?f=<fileId>`) and takes the size as another parameter (`&portionen=6`); a
+ * bare Drive viewer URL takes it as the fragment (`#portionen=6`), the shape its
+ * page could read if it ran the export's script at all. `plannedFromUrl` reads
+ * both back.
  */
-function appendPlanFragment(url: string, planned: PlannedAmount): string {
-  const withoutFragment = url.split('#', 1)[0] ?? url;
-  return `${withoutFragment}${planFragment(planned)}`;
+function withPlanSize(url: string, planned: PlannedAmount): string {
+  const [withoutFragment = url] = url.split('#', 1);
+  const [path = withoutFragment, query] = withoutFragment.split('?', 2);
+  const keptParams = (query ?? '')
+    .split('&')
+    .filter(
+      (part) =>
+        part !== '' &&
+        !part.startsWith(`${PLAN_FRAGMENT_SERVINGS}=`) &&
+        !part.startsWith(`${PLAN_FRAGMENT_YIELD}=`),
+    );
+  const base = keptParams.length > 0 ? `${path}?${keptParams.join('&')}` : path;
+  const separator = keptParams.length > 0 ? '&' : '#';
+  return `${base}${separator}${planSizeQuery(planned)}`;
 }
 
 /**
  * The meal-plan entry for a dish at a chosen size.
  *
  * With an export URL, the entry is `<Titel>: <URL>` and the size rides in the
- * URL's fragment — "Kürbissuppe: https://…/view#portionen=6",
- * "Béchamelsauce: https://…/view#menge=500g". The Keep item is then a tappable
- * link to the cooking view that opens at exactly that size.
+ * URL — "Kürbissuppe: https://<host>/exec?f=<id>&portionen=6",
+ * "Béchamelsauce: https://<host>/exec?f=<id>&menge=500g". The Keep item is then
+ * a tappable link to the cooking view that opens at exactly that size.
  *
  * Without a URL (the recipe has no export file) the entry falls back to the
  * parenthetical shape — "Kürbissuppe (6 Portionen)" — which the parser reads
@@ -283,7 +308,7 @@ export function mealPlanEntryText(
   if (exportUrl === undefined || exportUrl.trim() === '') {
     return `${title} (${formatPlannedAmount(planned)})`;
   }
-  return `${title}: ${appendPlanFragment(exportUrl.trim(), planned)}`;
+  return `${title}: ${withPlanSize(exportUrl.trim(), planned)}`;
 }
 
 /**

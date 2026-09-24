@@ -81,7 +81,7 @@ import {
   type Recipe,
 } from '@cookbook/core';
 
-import { driveViewUrl, readRecipe, type StoredRecipe } from '../drive/recipeStorage';
+import { readRecipe, recipeExportUrl, type StoredRecipe } from '../drive/recipeStorage';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import {
   CalendarAddIcon,
@@ -591,7 +591,7 @@ function RecipeOverview({
           recipe={details}
           exportUrl={
             target.recipe.exportFileId !== undefined
-              ? driveViewUrl(target.recipe.exportFileId)
+              ? recipeExportUrl(target.recipe.exportFileId)
               : undefined
           }
           onClose={() => setPlanOpen(false)}

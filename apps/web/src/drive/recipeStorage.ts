@@ -27,6 +27,8 @@ import {
   serializeRecipe,
   type Recipe,
 } from '@cookbook/core';
+
+import { EXPORT_HOST_URL } from '../config';
 import {
   createFileWithContent,
   createFolder,
@@ -72,26 +74,40 @@ export interface StoredRecipe {
   image?: RecipeImage;
   /**
    * The recipe's HTML export sibling (`<title>.html`), when one exists. The
-   * meal-plan write puts its Drive link into the Keep entry, so a planned dish
-   * can be opened from the Keep app (see ../keep/mealPlanCards and
-   * @cookbook/core's mealPlanEntryText). Missing after a failed export write,
-   * which degrades the entry to the linkless shape.
+   * meal-plan write links the Keep entry at it, so a planned dish can be opened
+   * from the Keep app (see ../keep/mealPlanCards and @cookbook/core's
+   * mealPlanEntryText). Missing after a failed export write, which degrades the
+   * entry to the linkless shape.
    */
   exportFileId?: string;
 }
 
 /**
- * The Drive viewer link of one file (`https://drive.google.com/file/d/<id>/view`).
- *
- * This is the shape every Cookbook link uses: the sub-recipe links inside an
- * export, and the meal-plan entry that points at a recipe's export. On Android
- * the Drive app renders a shared `.html` file as the page itself (verified by
- * the user); desktop browsers show its source, which is why the Sharing
- * milestone may later move the export to a real host — the URL is built in one
- * place still.
+ * The Drive viewer link of one file — the export host's fallback
+ * (`https://drive.google.com/file/d/<id>/view`).
  */
-export function driveViewUrl(fileId: string): string {
+function driveViewUrl(fileId: string): string {
   return `https://drive.google.com/file/d/${fileId}/view`;
+}
+
+/**
+ * The link to one export file's cooking view.
+ *
+ * With an export host configured that is `<host>?f=<fileId>`: the host serves
+ * the file's HTML itself, so the cooking view's script runs and the promised
+ * size arrives as a query parameter (`&portionen=6`, added by core's
+ * `mealPlanEntryText`). Without a host the Drive viewer link is the fallback,
+ * which a desktop browser shows as source and Keep's in-app browser renders
+ * without the script — the reason the host exists.
+ *
+ * Both the meal-plan entry and the export's own sub-recipe links are built
+ * here, so changing the host touches no other code.
+ */
+export function recipeExportUrl(fileId: string): string {
+  const host = EXPORT_HOST_URL?.trim().replace(/\/+$/, '');
+  return host === undefined || host === ''
+    ? driveViewUrl(fileId)
+    : `${host}?f=${encodeURIComponent(fileId)}`;
 }
 
 /**
@@ -341,7 +357,7 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
     if (!file.name.endsWith(EXPORT_EXTENSION)) continue;
     const title = file.name.slice(0, -EXPORT_EXTENSION.length);
     if (title === '') continue;
-    links[title] = driveViewUrl(file.id);
+    links[title] = recipeExportUrl(file.id);
   }
   const content = generateRecipeHtml(recipe, links);
   if (existing !== undefined) {

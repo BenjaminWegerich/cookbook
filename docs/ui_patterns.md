@@ -178,14 +178,14 @@ and knows nothing about the meal plan.
 The gateway supports this with one contract (`POST /keep/mealplan`):
 
 ```jsonc
-{ "add": ["Kürbissuppe: https://…/view#portionen=4", "Kürbissuppe"],  // string or list; may be []
-  "remove": ["Kürbissuppe: https://…/view#portionen=6"] }             // may be []
+{ "add": ["Kürbissuppe: https://…/exec?f=<id>&portionen=4", "Kürbissuppe"],  // string or list; may be []
+  "remove": ["Kürbissuppe: https://…/exec?f=<id>&portionen=6"] }             // may be []
 ```
 
 The added line is what the app wants to see in Keep, and it is opaque text to the
 gateway: a Cookbook-written entry carries the recipe's export link, with the chosen
-size in the link's fragment. That shape is why the meal-plan notice can name a
-dish whose line would otherwise read as a URL (see `mealPlanEntryLabel`).
+size as a query parameter. That shape is why the meal-plan notice can name a dish
+whose line would otherwise read as a URL (see `mealPlanEntryLabel`).
 
 A write that neither adds nor removes is refused; a pure removal (`add: []` with
 a non-empty `remove`) is the undo of a first-time plan. The gateway places the

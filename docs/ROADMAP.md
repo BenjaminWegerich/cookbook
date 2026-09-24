@@ -69,9 +69,12 @@ not where it is used.
 - [ ] Confirm durability: the 6-hourly sampler is running, but a first success is not a token
       that survives weeks. Watch the log for `rejected` before treating the setup as settled.
 - [x] Add a dish to the meal plan (the "Essensplan" list in Google Keep): the app writes the
-      entry with its chosen size and a link to the recipe's HTML export — the size rides in the
-      link's fragment, so the cooking view opens on it — and replaces the entries recognized as
-      the same recipe.
+      entry with its chosen size and a link to the recipe's HTML export — the size is a query
+      parameter on the export host, so the cooking view opens on it — and replaces the entries
+      recognized as the same recipe.
+- [ ] Deploy the export host (`apps/export-host/README.md`) and set the repository variable
+      `VITE_EXPORT_HOST_URL`. Until then the app links exports through Drive, whose viewer does
+      not run the export's script — and Keep's own tab is exactly where that bites.
 - [ ] Add the scaled ingredient list of a recipe to the shopping list ("Einkaufsliste"),
       including linked Zutaten-Rezepte: a sub-recipe is scaled by the ladder-rung difference
       to its yield so its own ingredients join the list (recipe_structure.md "The link means…").
@@ -105,8 +108,8 @@ frontend and the actual features.
    needs a category. Extend `docs/ingredients.csv` (and the Drive `zutaten.csv`) with it.
 5. **Implement the three Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
-   (the size rides in the link's fragment), replacing the entries recognized as the same recipe;
-   the gateway changes as little as possible and verifies the result). Still open: add a
+   (the size is a query parameter on the export host), replacing the entries recognized as the
+   same recipe; the gateway changes as little as possible and verifies the result). Still open: add a
    recipe's scaled ingredients to the shopping list (including linked Zutaten-Rezepte), and sort
    by category.
 6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,

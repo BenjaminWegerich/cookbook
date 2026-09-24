@@ -17,11 +17,13 @@
  *   written yield (`recipe/yieldViews.ts`), which is the same range the meal
  *   plan accepts — so the link in a Keep line can always open the exact amount.
  *
- * The page opens on the recipe's written size, or on the size the URL's
- * fragment asks for (`#portionen=6`, `#menge=500g` — the fragment keys live in
- * `planLink.ts`, where the meal-plan writer and reader use them too). Keep has
- * no hyperlink-with-text, so a meal-plan entry carries the raw export URL and
- * this fragment is how the chosen size travels with it.
+ * The page opens on the recipe's written size, or on the size the URL asks for
+ * (`?portionen=6` on the export host, `#portionen=6` on a bare Drive link — the
+ * parameter names live in `planLink.ts`, where the meal-plan writer and reader
+ * use them too). Keep has no hyperlink-with-text, so a meal-plan entry carries
+ * the raw export URL; the export host additionally injects the size as
+ * `window.__COOKBOOK_PLAN_SIZE__` and preselects the view with a `<style>`
+ * element, because its sandbox iframe hides the outer URL from the page.
  *
  * The app stores the export as `<title>.html` next to the recipe file and
  * regenerates it in place on every save, so shared links never break
@@ -44,7 +46,12 @@ import { scaleAQ } from '../aqLadder.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
 import type { TextArtifact } from './artifacts.js';
 import { difference, integerLadderValues, scale } from '../ladder.js';
-import { PLAN_FRAGMENT_SERVINGS, PLAN_FRAGMENT_YIELD, formatLinkQuantity } from '../planLink.js';
+import {
+  PLAN_FRAGMENT_SERVINGS,
+  PLAN_FRAGMENT_YIELD,
+  PLAN_PRESELECT_ELEMENT_ID,
+  formatLinkQuantity,
+} from '../planLink.js';
 import { displayTimeText } from './timeValues.js';
 import { yieldViewQuantities } from './yieldViews.js';
 import type { Ingredient, Recipe, Step, Unit } from './types.js';
@@ -327,15 +334,25 @@ const NAVIGATION_SCRIPT = `
 (function () {
   'use strict';
 
-  // The fragment carries the size the meal-plan line promised
-  // (#${PLAN_FRAGMENT_SERVINGS}=6, #${PLAN_FRAGMENT_YIELD}=500g). Keep's link
-  // handling may swallow it, so every selection below falls back to the
-  // recipe's written size instead of showing nothing.
+  // The size the meal-plan line promised. Three sources, in order of authority:
+  // a host may inject it (the Apps Script export host does, because its sandbox
+  // iframe hides the outer URL), and otherwise it arrives in this page's own
+  // query string or fragment - a Drive link can pass neither through.
+  var raw = '';
+  if (typeof window.__COOKBOOK_PLAN_SIZE__ === 'string') { raw += window.__COOKBOOK_PLAN_SIZE__; }
+  raw += '&' + window.location.search.replace(/^\\?/, '');
+  raw += '&' + window.location.hash.replace(/^#/, '');
   var params = {};
-  window.location.hash.replace(/^#/, '').split('&').forEach(function (part) {
+  raw.split('&').forEach(function (part) {
     var eq = part.indexOf('=');
     if (eq > 0) { params[part.slice(0, eq)] = decodeURIComponent(part.slice(eq + 1)); }
   });
+
+  // The host preselects the promised size with a <style> element, so the page is
+  // right even before (or without) this script. From here the real selection
+  // takes over, so that helper goes.
+  var preselect = document.getElementById('${PLAN_PRESELECT_ELEMENT_ID}');
+  if (preselect && preselect.parentNode) { preselect.parentNode.removeChild(preselect); }
 
   // Serving picker (finished dishes): every option is pre-rendered; only
   // visibility changes. Returns whether the requested option exists.
