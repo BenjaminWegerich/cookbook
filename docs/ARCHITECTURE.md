@@ -11,8 +11,11 @@
 > Gemini and sharing integrations follow in the upcoming roadmap tasks. The Google Keep
 > integration has started: its gateway (`apps/keep-gateway/`) reads both Keep lists over a
 > thin HTTP boundary, and the web app shows the meal plan as a second view of the recipe list
-> („Essensplan“ / „Sammlung“ tabs, entry recognition, „Eingeplant“ badge) behind a
-> session-only gateway token, degrading to "Keep off" when the gateway is unreachable.
+> („Essensplan“ / „Sammlung“ tabs, entry recognition, „Eingeplant“ badge) and writes a planned
+> dish back, linking it at the recipe's HTML export behind the caller's Google sign-in,
+> degrading to "Keep off" when the gateway is unreachable. That export link is served by a
+> small Apps Script web app (`apps/export-host/`), because a Drive viewer renders the stored
+> file without running its script; without a host the app falls back to Drive links.
 
 ## Components
 
@@ -91,8 +94,11 @@
 
 ### Export host (Apps Script)
 
-- A small Google Apps Script web app (`apps/export-host/`) that serves a recipe's `<title>.html`
-  from the cookbook owner's Drive as an ordinary page, so the export's embedded script runs.
+- **Built and deployed** as a Google Apps Script web app (`apps/export-host/`). It serves a
+  recipe's `<title>.html` from the cookbook owner's Drive as an ordinary page, so the export's
+  embedded script runs. Verified on 2026-09-24 in Google Keep's in-app browser — the case it
+  exists for: the size picker and the step navigation work there, and the promised size opens the
+  right view.
 - Request shape: `<web-app-url>?f=<exportFileId>` plus the planned size as a query parameter
   (`&portionen=6`, `&menge=500g` — `packages/core/src/planLink.ts` owns the names).
 - The size is delivered two ways: injected as `window.__COOKBOOK_PLAN_SIZE__` (an Apps Script page

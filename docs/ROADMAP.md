@@ -57,8 +57,9 @@ watches for a rejected credential, and a €1 budget guardrail caps the project'
 its copy of the spike's authentication and failure-diagnosis code, so the deployed image stays
 self-contained. The read-only frontend, the meal-plan recipe overview and the meal-plan write
 are built (tabs, recognition, the Google sign-in, the overview's three card forms and
-„Zum Essensplan hinzufügen“). The overview's other actions are still placeholders; what
-remains is the shopping-list write and the aisle sort.
+„Zum Essensplan hinzufügen“, which links the entry at the recipe's cooking view through the
+deployed export host). The overview's other actions are still placeholders; what remains is
+the shopping-list write and the aisle sort.
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -72,9 +73,11 @@ not where it is used.
       entry with its chosen size and a link to the recipe's HTML export — the size is a query
       parameter on the export host, so the cooking view opens on it — and replaces the entries
       recognized as the same recipe.
-- [ ] Deploy the export host (`apps/export-host/README.md`) and set the repository variable
-      `VITE_EXPORT_HOST_URL`. Until then the app links exports through Drive, whose viewer does
-      not run the export's script — and Keep's own tab is exactly where that bites.
+- [x] Deploy the export host (`apps/export-host/README.md`) and set the repository variable
+      `VITE_EXPORT_HOST_URL`. Deployed and verified on 2026-09-24 in Google Keep's in-app browser:
+      the cooking view's size picker and step navigation work there, and the promised size opens
+      the right view. Before it, the app linked exports through Drive, whose viewer does not run
+      the export's script.
 - [ ] Add the scaled ingredient list of a recipe to the shopping list ("Einkaufsliste"),
       including linked Zutaten-Rezepte: a sub-recipe is scaled by the ladder-rung difference
       to its yield so its own ingredients join the list (recipe_structure.md "The link means…").

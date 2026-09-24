@@ -3,6 +3,16 @@
 A tiny Google Apps Script web app that serves a recipe's HTML export as the cooking view, so the
 export's own script runs and the meal plan's promised size reaches the page.
 
+## Status
+
+Deployed as a web app in the cookbook Google account and verified on 2026-09-24 in Google Keep's
+in-app browser: the cooking view's size picker and the step navigation work there, and
+`&portionen=6` / `&menge=500g` opens the promised view. The build variable `VITE_EXPORT_HOST_URL`
+points at the deployment's `/exec` URL.
+
+The sections below stay as the runbook — for a redeployment, a second cookbook account, or
+recovery after the deployment is lost.
+
 ## Why it exists
 
 The HTML export (docs/ARCHITECTURE.md, "HTML share export") is a self-contained file in Google
@@ -83,7 +93,10 @@ buttons do not.
    (`drive.google.com/file/d/<id>/view`).
 2. Open `<the /exec URL>?f=<id>` in a browser. The cooking view must render, the size picker and the
    step buttons must work, and `…&portionen=6` (or `&menge=500g`) must open on that size.
-3. Plan that recipe in the app and tap the link in Google Keep. This is the case the host exists
+3. **Re-save the recipe once** if its export predates the host. The app regenerates the `.html` on
+   save, and an older export's embedded script does not read the injected size: its buttons work,
+   but it opens at the written size instead of the planned one.
+4. Plan that recipe in the app and tap the link in Google Keep. This is the case the host exists
    for: the buttons must work inside Keep's own tab.
 
 ## Updating the code
