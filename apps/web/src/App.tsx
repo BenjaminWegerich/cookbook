@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { Recipe } from '@cookbook/core';
+import { mealPlanEntriesForTitle, type Recipe } from '@cookbook/core';
 
 import {
   getAccessToken,
@@ -12,10 +12,12 @@ import AiCreateSheet, {
   type AiCreateSheetHandle,
   type AiHandoff,
 } from './components/AiCreateSheet';
-import KeepTokenSheet from './components/KeepTokenSheet';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import RecipeList from './components/RecipeList';
-import RecipeOverview from './components/RecipeOverview';
+import RecipeOverview, {
+  type RecipeOverviewHandle,
+  type RecipeOverviewTarget,
+} from './components/RecipeOverview';
 import { PencilIcon, PlusIcon, SparkleIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
@@ -23,11 +25,12 @@ import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
 import { useEscapeTrigger } from './hooks/useLeaveGuard';
 import { useScrollMemory } from './hooks/useScrollMemory';
 import type { KeepState } from './keep/keepClient';
-import { resolveMealPlan, type MealPlanResolution } from './keep/mealPlanCards';
+import { resolveMealPlan, type MealPlanCard, type MealPlanResolution } from './keep/mealPlanCards';
 import { useKeep } from './keep/useKeep';
 import './styles/ai-create.css';
 import './styles/recipe-list.css';
 import './styles/recipe-overview.css';
+import './styles/meal-plan-sheet.css';
 import './styles/editor.css';
 
 /**
@@ -36,7 +39,7 @@ import './styles/editor.css';
  * sheet are treated like screens here: the browser Back button closes them
  * first, then leaves the list.
  */
-type TopScreen = 'editor' | 'ai' | 'menu' | 'overview' | 'keep';
+type TopScreen = 'editor' | 'ai' | 'menu' | 'overview';
 
 /**
  * Which AI task the sheet runs while it is the visible 'ai' screen: create a new
@@ -197,9 +200,20 @@ function App() {
   const [aiHandoff, setAiHandoff] = useState<AiHandoff | null>(null);
   /** The FAB create menu: two extended FABs (manually create vs. AI create). */
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
-  /** The recipe overview sheet (opened by tapping a recipe card). */
+  /**
+   * The recipe overview sheet (opened by tapping a card of either list tab).
+   * The target is one of the three card types RecipeOverview renders: a known
+   * recipe with its meal-plan context, or an unrecognized meal-plan entry.
+   */
   const [overviewOpen, setOverviewOpen] = useState(false);
-  const [overviewTarget, setOverviewTarget] = useState<StoredRecipe | null>(null);
+  const [overviewTarget, setOverviewTarget] = useState<RecipeOverviewTarget | null>(null);
+  /**
+   * Imperative handle of the mounted overview sheet. It owns the meal-plan
+   * overlay layered inside it, so the popstate handler must let the sheet
+   * consume the Back before it closes the sheet itself (same contract as the
+   * editor and the AI sheet).
+   */
+  const overviewHandleRef = useRef<RecipeOverviewHandle | null>(null);
   /**
    * The AI screen (Task A create or Task B edit) is open. It stays mounted
    * (hidden) while its own draft is edited in the editor, so the conversation
@@ -208,8 +222,6 @@ function App() {
   const [aiOpen, setAiOpen] = useState(false);
   /** The task the open AI screen runs (create vs. edit of a stored recipe). */
   const [aiScreen, setAiScreen] = useState<AiScreen | null>(null);
-  /** The Keep token sheet (opened by the automatic prompt below). */
-  const [keepSheetOpen, setKeepSheetOpen] = useState(false);
   /**
    * The resolved meal plan (the cards of the "Essensplan" tab plus the recipe
    * titles that carry the "Eingeplant" badge in "Sammlung"), together with the
@@ -229,6 +241,12 @@ function App() {
    * simply show their connection state instead of meal-plan cards.
    */
   const keep = useKeep();
+  /**
+   * `keep.retry` is referentially stable, but the hook's result object is not
+   * (it is rebuilt each render). Naming the function here lets the automatic
+   * connect effect below depend on it alone instead of on the whole object.
+   */
+  const retryKeep = keep.retry;
 
   /**
    * The current TopScreen above the recipe list, or null for the list itself.
@@ -368,7 +386,6 @@ function App() {
       setAiOpen(next === 'ai' || (next === 'editor' && prev === 'ai'));
       setCreateMenuOpen(next === 'menu');
       setOverviewOpen(next === 'overview');
-      setKeepSheetOpen(next === 'keep');
       if (prev === null) {
         if (next === null) {
           return;
@@ -503,6 +520,12 @@ function App() {
         guardCurrentEntry();
         return;
       }
+      if (top === 'overview' && overviewHandleRef.current?.notifyBack() === true) {
+        // The overview's meal-plan overlay consumed the Back and closed; the
+        // sheet stays open, so re-establish the entry the pop consumed.
+        guardCurrentEntry();
+        return;
+      }
       // Back out of an AI draft (created or revised) returns to the
       // still-running conversation (mounted underneath) instead of leaving for
       // the list.
@@ -531,7 +554,6 @@ function App() {
       setAiOpen(false);
       setCreateMenuOpen(false);
       setOverviewOpen(false);
-      setKeepSheetOpen(false);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -673,32 +695,74 @@ function App() {
 
   /**
    * True while the recipe list is the visible layer (no editor, AI screen,
-   * sheet or menu above it) — the precondition for the automatic prompt below.
+   * sheet or menu above it) — the precondition for the automatic attempt below.
    */
-  const listVisible = !editorOpen && !aiOpen && !createMenuOpen && !overviewOpen && !keepSheetOpen;
+  const listVisible = !editorOpen && !aiOpen && !createMenuOpen && !overviewOpen;
 
-  /** Fires the automatic token prompt at most once per page session. */
-  const keepPromptedRef = useRef(false);
+  /** Fires the automatic Keep attempt at most once per page session. */
+  const keepAttemptedRef = useRef(false);
 
   /**
-   * The automatic Keep token prompt (decided with the user): once the Google
-   * login is done and the gateway reports that it wants a token, ask for it —
-   * but only once per session and never on top of another open layer. A
-   * dismissed prompt costs nothing: the "Essensplan" tab keeps offering the
-   * connection, and the app stays fully usable without Keep (N5).
+   * The automatic Keep connection (decided with the user: once the Google login is done, the
+   * app connects Keep without being asked). There is nothing to type any more — the sign-in
+   * replaced the pasted code — so this is one *silent* attempt: if Google has the grant
+   * already, the meal plan simply appears; if it needs a gesture, the "Essensplan" tab keeps
+   * offering the connection and the app stays fully usable without Keep (N5).
+   *
+   * It fires once per page session and only from the visible list, so it never lands on top
+   * of another layer. Waiting for `token` is what makes it work: on a cold start the Keep
+   * hook's own attempt can run before the GIS script has loaded, and this is the retry that
+   * happens once GIS is usable.
    */
   useEffect(() => {
-    if (keepPromptedRef.current) return;
-    if (token === null || keep.status !== 'needs-token') return;
+    if (keepAttemptedRef.current) return;
+    if (token === null || keep.status !== 'needs-signin') return;
     if (!listVisible) return;
-    keepPromptedRef.current = true;
-    setNav('keep');
-  }, [token, keep.status, listVisible, setNav]);
+    keepAttemptedRef.current = true;
+    retryKeep();
+  }, [token, keep.status, listVisible, retryKeep]);
 
-  /** Opens the overview sheet for a tapped recipe card. */
-  const openOverview = useCallback(
+  /**
+   * Opens the overview for a card of the "Sammlung" tab. The resolution already
+   * knows whether the recipe is planned and which size the plan states, so the
+   * sheet can show the "Eingeplant" badge (only here — on "Essensplan" the tab
+   * itself says it) and the "Geplant" value. With Keep off there is no
+   * resolution: the recipe then behaves exactly like an unplanned one.
+   */
+  const openCollectionOverview = useCallback(
     (recipe: StoredRecipe): void => {
-      setOverviewTarget(recipe);
+      const resolution = mealPlanResolution;
+      setOverviewTarget({
+        kind: 'recipe',
+        recipe,
+        source: 'collection',
+        onMealPlan: resolution?.plannedRecipeTitles.has(recipe.title) ?? false,
+        planned: resolution?.plannedAmounts.get(recipe.title) ?? null,
+      });
+      setNav('overview');
+    },
+    [mealPlanResolution, setNav],
+  );
+
+  /**
+   * Opens the overview for a card of the "Essensplan" tab. A recognized card
+   * carries the entry's stated size and is planned by definition ("Umplanen");
+   * an unrecognized one opens the destination for replacing or dropping the
+   * entry, because there is no recipe behind it.
+   */
+  const openMealPlanOverview = useCallback(
+    (card: MealPlanCard): void => {
+      setOverviewTarget(
+        card.recipe !== null
+          ? {
+              kind: 'recipe',
+              recipe: card.recipe,
+              source: 'mealplan',
+              onMealPlan: true,
+              planned: card.planned,
+            }
+          : { kind: 'unknown', text: card.text },
+      );
       setNav('overview');
     },
     [setNav],
@@ -708,6 +772,35 @@ function App() {
   const closeOverview = useCallback((): void => {
     setNav(null);
   }, [setNav]);
+
+  /** The Keep write action (stable), pulled out so the callback below can depend on it. */
+  const planMeal = keep.planMeal;
+
+  /**
+   * Performs the meal-plan write for the open overview's recipe. The overlay
+   * hands over the complete entry text (title + chosen size); the entries to
+   * replace are every line of the raw Keep plan that names the same recipe —
+   * checked or not, and whatever size it states (core's
+   * `mealPlanEntriesForTitle`) — so the dish ends up on the plan exactly once.
+   * The app owns that rule; the gateway only executes it.
+   *
+   * On success the whole flow closes back to the list, where the recipe card now
+   * carries the "Eingeplant" badge. The active tab is deliberately untouched, so
+   * the app stays on "Sammlung" instead of jumping to the new "Essensplan" entry.
+   */
+  const addToMealPlan = useCallback(
+    async (entryText: string): Promise<void> => {
+      const targetRecipe = overviewTarget?.kind === 'recipe' ? overviewTarget.recipe : null;
+      if (targetRecipe === null) return;
+      // The raw Keep items, not the resolved cards: the cards hide checked
+      // entries, and a ticked-off line is still a duplicate in Keep.
+      const texts = (keep.state?.mealplan.items ?? []).map((item) => item.text);
+      const replace = mealPlanEntriesForTitle(texts, targetRecipe.title);
+      await planMeal(entryText, replace);
+      closeOverview();
+    },
+    [overviewTarget, keep.state, planMeal, closeOverview],
+  );
 
   /**
    * Shows the base recipe in the editor (`draft` prefills a brand-new recipe)
@@ -996,12 +1089,13 @@ function App() {
             <RecipeList
               recipes={recipes}
               token={token}
-              onOpenRecipe={openOverview}
+              onOpenRecipe={openCollectionOverview}
+              onOpenPlanCard={openMealPlanOverview}
               mealPlanCards={mealPlanResolution?.cards ?? null}
               plannedRecipeTitles={mealPlanResolution?.plannedRecipeTitles ?? NO_PLANNED_TITLES}
               keepStatus={keep.status}
               keepError={keep.error}
-              onConnectKeep={() => setNav('keep')}
+              onConnectKeep={() => void keep.connect()}
               onRetryKeep={keep.retry}
             />
           )}
@@ -1043,22 +1137,19 @@ function App() {
 
       {/* The overview is a sheet over the list (not a screen of its own), so it
           renders as a sibling of the list branch and only while the list is the
-          visible base. "Mehr → Manuell bearbeiten" replaces the sheet with the editor. */}
+          visible base. It renders one of the three card types from the target
+          (known recipe, planned or not, or an unrecognized meal-plan entry);
+          "Mehr → Manuell bearbeiten" replaces the sheet with the editor. */}
       {!editorOpen && !aiOpen && overviewOpen && overviewTarget !== null && token !== null && (
         <RecipeOverview
+          ref={overviewHandleRef}
           token={token}
-          recipe={overviewTarget}
+          target={overviewTarget}
           onClose={closeOverview}
           onEdit={openEditor}
           onAiEdit={openAiEdit}
+          onAddToMealPlan={addToMealPlan}
         />
-      )}
-
-      {/* The Keep token sheet: the automatic prompt after the Google login, and
-          reopened from the "Essensplan" tab whenever the connection is missing.
-          Like every sheet it is a history entry of its own, so Back closes it. */}
-      {!editorOpen && !aiOpen && keepSheetOpen && token !== null && (
-        <KeepTokenSheet onClose={() => setNav(null)} onConnect={keep.connect} />
       )}
     </>
   );

@@ -89,7 +89,20 @@
   overflow-wrap: anywhere;
 }
 
-/* Arbeitszeit / Gesamtzeit as one compact caption/value row. */
+/* The plan status row: the "Eingeplant" or "Kein Cookbook-Rezept" badge on its
+   own line under the title. In the cards the badge sits inline because the title
+   text is clamped to two lines; the overview's heading is the full, freely
+   wrapping name, where an inline badge would land mid-wrap and read as part of
+   the name (decided with the user). The row reuses the card badge recipe
+   (.recipe-badge in recipe-list.css) unchanged — same symbol, same colour. */
+.overview-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Arbeitszeit / Gesamtzeit / Geplant as one compact caption/value row. */
 .overview-meta {
   display: flex;
   flex-wrap: wrap;
@@ -157,6 +170,15 @@
   gap: var(--space-2);
 }
 
+/* The unrecognized entry's two-button row may wrap: "Eintrag ersetzen" and
+   "Vom Plan entfernen" are both full action phrases and, unlike the known
+   card's three short buttons, do not fit one phone line. The primary grows on
+   its line and the danger action drops to a line of its own instead of either
+   label being squeezed or wrapped inside its button. */
+.overview-actions.is-wrapping {
+  flex-wrap: wrap;
+}
+
 .overview-action {
   display: flex;
   align-items: center;
@@ -195,6 +217,15 @@
   color: var(--color-on-accent);
 }
 
+/* "Vom Plan entfernen" (unrecognized entry): outlined danger. It removes the
+   line from the meal plan, so it carries the danger colour on label, symbol and
+   border, but it stays the row's secondary action — the fill stays the plain
+   surface, because the one filled button of that row is "Eintrag ersetzen". */
+.overview-action.is-danger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
 /*
  * The symbols are 18 px (ladder: space-6) and inherit the button's ink color,
  * so the open state tints them with the label. `display: block` centers each
@@ -211,12 +242,40 @@
 /* Wrapper of the "Mehr" button + its overflow menu: the menu anchors to it, so
    it is the third item of the action row and — like "Einplanen" — keeps its
    content width (`flex: 0 0 auto`); the button inside fills the wrapper. The
-   vertical three dots are the affordance for the menu — unlike the label buttons
-   this one carries no caret. */
+   vertical three dots are the menu's affordance: this trigger is icon-only, so
+   the glyph itself carries the meaning. */
 .overview-more {
   position: relative;
   display: grid;
   flex: 0 0 auto;
+}
+
+/* The "Eintrag ersetzen" wrapper is that row's primary action, so it grows like
+   the primary button itself (the button inside fills the grid area) — the same
+   emphasis the known row gives "Jetzt kochen". Its popover anchors to this
+   wrapper, so the menu still sits directly above its trigger. The trigger
+   deliberately carries no marker (decided with the user): this sheet marks menus
+   with the three-dot glyph, and the label names an outcome that needs a choice,
+   so it opens the chooser the way a "Teilen" button does. */
+.overview-more.is-primary {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The "Eintrag ersetzen" menu sizes to its entries, not to its trigger, and
+   never wider than the sheet: that trigger grows to fill its row line (up to the
+   full content width), and a menu as wide as a full-width button would dwarf its
+   three entries. `max-width: 100%` of the positioned wrapper keeps it inside the
+   sheet on a narrow phone, where the long entry labels then wrap instead of
+   forcing a horizontal scroll on the sheet. It stays right-aligned to the
+   trigger, like the "Mehr" menu. */
+.overview-more.is-primary .overview-menu {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.overview-more.is-primary .overview-menu button {
+  white-space: normal;
 }
 
 /* The overflow menu pops directly above its trigger instead of floating

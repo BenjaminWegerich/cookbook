@@ -21,7 +21,8 @@
  * The returned `plannedRecipeTitles` is what puts the "Eingeplant" badge on a
  * card in the "Sammlung" tab; a recipe planned twice, or planned once and
  * referenced by an unrecognized entry as well, still appears exactly once
- * there.
+ * there. `plannedAmounts` carries each planned dish's stated size along, which
+ * is what the recipe overview shows as its "Geplant" value.
  */
 
 import {
@@ -52,6 +53,13 @@ export interface MealPlanResolution {
   cards: MealPlanCard[];
   /** Titles of recipes recognized on the meal plan ("Eingeplant" badge). */
   plannedRecipeTitles: ReadonlySet<string>;
+  /**
+   * The size each planned recipe states, keyed by recipe title — what the
+   * overview shows as its "Geplant" value. Every title of
+   * `plannedRecipeTitles` has an entry here; the value is null when that dish's
+   * entry names it without a size.
+   */
+  plannedAmounts: ReadonlyMap<string, PlannedAmount | null>;
 }
 
 /**
@@ -91,6 +99,7 @@ export async function resolveMealPlan(
 
   const cards: MealPlanCard[] = [];
   const plannedRecipeTitles = new Set<string>();
+  const plannedAmounts = new Map<string, PlannedAmount | null>();
 
   for (const [index, item] of items.entries()) {
     if (item.checked) continue; // ticked off in Keep = not planned any more
@@ -109,7 +118,17 @@ export async function resolveMealPlan(
         recognized = meta !== null && plannedAmountFitsRecipe(parsed.planned, meta);
       }
     }
-    if (recognized && recipe !== null) plannedRecipeTitles.add(recipe.title);
+    if (recognized && recipe !== null) {
+      plannedRecipeTitles.add(recipe.title);
+      // The overview shows the stated size as its "Geplant" value. A dish
+      // planned twice is rare; when it happens, the entry that states a size is
+      // the more useful one to carry over, so a size-less duplicate never
+      // shadows it.
+      const previous = plannedAmounts.get(recipe.title);
+      if (previous === undefined || (previous === null && parsed.planned !== null)) {
+        plannedAmounts.set(recipe.title, parsed.planned);
+      }
+    }
 
     cards.push({
       key: `${index}:${text}`,
@@ -119,5 +138,5 @@ export async function resolveMealPlan(
     });
   }
 
-  return { cards, plannedRecipeTitles };
+  return { cards, plannedRecipeTitles, plannedAmounts };
 }

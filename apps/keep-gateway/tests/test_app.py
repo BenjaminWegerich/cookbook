@@ -1,8 +1,10 @@
 """Tests for the HTTP boundary: authentication, CORS, the error contract, the routes.
 
-The Keep client is replaced by a fake through `create_app(client_factory=...)`, so these
-tests need neither a Google account nor a network - the same isolation the spike used for
-its write/cleanup paths, applied to the service.
+Both collaborators are replaced through `create_app(...)`: the Keep client by a fake and the
+Google-backed identity verifier by a fake, so these tests need neither a Google account nor a
+network - the same isolation the spike used for its write/cleanup paths, applied to the
+service. The verifier itself (audience, allowlist, Google's answers) is tested against a fake
+HTTP session in `test_identity.py`.
 """
 
 from __future__ import annotations
@@ -12,11 +14,13 @@ import unittest
 
 from keep_gateway.app import create_app
 from keep_gateway.config import GatewayConfig
-from keep_gateway.errors import KeepAuthRejected
+from keep_gateway.errors import IdentityCheckUnavailable, KeepAuthRejected, Unauthorized
 
-# Fixed values for the test deployment. The gateway token is a fake; nothing here touches
-# a real credential.
-BEARER_TOKEN = "test-gateway-token"
+# Fixed values for the test deployment. The caller's token and the verifier are both fakes;
+# nothing here touches Google or a real credential.
+CALLER_TOKEN = "fake-google-access-token"
+CALLER_EMAIL = "cookbook@example.com"
+DEV_TOKEN = "local-dev-token"
 ALLOWED_ORIGIN = "https://cookbook.example"
 FOREIGN_ORIGIN = "https://evil.example"
 
@@ -48,7 +52,9 @@ def make_config(**overrides: object) -> GatewayConfig:
         "keep_device_id": "fake-device-id",
         "shopping_title": "Einkaufsliste",
         "mealplan_title": "Essensplan",
-        "bearer_token": BEARER_TOKEN,
+        "oauth_client_id": "fake-client-id.apps.googleusercontent.com",
+        "allowed_emails": frozenset({CALLER_EMAIL}),
+        "dev_access_token": "",
         "allowed_origins": (ALLOWED_ORIGIN,),
     }
     values.update(overrides)
@@ -61,11 +67,39 @@ class FakeKeepClient:
     def __init__(self, state: dict | None = None, error: Exception | None = None) -> None:
         self._state = FAKE_STATE if state is None else state
         self._error = error
+        # Every write the boundary performed, in order: (entry, replacements).
+        self.writes: list[tuple[str, list[str]]] = []
 
     def read_state(self) -> dict:
         if self._error is not None:
             raise self._error
         return self._state
+
+    def add_meal_plan_entry(self, entry: str, replace: list[str]) -> dict:
+        if self._error is not None:
+            raise self._error
+        self.writes.append((entry, list(replace)))
+        return self._state
+
+
+class FakeIdentityVerifier:
+    """Stands in for `GoogleIdentityVerifier`: a fixed caller, or a fixed failure.
+
+    It deliberately does not look at the token: what the boundary has to guarantee is that a
+    token is *presented* and that whatever the verifier decides is mapped onto the right HTTP
+    answer. Which token Google accepts is the verifier's business (test_identity.py).
+    """
+
+    def __init__(self, email: str = CALLER_EMAIL, error: Exception | None = None) -> None:
+        self._email = email
+        self._error = error
+        self.seen_tokens: list[str] = []
+
+    def verify(self, presented_token: str) -> str:
+        self.seen_tokens.append(presented_token)
+        if self._error is not None:
+            raise self._error
+        return self._email
 
 
 class GatewayBoundaryTests(unittest.TestCase):
@@ -82,14 +116,25 @@ class GatewayBoundaryTests(unittest.TestCase):
     def _restore_propagate(self) -> None:
         self.logger.propagate = self._previous_propagate
 
-    def build_app(self, *, client: FakeKeepClient | None = None, **config_overrides: object):
-        """Create the boundary with a fake Keep client and return both app and fake."""
+    def build_app(
+        self,
+        *,
+        client: FakeKeepClient | None = None,
+        verifier: FakeIdentityVerifier | None = None,
+        **config_overrides: object,
+    ):
+        """Create the boundary with fakes for Keep and for the caller identity."""
         fake = client if client is not None else FakeKeepClient()
-        app = create_app(config=make_config(**config_overrides), client_factory=lambda _config: fake)
+        checker = verifier if verifier is not None else FakeIdentityVerifier()
+        app = create_app(
+            config=make_config(**config_overrides),
+            client_factory=lambda _config: fake,
+            identity_verifier=checker,
+        )
         app.config["TESTING"] = True
         return app, fake
 
-    def auth_headers(self, token: str = BEARER_TOKEN) -> dict[str, str]:
+    def auth_headers(self, token: str = CALLER_TOKEN) -> dict[str, str]:
         """Headers for a legitimate call, including the allowed browser origin."""
         return {"Authorization": f"Bearer {token}", "Origin": ALLOWED_ORIGIN}
 
@@ -124,20 +169,62 @@ class GatewayBoundaryTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.get_json()["error"]["code"], "unauthorized")
 
-    def test_state_rejects_a_wrong_token(self) -> None:
-        app, _fake = self.build_app()
+    def test_state_rejects_a_token_google_refuses(self) -> None:
+        """Whatever Google says no to is a 401 - expired, foreign or unlisted alike."""
+        app, _fake = self.build_app(
+            verifier=FakeIdentityVerifier(error=Unauthorized("The Google sign-in is expired or invalid."))
+        )
         with app.test_client() as client:
-            response = client.get("/keep/state", headers=self.auth_headers("not-the-token"))
+            response = client.get("/keep/state", headers=self.auth_headers("stale-token"))
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.get_json()["error"]["code"], "unauthorized")
 
-    def test_missing_gateway_token_fails_closed(self) -> None:
-        """An unconfigured deployment is off, never open - even for a "valid-looking" call."""
-        app, _fake = self.build_app(bearer_token="")
+    def test_a_token_google_cannot_judge_is_a_retryable_503(self) -> None:
+        """A check that cannot run must never count as a passed check, but it is not a 401."""
+        app, _fake = self.build_app(
+            verifier=FakeIdentityVerifier(error=IdentityCheckUnavailable("Google is unreachable."))
+        )
         with app.test_client() as client:
-            response = client.get("/keep/state", headers={"Authorization": "Bearer anything"})
+            response = client.get("/keep/state", headers=self.auth_headers())
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.get_json()["error"]["code"], "gateway_not_configured")
+        self.assertEqual(response.get_json()["error"]["code"], "identity_unavailable")
+
+    def test_missing_identity_config_fails_closed(self) -> None:
+        """An unconfigured deployment is off, never open - even for a "valid-looking" call."""
+        for overrides in (
+            {"oauth_client_id": ""},
+            {"allowed_emails": frozenset()},
+        ):
+            with self.subTest(**overrides):
+                app, _fake = self.build_app(**overrides)
+                with app.test_client() as client:
+                    response = client.get("/keep/state", headers=self.auth_headers())
+                self.assertEqual(response.status_code, 503)
+                self.assertEqual(response.get_json()["error"]["code"], "gateway_not_configured")
+
+    def test_a_valid_sign_in_reaches_the_verifier_and_the_route(self) -> None:
+        """The happy path, including that the presented token is what the verifier sees."""
+        verifier = FakeIdentityVerifier()
+        app, _fake = self.build_app(verifier=verifier)
+        with app.test_client() as client:
+            response = client.get("/keep/state", headers=self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(verifier.seen_tokens, [CALLER_TOKEN])
+
+    def test_dev_token_is_accepted_only_when_configured(self) -> None:
+        """The local operator escape hatch: off by default, exact match when switched on.
+
+        The verifier refuses everything here, so a 200 can only come from the dev token - which
+        also proves the dev path short-circuits before Google is consulted.
+        """
+        verifier = FakeIdentityVerifier(error=Unauthorized("not a Google-issued token"))
+        app, _fake = self.build_app(dev_access_token=DEV_TOKEN, verifier=verifier)
+        with app.test_client() as client:
+            local = client.get("/keep/state", headers=self.auth_headers(DEV_TOKEN))
+            wrong = client.get("/keep/state", headers=self.auth_headers("not-the-dev-token"))
+        self.assertEqual(local.status_code, 200)
+        self.assertEqual(wrong.status_code, 401)
+        self.assertEqual(verifier.seen_tokens, ["not-the-dev-token"])
 
     # ----------------------------------------------------------------------------------
     # GET /keep/state
@@ -206,12 +293,109 @@ class GatewayBoundaryTests(unittest.TestCase):
         self.assertEqual(response.get_json()["error"]["code"], "method_not_allowed")
 
     # ----------------------------------------------------------------------------------
-    # Write actions: defined in the boundary, not implemented yet (the write-action step)
+    # POST /keep/mealplan (the write button)
     # ----------------------------------------------------------------------------------
 
-    def test_write_actions_answer_501(self) -> None:
+    def test_mealplan_write_passes_the_entry_and_replacements_to_the_client(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan",
+                headers=self.auth_headers(),
+                json={
+                    "add": "Kürbissuppe (6 Portionen)",
+                    "remove": ["Kürbissuppe", "Kürbissuppe (4 Portionen)"],
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        # The app owns the recognition rule and sends the exact texts to drop.
+        self.assertEqual(
+            fake.writes,
+            [("Kürbissuppe (6 Portionen)", ["Kürbissuppe", "Kürbissuppe (4 Portionen)"])],
+        )
+        # The answer is the post-write state, shaped like GET /keep/state.
+        self.assertEqual(response.get_json()["mealplan"]["title"], "Essensplan")
+
+    def test_mealplan_write_defaults_to_no_replacements(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan", headers=self.auth_headers(), json={"add": "Kürbissuppe"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.writes, [("Kürbissuppe", [])])
+
+    def test_mealplan_write_trims_the_entry_text(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan", headers=self.auth_headers(), json={"add": "  Kürbissuppe  "}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.writes, [("Kürbissuppe", [])])
+
+    def test_mealplan_write_rejects_a_missing_or_empty_entry(self) -> None:
+        app, fake = self.build_app()
+        for body in ({}, {"add": ""}, {"add": "   "}, {"add": 6}):
+            with self.subTest(body=body):
+                with app.test_client() as client:
+                    response = client.post(
+                        "/keep/mealplan", headers=self.auth_headers(), json=body
+                    )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+        self.assertEqual(fake.writes, [])
+
+    def test_mealplan_write_rejects_a_malformed_remove_list(self) -> None:
+        app, fake = self.build_app()
+        for remove in ("Kürbissuppe", [1], [""]):
+            with self.subTest(remove=remove):
+                with app.test_client() as client:
+                    response = client.post(
+                        "/keep/mealplan",
+                        headers=self.auth_headers(),
+                        json={"add": "Kürbissuppe", "remove": remove},
+                    )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+        self.assertEqual(fake.writes, [])
+
+    def test_mealplan_write_requires_a_json_object(self) -> None:
         app, _fake = self.build_app()
-        for path in ("/keep/mealplan", "/keep/shopping", "/keep/shopping/sort"):
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan",
+                headers=self.auth_headers(),
+                data="not json",
+                content_type="text/plain",
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+
+    def test_mealplan_write_reports_keep_failures_with_their_code(self) -> None:
+        app, _fake = self.build_app(
+            client=FakeKeepClient(error=KeepAuthRejected("Google rejected the Keep credential."))
+        )
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan", headers=self.auth_headers(), json={"add": "Kürbissuppe"}
+            )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json()["error"]["code"], "keep_auth_rejected")
+
+    def test_mealplan_write_still_requires_a_token(self) -> None:
+        app, _fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post("/keep/mealplan", json={"add": "Kürbissuppe"})
+        self.assertEqual(response.status_code, 401)
+
+    # ----------------------------------------------------------------------------------
+    # Write actions still to come: defined in the boundary, not implemented yet
+    # ----------------------------------------------------------------------------------
+
+    def test_unimplemented_write_actions_answer_501(self) -> None:
+        app, _fake = self.build_app()
+        for path in ("/keep/shopping", "/keep/shopping/sort"):
             with self.subTest(path=path):
                 with app.test_client() as client:
                     response = client.post(path, headers=self.auth_headers(), json={})
@@ -238,7 +422,7 @@ class GatewayBoundaryTests(unittest.TestCase):
 
     def test_foreign_origin_is_refused_even_with_a_valid_token(self) -> None:
         app, _fake = self.build_app()
-        headers = {"Authorization": f"Bearer {BEARER_TOKEN}", "Origin": FOREIGN_ORIGIN}
+        headers = {"Authorization": f"Bearer {CALLER_TOKEN}", "Origin": FOREIGN_ORIGIN}
         with app.test_client() as client:
             response = client.get("/keep/state", headers=headers)
         self.assertEqual(response.status_code, 403)
@@ -250,7 +434,7 @@ class GatewayBoundaryTests(unittest.TestCase):
         app, _fake = self.build_app(allowed_origins=())
         with app.test_client() as client:
             browser = client.get("/keep/state", headers=self.auth_headers())
-            tool = client.get("/keep/state", headers={"Authorization": f"Bearer {BEARER_TOKEN}"})
+            tool = client.get("/keep/state", headers={"Authorization": f"Bearer {CALLER_TOKEN}"})
         self.assertEqual(browser.status_code, 403)
         self.assertEqual(tool.status_code, 200)
 

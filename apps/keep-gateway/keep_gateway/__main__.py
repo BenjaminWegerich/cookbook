@@ -12,7 +12,7 @@ import logging
 import sys
 
 from .app import create_app
-from .config import local_port
+from .config import ENV_DEV_ACCESS_TOKEN, local_port
 
 logger = logging.getLogger("keep_gateway")
 
@@ -28,7 +28,9 @@ def main() -> int:
 
     print(f"Keep gateway listening on http://127.0.0.1:{port}")
     print(f"  liveness : curl -s http://127.0.0.1:{port}/health")
-    print(f"  state    : curl -s -H 'Authorization: Bearer $KEEP_GATEWAY_TOKEN' \\")
+    # In the app, the caller proves itself with a Google sign-in. For a local curl there is no
+    # browser, so the optional KEEP_DEV_ACCESS_TOKEN is what to present - see the README.
+    print(f"  state    : curl -s -H 'Authorization: Bearer ${ENV_DEV_ACCESS_TOKEN}' \\")
     print(f"               http://127.0.0.1:{port}/keep/state")
     app.run(host="127.0.0.1", port=port, debug=False)
     return 0

@@ -50,7 +50,6 @@ import {
 import type { Ref } from 'react';
 
 import {
-  NNBSP,
   RecipeParseError,
   deriveIngredients,
   displayTimeText,
@@ -58,7 +57,6 @@ import {
   masterIngredientNames,
   parseRecipe,
   parseTimeValue,
-  renderAQS,
   serializeRecipe,
   splitArtifacts,
   artifactToText,
@@ -67,7 +65,6 @@ import {
   type Recipe,
   type Step,
   type TextArtifact,
-  type Unit,
   type ValidationIssue,
 } from '@cookbook/core';
 
@@ -93,6 +90,7 @@ import IngredientSheet, {
 import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientSheet';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityPicker from './QuantityPicker';
+import { safeRenderAQS } from './ingredientDisplay';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -411,22 +409,6 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
     yield_unit: draft.yield_unit,
     ...(reference !== undefined ? { reference } : {}),
   };
-}
-
-/**
- * Renders the BQS + AQS display line defensively. A non-ladder quantity
- * should never exist (docs/quantity_scaling.md §3), but if one sneaks in
- * (e.g. a legacy file), the base form is shown instead of crashing the
- * render.
- */
-function safeRenderAQS(name: string, quantity: number, unit: Unit): string {
-  try {
-    return renderAQS(name, quantity, unit);
-  } catch {
-    // Defensive fallback: same number↔unit narrow no-break space as renderAQS
-    // (docs/CODING_CONVENTIONS.md), then a plain space before the name.
-    return `${quantity}${NNBSP}${unit} ${name}`;
-  }
 }
 
 /**

@@ -33,6 +33,13 @@ interface RecipeListProps {
   /** Called when the user taps a recipe card (opens the recipe overview). */
   onOpenRecipe: (recipe: StoredRecipe) => void;
   /**
+   * Called when the user taps an "Essensplan" card. A recognized card hands over
+   * its resolved entry (the overview shows the stated size and "Umplanen"); an
+   * unrecognized entry is handed over as-is, and the overview opens it as the
+   * destination for replacing or dropping it.
+   */
+  onOpenPlanCard: (card: MealPlanCard) => void;
+  /**
    * Resolved meal-plan cards in Keep's display order, or null while they are
    * still being resolved (see ../keep/mealPlanCards).
    */
@@ -43,7 +50,7 @@ interface RecipeListProps {
   keepStatus: KeepStatus;
   /** German failure text of the last Keep load, when there was one. */
   keepError: string | null;
-  /** Opens the Keep token sheet (the "Essensplan" connect state). */
+  /** Signs in with Google to connect Keep (the "Essensplan" connect state). */
   onConnectKeep: () => void;
   /** Re-runs the Keep load (the "Essensplan" error state). */
   onRetryKeep: () => void;
@@ -58,7 +65,9 @@ interface RecipeListProps {
  *   text is a recipe title, plus an optional fitting size suffix) renders in
  *   the known card format; every other entry renders as a card with a
  *   placeholder image derived from its text, its complete text as the title and
- *   a danger-colored "Kein Cookbook-Rezept" badge.
+ *   a danger-colored "Kein Cookbook-Rezept" badge. Tapping either card opens
+ *   the overview: the recognized one with its stated size and "Umplanen", the
+ *   unrecognized one as the destination for replacing or dropping the entry.
  * - **Sammlung** shows every recipe of the collection, whether it is on the
  *   meal plan or not; a planned recipe carries the inline "Eingeplant" badge.
  *
@@ -72,6 +81,7 @@ function RecipeList({
   recipes,
   token,
   onOpenRecipe,
+  onOpenPlanCard,
   mealPlanCards,
   plannedRecipeTitles,
   keepStatus,
@@ -127,13 +137,17 @@ function RecipeList({
           </p>
         );
       }
-      if (keepStatus === 'needs-token') {
+      if (keepStatus === 'needs-signin') {
         return (
           <section className="plan-connect">
             <p>Verbinde Google Keep, um deinen Essensplan hier zu sehen.</p>
             <p className="plan-connect-note">
-              Dafür wird der Keep-Zugangscode benötigt. Er bleibt nur für diese Sitzung im Speicher.
+              Cookbook meldet sich dafür mit deinem Google-Konto an — ein Zugangscode ist nicht mehr
+              nötig.
             </p>
+            {/* A refused sign-in (wrong account, mismatched client id) is not a first-run state:
+                it has a reason, and only the account chooser behind the button can fix it. */}
+            {keepError !== null && <p role="alert">{keepError}</p>}
             <button type="button" className="primary-button" onClick={onConnectKeep}>
               Keep verbinden
             </button>
@@ -180,10 +194,12 @@ function RecipeList({
           const recipe = card.recipe;
           if (recipe !== null) {
             // Recognized: the known card format, without the "Eingeplant"
-            // badge (it would repeat on every card of this tab).
+            // badge (it would repeat on every card of this tab). The overview
+            // receives the whole card, so it can show the entry's stated size
+            // and turn its travel action into "Umplanen".
             return (
               <li key={card.key}>
-                <button type="button" className="recipe-card" onClick={() => onOpenRecipe(recipe)}>
+                <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
                   <RecipeThumb recipe={recipe} token={token} />
                   <span className="recipe-card-title">
                     <span className="recipe-card-title-text">{recipe.title}</span>
@@ -192,9 +208,12 @@ function RecipeList({
               </li>
             );
           }
+          // Unrecognized: the same card look, but the overview behind it is the
+          // destination that lets the entry be replaced by or turned into a
+          // recipe (or dropped from the plan).
           return (
             <li key={card.key}>
-              <div className="recipe-card recipe-card-plain">
+              <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
                 <TitleThumb title={card.text} />
                 <span className="recipe-card-title">
                   <span className="recipe-card-title-text">{card.text}</span>
@@ -203,7 +222,7 @@ function RecipeList({
                     <span>Kein Cookbook-Rezept</span>
                   </span>
                 </span>
-              </div>
+              </button>
             </li>
           );
         })}

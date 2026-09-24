@@ -111,14 +111,21 @@
 - Isolated behind a clean HTTP boundary, with its own Google auth and secret handling. The web
   app degrades to "Keep features off" when no gateway is reachable (N5 in
   [user_stories.md](user_stories.md)).
-- **Endpoint authentication: a pasted gateway token.** The app asks for a shared token when
-  the user turns Keep features on, keeps it in memory only (the same pattern as the AI API
-  key, N6) and sends it as `Authorization: Bearer`; the gateway compares it in constant time
-  against `KEEP_GATEWAY_TOKEN`. Nothing is embedded in the static bundle, and the check is
-  one function, so a later move to a real sign-in touches no Keep code. Rejected for now:
-  reusing the Drive access token (it would hand the gateway a Drive credential), a
-  service-account key in the bundle, Firebase Auth, and IAP in front of Cloud Run (new
-  infrastructure for a single household).
+- **Endpoint authentication: the user's Google sign-in.** The app signs in with Google Identity
+  Services for the identity scopes only (`openid email`), requested with incremental
+  authorization switched off (`include_granted_scopes: false`) — Google's default returns every
+  scope the user has granted this client, which would put the Drive grant into the token the
+  gateway receives. It sends that short-lived token as
+  `Authorization: Bearer`, and the gateway has Google confirm it (`oauth2/v3/tokeninfo`):
+  audience = the web OAuth client, the address verified and on `KEEP_ALLOWED_EMAILS`. Nothing
+  is embedded in the static bundle, and the check is one seam (`_require_google_identity` plus
+  `identity.py`), so changing the scheme again touches no Keep code. A token carrying anything
+  beyond the identity scopes is refused, so the gateway can never end up holding a Drive
+  credential. Rejected: the pasted shared token this replaced (a second secret per session —
+  one the browser's password manager kept confusing with the Gemini API key), reusing the Drive
+  access token (it would hand the gateway a Drive credential), a service-account key in the
+  bundle, Firebase Auth, and IAP in front of Cloud Run (new infrastructure for a single
+  household).
 - **Credential model: a dedicated throwaway Google account** whose master token the gateway
   holds, with the two notes shared *into* it per note. This bounds the blast radius of a
   leaked token to exactly those two notes, and keeps a suspension of the automating account
@@ -144,13 +151,31 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   read, and the Drive content cache makes repeated entries free.
 - **Cards.** Recognized entries use the known card format; in „Sammlung“ a planned recipe
   carries the inline „Eingeplant“ badge. Unrecognized entries render with the shared letter
-  avatar, the entry's complete text and a danger „Kein Cookbook-Rezept“ badge, and are not
-  tappable until the overview step gives them a destination. A badge is never a hitbox of its
-  own — the whole card is.
-- **Gateway token.** Asked for automatically after the Google login (once per session,
-  dismissible) and reopenable from the „Essensplan“ tab; held in memory only, like the AI API
-  key (N6). The gateway URL is the build-time variable `VITE_KEEP_GATEWAY_URL`; without it the
-  feature is off.
+  avatar, the entry's complete text and a danger „Kein Cookbook-Rezept“ badge, and are
+  tappable: the recipe overview is their destination, where the entry can be replaced by an
+  existing recipe or by a new one (manual or AI) or dropped from the plan with „Vom Plan
+  entfernen“. A badge is never a hitbox of its own — the whole card is.
+- **Recipe overview.** A card opens the overview sheet in one of three forms. A recipe that is
+  not on the meal plan is unchanged. A planned recipe shows the entry's stated size first in
+  its caption/value row („Geplant 6 Portionen“ / „Geplant 1,5 l“), turns „Einplanen“ into
+  „Umplanen“ and carries the „Eingeplant“ badge only when it was opened from „Sammlung“ — on
+  the „Essensplan“ tab the tab itself already says it. An unrecognized entry opens the
+  replace/drop destination described above. The „Jetzt kochen“, „Umplanen“, „Vom Plan
+  entfernen“ and „Eintrag ersetzen“ actions are still placeholders; „Einplanen“ writes the
+  dish to the meal plan.
+- **Meal-plan write.** „Zum Essensplan hinzufügen“ sends the complete entry line (recipe title
+  plus the chosen size, e.g. „Kürbissuppe (6 Portionen)“, built by `mealPlanEntryText` in
+  `packages/core/src/mealPlan.ts`) and the exact texts of every line naming the same recipe —
+  checked or not, and whatever size it states (`mealPlanEntriesForTitle` next to the parser).
+  The app owns that rule; the gateway only executes the action. It places the new line above
+  every remaining item with the spike's sort-id rule, deletes the replaced entries, syncs once
+  and verifies the result before answering the changed list — a write is never reported as
+  successful unverified.
+- **Sign-in.** Started automatically once the Google login is done, reopenable from the
+  „Essensplan“ tab; the token is held in memory only, like the AI API key (N6), and nothing has
+  to be looked up by hand any more. An expired token is renewed silently; only when Google
+  needs a gesture does the tab offer „Keep verbinden“. The gateway URL is the build-time
+  variable `VITE_KEEP_GATEWAY_URL`; without it the feature is off.
 
 #### Why the token must be minted in the cloud
 

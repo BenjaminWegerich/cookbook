@@ -12,9 +12,10 @@ spike that proved the approach is in [`spike/keep-feasibility/`](../../spike/kee
 
 **Status: deployed and verified.** The service runs on Cloud Run in `europe-west3`
 (scale-to-zero), `GET /health` answers, and the read path returns both real Keep lists end to
-end. The three write actions deliberately answer `501 not_implemented` until their
-prerequisites exist (the ingredient-category and write-action steps). Deployment, the
-credential alert and the €1 spend guardrail are all in place — see
+end. The meal-plan write (`POST /keep/mealplan`) is implemented; the shopping-list write and
+the aisle sort still answer `501 not_implemented` until their prerequisites exist (the
+ingredient-category and write-action steps). Deployment, the credential alert and the €1
+spend guardrail are all in place — see
 [`deploy/cloud-run/README.md`](deploy/cloud-run/README.md).
 
 ## Endpoints
@@ -23,11 +24,14 @@ credential alert and the €1 spend guardrail are all in place — see
 | ------ | ---------------------- | ---------------------------------------------------- | ------ |
 | `GET`  | `/health`              | Liveness. No Keep call, no token, no config details. | works |
 | `GET`  | `/keep/state`          | Meal plan and shopping list, in Keep's display order. | works |
-| `POST` | `/keep/mealplan`       | Add a dish to "Essensplan".                           | `501` until the write-action step |
+| `POST` | `/keep/mealplan`       | Add a dish to "Essensplan".                           | works |
 | `POST` | `/keep/shopping`       | Add a recipe's scaled ingredients to "Einkaufsliste". | `501` until the write-action step |
 | `POST` | `/keep/shopping/sort`  | Reorder the shopping list by category/aisle.          | `501` until the category and write-action steps |
 
-Everything under `/keep/` requires `Authorization: Bearer <KEEP_GATEWAY_TOKEN>`.
+Everything under `/keep/` requires `Authorization: Bearer <token>`: the caller's Google sign-in
+for the identity scopes (`openid email`). The service has Google confirm it and checks the
+address against `KEEP_ALLOWED_EMAILS`. A token that grants more than the identity scopes — above
+all one that could touch Drive files — is refused.
 
 `GET /keep/state` answers:
 
@@ -48,6 +52,31 @@ Items arrive in the order the Keep app shows them. Only user-visible facts cross
 boundary — note ids, sort ids and account details stay inside the service, so a change in
 Keep or in `gkeepapi` cannot leak into the app.
 
+`POST /keep/mealplan` adds a dish and replaces the entries of the same recipe:
+
+```json
+{
+  "add": "Kürbissuppe (6 Portionen)",
+  "remove": ["Kürbissuppe", "Kürbissuppe (4 Portionen)"]
+}
+```
+
+`add` is the complete line to put at the top of "Essensplan" (recipe title plus size suffix);
+`remove` are the exact texts of every line that names the same recipe — checked or not, and
+whatever size it states. The app owns the rule that decides which lines those are
+(`mealPlanEntriesForTitle` in `packages/core/src/mealPlan.ts`, next to the parser), so the
+gateway only executes the action. The answer is the changed list in the checklist shape of
+`GET /keep/state`:
+
+```json
+{
+  "mealplan": {
+    "title": "Essensplan",
+    "items": [{ "text": "Kürbissuppe (6 Portionen)", "checked": false, "indented": false }]
+  }
+}
+```
+
 Every failure — including `404` and `405` — answers with the same shape, so the app can
 branch on a stable code and switch Keep features off cleanly (N5):
 
@@ -57,15 +86,16 @@ branch on a stable code and switch Keep features off cleanly (N5):
 
 | Code | HTTP | Meaning | What happens next |
 | ---- | ---- | ------- | ----------------- |
-| `gateway_not_configured` | 503 | No gateway token and/or no Keep credentials configured. | Fail-closed: Keep features are off. |
-| `unauthorized` | 401 | Missing or wrong bearer token. | The app asks for the token again. |
+| `gateway_not_configured` | 503 | No OAuth client id and/or no address allowlist configured. | Fail-closed: Keep features are off. |
+| `unauthorized` | 401 | Missing, expired or foreign sign-in, or an address off the allowlist. | The app signs in with Google again. |
+| `identity_unavailable` | 503 | Google could not confirm the caller's sign-in. | Fail-closed and retryable; nothing to configure. |
 | `origin_not_allowed` | 403 | Browser origin not on the allowlist. | Configuration error; check `KEEP_GATEWAY_ALLOWED_ORIGINS`. |
 | `keep_auth_rejected` | 502 | Google refused the master token. | **Operator action:** re-mint it from the cloud (runbook). |
 | `keep_unreachable` | 502 | Network error, or the private API answered non-JSON (blocked host). | Retry; if permanent, move the service. |
 | `keep_list_missing` | 502 | A configured note is not visible to the throwaway account. | Check the note is still shared and its title. |
 | `keep_api_error` | 502 | Any other `gkeepapi` failure. | See the server log line. |
-| `not_implemented` | 501 | Documented action, not built yet. | The ingredient-category and write-action steps. |
-| `bad_request` | 400 | Malformed body or missing field. | Reserved for the write actions. |
+| `not_implemented` | 501 | Documented action, not built yet. | The shopping-list write and the aisle sort. |
+| `bad_request` | 400 | Malformed body, or a write body without a usable `add` entry text. | Check the JSON body. |
 | `internal_error` | 500 | Unexpected failure. | The traceback is in the log, not the response. |
 
 ## Configuration
@@ -77,7 +107,9 @@ All configuration is environment variables; the service keeps no state and write
 | `KEEP_EMAIL` | yes | The **throwaway** account whose token this is. |
 | `KEEP_MASTER_TOKEN` | yes | Its master token. Secret — Secret Manager in the cloud. |
 | `KEEP_DEVICE_ID` | yes | Stable device id. **Never change it**; a new value looks like a new device to Google. |
-| `KEEP_GATEWAY_TOKEN` | yes | Shared secret the app presents. Empty ⇒ every Keep route refuses to work. |
+| `KEEP_OAUTH_CLIENT_ID` | yes | The web client the app signs in with. A caller's token must name it as its audience, which is what stops a token minted for any other Google app. |
+| `KEEP_ALLOWED_EMAILS` | yes | Comma-separated accounts allowed to call the service. Empty ⇒ nobody (fail-closed), never "anybody". |
+| `KEEP_DEV_ACCESS_TOKEN` | no | Static token accepted for local `curl` only. **Never set on Cloud Run** — it is a debugging aid, not a second production path. |
 | `KEEP_GATEWAY_ALLOWED_ORIGINS` | for browsers | Comma-separated origins allowed to call the service (the GitHub Pages URL and `http://localhost:5173` for the dev server by default). Empty ⇒ no browser caller. No wildcard. |
 | `KEEP_SHOPPING_LIST_TITLE` | no | Default `Einkaufsliste`. |
 | `KEEP_MEALPLAN_LIST_TITLE` | no | Default `Essensplan`. |
@@ -107,13 +139,19 @@ Run the service against the real account, using the spike's local `.env`:
 
 ```sh
 set -a; . ../../spike/keep-feasibility/.env; set +a
-export KEEP_GATEWAY_TOKEN=local-smoke-token   # any value; only used locally
+export KEEP_OAUTH_CLIENT_ID=<the web client id from apps/web/.env>
+export KEEP_ALLOWED_EMAILS=benjaminwegerich@gmail.com
 export KEEP_GATEWAY_ALLOWED_ORIGINS=http://localhost:5173
+export KEEP_DEV_ACCESS_TOKEN=local-smoke-token   # any value; local curl only
 ./.venv/bin/python -m keep_gateway            # or the gunicorn line from the Dockerfile
 
 curl -s http://127.0.0.1:8098/health
-curl -s -H "Authorization: Bearer $KEEP_GATEWAY_TOKEN" http://127.0.0.1:8098/keep/state
+curl -s -H "Authorization: Bearer $KEEP_DEV_ACCESS_TOKEN" http://127.0.0.1:8098/keep/state
 ```
+
+In the deployed service there is no such token: a caller proves itself with its Google sign-in,
+which a browser obtains and a `curl` cannot. That is why local runs set the dev token above —
+and why it must never be set anywhere a real user can reach.
 
 It binds to loopback on purpose: the process holds a credential that can write to the Keep
 account, so it must not be reachable from the local network by accident.
@@ -121,8 +159,8 @@ account, so it must not be reachable from the local network by accident.
 ## Deployment
 
 Deployed as a Cloud Run **service** in the project the feasibility spike created
-(`cookbook-keep`, `europe-west3`), scale-to-zero, no state cache, and gated by the token the
-app pastes (see "Endpoint authentication" in ARCHITECTURE.md). The build context is this
+(`cookbook-keep`, `europe-west3`), scale-to-zero, no state cache, and gated by the caller's
+Google sign-in (see "Endpoint authentication" in ARCHITECTURE.md). The build context is this
 directory, so no file from the spike is needed to build the image.
 
 Build, service, secrets, metric and alert are one idempotent script:
@@ -138,12 +176,10 @@ there:
 ./deploy/cloud-run/mint-token.sh
 ```
 
-The full runbook — prerequisites, what the service is configured with, rotating the app's
+The full runbook — prerequisites, what the service is configured with, retiring the old pasted
 token, re-minting after a dead credential, the credential alert, the €1 billing guardrail that
 detaches billing if the project ever spends it, troubleshooting and teardown — is in
 [`deploy/cloud-run/README.md`](deploy/cloud-run/README.md).
-
-The app has no Keep UI yet: the frontend integration is the next roadmap step.
 
 ## Design notes
 
@@ -164,6 +200,8 @@ The app has no Keep UI yet: the frontend integration is the next roadmap step.
   repository's convention is kebab-case file names: a Python package's modules have to be
   importable, and `keep-client.py` cannot be imported. The standalone spike scripts keep
   their kebab-case names because they are loaded by path.
-- **Writes stay non-destructive.** The three write actions must follow the recipe the
-  spike proved on the real 135-item list: mark what we create, place it with sort ids above
-  every existing item, then verify and clean up.
+- **Writes stay non-destructive.** Every write action follows the recipe the spike proved on
+  the real 135-item list: place what we create with sort ids above every existing item, change
+  as little as possible, and verify the state read back. The meal-plan write is the first one
+  built (`KeepClient.add_meal_plan_entry`); the shopping-list write and the aisle sort follow
+  it.

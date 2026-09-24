@@ -340,13 +340,6 @@
   background: var(--color-danger);
 }
 
-/* The unrecognized meal-plan card: the same surface and grid as a recipe card,
-   but plain content — there is no recipe behind it to open yet, so the card is
-   deliberately not a button (decided with the user). */
-.recipe-card-plain {
-  cursor: default;
-}
-
 /* Square media area of a recipe card — the photo cropped to a square, or the
    large letter-avatar fallback when the recipe has no photo. */
 .recipe-thumb {
@@ -567,49 +560,4 @@
 
 .editor-placeholder .text-button {
   justify-self: start;
-}
-
-/* ---- Keep token sheet --------------------------------------------------- */
-
-/* The token sheet follows the shared bottom-sheet pattern (.sheet /
-   .sheet-backdrop in editor.css). Like the overview it is a content sheet, so
-   it is capped to a comfortable reading width and centered; on phones the cap
-   is wider than the viewport, so it stays edge to edge. 42 rem is the same
-   layout breakpoint value the overview uses, not a new token. */
-.keep-token-sheet {
-  max-width: 42rem;
-  margin-inline: auto;
-}
-
-.keep-token-note {
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
-}
-
-/* The form is one grid cell of the sheet, so its own gap must not add to the
-   sheet's: the field, the error line and the action row follow each other at
-   the sheet-wide spacing. */
-.keep-token-form {
-  display: grid;
-  gap: var(--space-5);
-}
-
-.keep-token-input {
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-bg);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  color: var(--color-ink);
-  font-size: var(--text-md);
-}
-
-.keep-token-error {
-  margin: 0;
-  padding: var(--space-4);
-  background: var(--color-surface);
-  border: 1px solid var(--color-danger);
-  border-radius: var(--radius-md);
-  color: var(--color-danger);
-  font-size: var(--text-sm);
 }

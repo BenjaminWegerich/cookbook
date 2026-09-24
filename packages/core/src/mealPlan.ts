@@ -33,6 +33,7 @@
  * later shopping-list flow both consume it, and it is covered by unit tests.
  */
 
+import { NNBSP, formatBQ, formatDecimal } from './additionalUnits.js';
 import { integerLadderValues, pos } from './ladder.js';
 import type { RecipeType, Unit } from './recipe/types.js';
 
@@ -162,4 +163,63 @@ export function plannedAmountFitsRecipe(
     // Not a ladder value (e.g. "499 g"): the size cannot be scaled.
     return false;
   }
+}
+
+/**
+ * The display text of a planned size: a serving count ("6 Portionen", "1
+ * Portion") or a yield in the recipe's family unit ("500 g", "1,5 l"). Number
+ * and unit are joined with a narrow no-break space
+ * (docs/CODING_CONVENTIONS.md), and a yield goes through `formatBQ`, so it steps
+ * g→kg / ml→l and uses the German decimal comma.
+ *
+ * This is the one formatter of a meal-plan size: the recipe overview's "Geplant"
+ * value and the write path's entry suffix both use it, so what the app shows is
+ * exactly what `parseMealPlanText` reads back.
+ */
+export function formatPlannedAmount(planned: PlannedAmount): string {
+  if (planned.kind === 'servings') {
+    // Serving counts are the integer standard numbers 1–30 (SERVING_COUNTS).
+    const word = planned.servings === 1 ? 'Portion' : 'Portionen';
+    return `${formatDecimal(planned.servings)}${NNBSP}${word}`;
+  }
+  return formatBQ(planned.quantity, planned.baseUnit);
+}
+
+/**
+ * The meal-plan entry for a dish at a chosen size: the recipe title plus the
+ * size suffix the parser expects — "Kürbissuppe (6 Portionen)",
+ * "Béchamelsauce (500 g)", "Gemüsebrühe (1,5 l)". The space before the
+ * parenthesis is a plain space, which is one of the separators the parser
+ * accepts (the module docstring).
+ *
+ * The exact inverse of `parseMealPlanText`: parsing this text back yields the
+ * recipe title and the same `PlannedAmount`, so a written entry is recognized
+ * again by the app that wrote it.
+ */
+export function mealPlanEntryText(title: string, planned: PlannedAmount): string {
+  return `${title} (${formatPlannedAmount(planned)})`;
+}
+
+/**
+ * The texts of every meal-plan line that names `title` — checked or not, and
+ * whatever size it states.
+ *
+ * This is the write's removal rule: before the new entry is added, the app drops
+ * every other instance of the recipe, so the dish ends up on the plan exactly
+ * once. A line is an instance when its *title candidate* — the text without a
+ * parsed size suffix — equals `title`. The parser decides that: a parenthetical
+ * that is not a number plus a known unit stays part of the title, so
+ * "Kürbissuppe (6 Teller)" is not an instance of "Kürbissuppe" and is left alone.
+ *
+ * Deliberately broader than the card recognition: the fit check (recipe type,
+ * family unit, ladder value) decides what can be *scaled*, not what is a
+ * duplicate. And the caller passes every Keep item, checked ones included — a
+ * ticked-off line is hidden from the card view but is still a duplicate in Keep.
+ * The returned texts are trimmed, because the comparison is on the content and
+ * not on Keep's surrounding whitespace.
+ */
+export function mealPlanEntriesForTitle(texts: readonly string[], title: string): string[] {
+  return texts
+    .map((text) => text.trim())
+    .filter((text) => text !== '' && parseMealPlanText(text).title === title);
 }

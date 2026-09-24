@@ -48,11 +48,12 @@ class GatewayError(Exception):
 
 
 class GatewayNotConfigured(GatewayError):
-    """Credentials or the gateway token are absent, so the service refuses to act.
+    """Credentials or the caller-identity settings are absent, so the service refuses to act.
 
-    This is the fail-closed default: a deployment that was never given a token must not
-    become an open writer to the user's Keep account, so every Keep route answers 503
-    instead. The web app reads that as "Keep features off".
+    This is the fail-closed default: a deployment that was never told which Google account may
+    call it, or which OAuth client to trust, must not become an open writer to the user's Keep
+    account, so every Keep route answers 503 instead. The web app reads that as "Keep features
+    off".
     """
 
     status = HTTPStatus.SERVICE_UNAVAILABLE
@@ -60,10 +61,26 @@ class GatewayNotConfigured(GatewayError):
 
 
 class Unauthorized(GatewayError):
-    """The caller did not present the gateway's shared secret, or presented a wrong one."""
+    """The caller is not allowed: no token, a token Google refuses, or an address off the list.
+
+    One 401 for all three on purpose - the caller learns that it was refused, never *why*,
+    so the allowlist cannot be probed. Which case it was goes to the log (`detail`).
+    """
 
     status = HTTPStatus.UNAUTHORIZED
     code = "unauthorized"
+
+
+class IdentityCheckUnavailable(GatewayError):
+    """Google could not confirm the caller's sign-in (network failure or a 5xx from Google).
+
+    Distinct from `Unauthorized` because the two call for opposite reactions: a 401 means
+    "get a fresh sign-in", this means "try again shortly". Fail closed - an unrun check is
+    not a passed check - but retryable, which is why it is a 5xx and not a 401.
+    """
+
+    status = HTTPStatus.SERVICE_UNAVAILABLE
+    code = "identity_unavailable"
 
 
 class BadRequest(GatewayError):

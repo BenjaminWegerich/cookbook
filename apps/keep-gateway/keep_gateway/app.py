@@ -8,18 +8,18 @@ Endpoints:
 
     GET  /health                liveness, unauthenticated, cheap
     GET  /keep/state            the meal plan and shopping list, for app start
-    POST /keep/mealplan         add a dish to "Essensplan"            (501 for now)
+    POST /keep/mealplan         add a dish to "Essensplan", replacing its entries
     POST /keep/shopping         add a recipe's ingredients to the list (501 for now)
     POST /keep/shopping/sort    reorder the list by category/aisle     (501 for now)
 
 Three cross-cutting rules live here rather than at the call sites:
 
   * **Authentication is a seam, and it fails closed.** The service sits on a public URL and
-    its credential can write to the user's Keep account, so an empty token configuration
-    means "off" (503), never "open". How the *user* obtains the token is the
-    gateway-authentication decision (see ARCHITECTURE.md): a shared token the user pastes
-    per session, mirroring the Gemini key. Replacing that decision means replacing
-    `_require_gateway_token` and nothing else.
+    its credential can write to the user's Keep account, so a missing caller-identity
+    configuration means "off" (503), never "open". Who may call is the gateway-authentication
+    decision (see ARCHITECTURE.md): the web app's Google sign-in, confirmed with Google by
+    `identity.py`. That replaced a shared token the user had to paste per session; the whole
+    change is `_require_google_identity` plus the verifier behind it.
   * **CORS is closed by default.** The web app is a static bundle on another origin, so the
     browser needs an allowlist; only explicitly configured origins receive the headers, and
     a request that *carries* a foreign Origin is refused outright.
@@ -42,17 +42,21 @@ from werkzeug.exceptions import HTTPException
 from . import __version__
 from .config import GatewayConfig, load_config
 from .errors import (
+    BadRequest,
     GatewayError,
     GatewayNotConfigured,
     NotImplementedYet,
     OriginNotAllowed,
     Unauthorized,
 )
+from .identity import CallerVerifier, GoogleIdentityVerifier
 
 logger = logging.getLogger("keep_gateway")
 
-# Session-scoped credentials in a static bundle are impossible, so the web app sends a
-# token the user supplied at runtime; `Authorization: Bearer` is the least surprising shape.
+# A static bundle cannot hold a session credential, so the web app sends the Google access
+# token its sign-in produced; `Authorization: Bearer` is the least surprising shape for it
+# (and one CORS-safe header). The value is opaque to this service - identity.py has Google
+# say what it means.
 AUTHORIZATION_HEADER = "Authorization"
 BEARER_PREFIX = "bearer "
 
@@ -71,7 +75,6 @@ HTTP_ERROR_CODES: dict[int, str] = {
 # What each unwritten endpoint will do, quoted back in its 501 so the frontend (and a
 # curious curl) is told the truth instead of being handed an empty success.
 PENDING_ACTIONS: dict[str, str] = {
-    "/keep/mealplan": "Adding a dish to the meal plan",
     "/keep/shopping": "Adding a recipe's ingredients to the shopping list",
     "/keep/shopping/sort": "Sorting the shopping list by category",
 }
@@ -122,12 +125,16 @@ def _presented_token() -> str | None:
 # --------------------------------------------------------------------------------------
 
 
-def create_app(config: GatewayConfig | None = None, client_factory: ClientFactory | None = None) -> Flask:
+def create_app(
+    config: GatewayConfig | None = None,
+    client_factory: ClientFactory | None = None,
+    identity_verifier: CallerVerifier | None = None,
+) -> Flask:
     """Build the Flask application.
 
-    Configuration and the Keep client are injected so the app can be constructed with test
-    doubles; production calls `create_app()` with neither and gets the environment and the
-    real `KeepClient`.
+    Configuration, the Keep client and the caller verifier are injected so the app can be
+    constructed with test doubles; production calls `create_app()` with none of them and gets
+    the environment, the real `KeepClient` and the real Google-backed verifier.
     """
     settings = config if config is not None else load_config()
     # Imported here, not at module import time, so the boundary can be imported (and its
@@ -136,6 +143,11 @@ def create_app(config: GatewayConfig | None = None, client_factory: ClientFactor
         from .keep_client import KeepClient
 
         client_factory = KeepClient
+    verifier = (
+        identity_verifier
+        if identity_verifier is not None
+        else GoogleIdentityVerifier(settings.oauth_client_id, settings.allowed_emails)
+    )
 
     app = Flask(__name__)
     # Leave nothing to Flask's testing shortcuts: an unexpected exception is a 500 JSON
@@ -182,25 +194,34 @@ def create_app(config: GatewayConfig | None = None, client_factory: ClientFactor
         return None
 
     @app.before_request
-    def _require_gateway_token() -> Response | None:
-        """Authenticate every Keep route with the shared gateway token.
+    def _require_google_identity() -> Response | None:
+        """Authenticate every Keep route against the caller's Google sign-in.
 
-        Fail-closed in two ways: an unconfigured token makes the service refuse to serve
-        Keep routes at all (503), and a wrong or missing token is a 401. The comparison is
-        constant-time so the token cannot be recovered byte by byte.
+        Fail-closed three times over: a deployment without a client id or an allowlist refuses
+        to serve Keep routes at all (503); a missing, foreign or unlisted sign-in is a 401; and
+        a Google check that cannot run is a 503 rather than a pass. The only other way in is
+        `KEEP_DEV_ACCESS_TOKEN`, which exists so an operator can curl a local run and is unset
+        in every deployment.
         """
         if not request.path.startswith("/keep/"):
             return None
-        if not settings.bearer_token:
+        missing = settings.missing_auth_config()
+        if missing:
             raise GatewayNotConfigured(
                 "The Keep gateway is not configured.",
-                detail="KEEP_GATEWAY_TOKEN is empty, so Keep routes are refused",
+                detail=f"missing {', '.join(missing)}, so Keep routes are refused",
             )
         presented = _presented_token()
-        if presented is None or not hmac.compare_digest(
-            presented.encode("utf-8"), settings.bearer_token.encode("utf-8")
+        if presented is None:
+            raise Unauthorized("A verified Google sign-in is required.")
+        if settings.dev_access_token and hmac.compare_digest(
+            presented.encode("utf-8"), settings.dev_access_token.encode("utf-8")
         ):
-            raise Unauthorized("A valid gateway token is required.")
+            # Local operator access: no Google identity behind it, so the request log stays
+            # honest by leaving the caller empty.
+            g.caller_email = None
+            return None
+        g.caller_email = verifier.verify(presented)
         return None
 
     @app.after_request
@@ -226,6 +247,9 @@ def create_app(config: GatewayConfig | None = None, client_factory: ClientFactor
             status=response.status_code,
             duration_ms=round((time.perf_counter() - started) * 1000, 1) if started else None,
             origin=origin or None,
+            # Which account drove the request. None for /health, for a refused call and for
+            # the local dev token - only a Google-confirmed call has a name attached.
+            caller=getattr(g, "caller_email", None),
         )
         return response
 
@@ -254,10 +278,37 @@ def create_app(config: GatewayConfig | None = None, client_factory: ClientFactor
 
     @app.post("/keep/mealplan")
     def keep_mealplan() -> Response:
-        """Add a dish to the meal plan ("Essensplan"). Implemented in the write-action step."""
-        raise NotImplementedYet(
-            f"{PENDING_ACTIONS['/keep/mealplan']} is not implemented yet."
-        )
+        """Add a dish to the meal plan, replacing the entries that name it.
+
+        Body: `{"add": "<entry text>", "remove": ["<entry text>", ...]}`. `add` is
+        the complete line to put at the top of "Essensplan" (recipe title plus size
+        suffix); `remove` are the exact texts of every line that names the same
+        recipe — checked or not, and whatever size it states. The rule that decides
+        which lines those are lives in the app (`packages/core/src/mealPlan.ts`,
+        next to the parser), so the client decides *what* is the same dish and this
+        boundary only executes the action — the same division that keeps the app
+        from learning Keep's model.
+
+        The answer is the meal plan after the write, in the shape one checklist has
+        in `GET /keep/state` (`{"mealplan": {"title", "items"}}`), so the app can
+        update it without a second request. Only the changed list is returned:
+        reading the shopping list too would let an unrelated, missing note turn a
+        successful write into an error.
+        """
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise BadRequest("A JSON object body is required.")
+        entry = payload.get("add")
+        if not isinstance(entry, str) or entry.strip() == "":
+            raise BadRequest("The body needs a non-empty 'add' entry text.")
+        remove = payload.get("remove", [])
+        if remove is None:
+            remove = []
+        if not isinstance(remove, list) or any(
+            not isinstance(text, str) or text.strip() == "" for text in remove
+        ):
+            raise BadRequest("'remove' must be a list of entry texts.")
+        return jsonify(client_factory(settings).add_meal_plan_entry(entry.strip(), remove))
 
     @app.post("/keep/shopping")
     def keep_shopping() -> Response:

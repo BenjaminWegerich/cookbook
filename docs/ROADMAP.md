@@ -55,8 +55,10 @@ The gateway is built and deployed (`apps/keep-gateway/`, Cloud Run, `europe-west
 boundary and the read path are done and verified against the live account, a log-based alert
 watches for a rejected credential, and a €1 budget guardrail caps the project's spend. It owns
 its copy of the spike's authentication and failure-diagnosis code, so the deployed image stays
-self-contained. The read-only frontend is built (tabs, recognition, session token). What
-remains is the meal-plan recipe overview and the three write actions.
+self-contained. The read-only frontend, the meal-plan recipe overview and the meal-plan write
+are built (tabs, recognition, the Google sign-in, the overview's three card forms and
+„Zum Essensplan hinzufügen“). The overview's other actions are still placeholders; what
+remains is the shopping-list write and the aisle sort.
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -66,7 +68,8 @@ not where it is used.
 
 - [ ] Confirm durability: the 6-hourly sampler is running, but a first success is not a token
       that survives weeks. Watch the log for `rejected` before treating the setup as settled.
-- [ ] Add a dish to the meal plan (the "Essensplan" list in Google Keep).
+- [x] Add a dish to the meal plan (the "Essensplan" list in Google Keep): the app writes the
+      entry with its chosen size and replaces the entries recognized as the same recipe.
 - [ ] Add the scaled ingredient list of a recipe to the shopping list ("Einkaufsliste"),
       including linked Zutaten-Rezepte: a sub-recipe is scaled by the ladder-rung difference
       to its yield so its own ingredients join the list (recipe_structure.md "The link means…").
@@ -85,27 +88,32 @@ frontend and the actual features.
    Verify with:
    `gcloud logging read 'resource.labels.job_name="keep-gate2-probe"' --limit 200 --format='value(textPayload)' --freshness=7d`
 2. [x] **Frontend integration with graceful degradation** (N5): the app probes the gateway,
-   asks for the token automatically after the Google login (memory only, reopenable from the
+   signs in with Google automatically after the login (memory only, reopenable from the
    „Essensplan“ tab) and keeps working unchanged when the gateway is missing or unreachable.
    The meal-plan view is built and agreed with Ben: „Essensplan“ / „Sammlung“ tabs, recognition
    of meal-plan entries (`packages/core/src/mealPlan.ts`) and the „Eingeplant“ /
    „Kein Cookbook-Rezept“ badges. The gateway URL is the build variable
    `VITE_KEEP_GATEWAY_URL` (repository variable for the Pages build).
-3. **Meal-plan recipe overview** (next step): a recognized plan card opens the overview with the
-   entry's planned size (servings/yield), so the dish can be viewed, edited and scaled from the
-   plan; an unrecognized entry gets a destination of its own there.
+3. [x] **Meal-plan recipe overview**: a recognized plan card opens the overview with the
+   entry's planned size (servings/yield) shown first in its caption/value row, so the dish
+   can be viewed, edited and scaled from the plan; an unrecognized entry gets a destination
+   of its own there („Eintrag ersetzen“ / „Vom Plan entfernen“). „Einplanen“ now performs the
+   write (step 5); the other buttons are still placeholders.
 4. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
    needs a category. Extend `docs/ingredients.csv` (and the Drive `zutaten.csv`) with it.
-5. **Implement the three Keep actions**: add a dish to the meal plan, add a recipe's scaled
-   ingredients to the shopping list (including linked Zutaten-Rezepte), and sort by category.
+5. **Implement the three Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
+   hinzufügen“ writes the entry with its chosen size and replaces the entries recognized as
+   the same recipe; the gateway changes as little as possible and verifies the result). Still
+   open: add a recipe's scaled ingredients to the shopping list (including linked
+   Zutaten-Rezepte), and sort by category.
 6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
    query may-be-in-stock), which builds on the same gateway.
 
 Two things to carry over rather than rediscover:
 - **Writes must be non-destructive.** The spike proved this is achievable — a write/delete
-  cycle left the real 135-item list with identical order and sort ids — but the technique
-  (marker prefix, sort ids above every existing item, verify-then-cleanup) should be reused
-  rather than reinvented.
+  cycle left the real 135-item list with identical order and sort ids — and the meal-plan
+  write already follows the technique (sort ids above every existing item, verify the result).
+  The remaining two actions must reuse it rather than reinvent it.
 - **`spike/keep-feasibility/` is a spike, not the product.** Its tooling, tests and the
   `mint-in-cloud.py` recovery script are worth keeping; the rest exists to answer questions
   that are now answered. The gateway keeps that authentication and diagnosis logic in

@@ -1,14 +1,14 @@
 # Keep gateway on Cloud Run — deploy and recovery runbook
 
-Everything needed to put the gateway on Cloud Run, to hand the app its token, and — the part
-that matters most — to bring the integration back when Google stops accepting the credential.
+Everything needed to put the gateway on Cloud Run, to let the app in, and — the part that
+matters most — to bring the integration back when Google stops accepting the credential.
 
 **The gateway is already deployed** (`keep-gateway`, `europe-west3`); these scripts are
 idempotent, so they are also the update path. To see the live state without re-deriving it:
 
 ```sh
 gcloud run services list --region europe-west3   # keep-gateway (the service)
-gcloud secrets list                              # keep-master-token-cloud, keep-gateway-token
+gcloud secrets list                              # keep-master-token-cloud
 gcloud run jobs list --region europe-west3       # keep-gate2-probe (durability sampler), keep-mint
 gcloud functions describe stop-billing --region europe-west3   # the spend guardrail
 gcloud scheduler jobs list --location europe-west3             # keep-gate2-probe-6h
@@ -18,7 +18,7 @@ Scripts, in the order you need them:
 
 | Script | When | What it does |
 | ------ | ---- | ------------ |
-| `provision.sh` | first deploy, and every later release | builds the image, creates the gateway token secret, deploys/rolls the service, wires the metric + alert, re-points the mint job |
+| `provision.sh` | first deploy, and every later release | builds the image, deploys/rolls the service with its identity configuration, wires the metric + alert, re-points the mint job |
 | `mint-token.sh` | once at setup, then only when the credential dies | exchanges a browser cookie for a cloud-minted master token and stores it |
 | `setup_monitoring.py` | called by `provision.sh`; runnable alone | log-based metric + email alert (idempotent, `--dry-run` prints the payloads) |
 | `setup_budget_guardrail.sh` | once, then only to re-test or re-arm | the €1 budget, its Pub/Sub topic, and the function that detaches billing when the budget is spent (`setup_budget.py` builds the budget itself) |
@@ -51,7 +51,7 @@ Each origin is the app's exact scheme+host — GitHub Pages omits the port and t
 default allows both the Pages site and the Vite dev server
 (`https://benjaminwegerich.github.io,http://localhost:5173`), so developing against the
 deployed gateway needs no extra flag; `--allowed-origin` overrides the whole list. A remote
-page cannot claim a localhost origin, and the gateway token is required either way.
+page cannot claim a localhost origin, and the caller's Google sign-in is required either way.
 
 Then mint the master token, because nothing works before that:
 
@@ -59,64 +59,67 @@ Then mint the master token, because nothing works before that:
 ./deploy/cloud-run/mint-token.sh
 ```
 
-Finally, give the app its token — the one secret you have to see, exactly once:
-
-```sh
-gcloud secrets versions access latest --secret=keep-gateway-token
-```
-
-Store that value in **Google Passwords** (N6: secrets live there, never in the repository,
-never in the static bundle) and paste it into the app when it asks for the Keep token. The
-same value lives in Secret Manager as `keep-gateway-token`; `provision.sh` generated it and
-never printed it.
+Nothing to hand to the app: it signs in with Google, and the gateway confirms that sign-in. The
+OAuth client id and the address allowlist are configuration, not secrets — `provision.sh`
+defaults the client id from `apps/web/.env` so gateway and bundle cannot drift apart, and takes
+the list from `--allowed-emails` (default `benjaminwegerich@gmail.com`).
 
 Verify the deployment:
 
 ```sh
 URL=https://keep-gateway-<hash>-ew.a.run.app      # printed by provision.sh
 curl -s "$URL/health"                              # {"status":"ok",...}
-curl -s -H "Authorization: Bearer $TOKEN" "$URL/keep/state" | head -c 400
+curl -s -o /dev/null -w '%{http_code}\n' "$URL/keep/state"   # 401: the sign-in gate is on
 ```
 
-`/health` proves the container is up; only `/keep/state` proves the credential works, which
-is why `mint-token.sh` ends with exactly that call.
+`/health` proves the container is up, and the 401 proves the gate is closed. Reading the lists
+needs a browser (the sign-in lives there, and that is the point); `mint-token.sh` therefore ends
+with exactly these two checks. The master token itself is proven inside the mint job, which
+authenticates with it through the same `keep_client` code the service uses.
 
 ## What the service is configured with
 
 | Setting | Value | Why |
 | ------- | ----- | --- |
-| `--allow-unauthenticated` | on | a browser cannot hold a Cloud Run IAM credential; the gate is the token the app sends |
+| `--allow-unauthenticated` | on | a browser cannot hold a Cloud Run IAM credential; the gate is the caller's Google sign-in, checked inside the service |
 | `--min-instances` | 0 | scale to zero; a cold Keep sync is ~1 s, so the cold start is invisible |
 | `--max-instances` | 2 | bounds what a leaked URL can cost |
 | `--concurrency` | 8 | matches gunicorn's thread count; the request rate is a household's |
 | `KEEP_MASTER_TOKEN` | Secret Manager `keep-master-token-cloud:latest` | the cloud-minted credential |
-| `KEEP_GATEWAY_TOKEN` | Secret Manager `keep-gateway-token:latest` | the token the app pastes |
+| `KEEP_OAUTH_CLIENT_ID` | the web client id (default: read from `apps/web/.env`) | the audience a caller's token must name; without it every call is refused |
+| `KEEP_ALLOWED_EMAILS` | default `benjaminwegerich@gmail.com` | who may call. Empty ⇒ nobody, never "anybody" |
 | `KEEP_GATEWAY_ALLOWED_ORIGINS` | the Pages origin + `http://localhost:5173` | CORS is closed by default; a foreign `Origin` is refused anyway |
 
 **The service URL is public.** That is deliberate (the browser must reach it) and safe only
-because every `/keep/*` route requires the bearer token and fails closed when the token is
-unset. Do not add an unauthenticated Keep route.
+because every `/keep/*` route requires a Google-confirmed sign-in and fails closed when the
+identity configuration is missing. Do not add an unauthenticated Keep route.
 
-## Rotating the app's token
+## Retiring the pasted token
 
-If the pasted token ever leaks (a shared screenshot, a borrowed phone):
+The service used to be gated by a shared token the app asked the user to paste. It is now gated
+by the caller's Google sign-in, so that secret is dead weight — and a stored password in Google
+Passwords that no longer belongs to anything. Cleaning up after the switch:
 
 ```sh
-# 1. a new version; earlier versions stay for rollback
-python3 -c 'import secrets; print(secrets.token_urlsafe(32), end="")' | \
-  gcloud secrets versions add keep-gateway-token --data-file=-
+# 1. delete the secret (it is no longer referenced by the service)
+gcloud secrets delete keep-gateway-token
 
-# 2. a new revision, so new instances resolve :latest
-gcloud run services update keep-gateway --region europe-west3 \
-  --update-secrets KEEP_GATEWAY_TOKEN=keep-gateway-token:latest
+# 2. remove the stored password from Google Passwords
+#    (passwords.google.com → search "keep-gateway-token" or the Pages URL → delete)
 
-# 3. fetch it, put it in Google Passwords, paste it into the app again
-gcloud secrets versions access latest --secret=keep-gateway-token
+# 3. confirm the deployment still answers
+curl -s "$URL/health"
+curl -s -o /dev/null -w '%{http_code}\n' "$URL/keep/state"   # 401
 ```
 
-Existing instances keep serving with the old value until Cloud Run replaces them; the new
-revision makes that happen as traffic arrives. A `gcloud run services update --min-instances`
-round-trip is not needed.
+If a deployment is ever rolled back to a revision that still expects the old token, it will fail
+closed (503 `gateway_not_configured`) rather than open up — re-minting it would then be a
+`gcloud secrets create` plus the `--set-secrets` flag in `provision.sh`'s removed step. The
+forward path is the sign-in, not the rollback.
+
+**Rotating the caller's access instead** is now Google's job: remove the address from
+`KEEP_ALLOWED_EMAILS` and redeploy, or remove Cookbook's access at
+`myaccount.google.com/permissions`. There is no shared secret left to rotate.
 
 ## Re-minting the master token (recovery)
 
@@ -264,12 +267,14 @@ Inspect the budget in the Console:
 | Symptom | Cause | Fix |
 | ------- | ----- | --- |
 | `403` with `origin_not_allowed` | the app's origin is not in the allowlist | re-run `provision.sh --allowed-origin <origin>` (exact scheme+host, no path) |
-| `503` with `gateway_not_configured` | `KEEP_GATEWAY_TOKEN` is empty | the secret has no version — rotate/add one, then roll the service |
+| `503` with `gateway_not_configured` | `KEEP_OAUTH_CLIENT_ID` or `KEEP_ALLOWED_EMAILS` is missing, or the secret has no version | re-run `provision.sh` (it reads the client id from `apps/web/.env`) and check the summary's `caller` line |
+| `401` with a sign-in the app just obtained | the account is not on `KEEP_ALLOWED_EMAILS`, or the client id does not match the bundle's | check the service log line's `detail` (`audience mismatch` vs `not on KEEP_ALLOWED_EMAILS`), then re-run `provision.sh` |
+| `503` with `identity_unavailable` | Google could not be reached to confirm the sign-in | transient; the app retries. If permanent, check Cloud Run egress |
 | `502` with `keep_list_missing` | one of the two notes is no longer shared/visible, or was renamed | re-share the note into the throwaway account, or set `KEEP_SHOPPING_LIST_TITLE` / `KEEP_MEALPLAN_LIST_TITLE` |
 | `502` with `keep_unreachable` | network error, or the private API answered non-JSON (a blocked host) | retry; if it persists, the fallback is running the same image on the home machine |
 | `502` with `keep_auth_rejected` | the credential died | `./deploy/cloud-run/mint-token.sh` |
 | build fails with `PERMISSION_DENIED` right after enabling APIs | IAM has not propagated | wait a minute and re-run `provision.sh` |
-| a `curl` works but the app still shows no Keep features | the app never got the token, or its origin is off | check the app's stored token, then the origin above |
+| a `curl` cannot read the lists at all | expected: the sign-in lives in a browser, not in `curl` | check `/health` and the 401 above, then open the app and sign in |
 | `/healthz` answers a Google-branded HTML 404 while every other path works | Google's frontend intercepts that exact path on `run.app` URLs before the request reaches the container | the liveness route is `/health` for this reason — do not "fix" it back |
 | the guardrail logs an `ERROR` with `403 … permission: billing.resourceAssociations.create` | the Billing API is not enabled, or the service account holds only the project-level role | `gcloud services enable cloudbilling.googleapis.com`, then re-run `setup_budget_guardrail.sh --armed` (it grants `roles/billing.admin`) |
 | the guardrail logs `no action` for a spent budget | the notification carried no `costAmount`, or the budget is higher than expected | read the reason in the log line; check the budget amount in the Console |
@@ -279,7 +284,7 @@ Inspect the budget in the Console:
 ```sh
 gcloud run services delete keep-gateway --region europe-west3 --quiet
 gcloud run jobs delete keep-mint --region europe-west3 --quiet
-gcloud secrets delete keep-gateway-token --quiet
+# (keep-gateway-token is gone already if the sign-in switch was completed)
 gcloud secrets delete keep-master-token-cloud --quiet
 gcloud logging metrics delete keep_auth_rejected --quiet
 

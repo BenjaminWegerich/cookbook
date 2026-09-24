@@ -3,10 +3,9 @@
 #
 # Creates and updates, idempotently, so this is also the "deploy a new build" path:
 #
-#   1. the gateway token secret (a random value the web app is asked to paste)
-#   2. the Cloud Run *service* (public URL, scale-to-zero, token-gated)
-#   3. the log-based metric and the email alert for a rejected credential
-#   4. the mint job's image, when the mint has been set up before
+#   1. the Cloud Run *service* (public URL, scale-to-zero, gated by the caller's Google sign-in)
+#   2. the log-based metric and the email alert for a rejected credential
+#   3. the mint job's image, when the mint has been set up before
 #
 # Deliberately NOT done here: seeding the master token. A home-minted token is refused from
 # Google Cloud's network (`BadAuthentication`), so the secret may only be filled by the mint
@@ -18,8 +17,8 @@
 #   ./deploy/cloud-run/provision.sh --allowed-origin https://user.github.io
 #   ./deploy/cloud-run/provision.sh --skip-build          # redeploy the current revision
 #
-# Environment variables override every default: PROJECT, REGION, SERVICE, REPO,
-# MASTER_SECRET, TOKEN_SECRET, MINT_JOB, ALLOWED_ORIGINS, ALERT_EMAIL, TAG.
+# Environment variables override every default: PROJECT, REGION, SERVICE, REPO, MASTER_SECRET,
+# OAUTH_CLIENT_ID, ALLOWED_EMAILS, MINT_JOB, ALLOWED_ORIGINS, ALERT_EMAIL, TAG.
 
 set -euo pipefail
 
@@ -28,9 +27,21 @@ REGION="${REGION:-europe-west3}"
 SERVICE="${SERVICE:-keep-gateway}"
 REPO="${REPO:-keep-probe}"
 MASTER_SECRET="${MASTER_SECRET:-keep-master-token-cloud}"
-TOKEN_SECRET="${TOKEN_SECRET:-keep-gateway-token}"
 MINT_JOB="${MINT_JOB:-keep-mint}"
 COOKIE_SECRET="${COOKIE_SECRET:-keep-oauth-token}"
+
+# Caller identity: the OAuth client the web app is built with (the audience Google must confirm
+# on every presented token) and the accounts allowed to call the gateway. Neither is a secret -
+# the client id ships in the public bundle and the allowlist is a policy, not a credential.
+# Empty OAUTH_CLIENT_ID is filled from the web app's own .env below, so the gateway cannot be
+# pinned to a different client than the bundle it serves.
+OAUTH_CLIENT_ID="${OAUTH_CLIENT_ID:-}"
+ALLOWED_EMAILS="${ALLOWED_EMAILS:-benjaminwegerich@gmail.com}"
+
+# The shared token the app used to be asked to paste. It is no longer read by the service; the
+# name is kept here only so the summary can offer the exact cleanup command (see the README,
+# "Retiring the pasted token").
+RETIRED_TOKEN_SECRET="${RETIRED_TOKEN_SECRET:-keep-gateway-token}"
 
 # The browser origins allowed to call the gateway. Each is the exact scheme+host, no path:
 # the published app on the repository's GitHub Pages site, plus the Vite dev server so
@@ -54,6 +65,8 @@ while [[ $# -gt 0 ]]; do
     --alert-email)     ALERT_EMAIL="$2";     shift 2 ;;
     --keep-email)      KEEP_EMAIL="$2";      shift 2 ;;
     --keep-device-id)  KEEP_DEVICE_ID="$2";  shift 2 ;;
+    --oauth-client-id) OAUTH_CLIENT_ID="$2"; shift 2 ;;
+    --allowed-emails)  ALLOWED_EMAILS="$2";  shift 2 ;;
     --skip-build)      SKIP_BUILD=1;         shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -91,6 +104,19 @@ if [[ -f "$SPIKE_DIR/.env" ]]; then
 fi
 [[ -n "$KEEP_EMAIL" ]] || { echo "KEEP_EMAIL unknown: pass --keep-email or keep it in $SPIKE_DIR/.env" >&2; exit 1; }
 [[ -n "$KEEP_DEVICE_ID" ]] || { echo "KEEP_DEVICE_ID unknown: pass --keep-device-id or keep it in $SPIKE_DIR/.env" >&2; exit 1; }
+
+# The caller identity: the client id comes from the web app's own .env when it is not given, so
+# gateway and bundle cannot drift apart (a mismatch would show up as every sign-in being refused
+# with an audience error in the log).
+WEB_ENV="$REPO_ROOT/apps/web/.env"
+if [[ -z "$OAUTH_CLIENT_ID" && -f "$WEB_ENV" ]]; then
+  OAUTH_CLIENT_ID="$(grep '^VITE_GOOGLE_CLIENT_ID=' "$WEB_ENV" | cut -d= -f2- || true)"
+fi
+[[ -n "$OAUTH_CLIENT_ID" ]] || {
+  echo "OAUTH_CLIENT_ID unknown: pass --oauth-client-id, or set VITE_GOOGLE_CLIENT_ID in $WEB_ENV" >&2
+  exit 1
+}
+[[ -n "$ALLOWED_EMAILS" ]] || { echo "ALLOWED_EMAILS empty: nobody could call the gateway, which would switch Keep off" >&2; exit 1; }
 
 # --- Project and APIs ------------------------------------------------------------------
 step "Project ${PROJECT}"
@@ -131,28 +157,6 @@ gcloud secrets add-iam-policy-binding "$MASTER_SECRET" \
   --role="roles/secretmanager.secretAccessor" --quiet >/dev/null
 echo "read access granted to ${RUN_SA}"
 
-# --- Gateway token secret --------------------------------------------------------------
-step "Gateway token secret (${TOKEN_SECRET})"
-# A token the user pastes into the app, one per session. It is generated here and never
-# printed: read it out with
-#   gcloud secrets versions access latest --secret=${TOKEN_SECRET}
-# and store it in Google Passwords, which is where the app's user keeps it.
-if gcloud secrets describe "$TOKEN_SECRET" >/dev/null 2>&1; then
-  echo "already exists - leaving the value alone (rotation is in the README)"
-else
-  gcloud secrets create "$TOKEN_SECRET" --replication-policy=automatic --quiet
-  # token_urlsafe(32) is 43 characters of URL-safe base64 - long enough that guessing is not
-  # a threat model, short enough to paste by hand on a phone.
-  python3 -c 'import secrets; print(secrets.token_urlsafe(32), end="")' | \
-    gcloud secrets versions add "$TOKEN_SECRET" --data-file=- --quiet >/dev/null
-  echo "created with a new random token"
-fi
-
-gcloud secrets add-iam-policy-binding "$TOKEN_SECRET" \
-  --member="serviceAccount:${RUN_SA}" \
-  --role="roles/secretmanager.secretAccessor" --quiet >/dev/null
-echo "read access granted to ${RUN_SA}"
-
 # --- Image -----------------------------------------------------------------------------
 step "Image"
 gcloud artifacts repositories create "$REPO" \
@@ -183,21 +187,23 @@ step "Cloud Run service (${SERVICE})"
 # Two flags deserve their reasoning:
 #
 #   --allow-unauthenticated  The web app is a static bundle in a browser: it cannot hold a
-#                            Cloud Run IAM credential. The gate is the gateway token the app
-#                            sends, checked inside the service - so the URL itself is public
-#                            and useless without a token.
+#                            Cloud Run IAM credential. The gate is the caller's Google sign-in,
+#                            checked inside the service - so the URL itself is public and
+#                            useless without an allowed account.
 #   --min-instances 0        Scale to zero. A cold Keep sync is ~1s, so the cold start is
 #                            invisible and the free tier covers this workload.
 #
 # Environment goes through a temporary YAML file rather than `--set-env-vars`. That flag
-# splits on a delimiter, and no natural delimiter survives here: the throwaway address
-# contains "@" and the origin list contains ",". A file has no delimiter rules.
+# splits on a delimiter, and no natural delimiter survives here: the throwaway address, the
+# allowlist and the origin list all contain "@" or ",". A file has no delimiter rules.
 ENV_FILE="$(mktemp --suffix=.yaml)"
 trap 'rm -f "$ENV_FILE"' EXIT
 cat > "$ENV_FILE" <<EOF
 KEEP_EMAIL: "${KEEP_EMAIL}"
 KEEP_DEVICE_ID: "${KEEP_DEVICE_ID}"
 KEEP_GATEWAY_ALLOWED_ORIGINS: "${ALLOWED_ORIGINS}"
+KEEP_OAUTH_CLIENT_ID: "${OAUTH_CLIENT_ID}"
+KEEP_ALLOWED_EMAILS: "${ALLOWED_EMAILS}"
 EOF
 
 SERVICE_ARGS=(
@@ -211,7 +217,7 @@ SERVICE_ARGS=(
   --concurrency 8
   --timeout 30
   --env-vars-file "$ENV_FILE"
-  --set-secrets "KEEP_MASTER_TOKEN=${MASTER_SECRET}:latest,KEEP_GATEWAY_TOKEN=${TOKEN_SECRET}:latest"
+  --set-secrets "KEEP_MASTER_TOKEN=${MASTER_SECRET}:latest"
   --quiet
 )
 
@@ -275,16 +281,19 @@ cat <<EOF
   url        ${SERVICE_URL}
   image      ${IMAGE}
   origins    ${ALLOWED_ORIGINS}
+  caller     ${ALLOWED_EMAILS} (via ${OAUTH_CLIENT_ID})
   alert to   ${ALERT_EMAIL}
 
 NEXT
-  1. The app's token. Store it in Google Passwords, then paste it into the app:
-       gcloud secrets versions access latest --secret=${TOKEN_SECRET}
-  2. The master token. If the service logs keep the credential is rejected, or nothing has
+  1. The master token. If the service logs keep the credential is rejected, or nothing has
      been minted yet, run:
        ./deploy/cloud-run/mint-token.sh
-  3. Check the deployment:
+  2. Check the deployment:
        curl -s ${SERVICE_URL}/health
+  3. The retired app token. This deployment no longer uses KEEP_GATEWAY_TOKEN; if the secret
+     ${RETIRED_TOKEN_SECRET} still exists, delete it and remove the stored password from Google
+     Passwords (see the README, "Retiring the pasted token"):
+       gcloud secrets delete ${RETIRED_TOKEN_SECRET}
   4. Budget guardrail, if not set already (free tier is a discount, not a cap):
        https://console.cloud.google.com/billing/budgets
 

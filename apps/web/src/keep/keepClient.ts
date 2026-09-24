@@ -13,12 +13,14 @@
  * - the gateway URL comes from the build-time environment
  *   (`VITE_KEEP_GATEWAY_URL`, see .env.example). Without it the feature is
  *   "off" and the app must stay fully usable;
- * - the gateway token is pasted by the user per session and sent as
- *   `Authorization: Bearer` (see ./sessionToken).
+ * - the caller proves itself with its Google sign-in for the `openid email`
+ *   scope, sent as `Authorization: Bearer` (see ../auth/googleAuth). That token
+ *   opens no file: it exists so the gateway can check the address against its
+ *   allowlist, and it is why the Drive token never leaves the app.
  *
  * Every failure is mapped onto one `KeepClientError` with a stable `code`, so
- * the UI can tell "wrong token" (ask again) from "gateway down" (retry) from
- * "operator must re-mint the credential" (nothing the app can do). The
+ * the UI can tell "sign-in refused" (sign in again) from "gateway down" (retry)
+ * from "operator must re-mint the credential" (nothing the app can do). The
  * gateway's error contract (`{"error": {"code", "message"}}`) is documented in
  * apps/keep-gateway/README.md.
  */
@@ -64,6 +66,7 @@ export interface KeepState {
 export type KeepErrorCode =
   | 'gateway_not_configured'
   | 'unauthorized'
+  | 'identity_unavailable'
   | 'origin_not_allowed'
   | 'keep_auth_rejected'
   | 'keep_unreachable'
@@ -121,13 +124,23 @@ function errorMessageOf(body: unknown): string | null {
   return typeof message === 'string' && message.trim() !== '' ? message : null;
 }
 
+/** Options of one gateway call: the HTTP method and an optional JSON body. */
+interface RequestOptions {
+  method?: 'GET' | 'POST';
+  body?: unknown;
+}
+
 /**
  * Performs one gateway call and decodes its JSON. A missing configuration, a
  * transport failure, a non-2xx status and an unreadable body each become a
  * `KeepClientError` with the matching code — no raw fetch error and no
  * response text ever reaches the UI.
  */
-async function requestJson(path: string, gatewayToken?: string): Promise<unknown> {
+async function requestJson(
+  path: string,
+  gatewayToken?: string,
+  options: RequestOptions = {},
+): Promise<unknown> {
   const base = gatewayBaseUrl();
   if (base === null) {
     throw new KeepClientError(
@@ -135,10 +148,17 @@ async function requestJson(path: string, gatewayToken?: string): Promise<unknown
       'Das Keep-Gateway ist in dieser Installation nicht eingerichtet.',
     );
   }
+  const headers: Record<string, string> = {};
+  if (gatewayToken !== undefined) headers.Authorization = `Bearer ${gatewayToken}`;
+  // A body always travels as JSON: the gateway rejects anything else as a
+  // bad request, and the write actions are the only calls that carry one.
+  if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   let response: Response;
   try {
     response = await fetch(`${base}${path}`, {
-      headers: gatewayToken === undefined ? {} : { Authorization: `Bearer ${gatewayToken}` },
+      method: options.method ?? 'GET',
+      headers,
+      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
@@ -182,12 +202,11 @@ function parseChecklist(value: unknown): KeepChecklist | null {
 }
 
 /**
- * Reads the meal plan and the shopping list. Requires the gateway token; a
- * wrong token is a `KeepClientError` with code `unauthorized`, which the UI
- * answers by asking for the token again.
+ * Decodes the gateway's state shape (both checklists). A malformed answer is a
+ * hard error (not an empty list): showing "no dishes planned" when the gateway
+ * actually failed would quietly hide a real problem.
  */
-export async function fetchKeepState(gatewayToken: string): Promise<KeepState> {
-  const body = await requestJson('/keep/state', gatewayToken);
+function parseState(body: unknown): KeepState {
   if (!isRecord(body)) {
     throw new KeepClientError('invalid_response', 'Das Keep-Gateway hat unerwartet geantwortet.');
   }
@@ -200,9 +219,49 @@ export async function fetchKeepState(gatewayToken: string): Promise<KeepState> {
 }
 
 /**
- * Cheap liveness probe (no Keep call, no token). Used before asking for the
- * token, so the UI can tell "the gateway is down" from "we still need the
- * token" without sending an unauthenticated `/keep/state` request.
+ * Reads the meal plan and the shopping list. Requires the caller's Google
+ * sign-in (the identity token from ../auth/googleAuth); a refused sign-in is a
+ * `KeepClientError` with code `unauthorized`, which the hook answers by signing
+ * in again (see ./useKeep).
+ */
+export async function fetchKeepState(gatewayToken: string): Promise<KeepState> {
+  return parseState(await requestJson('/keep/state', gatewayToken));
+}
+
+/**
+ * Puts a dish on the meal plan, replacing the entries of the same recipe.
+ *
+ * `entry` is the complete line to add (recipe title plus size suffix, built by
+ * `mealPlanEntryText` in @cookbook/core); `replace` are the exact texts of the
+ * entries the app recognized as the same recipe, checked or not. The app owns
+ * that recognition rule — it needs the recipe's type and family unit — so the
+ * gateway only executes the action.
+ *
+ * The answer is the meal plan after the write, so the caller can update it
+ * without a second request. Only that list comes back: it is the one the action
+ * changed, and asking the gateway for the shopping list too would let an
+ * unrelated, missing note turn a successful write into an error.
+ */
+export async function addMealPlanEntry(
+  gatewayToken: string,
+  entry: string,
+  replace: readonly string[],
+): Promise<KeepChecklist> {
+  const body = await requestJson('/keep/mealplan', gatewayToken, {
+    method: 'POST',
+    body: { add: entry, remove: [...replace] },
+  });
+  const mealplan = isRecord(body) ? parseChecklist(body.mealplan) : null;
+  if (mealplan === null) {
+    throw new KeepClientError('invalid_response', 'Das Keep-Gateway hat unerwartet geantwortet.');
+  }
+  return mealplan;
+}
+
+/**
+ * Cheap liveness probe (no Keep call, no token). Used before trying a sign-in,
+ * so the UI can tell "the gateway is down" from "we still need a sign-in"
+ * without sending an unauthenticated `/keep/state` request.
  */
 export async function checkKeepHealth(): Promise<boolean> {
   if (!isKeepConfigured()) return false;

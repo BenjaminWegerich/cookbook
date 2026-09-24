@@ -1,0 +1,52 @@
+/**
+ * Meal-plan overlay — the sheet that puts a known recipe on the meal plan (see
+ * components/MealPlanSheet.tsx).
+ *
+ * It reuses the shared bottom-sheet pattern and, for its fields and chips, the
+ * editor's own control styles (.sheet / .sheet-title / .field / .field-label /
+ * .quantity-chips / .quantity-picker / .sheet-actions / .text-button /
+ * .primary-button in editor.css and recipe-list.css). This file adds only what
+ * belongs to this overlay: its own stacking layer, the content-sheet width and
+ * the two small text lines. All pixel values come from the design ladder
+ * (docs/CODING_CONVENTIONS.md).
+ */
+
+/* The overlay opens from the overview sheet, so it must paint above it: the
+   shared backdrop/sheet z-indexes (20 / 30) already belong to that first modal
+   layer, and a second one at the same level would interleave with it. The
+   selectors repeat the shared class on purpose — the two-class form outranks
+   the one-class rule in editor.css whatever the stylesheet order is. */
+.sheet-backdrop.meal-plan-backdrop {
+  z-index: 40;
+}
+
+.sheet.meal-plan-sheet {
+  z-index: 41;
+  /* Content sheet like the overview: a readable width on desktop, edge to edge
+     on phones. 42 rem is the layout breakpoint value used by the recipe grid
+     and the overview sheet, not a new token. */
+  max-width: 42rem;
+  margin-inline: auto;
+  /* Same zero-minimum column as the overview, for the same reason: a long
+     unbreakable title must break inside the sheet instead of widening it. */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The reference sanity check under the size input: small and quiet, because it
+   is a readout of the choice, not an input — hence no caption. */
+.meal-plan-reference {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* The write failed: the reason sits next to the buttons that triggered it, in
+   the same bordered box the other sheets use for a form problem. */
+.meal-plan-error {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}

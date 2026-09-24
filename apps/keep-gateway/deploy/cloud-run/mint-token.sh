@@ -186,29 +186,21 @@ gcloud run services update "$SERVICE" --region "$REGION" \
   --update-secrets "KEEP_MASTER_TOKEN=${MASTER_SECRET}:latest" --quiet
 SERVICE_URL="$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')"
 
-# --- End-to-end check ------------------------------------------------------------------
-step "Checking the service against Keep"
-# Read the app's token only to make this one authenticated call; it is never printed. This is
-# the check that matters: /health cannot tell a working credential from a dead one.
-GATEWAY_TOKEN="$(gcloud secrets versions access latest --secret=keep-gateway-token 2>/dev/null || true)"
-if [[ -z "$GATEWAY_TOKEN" ]]; then
-  echo "could not read the gateway token secret; check by hand:"
-  echo "  curl -s -H 'Authorization: Bearer <token>' ${SERVICE_URL}/keep/state"
+# --- Boundary check --------------------------------------------------------------------
+step "Checking the deployed boundary"
+# A state read needs a *caller* sign-in now: the app's Google token only ever exists in a
+# browser, and this script has none. What is checkable from here is the boundary itself - the
+# service is up on the new revision and it refuses an unauthenticated read. That the fresh
+# master token actually works was already proven inside the mint job above, which authenticates
+# with it through the same `keep_gateway.keep_client` code the service uses.
+HEALTH="$(curl -s "${SERVICE_URL}/health" || true)"
+echo "health: ${HEALTH}"
+ANONYMOUS_STATUS="$(curl -s -o /dev/null -w '%{http_code}' "${SERVICE_URL}/keep/state" || true)"
+if [[ "$ANONYMOUS_STATUS" == "401" ]]; then
+  echo "unauthenticated /keep/state: 401 - the sign-in gate is on."
+  echo "open the app and sign in with an allowed account to read the lists."
 else
-  curl -s -H "Authorization: Bearer ${GATEWAY_TOKEN}" "${SERVICE_URL}/keep/state" \
-    | python3 -c '
-import json, sys
-try:
-    body = json.load(sys.stdin)
-except json.JSONDecodeError:
-    print("unexpected (non-JSON) answer - see the service log"); sys.exit(0)
-if "error" in body:
-    print("FAILED:", body["error"]["code"], "-", body["error"]["message"])
-else:
-    print("OK:", body["mealplan"]["title"], len(body["mealplan"]["items"]), "items,",
-          body["shopping"]["title"], len(body["shopping"]["items"]), "items")
-'
-  unset GATEWAY_TOKEN
+  echo "unexpected: unauthenticated /keep/state answered HTTP ${ANONYMOUS_STATUS}" >&2
 fi
 
 cat <<EOF

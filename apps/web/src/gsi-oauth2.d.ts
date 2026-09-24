@@ -30,7 +30,12 @@ declare namespace google.accounts.oauth2 {
     enable_serial_consent?: boolean;
     /** Email address or unique ID of the Google Account to preselect. */
     hint?: string;
-    /** Adds previously granted scopes to new requests. */
+    /**
+     * Incremental authorization. Defaults to `true`, which makes a new token cover *every*
+     * scope the user has granted this client — so a narrow request also returns the wider
+     * grants. The app sets `false` so each token covers exactly the scope it asked for; the
+     * Keep gateway refuses a sign-in that carries more than the identity scopes.
+     */
     include_granted_scopes?: boolean;
   }
 

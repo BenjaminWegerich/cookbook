@@ -34,7 +34,6 @@ def make_config(**overrides: object) -> GatewayConfig:
         "keep_device_id": "fake-device-id",
         "shopping_title": "Einkaufsliste",
         "mealplan_title": "Essensplan",
-        "bearer_token": "test-gateway-token",
     }
     values.update(overrides)
     return GatewayConfig(**values)  # type: ignore[arg-type]
@@ -43,19 +42,46 @@ def make_config(**overrides: object) -> GatewayConfig:
 class FakeItem:
     """Minimal stand-in for `gkeepapi.node.ListItem`."""
 
-    def __init__(self, text: str, checked: bool = False, indented: bool = False, sort: int = 0) -> None:
+    def __init__(
+        self,
+        text: str,
+        checked: bool = False,
+        indented: bool = False,
+        sort: int = 0,
+        deleted: bool = False,
+    ) -> None:
         self.text = text
         self.checked = checked
         self.indented = indented
         self.sort = sort
+        self.deleted = deleted
+
+    def delete(self) -> None:
+        """gkeepapi's `delete` only marks a timestamp; the item stays in the list."""
+        self.deleted = True
 
 
 class FakeList:
-    """Minimal stand-in for `gkeepapi.node.List`."""
+    """Minimal stand-in for `gkeepapi.node.List`.
+
+    `items` mirrors the real one: display order (highest sort id first) with
+    deleted items hidden. That is the shape both `describe_list` and the write
+    path read, so the fakes exercise the same assumptions.
+    """
 
     def __init__(self, title: str | None, items: list[FakeItem] | None = None) -> None:
         self.title = title
-        self.items = items or []
+        self._items = list(items or [])
+
+    @property
+    def items(self) -> list[FakeItem]:
+        visible = (item for item in self._items if not item.deleted)
+        return sorted(visible, key=lambda item: item.sort, reverse=True)
+
+    def add(self, text: str, checked: bool = False, sort: int | None = None) -> FakeItem:
+        item = FakeItem(text, checked=checked, sort=0 if sort is None else sort)
+        self._items.append(item)
+        return item
 
 
 class DescribeListTests(unittest.TestCase):
@@ -167,6 +193,149 @@ class AuthenticateTests(unittest.TestCase):
             with self.assertRaises(KeepApiError) as raised:
                 keep_client.authenticate(make_config())
         self.assertIn("SyncException", raised.exception.detail or "")
+
+
+class SyncTests(unittest.TestCase):
+    """The write path pushes with `sync`; a failed push must be a typed error, not a 500."""
+
+    def test_a_consistency_failure_becomes_a_keep_api_error(self) -> None:
+        keep = mock.MagicMock()
+        keep.sync.side_effect = gkeepapi.exception.SyncException("consistency")
+        with self.assertRaises(KeepApiError) as raised:
+            keep_client.sync(keep)
+        self.assertIn("SyncException", raised.exception.detail or "")
+
+    def test_a_network_failure_becomes_unreachable(self) -> None:
+        keep = mock.MagicMock()
+        keep.sync.side_effect = requests.exceptions.ConnectionError("no route to host")
+        with self.assertRaises(KeepUnreachable):
+            keep_client.sync(keep)
+
+
+class VerifyMealPlanStateTests(unittest.TestCase):
+    """The write's own check: an unverified write must never look like success."""
+
+    @staticmethod
+    def state(*texts: str) -> dict:
+        return {"title": "Essensplan", "items": [{"text": text} for text in texts]}
+
+    def test_accepts_the_entry_appearing_exactly_once(self) -> None:
+        keep_client.verify_meal_plan_state(
+            self.state("Brot", "Kürbissuppe (6 Portionen)"),
+            "Kürbissuppe (6 Portionen)",
+            ["Kürbissuppe"],
+        )
+
+    def test_reports_a_missing_entry(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_meal_plan_state(
+                self.state("Brot"), "Kürbissuppe (6 Portionen)", []
+            )
+
+    def test_reports_a_duplicated_entry(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_meal_plan_state(
+                self.state("Kürbissuppe (6 Portionen)", "Kürbissuppe (6 Portionen)"),
+                "Kürbissuppe (6 Portionen)",
+                [],
+            )
+
+    def test_reports_a_replaced_entry_left_behind(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_meal_plan_state(
+                self.state("Kürbissuppe", "Kürbissuppe (6 Portionen)"),
+                "Kürbissuppe (6 Portionen)",
+                ["Kürbissuppe"],
+            )
+
+    def test_re_planning_at_the_same_size_is_not_a_stale_entry(self) -> None:
+        """The replaced text and the new text are identical; only one may remain."""
+        keep_client.verify_meal_plan_state(
+            self.state("Kürbissuppe (6 Portionen)"),
+            "Kürbissuppe (6 Portionen)",
+            ["Kürbissuppe (6 Portionen)"],
+        )
+
+
+class ListThatDropsWrites(FakeList):
+    """A list whose `add` silently does nothing — a server that stored something else."""
+
+    def add(self, text: str, checked: bool = False, sort: int | None = None) -> FakeItem:
+        return FakeItem(text)
+
+
+class AddMealPlanEntryTests(unittest.TestCase):
+    """The write path: replace what the app recognized, place the new entry on top."""
+
+    def _client_with(self, plan: FakeList):
+        """A `KeepClient` whose authentication and list lookup are replaced by fakes."""
+        keep = mock.MagicMock()
+        for patch in (
+            mock.patch.object(keep_client, "authenticate", return_value=keep),
+            mock.patch.object(keep_client, "find_list_by_title", return_value=plan),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+        return keep_client.KeepClient(make_config()), keep
+
+    def test_replaces_the_recognized_entries_and_places_the_entry_above_the_rest(self) -> None:
+        plan = FakeList(
+            "Essensplan",
+            [
+                FakeItem("Kürbissuppe (4 Portionen)", sort=5000),
+                FakeItem("Brot", sort=3000),
+                FakeItem("Kürbissuppe", checked=True, sort=1000),
+            ],
+        )
+        client, keep = self._client_with(plan)
+
+        state = client.add_meal_plan_entry(
+            "Kürbissuppe (6 Portionen)", ["Kürbissuppe", "Kürbissuppe (4 Portionen)"]
+        )
+
+        # One sync carries the whole change.
+        keep.sync.assert_called_once()
+        # The new entry is on top, both recognized entries are gone - the checked
+        # one as well - and the unrelated entry did not move.
+        self.assertEqual(
+            [item["text"] for item in state["mealplan"]["items"]],
+            ["Kürbissuppe (6 Portionen)", "Brot"],
+        )
+        added = next(item for item in plan._items if item.text == "Kürbissuppe (6 Portionen)")
+        self.assertGreater(added.sort, 3000)
+        # Only the changed list is answered: the write never touches (or reads) the
+        # shopping list, so a missing note cannot fail a successful write.
+        self.assertEqual(set(state), {"mealplan"})
+
+    def test_an_empty_replacement_list_only_adds(self) -> None:
+        plan = FakeList("Essensplan", [FakeItem("Brot", sort=3000)])
+        client, _keep = self._client_with(plan)
+
+        state = client.add_meal_plan_entry("Kürbissuppe (6 Portionen)", [])
+
+        self.assertEqual(
+            [item["text"] for item in state["mealplan"]["items"]],
+            ["Kürbissuppe (6 Portionen)", "Brot"],
+        )
+
+    def test_matches_replaced_texts_ignoring_surrounding_whitespace(self) -> None:
+        """Keep may keep whitespace the app's parsed texts do not carry."""
+        plan = FakeList("Essensplan", [FakeItem("  Kürbissuppe (4 Portionen)  ", sort=1000)])
+        client, _keep = self._client_with(plan)
+
+        state = client.add_meal_plan_entry("Kürbissuppe (6 Portionen)", ["Kürbissuppe (4 Portionen)"])
+
+        self.assertEqual(
+            [item["text"] for item in state["mealplan"]["items"]],
+            ["Kürbissuppe (6 Portionen)"],
+        )
+
+    def test_a_write_that_does_not_land_raises_instead_of_reporting_success(self) -> None:
+        plan = ListThatDropsWrites("Essensplan", [FakeItem("Brot", sort=1000)])
+        client, _keep = self._client_with(plan)
+
+        with self.assertRaises(KeepApiError):
+            client.add_meal_plan_entry("Kürbissuppe (6 Portionen)", [])
 
 
 if __name__ == "__main__":
