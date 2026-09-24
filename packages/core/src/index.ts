@@ -20,6 +20,7 @@ export * from './aqLadder.js';
 export * from './ingredientCsv.js';
 export * from './ingredientRegistry.js';
 export * from './ladder.js';
+export * from './mealPlan.js';
 export * from './recipe/artifacts.js';
 export * from './recipe/exportHtml.js';
 export * from './recipe/ingredientList.js';
