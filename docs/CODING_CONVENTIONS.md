@@ -96,7 +96,7 @@
   readable at a glance and never plain coloured text. The symbol comes from the
   shared icon set (`components/icons.tsx`) and follows the badge's meaning, not its
   colour: `Neu` = "new releases" (the name is not in the master data yet), `Rezept`
-  = "link" (opens the ingredient's own recipe), `Referenz` = filled "star" (mirrors
+  = "link" (opens the ingredient's own recipe), `Referenz` = outline "star" (mirrors
   the star toggle). A badge's own controls follow the same rule as any other icon
   (an icon-only control like the reference tag's × never replaces the badge's
   leading symbol). Badges keep one shared style and the text stays a short noun in

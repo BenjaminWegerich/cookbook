@@ -30,7 +30,7 @@
  *   star = reference quantity, arrows = reorder.
  * - the ingredient tags share one style and always appear in the order
  *   "NEU" (danger, star badge) - "REZEPT" (terracotta, chain link) -
- *   "REFERENZ" (olive, filled star + ×), so every ingredient row reads the
+ *   "REFERENZ" (olive, outline star + ×), so every ingredient row reads the
  *   same way in both lists; every tag leads with its symbol (docs/
  *   CODING_CONVENTIONS.md, "inline badges"); only the master list carries the
  *   star toggle.
@@ -1968,7 +1968,7 @@ function RecipeEditor({
                         )}
                         {isReference && (
                           <span className="ingredient-tag tag-reference">
-                            <StarFilledIcon className="tag-icon" />
+                            <StarIcon className="tag-icon" />
                             <span>Referenz</span>
                             {/* The × mirrors the star toggle: it drops the
                                 reference role (star unfills, badge vanishes). */}

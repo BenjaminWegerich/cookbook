@@ -555,13 +555,18 @@
 
 /* Reference toggle — master list only (decided with the user): outline star
    when off, the same star filled when on, in the reference colour (olive — the
-   colour of the "REFERENZ" badge), so toggle and badge tell the same story. */
+   colour of the "REFERENZ" badge), so toggle and badge tell the same story.
+   The box is one body-text line tall (`--space-7`, the 18px text at
+   `line-height: 1.5`) so the toggle can never make a master-list row taller
+   than a step-list row — both lists must read identically. The hit area still
+   grows past the box via ::before, exactly like the reference badge's ×. */
 .ref-toggle {
+  position: relative;
   flex: none;
   display: grid;
   place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--space-7);
+  height: var(--space-7);
   padding: 0;
   background: none;
   border: none;
@@ -569,6 +574,13 @@
   color: var(--color-ink-muted);
   line-height: 1;
   cursor: pointer;
+}
+
+/* Keeps the touch target comfortable without adding any height to the row. */
+.ref-toggle::before {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--space-1));
 }
 
 .star-icon {
@@ -886,7 +898,7 @@
    all-caps marker directly after the ingredient name, always led by its symbol.
    "NEU" (star badge) warns that the name is not in the master data yet, "REZEPT"
    (chain link) marks a sub-recipe use (tapping it jumps to the ingredient
-   recipe) and "REFERENZ" (filled star) mirrors the star toggle: its × clears the
+   recipe) and "REFERENZ" (outline star) mirrors the star toggle: its × clears the
    reference role, exactly like tapping the star again. */
 .ingredient-tag {
   display: inline-flex;

@@ -290,7 +290,9 @@ export function StarFilledIcon({ className }: IconProps) {
   );
 }
 
-/** Star — the reference-quantity toggle (the active state is shown by color). */
+/** Star — the reference-quantity marker: the master list's toggle, the "Referenz"
+ *  tag, and the "Referenz" tag's × all show the outline star; the active state is
+ *  carried by the colour (olive), so only the big toggle swaps to the filled one. */
 export function StarIcon({ className }: IconProps) {
   return (
     <svg className={className} {...ICON_PROPS}>
