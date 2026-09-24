@@ -32,9 +32,12 @@ TOKEN_SECRET="${TOKEN_SECRET:-keep-gateway-token}"
 MINT_JOB="${MINT_JOB:-keep-mint}"
 COOKIE_SECRET="${COOKIE_SECRET:-keep-oauth-token}"
 
-# The browser origin allowed to call the gateway. This is the exact scheme+host, no path:
-# the Vite app is served from the repository's GitHub Pages site. Add more with a comma.
-ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://benjaminwegerich.github.io}"
+# The browser origins allowed to call the gateway. Each is the exact scheme+host, no path:
+# the published app on the repository's GitHub Pages site, plus the Vite dev server so
+# developing against the deployed gateway keeps working (decided with the user: a remote page
+# cannot claim a localhost origin, and the gateway token is still required either way). Add
+# more with a comma, or override the whole list with --allowed-origin.
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://benjaminwegerich.github.io,http://localhost:5173}"
 
 # Where the "credential rejected" alert goes. Must be an address Google can send to.
 ALERT_EMAIL="${ALERT_EMAIL:-benjaminwegerich@gmail.com}"

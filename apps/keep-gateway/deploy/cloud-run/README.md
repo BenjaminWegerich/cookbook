@@ -44,12 +44,14 @@ Scripts, in the order you need them:
 From `apps/keep-gateway`:
 
 ```sh
-./deploy/cloud-run/provision.sh --allowed-origin https://benjaminwegerich.github.io
+./deploy/cloud-run/provision.sh
 ```
 
-The origin is the app's exact scheme+host — GitHub Pages omits the port and the path. Add more
-with a comma if you ever serve the app elsewhere (`http://localhost:5173` while developing
-against the deployed gateway).
+Each origin is the app's exact scheme+host — GitHub Pages omits the port and the path. The
+default allows both the Pages site and the Vite dev server
+(`https://benjaminwegerich.github.io,http://localhost:5173`), so developing against the
+deployed gateway needs no extra flag; `--allowed-origin` overrides the whole list. A remote
+page cannot claim a localhost origin, and the gateway token is required either way.
 
 Then mint the master token, because nothing works before that:
 
@@ -89,7 +91,7 @@ is why `mint-token.sh` ends with exactly that call.
 | `--concurrency` | 8 | matches gunicorn's thread count; the request rate is a household's |
 | `KEEP_MASTER_TOKEN` | Secret Manager `keep-master-token-cloud:latest` | the cloud-minted credential |
 | `KEEP_GATEWAY_TOKEN` | Secret Manager `keep-gateway-token:latest` | the token the app pastes |
-| `KEEP_GATEWAY_ALLOWED_ORIGINS` | the Pages origin | CORS is closed by default; a foreign `Origin` is refused anyway |
+| `KEEP_GATEWAY_ALLOWED_ORIGINS` | the Pages origin + `http://localhost:5173` | CORS is closed by default; a foreign `Origin` is refused anyway |
 
 **The service URL is public.** That is deliberate (the browser must reach it) and safe only
 because every `/keep/*` route requires the bearer token and fails closed when the token is

@@ -78,7 +78,7 @@ All configuration is environment variables; the service keeps no state and write
 | `KEEP_MASTER_TOKEN` | yes | Its master token. Secret — Secret Manager in the cloud. |
 | `KEEP_DEVICE_ID` | yes | Stable device id. **Never change it**; a new value looks like a new device to Google. |
 | `KEEP_GATEWAY_TOKEN` | yes | Shared secret the app presents. Empty ⇒ every Keep route refuses to work. |
-| `KEEP_GATEWAY_ALLOWED_ORIGINS` | for browsers | Comma-separated origins allowed to call the service (e.g. the GitHub Pages URL). Empty ⇒ no browser caller. No wildcard. |
+| `KEEP_GATEWAY_ALLOWED_ORIGINS` | for browsers | Comma-separated origins allowed to call the service (the GitHub Pages URL and `http://localhost:5173` for the dev server by default). Empty ⇒ no browser caller. No wildcard. |
 | `KEEP_SHOPPING_LIST_TITLE` | no | Default `Einkaufsliste`. |
 | `KEEP_MEALPLAN_LIST_TITLE` | no | Default `Essensplan`. |
 | `PORT` | no | Default `8080`, which is what Cloud Run injects. |
@@ -128,7 +128,7 @@ directory, so no file from the spike is needed to build the image.
 Build, service, secrets, metric and alert are one idempotent script:
 
 ```sh
-./deploy/cloud-run/provision.sh --allowed-origin https://benjaminwegerich.github.io
+./deploy/cloud-run/provision.sh
 ```
 
 The master token has to be minted from the cloud, because Google refuses a home-minted one
