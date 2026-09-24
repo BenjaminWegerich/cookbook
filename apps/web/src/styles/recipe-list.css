@@ -15,8 +15,19 @@
   margin-block-end: var(--space-7);
 }
 
+/* The heading opens the screen, so the browser's default vertical margin
+   (~21 px at the 32 px screen-title size) would stack on top of the app padding
+   above and on the header's own bottom margin below. Both directions are reset;
+   the header's margin-block-end alone sets the distance to the search bar. The
+   AI screen resets the whole margin the same way. */
+.app-header h1 {
+  margin-block: 0;
+}
+
+/* Status line in the header's top right corner: as a flex child it sits beside
+   the heading, so it carries no leading margin of its own. */
 .app-subtitle {
-  margin-block-start: var(--space-1);
+  margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
 }

@@ -715,14 +715,15 @@ function App() {
     setAiHandoff(null);
   }, []);
 
-  /** Status line under the header, German. */
+  /** Status line in the header, German. It carries nothing but the count: while
+   *  the list is loading and while the collection is empty, the body already
+   *  says so in place of the list — the screen must not carry the same text
+   *  twice. */
   const subtitle = !token
     ? 'Nicht verbunden'
-    : recipes === null
-      ? 'Rezepte werden geladen …'
-      : recipes.length === 0
-        ? 'Noch keine Rezepte'
-        : `${recipes.length} ${recipes.length === 1 ? 'Rezept' : 'Rezepte'}`;
+    : recipes === null || recipes.length === 0
+      ? ''
+      : `${recipes.length} ${recipes.length === 1 ? 'Rezept' : 'Rezepte'}`;
 
   return (
     <>
@@ -792,12 +793,10 @@ function App() {
       ) : aiCreateOpen ? null : (
         <main className="app">
           <header className="app-header">
-            <div>
-              <h1>Cookbook</h1>
-              <p className="app-subtitle" role="status">
-                {subtitle}
-              </p>
-            </div>
+            <h1>Cookbook</h1>
+            <p className="app-subtitle" role="status">
+              {subtitle}
+            </p>
           </header>
 
           {token && masterDataWarning !== null && (
