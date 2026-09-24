@@ -27,6 +27,12 @@
  *   context (used after a sub-recipe was saved mid-conversation). Both only
  *   rebuild the single system message, which is sent anew with every request —
  *   the AiClient contract stays untouched.
+ *
+ * The same session also runs the AI-edit flow (Task B, "Mit KI bearbeiten"):
+ * `task: 'edit'` swaps the task framing for the {@link buildEditTaskText} block
+ * and makes every `send` a revision of the transferred original, so the whole
+ * conversation is "change request → complete corrected file" instead of
+ * "description → new recipe".
  */
 
 import { parseRecipe } from '@cookbook/core';
@@ -50,6 +56,32 @@ const REVISION_PREFIX =
   'Rezeptdatei zurück (kein Diff, keine Auslassungen, kein Kommentar außer optional ein bis ' +
   'zwei Sätzen). Behalte `title` und `type` bei, sofern der Wunsch nichts anderes verlangt. ' +
   'Änderungswunsch:';
+
+/**
+ * Prefix of the first user turn of an edit session (Task B): the change request
+ * refers to the original file transferred in the system instruction, not to a
+ * previous assistant reply — so it cannot reuse {@link REVISION_PREFIX}.
+ */
+const EDIT_PREFIX =
+  'Überarbeite das oben übergebene Rezept und gib die vollständige, korrigierte Rezeptdatei ' +
+  'zurück (kein Diff, keine Auslassungen, kein Kommentar außer optional ein bis zwei Sätzen). ' +
+  'Behalte `title` und `type` bei, sofern der Wunsch nichts anderes verlangt. Änderungswunsch:';
+
+/** Which task a session runs: create a new recipe (Task A) or revise an
+ *  existing one (Task B). */
+export type AiRecipeTask = 'create' | 'edit';
+
+/**
+ * The task framing of a create session (Task A). The rules document carries
+ * both task sections, so the system instruction names the one in force — the
+ * edit session names its own in the transferred-recipe block
+ * (aiContext.buildEditTaskText).
+ */
+const CREATE_TASK_TEXT =
+  '## Auftrag: neues Rezept aus einer Beschreibung erstellen (Task A)\n\n' +
+  'Der Nutzer beschreibt unten ein Gericht; es gibt kein Ausgangsrezept. Erstelle daraus gemäß ' +
+  'Task A ein neues Rezept im kanonischen Format. Task B („vorhandenes Rezept überarbeiten“) ' +
+  'gilt für diese Unterhaltung nicht.';
 
 /**
  * Strips one optional markdown code fence (```markdown … ```) around a reply:
@@ -119,6 +151,14 @@ export interface AiCreateSessionOptions {
   contextText: string;
   /** The serialized Vorgaben block (see aiContext.buildSpecificationsText). */
   specificationsText?: string;
+  /**
+   * The serialized edit-task block (see aiContext.buildEditTaskText) — the
+   * original recipe the session revises. Required when `task` is `'edit'`,
+   * ignored otherwise.
+   */
+  editTaskText?: string;
+  /** Which task the session runs (default `'create'`, Task A). */
+  task?: AiRecipeTask;
   /** Names present in the loaded ingredient master data. */
   knownIngredientNames: ReadonlySet<string>;
   /** Titles of the collection's ingredient-recipes (valid link targets). */
@@ -138,6 +178,8 @@ interface ExtractedFile {
  * context (personal rules, master data, collection) + the user's Vorgaben.
  */
 export function createAiCreateSession(options: AiCreateSessionOptions): AiCreateSession {
+  /** Which task this session runs (Task A create vs. Task B edit). */
+  const task: AiRecipeTask = options.task ?? 'create';
   /** The runtime context block (aiContext.ts); replaced after a save. */
   let contextText = options.contextText;
   /** The user's Vorgaben block; replaced whenever the settings change. */
@@ -149,11 +191,13 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
 
   /**
    * Rebuilds the head of the history (the only system message): static rules,
-   * runtime context and the current Vorgaben. The provider receives the system
-   * instruction with every request, so replacing it here is enough.
+   * the task framing in force, runtime context and the current Vorgaben. The
+   * provider receives the system instruction with every request, so replacing
+   * it here is enough.
    */
   function rebuildSystemInstruction(): void {
-    const parts = [AI_RULES_TEXT, contextText, specificationsText].filter(
+    const taskText = task === 'edit' ? (options.editTaskText ?? '') : CREATE_TASK_TEXT;
+    const parts = [AI_RULES_TEXT, taskText, contextText, specificationsText].filter(
       (part) => part.trim() !== '',
     );
     messages[0] = { role: 'system', content: parts.join('\n\n') };
@@ -302,7 +346,11 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
       // The repair budget belongs to one user turn — a long conversation with
       // several drafts must not accumulate it across turns.
       repairRounds = 0;
-      messages.push({ role: 'user', content: userText });
+      // In an edit session the first turn already revises the transferred
+      // original, so it carries the same "complete corrected file" framing as a
+      // later revision (a clarifying answer keeps it, which is harmless).
+      const content = task === 'edit' ? `${EDIT_PREFIX}\n${userText}` : userText;
+      messages.push({ role: 'user', content });
       return runTurn();
     },
 

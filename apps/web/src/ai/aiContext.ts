@@ -13,6 +13,11 @@
  * — is serialized by {@link buildSpecificationsText} and appended after the
  * context block, so both live in the system instruction and never appear as a
  * chat bubble.
+ *
+ * The AI-edit screen ("Mit KI bearbeiten") needs no such controls: the original
+ * recipe is transferred in full by {@link buildEditTaskText} (Task B of the
+ * rules) and the user only describes the desired changes, which travel as the
+ * normal chat message.
  */
 
 import { serializeRecipe } from '@cookbook/core';
@@ -206,4 +211,27 @@ export function buildSpecificationsText(spec: RecipeSpecifications): string {
   );
 
   return `## Vorgaben für dieses Rezept (verbindlich)\n\n${lines.join('\n')}`;
+}
+
+/**
+ * Serializes the AI-edit task (Task B of docs/ai_recipe_rules.md): the original
+ * recipe file in full, framed as the binding starting version. It takes the
+ * place of the create task framing in an edit session's system instruction, so
+ * the recipe is present on every turn (including clarifying questions and
+ * repair rounds) and never appears as a chat bubble. The user's own message
+ * then carries only the desired change.
+ *
+ * The file is embedded fenced so its front matter and headings cannot be read
+ * as instructions of the context block around it.
+ */
+export function buildEditTaskText(originalText: string, title: string): string {
+  return (
+    '## Auftrag: vorhandenes Rezept überarbeiten (Task B)\n\n' +
+    `Das folgende Rezept „${title}“ ist die verbindliche Ausgangsfassung und wird dir ` +
+    'vollständig übergeben. Der Nutzer beschreibt in seiner Nachricht ausschließlich die ' +
+    'gewünschten Änderungen; alles, was er nicht nennt, bleibt unverändert. Gib als Antwort die ' +
+    'vollständige, überarbeitete Rezeptdatei im kanonischen Format zurück (siehe Task B der ' +
+    'Regeln oben).\n\n' +
+    `\`\`\`markdown\n${originalText.trimEnd()}\n\`\`\``
+  );
 }

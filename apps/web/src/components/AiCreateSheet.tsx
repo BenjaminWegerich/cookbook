@@ -37,16 +37,25 @@
  *   is on screen by definition. The caption is shown only while a field has
  *   focus and only on pointer/keyboard devices — see .ai-field-hint.
  *
+ * The same sheet also runs the AI-edit flow ("Mit KI bearbeiten", Task B of the
+ * rules): `mode === 'edit'` drops every create-only extra — the source textarea
+ * and the Typ/Portionen/Merkmale/„KI-Verhalten“ block — so the screen is the
+ * explanation plus a *single* prompt field. The original recipe is transferred
+ * to the AI in full (buildEditTaskText) and the user only describes the desired
+ * changes; the prompt's explanation says exactly that. Everything else (API
+ * key, transcript, revision turns, draft hand-over to the editor, exit guard)
+ * is shared, and the first edit turn is already a revision of the original.
+ *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { KeyboardEvent, Ref } from 'react';
 
-import { NNBSP, allIngredientMappings, integerLadderValues } from '@cookbook/core';
+import { NNBSP, allIngredientMappings, integerLadderValues, serializeRecipe } from '@cookbook/core';
 import type { Recipe, RecipeType } from '@cookbook/core';
 
-import { buildAiContextText, buildSpecificationsText } from '../ai/aiContext';
+import { buildAiContextText, buildEditTaskText, buildSpecificationsText } from '../ai/aiContext';
 import type { RecipeSpecifications } from '../ai/aiContext';
 import { createAiCreateSession } from '../ai/createRecipeDraft';
 import type { AiCreateSession } from '../ai/createRecipeDraft';
@@ -166,6 +175,19 @@ interface AiCreateSheetProps {
   /** Drive access token (the Drive connection is required). */
   token: string;
   /**
+   * Which task the sheet runs: `'create'` (Task A, the default) starts a new
+   * recipe from a description, `'edit'` (Task B) revises the recipe passed as
+   * `editTarget`. Edit mode hides the create-only extras (source textarea,
+   * Vorgaben) and shows a single prompt field.
+   */
+  mode?: 'create' | 'edit';
+  /**
+   * The recipe to revise — required in `'edit'` mode, ignored otherwise. Its
+   * canonical text is transferred to the AI in full, so the user only describes
+   * the desired changes.
+   */
+  editTarget?: StoredRecipe;
+  /**
    * True while this screen is the visible one. The sheet deliberately stays
    * mounted (hidden) while its own draft is edited, so its Escape trigger must
    * be off in that state — otherwise Escape would hit the editor and this sheet
@@ -231,17 +253,31 @@ async function loadContext(token: string, stored: readonly StoredRecipe[]): Prom
 
 /**
  * Loads the session prerequisites and creates the session. Requires a stored
- * session API key (N6).
+ * session API key (N6). In edit mode the target recipe is read and transferred
+ * to the AI in full (Task B); a broken target file therefore fails preparation
+ * instead of silently editing something else.
  */
 async function prepareSession(
   token: string,
   stored: readonly StoredRecipe[],
+  editTarget?: StoredRecipe,
 ): Promise<AiCreateSession> {
   const apiKey = getAiApiKey();
   if (apiKey === null) {
     throw new Error('Kein API-Schlüssel hinterlegt.');
   }
   const context = await loadContext(token, stored);
+  if (editTarget !== undefined) {
+    const originalText = serializeRecipe(await readRecipe(token, editTarget.fileId));
+    return createAiCreateSession({
+      client: createAiClient({ provider: 'gemini', apiKey }),
+      contextText: context.text,
+      editTaskText: buildEditTaskText(originalText, editTarget.title),
+      task: 'edit',
+      knownIngredientNames: new Set(Object.keys(allIngredientMappings())),
+      ingredientRecipeTitles: context.ingredientRecipeTitles,
+    });
+  }
   return createAiCreateSession({
     client: createAiClient({ provider: 'gemini', apiKey }),
     contextText: context.text,
@@ -283,6 +319,8 @@ function composeUserMessage(description: string, source: string): string {
 
 export default function AiCreateSheet({
   token,
+  mode = 'create',
+  editTarget,
   visible,
   recipes,
   handoff,
@@ -291,6 +329,8 @@ export default function AiCreateSheet({
   onOpenDraft,
   ref,
 }: AiCreateSheetProps) {
+  /** True for the edit task (Task B): no create extras, single prompt field. */
+  const isEdit = mode === 'edit';
   /** The prepared session; null while the context loads or no key is set. */
   const [session, setSession] = useState<AiCreateSession | null>(null);
   /** True while the context + session load runs (mount, or after key save). */
@@ -343,8 +383,9 @@ export default function AiCreateSheet({
 
   /** Loads the session prerequisites (throws on failure). */
   const loadSession = useCallback(
-    (activeToken: string): Promise<AiCreateSession> => prepareSession(activeToken, recipes),
-    [recipes],
+    (activeToken: string): Promise<AiCreateSession> =>
+      prepareSession(activeToken, recipes, editTarget),
+    [recipes, editTarget],
   );
 
   /** Applies the prepared session (state updates from promise callbacks). */
@@ -389,9 +430,12 @@ export default function AiCreateSheet({
    * session is created without them, so this effect also performs the initial
    * push; every later control change only rebuilds the system message and takes
    * effect with the next turn (a change alone never triggers a request).
+   *
+   * Edit mode has no Vorgaben controls: the task's own block (the transferred
+   * recipe) already frames the session, so there is nothing to push.
    */
   useEffect(() => {
-    if (session === null) return;
+    if (session === null || isEdit) return;
     session.setSpecifications(
       buildSpecificationsText({
         type: recipeType,
@@ -406,6 +450,7 @@ export default function AiCreateSheet({
     );
   }, [
     session,
+    isEdit,
     recipeType,
     servings,
     yieldQuantity,
@@ -537,6 +582,20 @@ export default function AiCreateSheet({
   const refreshing = handoff !== null && session !== null;
   const canSend = !busy && !refreshing && (description.trim() !== '' || source.trim() !== '');
 
+  /**
+   * Placeholder of the shared prompt field. Before the first turn an edit
+   * session asks for the change, a create session for the whole dish; later
+   * turns answer a question or revise the draft.
+   */
+  const promptPlaceholder =
+    draft !== null
+      ? 'Änderung am Entwurf beschreiben …'
+      : conversationStarted
+        ? 'Antwort eingeben …'
+        : isEdit
+          ? 'Änderung beschreiben …'
+          : 'Rezept beschreiben …';
+
   /** True when leaving would discard started work: text typed into the
    *  composer, a started conversation, or an AI draft that was never saved.
    *  The API-key field is deliberately excluded — the key is session-only
@@ -596,7 +655,7 @@ export default function AiCreateSheet({
         >
           {guard.armed ? 'Änderungen verwerfen?' : 'Zurück'}
         </button>
-        <h1>Rezept mit KI anlegen</h1>
+        <h1>{isEdit ? 'Rezept mit KI bearbeiten' : 'Rezept mit KI anlegen'}</h1>
       </header>
 
       {showKeyField ? (
@@ -652,12 +711,31 @@ export default function AiCreateSheet({
               <section className="ai-transcript" ref={transcriptRef} aria-label="Unterhaltung">
                 {messages.length === 0 && (
                   <div className="ai-hint">
-                    <p>Beschreibe das Gericht frei und beliebig detailliert.</p>
-                    <p>
-                      Soll eine Webseite als Inspiration dienen, füge nicht den Link ein, sondern
-                      beschreibe die Webseite (z.{NNBSP}B. „Thick and Creamy Tomato Soup von Serious
-                      Eats“), oder kopiere den Text und füge ihn im zweiten Feld ein.
-                    </p>
+                    {isEdit ? (
+                      // Edit task (Task B): the whole point of the screen is
+                      // that the user does not retype the recipe — say so before
+                      // the single prompt field.
+                      <>
+                        <p>
+                          Das Rezept „{editTarget?.title ?? ''}“ wird vollständig an die KI
+                          übergeben.
+                        </p>
+                        <p>
+                          Beschreibe unten nur, was sich ändern soll — z.{NNBSP}B. „ohne Sahne“,
+                          „für 4 Portionen“ oder „Mengen und Einheiten prüfen“.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p>Beschreibe das Gericht frei und beliebig detailliert.</p>
+                        <p>
+                          Soll eine Webseite als Inspiration dienen, füge nicht den Link ein,
+                          sondern beschreibe die Webseite (z.{NNBSP}B. „Thick and Creamy Tomato Soup
+                          von Serious Eats“), oder kopiere den Text und füge ihn im zweiten Feld
+                          ein.
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
                 {messages.map((message, index) => (
@@ -676,9 +754,9 @@ export default function AiCreateSheet({
                 <section className="editor-card ai-draft-card">
                   <h2 className="editor-card-title">Entwurf erstellt</h2>
                   <p>
-                    Ich habe einen Entwurf für „{draft.title}“ erstellt. Du kannst ihn jetzt im
-                    Editor ansehen, ändern und speichern — oder unten beschreiben, was die KI am
-                    Entwurf ändern soll.
+                    {isEdit
+                      ? `Ich habe eine überarbeitete Fassung von „${draft.title}“ erstellt. Du kannst sie jetzt im Editor prüfen und speichern — dabei wird das vorhandene Rezept ersetzt — oder unten beschreiben, was die KI weiter ändern soll.`
+                      : `Ich habe einen Entwurf für „${draft.title}“ erstellt. Du kannst ihn jetzt im Editor ansehen, ändern und speichern — oder unten beschreiben, was die KI am Entwurf ändern soll.`}
                   </p>
                   <div className="sheet-actions">
                     <button
@@ -707,16 +785,16 @@ export default function AiCreateSheet({
                   void handleSend();
                 }}
               >
-                {conversationStarted ? (
-                  // Follow-up answer or change request: fixed three-line height,
-                  // scrolls vertically inside the field.
+                {conversationStarted || isEdit ? (
+                  // Follow-up answer or change request (and the single prompt
+                  // field of the edit screen): the first turn keeps the tall
+                  // six-line height, later turns the fixed three-line one,
+                  // scrolling vertically inside the field.
                   <div className="ai-field">
                     <textarea
-                      rows={3}
+                      rows={conversationStarted ? 3 : 6}
                       value={description}
-                      placeholder={
-                        draft !== null ? 'Änderung am Entwurf beschreiben …' : 'Antwort eingeben …'
-                      }
+                      placeholder={promptPlaceholder}
                       onChange={(event) => setDescription(event.target.value)}
                     />
                     <FieldHint />
@@ -728,7 +806,7 @@ export default function AiCreateSheet({
                       <textarea
                         rows={6}
                         value={description}
-                        placeholder="Rezept beschreiben …"
+                        placeholder={promptPlaceholder}
                         onChange={(event) => setDescription(event.target.value)}
                       />
                       <FieldHint />

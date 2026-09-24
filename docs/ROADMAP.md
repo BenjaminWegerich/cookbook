@@ -32,7 +32,7 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 - [x] AI key handling: pasted per session, never stored (N6).
 - [x] AI create: natural-language description → draft recipe in the canonical format,
       reviewable and editable before saving.
-- [ ] AI edit: fill gaps / correct units, preview + accept or reject (user story A3).
+- [x] AI edit: fill gaps / correct units, preview + accept or reject (user story A3).
 - [x] AI workflow refinements:
       - [x] More entry fields: servings, „schnell und einfach“ / „günstig“ / „vegan“.
       - [x] Wire the entry fields (Typ, Portionen/Ergiebigkeit, Vorgaben, „KI-Verhalten“)

@@ -131,12 +131,16 @@ function withIngredients(draft: EditorDraft): Recipe {
 }
 
 /**
- * The draft the editor can show before any Drive read: the cached text of the
- * target recipe (e.g. the overview sheet already read it, so "Manuell
+ * The baseline draft the editor can show before any Drive read: the cached text
+ * of the target recipe (e.g. the overview sheet already read it, so "Manuell
  * bearbeiten" opens instantly) or the empty / AI draft for a new recipe.
  * `null` means the target is not cached yet — the load effect fetches it.
+ *
+ * The baseline is what the draft is compared against (dirty check, save
+ * rollback). For an AI revision of an existing recipe the working draft is the
+ * revision (`initialDraft`) while the baseline stays this stored file.
  */
-function initialDraftFor(target: StoredRecipe | null, initialDraft?: Recipe): EditorDraft | null {
+function baselineDraftFor(target: StoredRecipe | null, initialDraft?: Recipe): EditorDraft | null {
   if (target === null) {
     return initialDraft !== undefined ? toDraft(initialDraft) : newRecipeDraft();
   }
@@ -228,9 +232,11 @@ interface RecipeEditorProps {
   /** The recipe to edit (from the list); null creates a new recipe. */
   target: StoredRecipe | null;
   /**
-   * When `target` is null, an optional already-valid draft to open the editor
-   * with (e.g. an AI-created draft, Phase 3) instead of an empty new recipe.
-   * Ignored when `target` is set.
+   * An already-valid draft to open the editor with instead of the target's
+   * stored text: an AI-created draft (with `target` null) or an AI revision of
+   * an existing recipe (with `target` set, Phase 3). With a `target` the draft
+   * is the working copy while the stored file remains the baseline for the
+   * dirty check and the save rollback.
    */
   initialDraft?: Recipe;
   /** All recipes of the collection, for the cross-recipe checks (§7.2). */
@@ -506,19 +512,28 @@ function RecipeEditor({
   ref,
 }: RecipeEditorProps) {
   /**
-   * The draft as it is known synchronously at mount: from the content cache
-   * when the target was already read (the overview sheet does so before
-   * "Bearbeiten → Manuell"), or the empty / AI draft. `null` = not cached, the
-   * load effect fetches it. Rendered on the first paint so the editor never
-   * flashes a loading message for an already-read recipe.
+   * The working draft as it is known synchronously at mount: an AI revision
+   * (`initialDraft`, e.g. "Mit KI bearbeiten"), or the target's cached text / the
+   * empty draft. `null` = not cached, the load effect fetches it. Rendered on
+   * the first paint so the editor never flashes a loading message for an
+   * already-read recipe.
    */
   const [initialEditorDraft] = useState<EditorDraft | null>(() =>
-    initialDraftFor(target, initialDraft),
+    initialDraft !== undefined ? toDraft(initialDraft) : baselineDraftFor(target),
+  );
+  /**
+   * The baseline the editor compares against — the target recipe as stored, or
+   * the AI draft of a brand-new recipe. For an AI revision of an existing recipe
+   * this is the file on Drive while the working draft is the revision, so the
+   * dirty check and the save rollback keep pointing at what is actually stored.
+   */
+  const [initialBaseline] = useState<EditorDraft | null>(() =>
+    baselineDraftFor(target, initialDraft),
   );
   /** The working draft; null while the target recipe is still loading. */
   const [draft, setDraft] = useState<EditorDraft | null>(initialEditorDraft);
   /** The recipe as loaded from Drive — rollback target and dirty check. */
-  const [original, setOriginal] = useState<EditorDraft | null>(initialEditorDraft);
+  const [original, setOriginal] = useState<EditorDraft | null>(initialBaseline);
   /** Every other recipe of the collection (parse errors skipped). */
   const [collection, setCollection] = useState<Recipe[]>([]);
   /**
@@ -587,20 +602,22 @@ function RecipeEditor({
   // Load the target recipe (or the empty/AI draft). The content cache makes
   // this a no-op read for a recipe that was read before (e.g. by the overview
   // sheet), so the form is already on screen via `initialEditorDraft` and this
-  // effect only confirms it / fills it in on a cold open.
+  // effect only confirms it / fills it in on a cold open. An AI revision stays
+  // the working draft while the loaded file becomes the baseline it is compared
+  // against (dirty check, save rollback).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const loaded =
+        const baseline =
           target !== null
             ? toDraft(await readRecipe(token, target.fileId))
             : initialDraft !== undefined
               ? toDraft(initialDraft)
               : newRecipeDraft();
         if (cancelled) return;
-        setDraft(loaded);
-        setOriginal(loaded);
+        setOriginal(baseline);
+        setDraft(initialDraft !== undefined ? toDraft(initialDraft) : baseline);
         setLoadError(null);
       } catch (err) {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));

@@ -35,6 +35,13 @@ import './styles/editor.css';
 type TopScreen = 'editor' | 'ai' | 'menu' | 'overview';
 
 /**
+ * Which AI task the sheet runs while it is the visible 'ai' screen: create a new
+ * recipe (Task A) or revise an existing one (Task B) — the latter carrying the
+ * stored recipe the user opened it for.
+ */
+type AiScreen = { mode: 'create' } | { mode: 'edit'; recipe: StoredRecipe };
+
+/**
  * Browser-history markers of the two entries a TopScreen is layered between.
  * The recipe list is the entry the app was loaded on (state `null`); every
  * screen above it is one entry carrying SCREEN_MARKER, and the list keeps one
@@ -163,11 +170,12 @@ function App() {
    */
   const [editorSubRecipes, setEditorSubRecipes] = useState<StoredRecipe[]>([]);
   /**
-   * Which screen opened the editor: 'ai' means it was started from a draft of
-   * the AI-create conversation, which then continues underneath (see the
-   * handoff below) instead of the app returning to the list.
+   * Which screen opened the editor: an AI conversation ('ai-create' or
+   * 'ai-edit') continues underneath instead of the app returning to the list,
+   * and a saved Zutaten-Rezept of an AI-create continues that conversation
+   * (see the handoff below).
    */
-  const editorOriginRef = useRef<'ai' | 'list' | null>(null);
+  const editorOriginRef = useRef<'ai-create' | 'ai-edit' | 'list' | null>(null);
   /** The AI draft that opened the editor (null for a list/manual edit). */
   const pendingDraftRef = useRef<Recipe | null>(null);
   /**
@@ -181,8 +189,14 @@ function App() {
   /** The recipe overview sheet (opened by tapping a recipe card). */
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [overviewTarget, setOverviewTarget] = useState<StoredRecipe | null>(null);
-  /** The AI-create conversation screen. */
-  const [aiCreateOpen, setAiCreateOpen] = useState(false);
+  /**
+   * The AI screen (Task A create or Task B edit) is open. It stays mounted
+   * (hidden) while its own draft is edited in the editor, so the conversation
+   * survives the trip.
+   */
+  const [aiOpen, setAiOpen] = useState(false);
+  /** The task the open AI screen runs (create vs. edit of a stored recipe). */
+  const [aiScreen, setAiScreen] = useState<AiScreen | null>(null);
 
   /**
    * The current TopScreen above the recipe list, or null for the list itself.
@@ -224,8 +238,10 @@ function App() {
    */
   const visiblePageKey = editorOpen
     ? editorLevelKey(editorSubRecipes.length)
-    : aiCreateOpen
-      ? 'ai'
+    : aiOpen
+      ? aiScreen?.mode === 'edit'
+        ? 'ai-edit'
+        : 'ai'
       : 'list';
   /** Remembers/restores the window scroll per page (see useScrollMemory). */
   const scrollMemory = useScrollMemory(visiblePageKey);
@@ -313,10 +329,11 @@ function App() {
       // scroll offset before this commit replaces it (see useScrollMemory).
       scrollMemory.remember();
       setEditorOpen(next === 'editor');
-      // The AI-create conversation stays mounted (hidden) while its own draft is
-      // opened in the editor: transcript, AI context and Vorgaben survive the
-      // trip, so saving a Zutaten-Rezept there can continue the same chat.
-      setAiCreateOpen(next === 'ai' || (next === 'editor' && prev === 'ai'));
+      // The AI screen (create or edit) stays mounted (hidden) while its own
+      // draft is opened in the editor: transcript, AI context and Vorgaben
+      // survive the trip, so saving a Zutaten-Rezept there can continue the same
+      // chat and a revision can still be refined afterwards.
+      setAiOpen(next === 'ai' || (next === 'editor' && prev === 'ai'));
       setCreateMenuOpen(next === 'menu');
       setOverviewOpen(next === 'overview');
       if (prev === null) {
@@ -448,14 +465,18 @@ function App() {
         }
       }
       if (top === 'ai' && aiCreateHandleRef.current?.notifyBack() === true) {
-        // Stay on the AI-create screen (the discard confirmation was armed):
-        // make sure the Back the guard consumed left an entry.
+        // Stay on the AI screen (the discard confirmation was armed): make sure
+        // the Back the guard consumed left an entry.
         guardCurrentEntry();
         return;
       }
-      // Back out of an AI-created draft returns to the still-running
-      // conversation (mounted underneath) instead of leaving for the list.
-      if (top === 'editor' && editorOriginRef.current === 'ai') {
+      // Back out of an AI draft (created or revised) returns to the
+      // still-running conversation (mounted underneath) instead of leaving for
+      // the list.
+      if (
+        top === 'editor' &&
+        (editorOriginRef.current === 'ai-create' || editorOriginRef.current === 'ai-edit')
+      ) {
         editorOriginRef.current = null;
         pendingDraftRef.current = null;
         editorSubRecipesRef.current = [];
@@ -463,7 +484,7 @@ function App() {
         navRef.current = 'ai';
         setEditorOpen(false);
         setEditorSubRecipes([]);
-        setAiCreateOpen(true);
+        setAiOpen(true);
         guardCurrentEntry();
         return;
       }
@@ -474,7 +495,7 @@ function App() {
       navRef.current = null;
       setEditorOpen(false);
       setEditorSubRecipes([]);
-      setAiCreateOpen(false);
+      setAiOpen(false);
       setCreateMenuOpen(false);
       setOverviewOpen(false);
     };
@@ -623,10 +644,27 @@ function App() {
   const openEditorWithDraft = useCallback(
     (recipe: Recipe): void => {
       // Remembered so saving the draft can hand it back to the conversation.
-      editorOriginRef.current = 'ai';
+      editorOriginRef.current = 'ai-create';
       pendingDraftRef.current = recipe;
       startEditorChain();
       showInEditor(null, recipe);
+      setNav('editor');
+    },
+    [setNav, showInEditor, startEditorChain],
+  );
+
+  /**
+   * Opens the editor on an existing recipe, prefilled with the AI's revised
+   * version (Task B). The editor keeps the stored file as its baseline, so the
+   * dirty check and the save rollback point at what is actually stored and
+   * saving replaces the recipe.
+   */
+  const openEditorWithRevision = useCallback(
+    (original: StoredRecipe, revision: Recipe): void => {
+      editorOriginRef.current = 'ai-edit';
+      pendingDraftRef.current = revision;
+      startEditorChain();
+      showInEditor(original, revision);
       setNav('editor');
     },
     [setNav, showInEditor, startEditorChain],
@@ -655,10 +693,20 @@ function App() {
     [openEditor, replaceSubRecipes],
   );
 
-  /** Opens the AI-create conversation screen. */
+  /** Opens the AI-create conversation screen (Task A). */
   const openAiCreate = useCallback((): void => {
+    setAiScreen({ mode: 'create' });
     setNav('ai');
   }, [setNav]);
+
+  /** Opens the AI-edit screen for a stored recipe (Task B). */
+  const openAiEdit = useCallback(
+    (recipe: StoredRecipe): void => {
+      setAiScreen({ mode: 'edit', recipe });
+      setNav('ai');
+    },
+    [setNav],
+  );
 
   /**
    * Leaves the editor one step: first back to the parent level of an open
@@ -673,7 +721,7 @@ function App() {
       replaceSubRecipes(open.slice(0, -1));
       return;
     }
-    const fromAi = editorOriginRef.current === 'ai';
+    const fromAi = editorOriginRef.current === 'ai-create' || editorOriginRef.current === 'ai-edit';
     editorOriginRef.current = null;
     pendingDraftRef.current = null;
     editorTargetRef.current = null;
@@ -693,14 +741,15 @@ function App() {
         replaceSubRecipes(open.slice(0, -1));
         return;
       }
-      const fromAi = editorOriginRef.current === 'ai';
+      const origin = editorOriginRef.current;
       editorOriginRef.current = null;
       pendingDraftRef.current = null;
       editorTargetRef.current = null;
-      // A saved Zutaten-Rezept continues the conversation: the dish using it is
-      // usually the next request, and the chat must list the new title. A saved
-      // dish is the end of the flow — back to the list like any other save.
-      if (fromAi && saved !== null && saved.type === 'ingredient_recipe') {
+      // A saved Zutaten-Rezept continues the *create* conversation: the dish
+      // using it is usually the next request, and the chat must list the new
+      // title. A saved dish and every AI *edit* are the end of the flow — back
+      // to the list like any other save (the list was refreshed above).
+      if (origin === 'ai-create' && saved !== null && saved.type === 'ingredient_recipe') {
         setAiHandoff({ title: saved.title, type: saved.type });
         setNav('ai');
       } else {
@@ -727,20 +776,30 @@ function App() {
 
   return (
     <>
-      {/* The AI-create conversation stays mounted while its own draft is edited
-          (hidden): transcript, AI context and Vorgaben survive the trip, so a
-          saved Zutaten-Rezept can continue the same conversation. */}
-      {aiCreateOpen && (
+      {/* The AI screen (create or edit) stays mounted while its own draft is
+          edited (hidden): transcript, AI context and the transferred recipe
+          survive the trip, so a saved Zutaten-Rezept can continue the same
+          conversation and a revision can be refined further. The key remounts
+          the sheet for a different task/target, so no conversation leaks from
+          one recipe into another. */}
+      {aiOpen && aiScreen !== null && (
         <div hidden={editorOpen}>
           <AiCreateSheet
+            key={aiScreen.mode === 'edit' ? `edit:${aiScreen.recipe.fileId}` : 'create'}
             ref={aiCreateHandleRef}
+            mode={aiScreen.mode}
+            editTarget={aiScreen.mode === 'edit' ? aiScreen.recipe : undefined}
             token={token ?? ''}
             visible={!editorOpen}
             recipes={recipes ?? []}
             handoff={aiHandoff}
             onHandoffConsumed={handleHandoffConsumed}
             onClose={() => setNav(null)}
-            onOpenDraft={openEditorWithDraft}
+            onOpenDraft={(draft) =>
+              aiScreen.mode === 'edit'
+                ? openEditorWithRevision(aiScreen.recipe, draft)
+                : openEditorWithDraft(draft)
+            }
           />
         </div>
       )}
@@ -790,7 +849,7 @@ function App() {
             </div>
           ))}
         </>
-      ) : aiCreateOpen ? null : (
+      ) : aiOpen ? null : (
         <main className="app">
           <header className="app-header">
             <h1>Cookbook</h1>
@@ -884,7 +943,7 @@ function App() {
           renders as a sibling of the list branch and only while the list is the
           visible base. "Mehr → Manuell bearbeiten" replaces the sheet with the editor. */}
       {!editorOpen &&
-        !aiCreateOpen &&
+        !aiOpen &&
         overviewOpen &&
         overviewTarget !== null &&
         token !== null && (
@@ -893,6 +952,7 @@ function App() {
             recipe={overviewTarget}
             onClose={closeOverview}
             onEdit={openEditor}
+            onAiEdit={openAiEdit}
           />
         )}
     </>

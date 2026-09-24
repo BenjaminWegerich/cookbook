@@ -26,9 +26,11 @@
  *   per-recipe action must not be named "Zur Liste hinzufügen".
  * - "Mehr" opens the actions that do not earn a full row column as a small
  *   popover above the row: "Manuell bearbeiten" opens the editor, "Mit KI
- *   bearbeiten" is still a placeholder. The kebab itself is the affordance, and
- *   the entries carry the full wording because the trigger no longer names the
- *   feature. The menu is closed by an outside tap, Escape and any chosen entry.
+ *   bearbeiten" opens the AI-edit screen (Task B: the recipe is transferred to
+ *   the AI and the user only describes the desired changes). The kebab itself is
+ *   the affordance, and the entries carry the full wording because the trigger no
+ *   longer names the feature. The menu is closed by an outside tap, Escape and
+ *   any chosen entry.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -58,6 +60,8 @@ interface RecipeOverviewProps {
   onClose: () => void;
   /** Opens the recipe in the editor ("Mehr" → "Manuell bearbeiten"). */
   onEdit: (recipe: StoredRecipe) => void;
+  /** Opens the AI-edit screen ("Mehr" → "Mit KI bearbeiten"). */
+  onAiEdit: (recipe: StoredRecipe) => void;
 }
 
 /**
@@ -65,7 +69,7 @@ interface RecipeOverviewProps {
  * photo, so the hero renders immediately; times and description are
  * read from the recipe file and fill in when the load finishes.
  */
-function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps) {
+function RecipeOverview({ token, recipe, onClose, onEdit, onAiEdit }: RecipeOverviewProps) {
   /** The full recipe; null while it is being read from Drive. */
   const [details, setDetails] = useState<Recipe | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -149,6 +153,12 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
   const openManualEdit = (): void => {
     setMoreMenuOpen(false);
     onEdit(recipe);
+  };
+
+  /** "Mit KI bearbeiten": closes the menu and opens the AI-edit screen. */
+  const openAiEdit = (): void => {
+    setMoreMenuOpen(false);
+    onAiEdit(recipe);
   };
 
   const title = details?.title ?? recipe.title;
@@ -268,14 +278,7 @@ function RecipeOverview({ token, recipe, onClose, onEdit }: RecipeOverviewProps)
                   <PencilIcon />
                   <span>Manuell bearbeiten</span>
                 </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setMoreMenuOpen(false);
-                    notBuiltYet('Mit KI bearbeiten');
-                  }}
-                >
+                <button type="button" role="menuitem" onClick={openAiEdit}>
                   <SparkleIcon />
                   <span>Mit KI bearbeiten</span>
                 </button>
