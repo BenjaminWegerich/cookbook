@@ -175,7 +175,13 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   „Essensplan“ tab; the token is held in memory only, like the AI API key (N6), and nothing has
   to be looked up by hand any more. An expired token is renewed silently; only when Google
   needs a gesture does the tab offer „Keep verbinden“. The gateway URL is the build-time
-  variable `VITE_KEEP_GATEWAY_URL`; without it the feature is off.
+  variable `VITE_KEEP_GATEWAY_URL`; without it the feature is off. Two constraints on that
+  silent start, both observed on 2026-09-24: it needs exactly **one** Google account signed into
+  the browser (with several, Google answers no silent request at all, so every reload costs one
+  tap per credential — signing out of the extra accounts brings the silent start back), and
+  development builds report a declined silent request to the browser console
+  (`[cookbook] silent Google sign-in for … failed: …`), which is the fastest way to tell a
+  browser restriction from a missing grant.
 
 #### Why the token must be minted in the cloud
 
