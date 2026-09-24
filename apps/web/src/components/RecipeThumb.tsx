@@ -1,22 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { loadRecipePhoto } from '../drive/recipePhoto';
 import type { StoredRecipe } from '../drive/recipeStorage';
-
-/** Number of letter-avatar variants in tokens.css (--avatar-0 … --avatar-3). */
-const AVATAR_VARIANT_COUNT = 4;
-
-/**
- * Deterministic avatar variant for a title (stable across renders, so the
- * same recipe always gets the same color).
- */
-function avatarVariant(title: string): number {
-  let hash = 0;
-  for (let i = 0; i < title.length; i += 1) {
-    hash = (hash * 31 + title.charCodeAt(i)) >>> 0;
-  }
-  return hash % AVATAR_VARIANT_COUNT;
-}
+import TitleThumb from './TitleThumb';
 
 interface RecipeThumbProps {
   recipe: StoredRecipe;
@@ -26,8 +12,9 @@ interface RecipeThumbProps {
 
 /**
  * Recipe photo area of a home-screen card: the recipe photo when one exists
- * (§2, optional sibling file), otherwise a warm letter avatar (initial letter
- * on a deterministic color from tokens.css). The photo is downloaded through
+ * (§2, optional sibling file), otherwise the shared warm letter avatar
+ * (TitleThumb — initial letter on a deterministic color from tokens.css). The
+ * photo is downloaded through
  * the shared photo cache (../drive/recipePhoto) and shown as an object URL, so
  * the overview sheet and the editor preview reuse the same download. The square
  * format of the media area is set in CSS (aspect-ratio 1/1, see
@@ -98,16 +85,7 @@ function RecipeThumb({ recipe, token }: RecipeThumbProps) {
     );
   }
 
-  const variant = avatarVariant(recipe.title);
-  const style: CSSProperties = {
-    backgroundColor: `var(--avatar-${variant})`,
-    color: `var(--avatar-${variant}-fg)`,
-  };
-  return (
-    <span className="recipe-thumb" style={style} aria-hidden="true">
-      {recipe.title.charAt(0).toUpperCase()}
-    </span>
-  );
+  return <TitleThumb title={recipe.title} />;
 }
 
 export default RecipeThumb;

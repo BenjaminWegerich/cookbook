@@ -15,6 +15,11 @@
 .overview-sheet {
   max-width: 42rem;
   margin-inline: auto;
+  /* One zero-minimum column: without it the implicit `auto` column would take
+     its minimum from the content, so one unbreakable word in a title (a URL,
+     typically) could push the sheet's content — and the hero below it — wider
+     than the sheet. Same guard as the recipe cards. */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Circular close button in the top-right corner of the sheet, level with the
@@ -67,6 +72,8 @@
 .overview-body {
   display: grid;
   gap: var(--space-3);
+  /* Same zero-minimum column as the sheet above, for the same reason. */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .overview-title {
@@ -76,6 +83,10 @@
   font-size: var(--text-xl);
   font-weight: 600;
   line-height: 1.3;
+  /* A long unbreakable word (a URL in a title) breaks instead of overflowing
+     the sheet. The title is not clamped here: the overview is the readable
+     detail view, so it shows the full name. */
+  overflow-wrap: anywhere;
 }
 
 /* Arbeitszeit / Gesamtzeit as one compact caption/value row. */

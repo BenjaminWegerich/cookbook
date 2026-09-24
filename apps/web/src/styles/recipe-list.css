@@ -99,10 +99,13 @@
 .recipe-search-input {
   font: inherit;
   width: 100%;
-  /* The inline-end padding reserves the clear button's overlay (space-2 inset +
-     space-9 button + space-2 gap), so the value never runs underneath it. */
+  /* The inline-start padding clears the search symbol's overlay (space-6 inset
+     + the 24 px icon) plus one ladder step of breathing room (space-3), so the
+     value starts with a comfortable gap after the glyph. The inline-end padding
+     reserves the clear button's overlay (space-2 inset + space-9 button +
+     space-2 gap), so the value never runs underneath it. */
   padding: var(--space-4) calc(var(--space-2) + var(--space-9) + var(--space-2)) var(--space-4)
-    calc(var(--space-6) + var(--icon-size));
+    calc(var(--space-6) + var(--icon-size) + var(--space-3));
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -158,6 +161,59 @@
   color: var(--color-ink-muted);
 }
 
+/* ---- View tabs (Essensplan / Sammlung) ---------------------------------- */
+
+/* Two value-picking tabs directly under the search field, inside the sticky
+   bar: both views render the same card grid and only filter its content. The
+   row centers the content-width control — centering through a flex row rather
+   than auto margins plus intrinsic grid sizing, so every engine centers it the
+   same way. The two segments are equally wide: each button holds its visible
+   label and an invisible copy of the longest label in the same grid cell (see
+   RecipeList.tsx), so a button is exactly as wide as the longest label. The
+   active fill is the olive secondary accent, the same colour an active segment
+   uses in the editor. */
+.recipe-tabs-row {
+  display: flex;
+  justify-content: center;
+  margin-block-start: var(--space-4);
+}
+
+.recipe-tabs {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+/* The label and the invisible sizer share one grid cell: the cell is as wide as
+   the wider of the two (the longest label), and the label centers in it. */
+.recipe-tab {
+  display: grid;
+  place-items: center;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.recipe-tab > * {
+  grid-area: 1 / 1;
+}
+
+.recipe-tab-sizer {
+  visibility: hidden;
+}
+
+.recipe-tab-active {
+  background: var(--color-olive);
+  color: var(--color-on-accent);
+}
+
 /* ---- Recipe list -------------------------------------------------------- */
 
 .recipe-list {
@@ -188,11 +244,19 @@
 .recipe-list > li {
   min-width: 0;
   display: grid; /* let the card button fill the whole (stretched) row cell */
+  /* A zero-minimum single column: the implicit `auto` column takes its minimum
+     from the content, so one unbreakable word in a title (a URL, typically)
+     would push the cell — and with it the card and its square media area —
+     wider than the grid column. */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Whole recipe card (photo media area on top, title below). */
 .recipe-card {
   display: grid;
+  /* Same reason as the list cell above: the media area is `width: 100%` of this
+     column, so the column itself must never grow past the card. */
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
   padding: 0;
   overflow: hidden;
@@ -205,11 +269,82 @@
 }
 
 .recipe-card-title {
-  display: block;
+  /* A wrapping flex row: the title text and the badge share a line while the
+     title's full text fits next to the badge, and the badge moves to its own
+     line otherwise. Flex also centers the badge on the title's line — as an
+     inline element next to a clamped box (`overflow: hidden`) it would align to
+     that box's bottom edge (CSS uses the bottom margin edge as the baseline of
+     an overflow-hidden inline box) and sit visibly too low. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
   padding: var(--space-3) var(--space-4) var(--space-4);
   font-size: var(--text-md);
   font-weight: 600;
   line-height: 1.3;
+}
+
+/* The title text: at most two lines, then an ellipsis. The badge is a sibling
+   flex item, so it is never part of the clamp. `min-width: 0` lets the text
+   shrink below its longest word and `overflow-wrap: anywhere` breaks a long
+   unbreakable word (a URL in a title, in practice) instead of widening the
+   card. */
+.recipe-card-title-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Card badges: small all-caps markers directly after the card title, one look
+   for both (the editor's ingredient tags use the same recipe). A badge is plain
+   content inside the card and never a hitbox of its own — the whole card is the
+   single tap target. The gap to the title comes from the row's `column-gap`. */
+.recipe-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-on-accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+/* The badge's symbol (Material Symbols, see components/icons.tsx), at the
+   editor's tag-icon size so it does not dominate the label. */
+.recipe-badge-icon {
+  display: block;
+  flex: none;
+  width: var(--space-5);
+  height: var(--space-5);
+  color: currentColor;
+}
+
+/* "Eingeplant" (Sammlung tab): the dish is on the meal plan. Olive is the
+   app's secondary/positive accent — the same colour an active segmented option
+   uses, which is exactly what this state is. */
+.recipe-badge-planned {
+  background: var(--color-olive);
+}
+
+/* "Kein Cookbook-Rezept" (Essensplan tab): the entry does not name a recipe of
+   the collection, so nothing here can be scaled or cooked from. */
+.recipe-badge-unknown {
+  background: var(--color-danger);
+}
+
+/* The unrecognized meal-plan card: the same surface and grid as a recipe card,
+   but plain content — there is no recipe behind it to open yet, so the card is
+   deliberately not a button (decided with the user). */
+.recipe-card-plain {
+  cursor: default;
 }
 
 /* Square media area of a recipe card — the photo cropped to a square, or the
@@ -380,6 +515,29 @@
   color: var(--color-ink-muted);
 }
 
+/* "Essensplan" connection states (Keep not connected / not reachable): a card
+   that explains the state and offers the one sensible action. Flat, filled and
+   opaque like every surface (docs/CODING_CONVENTIONS.md). */
+.plan-connect {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.plan-connect p {
+  margin: 0;
+}
+
+.plan-connect-note {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
 .error-message {
   padding: var(--space-5);
   background: var(--color-surface);
@@ -409,4 +567,49 @@
 
 .editor-placeholder .text-button {
   justify-self: start;
+}
+
+/* ---- Keep token sheet --------------------------------------------------- */
+
+/* The token sheet follows the shared bottom-sheet pattern (.sheet /
+   .sheet-backdrop in editor.css). Like the overview it is a content sheet, so
+   it is capped to a comfortable reading width and centered; on phones the cap
+   is wider than the viewport, so it stays edge to edge. 42 rem is the same
+   layout breakpoint value the overview uses, not a new token. */
+.keep-token-sheet {
+  max-width: 42rem;
+  margin-inline: auto;
+}
+
+.keep-token-note {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* The form is one grid cell of the sheet, so its own gap must not add to the
+   sheet's: the field, the error line and the action row follow each other at
+   the sheet-wide spacing. */
+.keep-token-form {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.keep-token-input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+}
+
+.keep-token-error {
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
 }
