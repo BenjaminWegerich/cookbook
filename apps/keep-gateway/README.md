@@ -24,7 +24,7 @@ spend guardrail are all in place — see
 | ------ | ---------------------- | ---------------------------------------------------- | ------ |
 | `GET`  | `/health`              | Liveness. No Keep call, no token, no config details. | works |
 | `GET`  | `/keep/state`          | Meal plan and shopping list, in Keep's display order. | works |
-| `POST` | `/keep/mealplan`       | Add a dish to "Essensplan".                           | works |
+| `POST` | `/keep/mealplan`       | Add dish lines to "Essensplan".                       | works |
 | `POST` | `/keep/shopping`       | Add a recipe's scaled ingredients to "Einkaufsliste". | `501` until the write-action step |
 | `POST` | `/keep/shopping/sort`  | Reorder the shopping list by category/aisle.          | `501` until the category and write-action steps |
 
@@ -52,7 +52,7 @@ Items arrive in the order the Keep app shows them. Only user-visible facts cross
 boundary — note ids, sort ids and account details stay inside the service, so a change in
 Keep or in `gkeepapi` cannot leak into the app.
 
-`POST /keep/mealplan` adds a dish and replaces the entries of the same recipe:
+`POST /keep/mealplan` adds one or more lines and replaces the entries of the same recipe:
 
 ```json
 {
@@ -61,12 +61,16 @@ Keep or in `gkeepapi` cannot leak into the app.
 }
 ```
 
-`add` is the complete line to put at the top of "Essensplan" (recipe title plus size suffix);
-`remove` are the exact texts of every line that names the same recipe — checked or not, and
-whatever size it states. The app owns the rule that decides which lines those are
-(`mealPlanEntriesForTitle` in `packages/core/src/mealPlan.ts`, next to the parser), so the
-gateway only executes the action. The answer is the changed list in the checklist shape of
-`GET /keep/state`:
+`add` is the complete line (or the lines, in reading order) to put at the top of "Essensplan"
+(recipe title plus size suffix); `remove` are the exact texts of every line that names the same
+recipe — checked or not, and whatever size it states. The app owns the rule that decides which
+lines those are (`mealPlanEntriesForTitle` in `packages/core/src/mealPlan.ts`, next to the
+parser), so the gateway only executes the action.
+
+The same endpoint carries the app's undo (the snackbar's "Rückgängig"): `add` is then a list of
+the lines the previous write replaced, in their original order, or an empty list when it only
+has to take the added line back off a first-time plan. A body that neither adds nor removes is
+rejected. The answer is the changed list in the checklist shape of `GET /keep/state`:
 
 ```json
 {
@@ -203,5 +207,5 @@ detaches billing if the project ever spends it, troubleshooting and teardown —
 - **Writes stay non-destructive.** Every write action follows the recipe the spike proved on
   the real 135-item list: place what we create with sort ids above every existing item, change
   as little as possible, and verify the state read back. The meal-plan write is the first one
-  built (`KeepClient.add_meal_plan_entry`); the shopping-list write and the aisle sort follow
+  built (`KeepClient.add_meal_plan_entries`); the shopping-list write and the aisle sort follow
   it.

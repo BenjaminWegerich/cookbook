@@ -229,27 +229,36 @@ export async function fetchKeepState(gatewayToken: string): Promise<KeepState> {
 }
 
 /**
- * Puts a dish on the meal plan, replacing the entries of the same recipe.
+ * Writes the meal plan: puts `add` at the top, replacing the `remove` entries.
  *
- * `entry` is the complete line to add (recipe title plus size suffix, built by
- * `mealPlanEntryText` in @cookbook/core); `replace` are the exact texts of the
- * entries the app recognized as the same recipe, checked or not. The app owns
- * that recognition rule — it needs the recipe's type and family unit — so the
- * gateway only executes the action.
+ * `add` are the complete lines to place, in reading order (top first):
+ * `mealPlanEntryText` for the ordinary write ("Kürbissuppe (6 Portionen)"), or
+ * the lines a previous write replaced when the app restores them (undo).
+ * `remove` are the exact texts of the entries the app recognized as the same
+ * recipe, checked or not. The app owns that recognition rule — it needs the
+ * recipe's type and family unit — so the gateway only executes the action.
  *
  * The answer is the meal plan after the write, so the caller can update it
  * without a second request. Only that list comes back: it is the one the action
  * changed, and asking the gateway for the shopping list too would let an
  * unrelated, missing note turn a successful write into an error.
  */
-export async function addMealPlanEntry(
+export async function writeMealPlan(
   gatewayToken: string,
-  entry: string,
-  replace: readonly string[],
+  add: readonly string[],
+  remove: readonly string[],
 ): Promise<KeepChecklist> {
   const body = await requestJson('/keep/mealplan', gatewayToken, {
     method: 'POST',
-    body: { add: entry, remove: [...replace] },
+    // A single line goes as the plain string the endpoint has always accepted.
+    // The list form is only what the undo needs (several restored lines, or none
+    // for a first-time plan), so a bundle deployed ahead of the gateway keeps its
+    // ordinary write working instead of failing on a payload shape the old
+    // gateway does not parse.
+    body: {
+      add: add.length === 1 ? add[0]! : [...add],
+      remove: [...remove],
+    },
   });
   const mealplan = isRecord(body) ? parseChecklist(body.mealplan) : null;
   if (mealplan === null) {

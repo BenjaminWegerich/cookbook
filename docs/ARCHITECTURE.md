@@ -170,7 +170,9 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   The app owns that rule; the gateway only executes the action. It places the new line above
   every remaining item with the spike's sort-id rule, deletes the replaced entries, syncs once
   and verifies the result before answering the changed list — a write is never reported as
-  successful unverified.
+  successful unverified. Success is reported by the shared snackbar with a full undo
+  („Rückgängig“ puts the replaced lines back; the gateway accepts one or several added lines
+  for exactly that, see [ui_patterns.md](ui_patterns.md)).
 - **Sign-in.** Started automatically once the Google login is done, reopenable from the
   „Essensplan“ tab; the token is held in memory only, like the AI API key (N6), and nothing has
   to be looked up by hand any more. An expired token is renewed silently; only when Google
@@ -249,6 +251,10 @@ The VM tiers were rejected on their own merits before authentication was ever te
   Every write through the storage layer refreshes or drops the affected entries. The cache is
   limited to the session: a page reload starts clean, and changes made outside the app are
   picked up on the next load.
+- **Reusable UI patterns:** cross-screen patterns are specified once in
+  [ui_patterns.md](ui_patterns.md). The transient snackbar (one at a time, 6 s countdown,
+  optional action) is rendered once at the app root and is the confirmation layer for finished
+  actions.
 
 ## Open questions
 

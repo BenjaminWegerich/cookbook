@@ -30,11 +30,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { clearIdentityToken, getIdentityToken, requestIdentityToken } from '../auth/googleAuth';
 import {
   KeepClientError,
-  addMealPlanEntry,
   checkKeepHealth,
   fetchKeepState,
   isKeepConfigured,
   keepErrorMessage,
+  writeMealPlan,
   type KeepState,
 } from './keepClient';
 
@@ -64,6 +64,14 @@ export interface UseKeepResult {
    * sheet can show the reason.
    */
   planMeal: (entry: string, replace: readonly string[]) => Promise<void>;
+  /**
+   * Undoes a `planMeal` write (the success pop-up's "Rückgängig"): removes the entry that
+   * was added and puts the `restore` lines the write replaced back on the plan. The caller
+   * captured both when it performed the write — this hook has no memory of it.
+   *
+   * Adopts the state the gateway reports back and maps a failure exactly like `planMeal`.
+   */
+  undoMealPlan: (entry: string, restore: readonly string[]) => Promise<void>;
   /** Re-runs the current step (probe, silent sign-in and read) — the retry action. */
   retry: () => void;
 }
@@ -209,6 +217,48 @@ export function useKeep(): UseKeepResult {
     setAttempt((current) => current + 1);
   }, []);
 
+  /**
+   * Maps a failed `planMeal` / `undoMealPlan` onto the connection status, so both writes
+   * report the same failure the same way and the caller only has to show the thrown reason.
+   * Stable, so the write callbacks do not change identity with every render.
+   */
+  const reportWriteFailure = useCallback((err: unknown): void => {
+    if (isRefusedSignIn(err)) {
+      setStatus('needs-signin');
+      setError(REFUSED_HINT);
+    } else if (err instanceof KeepClientError) {
+      // A problem worth reading: the gateway is down, or it reported a failure.
+      setStatus('error');
+      setError(keepErrorMessage(err));
+    } else {
+      // No silent Google session or grant: the ordinary "sign in again" state, exactly
+      // like the startup read. The caller shows the thrown reason.
+      setStatus('needs-signin');
+      setError(null);
+    }
+  }, []);
+
+  /**
+   * Runs one meal-plan write and adopts the list the gateway answers. The two writes (the
+   * plan action and its undo) differ only in which lines they add and remove, so they share
+   * this body; a failure is mapped onto the status by `reportWriteFailure` and rethrown.
+   */
+  const runMealPlanWrite = useCallback(
+    async (add: readonly string[], remove: readonly string[]): Promise<void> => {
+      try {
+        const updated = await withIdentityToken((token) => writeMealPlan(token, add, remove));
+        // The endpoint answers the changed list; the shopping list is untouched.
+        setState((current) => (current === null ? current : { ...current, mealplan: updated }));
+        setStatus('ready');
+        setError(null);
+      } catch (err) {
+        reportWriteFailure(err);
+        throw err;
+      }
+    },
+    [reportWriteFailure],
+  );
+
   const planMeal = useCallback(
     async (entry: string, replace: readonly string[]): Promise<void> => {
       // No loaded state means Keep was never read, so the caller could not compute which
@@ -216,31 +266,21 @@ export function useKeep(): UseKeepResult {
       if (state === null) {
         throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
       }
-      try {
-        const updated = await withIdentityToken((token) => addMealPlanEntry(token, entry, replace));
-        // The endpoint answers the changed list; the shopping list is untouched.
-        setState((current) => (current === null ? current : { ...current, mealplan: updated }));
-        setStatus('ready');
-        setError(null);
-      } catch (err) {
-        if (isRefusedSignIn(err)) {
-          setStatus('needs-signin');
-          setError(REFUSED_HINT);
-        } else if (err instanceof KeepClientError) {
-          // A problem worth reading: the gateway is down, or it reported a failure.
-          setStatus('error');
-          setError(keepErrorMessage(err));
-        } else {
-          // No silent Google session or grant: the ordinary "sign in again" state, exactly
-          // like the startup read. The sheet shows the thrown reason.
-          setStatus('needs-signin');
-          setError(null);
-        }
-        throw err;
-      }
+      await runMealPlanWrite([entry], replace);
     },
-    [state],
+    [state, runMealPlanWrite],
   );
 
-  return { status, state, error, connect, planMeal, retry };
+  const undoMealPlan = useCallback(
+    async (entry: string, restore: readonly string[]): Promise<void> => {
+      // Same guard as `planMeal`: without the loaded list there is nothing to restore onto.
+      if (state === null) {
+        throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
+      }
+      await runMealPlanWrite(restore, [entry]);
+    },
+    [state, runMealPlanWrite],
+  );
+
+  return { status, state, error, connect, planMeal, undoMealPlan, retry };
 }

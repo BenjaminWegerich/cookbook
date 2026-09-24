@@ -22,7 +22,8 @@ Two spike findings are encoded here and must not be "optimised" away:
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterable, NoReturn
+from collections import Counter
+from typing import Any, Iterable, NoReturn, Sequence
 
 import gkeepapi
 import requests
@@ -100,34 +101,53 @@ def describe_list(target: node.List) -> dict[str, Any]:
 
 
 def verify_meal_plan_state(
-    mealplan: dict[str, Any], entry: str, replaced: Iterable[str]
+    mealplan: dict[str, Any], added: Iterable[str], replaced: Iterable[str]
 ) -> None:
-    """Refuse a write whose result is not "the dish appears exactly once".
+    """Refuse a write whose result is not "the added lines are there, the replaced ones gone".
 
-    Called with the state read back after the sync. Three things must hold for the
+    Called with the state read back after the sync. Four things must hold for the
     app to render success honestly:
 
-      * the new entry is present exactly once;
-      * no replaced entry is left behind (an entry equal to `entry` is the new one,
-        which matters when a dish is re-planned at the size it already had);
+      * every added line is present exactly as often as it was handed over. The
+        ordinary write adds one line; an undo restores what a previous write
+        replaced, which may be several lines (and could in principle repeat);
+      * the added lines sit at the top of the list, in the order they were given.
+        The write places them above every remaining item, so a restored block
+        reappears in its original reading order;
+      * no replaced entry is left behind (an entry equal to an added line is that
+        added line, which matters when a dish is re-planned at the size it already
+        had, and when an undo restores the very text it removes);
       * nothing else was touched - the caller can only check what it asked for, so
         that part rests on the client deleting exactly the texts it was given.
 
     A mismatch is a `KeepApiError`: the write reached Keep but did not land as
     asked, and the app must not show a badge for it.
     """
+    # A single entry may arrive as a plain string (the shape the first version of
+    # this helper took); iterating it would silently compare single characters.
+    ordered = [added] if isinstance(added, str) else list(added)
+    expected_order = [text.strip() for text in ordered]
     # Compare on the content: Keep may keep surrounding whitespace that the
     # app's parsed texts do not carry.
     texts = [item["text"].strip() for item in mealplan["items"]]
-    wanted = entry.strip()
-    count = texts.count(wanted)
-    if count != 1:
+
+    for text, expected in Counter(expected_order).items():
+        count = texts.count(text)
+        if count != expected:
+            raise KeepApiError(
+                "The meal plan did not end up with the expected entries.",
+                detail=f"expected {expected} x {text!r}, found {count}",
+            )
+
+    if texts[: len(expected_order)] != expected_order:
         raise KeepApiError(
-            "The meal plan did not end up with exactly one entry for the dish.",
-            detail=f"expected exactly one {wanted!r}, found {count}",
+            "The meal plan did not place the new entries at the top.",
+            detail=f"expected top {expected_order!r}, found {texts[: len(expected_order)]!r}",
         )
+
+    added_texts = set(expected_order)
     replaced_texts = {text.strip() for text in replaced}
-    stale = sorted(text for text in replaced_texts if text != wanted and text in texts)
+    stale = sorted(text for text in replaced_texts if text not in added_texts and text in texts)
     if stale:
         raise KeepApiError(
             "The meal plan still carries entries the write should have replaced.",
@@ -261,52 +281,73 @@ class KeepClient:
             "shopping": describe_list(shopping),
         }
 
-    def add_meal_plan_entry(self, entry: str, replace: Iterable[str]) -> dict[str, Any]:
-        """Put `entry` at the top of the meal plan, replacing the given entries.
+    def add_meal_plan_entries(
+        self, entries: Sequence[str], replace: Iterable[str]
+    ) -> dict[str, Any]:
+        """Put `entries` at the top of the meal plan, replacing the given entries.
 
-        `entry` is the complete line the app wants to see (recipe title plus size
-        suffix, e.g. "Kürbissuppe (6 Portionen)"). `replace` are the exact texts of
-        every line that names the same recipe — checked or not, and whatever size
-        it states; they are removed so the dish appears exactly once after the
-        write. Which lines those are is the app's rule (`mealPlanEntriesForTitle`
-        in `packages/core/src/mealPlan.ts`, next to the parser) — re-implementing
-        it here would let the two drift, so the gateway only executes the action it
-        is handed.
+        `entries` are the complete lines the app wants to see, in the order they
+        should read from the top: one line for the ordinary write
+        ("Kürbissuppe (6 Portionen)"), several for an undo that restores the
+        lines a previous write replaced, none for an undo that only takes the
+        added line back off (the dish had not been planned before). `replace` are
+        the exact texts of every line that names the same recipe — checked or not,
+        and whatever size it states; they are removed so the dish appears exactly
+        once after the write. Which lines those are is the app's rule
+        (`mealPlanEntriesForTitle` in `packages/core/src/mealPlan.ts`, next to the
+        parser) — re-implementing it here would let the two drift, so the gateway
+        only executes the action it is handed.
 
         Non-destructive, following the spike's rule for the part that applies to a
-        real action: the new item gets a sort id above every remaining item, so it
-        sits at the very top and never interleaves with the rest, and the whole
-        change is one sync. The list read back from that sync is verified
-        (`verify_meal_plan_state`) before it is returned, so the app never shows
-        the dish as planned on the strength of an unverified write.
+        real action: the new items get sort ids above every remaining item, so they
+        sit at the very top in the given order and never interleave with the rest,
+        and the whole change is one sync. The list read back from that sync is
+        verified (`verify_meal_plan_state`) before it is returned, so the app never
+        shows the dish as planned on the strength of an unverified write.
 
         The answer carries only the meal plan: it is the list this action changed,
         and reading the shopping list as well would let an unrelated, missing note
         turn a successful write into an error.
         """
-        keep = authenticate(self._config)
-        mealplan = find_list_by_title(keep, self._config.mealplan_title)
-
+        added = [text.strip() for text in entries]
+        if any(text == "" for text in added):
+            raise ValueError("Added entry texts must be non-empty.")
         # Compare on the content: Keep may keep surrounding whitespace that the
         # app's parsed texts do not carry.
         replaced = {text.strip() for text in replace}
+        # A write that neither adds nor removes would sync an untouched list and
+        # (worse) could look like a successful one; the HTTP boundary already
+        # refuses it, and this guard keeps a direct caller from the same mistake.
+        if not added and not replaced:
+            raise ValueError("A meal-plan write must add or remove at least one entry.")
+
+        keep = authenticate(self._config)
+        mealplan = find_list_by_title(keep, self._config.mealplan_title)
+
         for item in list(mealplan.items):
             if item.text.strip() in replaced:
                 item.delete()
 
         # `List.items` already hides deleted items, so the maximum is taken over
-        # what remains: the new entry ends up above all of them.
+        # what remains: every new entry ends up above all of them. A higher sort id
+        # renders closer to the top, so the first listed line gets the highest id —
+        # the reading order of the restored block survives the round trip.
         highest = max((int(item.sort) for item in mealplan.items), default=0)
-        mealplan.add(entry, False, highest + SORT_OFFSET_ABOVE_EXISTING)
+        for index, text in enumerate(added):
+            mealplan.add(
+                text,
+                False,
+                highest + (len(added) - index) * SORT_OFFSET_ABOVE_EXISTING,
+            )
         sync(keep)
 
         mealplan_state = describe_list(mealplan)
-        verify_meal_plan_state(mealplan_state, entry, replaced)
+        verify_meal_plan_state(mealplan_state, added, replaced)
         return {"mealplan": mealplan_state}
 
     # ----------------------------------------------------------------------------------
     # The remaining write actions (the write-action step). Both must follow the same
-    # non-destructive recipe as `add_meal_plan_entry`: place what we create with sort ids
+    # non-destructive recipe as `add_meal_plan_entries`: place what we create with sort ids
     # above every existing item, change as little as possible, and verify the state we read
     # back. They stay absent until their prerequisites exist (ingredient categories for the
     # aisle sort, the scaled-line payload for the shopping list); the HTTP layer answers 501

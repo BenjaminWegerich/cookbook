@@ -67,18 +67,18 @@ class FakeKeepClient:
     def __init__(self, state: dict | None = None, error: Exception | None = None) -> None:
         self._state = FAKE_STATE if state is None else state
         self._error = error
-        # Every write the boundary performed, in order: (entry, replacements).
-        self.writes: list[tuple[str, list[str]]] = []
+        # Every write the boundary performed, in order: (entries, replacements).
+        self.writes: list[tuple[list[str], list[str]]] = []
 
     def read_state(self) -> dict:
         if self._error is not None:
             raise self._error
         return self._state
 
-    def add_meal_plan_entry(self, entry: str, replace: list[str]) -> dict:
+    def add_meal_plan_entries(self, entries: list[str], replace: list[str]) -> dict:
         if self._error is not None:
             raise self._error
-        self.writes.append((entry, list(replace)))
+        self.writes.append((list(entries), list(replace)))
         return self._state
 
 
@@ -311,10 +311,40 @@ class GatewayBoundaryTests(unittest.TestCase):
         # The app owns the recognition rule and sends the exact texts to drop.
         self.assertEqual(
             fake.writes,
-            [("Kürbissuppe (6 Portionen)", ["Kürbissuppe", "Kürbissuppe (4 Portionen)"])],
+            [(["Kürbissuppe (6 Portionen)"], ["Kürbissuppe", "Kürbissuppe (4 Portionen)"])],
         )
         # The answer is the post-write state, shaped like GET /keep/state.
         self.assertEqual(response.get_json()["mealplan"]["title"], "Essensplan")
+
+    def test_mealplan_write_accepts_a_list_of_added_lines(self) -> None:
+        """The undo shape: the app asks for the replaced lines to be put back."""
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan",
+                headers=self.auth_headers(),
+                json={
+                    "add": ["Kürbissuppe (4 Portionen)", "Kürbissuppe"],
+                    "remove": ["Kürbissuppe (6 Portionen)"],
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            fake.writes,
+            [(["Kürbissuppe (4 Portionen)", "Kürbissuppe"], ["Kürbissuppe (6 Portionen)"])],
+        )
+
+    def test_mealplan_write_accepts_an_empty_add_list_as_a_pure_removal(self) -> None:
+        """The undo of a first-time plan only takes the added line back off."""
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan",
+                headers=self.auth_headers(),
+                json={"add": [], "remove": ["Kürbissuppe (6 Portionen)"]},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.writes, [([], ["Kürbissuppe (6 Portionen)"])])
 
     def test_mealplan_write_defaults_to_no_replacements(self) -> None:
         app, fake = self.build_app()
@@ -323,7 +353,7 @@ class GatewayBoundaryTests(unittest.TestCase):
                 "/keep/mealplan", headers=self.auth_headers(), json={"add": "Kürbissuppe"}
             )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(fake.writes, [("Kürbissuppe", [])])
+        self.assertEqual(fake.writes, [(["Kürbissuppe"], [])])
 
     def test_mealplan_write_trims_the_entry_text(self) -> None:
         app, fake = self.build_app()
@@ -332,11 +362,21 @@ class GatewayBoundaryTests(unittest.TestCase):
                 "/keep/mealplan", headers=self.auth_headers(), json={"add": "  Kürbissuppe  "}
             )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(fake.writes, [("Kürbissuppe", [])])
+        self.assertEqual(fake.writes, [(["Kürbissuppe"], [])])
 
     def test_mealplan_write_rejects_a_missing_or_empty_entry(self) -> None:
         app, fake = self.build_app()
-        for body in ({}, {"add": ""}, {"add": "   "}, {"add": 6}):
+        bodies = (
+            {},
+            {"add": ""},
+            {"add": "   "},
+            {"add": 6},
+            {"add": ["", "x"]},
+            {"add": ["x", 6]},
+            {"add": []},
+            {"add": [], "remove": []},
+        )
+        for body in bodies:
             with self.subTest(body=body):
                 with app.test_client() as client:
                     response = client.post(

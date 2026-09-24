@@ -18,12 +18,14 @@ import RecipeOverview, {
   type RecipeOverviewHandle,
   type RecipeOverviewTarget,
 } from './components/RecipeOverview';
-import { PencilIcon, PlusIcon, SparkleIcon } from './components/icons';
+import Snackbar from './components/Snackbar';
+import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
 import { useEscapeTrigger } from './hooks/useLeaveGuard';
 import { useScrollMemory } from './hooks/useScrollMemory';
+import { useSnackbar } from './hooks/useSnackbar';
 import type { KeepState } from './keep/keepClient';
 import { resolveMealPlan, type MealPlanCard, type MealPlanResolution } from './keep/mealPlanCards';
 import { useKeep } from './keep/useKeep';
@@ -32,6 +34,7 @@ import './styles/recipe-list.css';
 import './styles/recipe-overview.css';
 import './styles/meal-plan-sheet.css';
 import './styles/editor.css';
+import './styles/snackbar.css';
 
 /**
  * The app layers above the recipe list (the list itself is the root/bottom
@@ -247,6 +250,14 @@ function App() {
    * connect effect below depend on it alone instead of on the whole object.
    */
   const retryKeep = keep.retry;
+  /**
+   * The app's transient notices (docs/ui_patterns.md). They live at the root so
+   * every screen can report a finished action the same way; the timer, the queue
+   * and the undo plumbing live in the hook. `showSnackbar` is stable, so the
+   * callbacks below can depend on it directly.
+   */
+  const snackbar = useSnackbar();
+  const showSnackbar = snackbar.show;
 
   /**
    * The current TopScreen above the recipe list, or null for the list itself.
@@ -773,8 +784,9 @@ function App() {
     setNav(null);
   }, [setNav]);
 
-  /** The Keep write action (stable), pulled out so the callback below can depend on it. */
+  /** The Keep write actions (stable), pulled out so the callback below can depend on them. */
   const planMeal = keep.planMeal;
+  const undoMealPlan = keep.undoMealPlan;
 
   /**
    * Performs the meal-plan write for the open overview's recipe. The overlay
@@ -785,8 +797,15 @@ function App() {
    * The app owns that rule; the gateway only executes it.
    *
    * On success the whole flow closes back to the list, where the recipe card now
-   * carries the "Eingeplant" badge. The active tab is deliberately untouched, so
-   * the app stays on "Sammlung" instead of jumping to the new "Essensplan" entry.
+   * carries the "Eingeplant" badge, and one snackbar confirms it with the way back
+   * (docs/ui_patterns.md). The active tab is deliberately untouched, so the app
+   * stays on "Sammlung" instead of jumping to the new "Essensplan" entry.
+   *
+   * "Rückgängig" is a full undo: it removes the line this write added and puts
+   * back the exact lines it replaced (`undoMealPlan`). Both texts are captured
+   * here, because only this callback knows what the write actually changed. A
+   * failed undo is reported as its own error notice — the success notice has
+   * already closed by then.
    */
   const addToMealPlan = useCallback(
     async (entryText: string): Promise<void> => {
@@ -798,8 +817,27 @@ function App() {
       const replace = mealPlanEntriesForTitle(texts, targetRecipe.title);
       await planMeal(entryText, replace);
       closeOverview();
+      showSnackbar({
+        text: `${entryText} zum Essensplan hinzugefügt. Die Einkaufsliste bleibt unverändert.`,
+        action: {
+          label: 'Rückgängig',
+          busyLabel: 'Wird rückgängig gemacht …',
+          icon: <UndoIcon className="button-icon" />,
+          run: async (): Promise<void> => {
+            try {
+              await undoMealPlan(entryText, replace);
+            } catch (err) {
+              const reason = err instanceof Error ? err.message : String(err);
+              showSnackbar({
+                tone: 'error',
+                text: `„${entryText}“ konnte nicht rückgängig gemacht werden. ${reason}`,
+              });
+            }
+          },
+        },
+      });
     },
-    [overviewTarget, keep.state, planMeal, closeOverview],
+    [overviewTarget, keep.state, planMeal, undoMealPlan, closeOverview, showSnackbar],
   );
 
   /**
@@ -1151,6 +1189,11 @@ function App() {
           onAddToMealPlan={addToMealPlan}
         />
       )}
+
+      {/* The transient notice (docs/ui_patterns.md). It renders at the root and
+          above every layer, because the action it reports has just closed those
+          layers; it is non-modal and never takes focus. */}
+      <Snackbar host={snackbar} />
     </>
   );
 }

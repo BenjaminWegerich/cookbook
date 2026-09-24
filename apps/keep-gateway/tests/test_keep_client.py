@@ -219,12 +219,36 @@ class VerifyMealPlanStateTests(unittest.TestCase):
     def state(*texts: str) -> dict:
         return {"title": "Essensplan", "items": [{"text": text} for text in texts]}
 
-    def test_accepts_the_entry_appearing_exactly_once(self) -> None:
+    def test_accepts_the_entry_appearing_exactly_once_at_the_top(self) -> None:
         keep_client.verify_meal_plan_state(
-            self.state("Brot", "Kürbissuppe (6 Portionen)"),
+            self.state("Kürbissuppe (6 Portionen)", "Brot"),
             "Kürbissuppe (6 Portionen)",
             ["Kürbissuppe"],
         )
+
+    def test_accepts_several_added_lines_in_the_order_they_were_given(self) -> None:
+        """The undo shape: a block of restored lines reads in its original order."""
+        keep_client.verify_meal_plan_state(
+            self.state("Kürbissuppe (4 Portionen)", "Kürbissuppe", "Brot"),
+            ["Kürbissuppe (4 Portionen)", "Kürbissuppe"],
+            ["Kürbissuppe (6 Portionen)"],
+        )
+
+    def test_reports_added_lines_in_the_wrong_order(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_meal_plan_state(
+                self.state("Kürbissuppe", "Kürbissuppe (4 Portionen)", "Brot"),
+                ["Kürbissuppe (4 Portionen)", "Kürbissuppe"],
+                [],
+            )
+
+    def test_reports_one_missing_line_among_several(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_meal_plan_state(
+                self.state("Kürbissuppe (4 Portionen)", "Brot"),
+                ["Kürbissuppe (4 Portionen)", "Kürbissuppe"],
+                [],
+            )
 
     def test_reports_a_missing_entry(self) -> None:
         with self.assertRaises(KeepApiError):
@@ -243,7 +267,7 @@ class VerifyMealPlanStateTests(unittest.TestCase):
     def test_reports_a_replaced_entry_left_behind(self) -> None:
         with self.assertRaises(KeepApiError):
             keep_client.verify_meal_plan_state(
-                self.state("Kürbissuppe", "Kürbissuppe (6 Portionen)"),
+                self.state("Kürbissuppe (6 Portionen)", "Kürbissuppe"),
                 "Kürbissuppe (6 Portionen)",
                 ["Kürbissuppe"],
             )
@@ -264,8 +288,8 @@ class ListThatDropsWrites(FakeList):
         return FakeItem(text)
 
 
-class AddMealPlanEntryTests(unittest.TestCase):
-    """The write path: replace what the app recognized, place the new entry on top."""
+class AddMealPlanEntriesTests(unittest.TestCase):
+    """The write path: replace what the app recognized, place the new entries on top."""
 
     def _client_with(self, plan: FakeList):
         """A `KeepClient` whose authentication and list lookup are replaced by fakes."""
@@ -289,8 +313,8 @@ class AddMealPlanEntryTests(unittest.TestCase):
         )
         client, keep = self._client_with(plan)
 
-        state = client.add_meal_plan_entry(
-            "Kürbissuppe (6 Portionen)", ["Kürbissuppe", "Kürbissuppe (4 Portionen)"]
+        state = client.add_meal_plan_entries(
+            ["Kürbissuppe (6 Portionen)"], ["Kürbissuppe", "Kürbissuppe (4 Portionen)"]
         )
 
         # One sync carries the whole change.
@@ -307,11 +331,32 @@ class AddMealPlanEntryTests(unittest.TestCase):
         # shopping list, so a missing note cannot fail a successful write.
         self.assertEqual(set(state), {"mealplan"})
 
+    def test_restores_several_lines_at_the_top_in_their_given_order(self) -> None:
+        """The undo shape: what a previous write replaced comes back as one block."""
+        plan = FakeList("Essensplan", [FakeItem("Brot", sort=3000)])
+        client, keep = self._client_with(plan)
+
+        state = client.add_meal_plan_entries(
+            ["Kürbissuppe (4 Portionen)", "Kürbissuppe"], ["Kürbissuppe (6 Portionen)"]
+        )
+
+        keep.sync.assert_called_once()
+        self.assertEqual(
+            [item["text"] for item in state["mealplan"]["items"]],
+            ["Kürbissuppe (4 Portionen)", "Kürbissuppe", "Brot"],
+        )
+        restored = [item for item in plan._items if item.text != "Brot"]
+        self.assertEqual(len(restored), 2)
+        self.assertEqual(
+            [item.text for item in sorted(restored, key=lambda item: item.sort, reverse=True)],
+            ["Kürbissuppe (4 Portionen)", "Kürbissuppe"],
+        )
+
     def test_an_empty_replacement_list_only_adds(self) -> None:
         plan = FakeList("Essensplan", [FakeItem("Brot", sort=3000)])
         client, _keep = self._client_with(plan)
 
-        state = client.add_meal_plan_entry("Kürbissuppe (6 Portionen)", [])
+        state = client.add_meal_plan_entries(["Kürbissuppe (6 Portionen)"], [])
 
         self.assertEqual(
             [item["text"] for item in state["mealplan"]["items"]],
@@ -323,19 +368,43 @@ class AddMealPlanEntryTests(unittest.TestCase):
         plan = FakeList("Essensplan", [FakeItem("  Kürbissuppe (4 Portionen)  ", sort=1000)])
         client, _keep = self._client_with(plan)
 
-        state = client.add_meal_plan_entry("Kürbissuppe (6 Portionen)", ["Kürbissuppe (4 Portionen)"])
+        state = client.add_meal_plan_entries(
+            ["Kürbissuppe (6 Portionen)"], ["Kürbissuppe (4 Portionen)"]
+        )
 
         self.assertEqual(
             [item["text"] for item in state["mealplan"]["items"]],
             ["Kürbissuppe (6 Portionen)"],
         )
 
+    def test_a_remove_only_write_takes_an_entry_off_without_adding(self) -> None:
+        """The undo of a first-time plan: nothing was replaced, so nothing comes back."""
+        plan = FakeList(
+            "Essensplan",
+            [FakeItem("Kürbissuppe (6 Portionen)", sort=2000), FakeItem("Brot", sort=1000)],
+        )
+        client, keep = self._client_with(plan)
+
+        state = client.add_meal_plan_entries([], ["Kürbissuppe (6 Portionen)"])
+
+        keep.sync.assert_called_once()
+        self.assertEqual([item["text"] for item in state["mealplan"]["items"]], ["Brot"])
+
+    def test_refuses_a_write_that_neither_adds_nor_removes(self) -> None:
+        plan = FakeList("Essensplan", [FakeItem("Kürbissuppe", sort=1000)])
+        client, keep = self._client_with(plan)
+
+        with self.assertRaises(ValueError):
+            client.add_meal_plan_entries([], [])
+        keep.sync.assert_not_called()
+        self.assertEqual([item.text for item in plan.items], ["Kürbissuppe"])
+
     def test_a_write_that_does_not_land_raises_instead_of_reporting_success(self) -> None:
         plan = ListThatDropsWrites("Essensplan", [FakeItem("Brot", sort=1000)])
         client, _keep = self._client_with(plan)
 
         with self.assertRaises(KeepApiError):
-            client.add_meal_plan_entry("Kürbissuppe (6 Portionen)", [])
+            client.add_meal_plan_entries(["Kürbissuppe (6 Portionen)"], [])
 
 
 if __name__ == "__main__":

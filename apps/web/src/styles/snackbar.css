@@ -1,0 +1,89 @@
+/**
+ * Snackbar — the reusable transient notice (components/Snackbar.tsx; the full
+ * specification is docs/ui_patterns.md).
+ *
+ * It floats above the list, clear of the + FAB, as a paper card: a fully opaque
+ * surface, a hairline border and the warm shadow — the same surface language as
+ * every other card, which is what keeps a notice from reading as a new kind of
+ * layer. Its leading symbol carries the tone (olive check = done, danger
+ * exclamation = failed); the action is the app's small text button in the clay
+ * accent. Every pixel value comes from the design ladder (tokens.css).
+ */
+
+/* Above every sheet layer (the meal-plan overlay tops out at 41): a notice
+   reports the action that just closed those layers, so it must never hide
+   underneath one — and, being a non-modal report, it stays free of a backdrop. */
+.snackbar {
+  position: fixed;
+  left: var(--app-padding);
+  right: var(--app-padding);
+  /* Clear of the FAB with the same offset the extended-FAB menu uses above it:
+     the card's bottom edge sits one space-5 above the FAB's top edge, so the
+     thumb's two targets never overlap and the FAB stays reachable. */
+  bottom: calc(
+    var(--space-7) + var(--fab-size) + var(--space-5) + env(safe-area-inset-bottom, 0px)
+  );
+  z-index: 50;
+  /* Content width like the sheets (42 rem is the app's established content
+     breakpoint), centered on wide screens. */
+  max-width: 42rem;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  animation: snackbar-in 180ms ease-out;
+}
+
+/* The tone symbol, at the standalone icon size. */
+.snackbar-icon {
+  display: block;
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  color: var(--color-olive);
+}
+
+.snackbar-error .snackbar-icon {
+  color: var(--color-danger);
+}
+
+/* The sentence. It may wrap freely (a recipe title can be long) and takes every
+   pixel the action leaves, so the row stays one line wherever it fits. */
+.snackbar-text {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+/* The action reuses the shared small text button (.text-button carries the
+   shape: no fill, no border); only its colour and weight are the notice's. The
+   two-class selector outranks .text-button whatever the stylesheet order is. */
+.snackbar .snackbar-action {
+  flex: none;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* A notice rises the last few pixels into place, like the create menu. */
+@keyframes snackbar-in {
+  from {
+    opacity: 0;
+    translate: 0 var(--space-4);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snackbar {
+    animation: none;
+  }
+}

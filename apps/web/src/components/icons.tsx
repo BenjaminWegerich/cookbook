@@ -361,6 +361,40 @@ export function ErrorIcon({ className }: IconProps) {
 }
 
 /**
+ * Filled circle with a checkmark — the leading symbol of a success snackbar
+ * (components/Snackbar.tsx): the action it reports is done. The positive
+ * counterpart of ErrorIcon, and deliberately the *circle* form rather than a
+ * bare check, so a notice status is recognizable as a status at a glance.
+ */
+export function CheckCircleIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M424,552L338,466Q327,455 310,455Q293,455 282,466Q271,477 271,494Q271,511 282,522L396,636Q408,648 424,648Q440,648 452,636L678,410Q689,399 689,382Q689,365 678,354Q667,343 650,343Q633,343 622,354L424,552ZM480,880Q397,880 324,848.5Q251,817 197,763Q143,709 111.5,636Q80,563 80,480Q80,397 111.5,324Q143,251 197,197Q251,143 324,111.5Q397,80 480,80Q563,80 636,111.5Q709,143 763,197Q817,251 848.5,324Q880,397 880,480Q880,563 848.5,636Q817,709 763,763Q709,817 636,848.5Q563,880 480,880ZM480,800Q614,800 707,707Q800,614 800,480Q800,346 707,253Q614,160 480,160Q346,160 253,253Q160,346 160,480Q160,614 253,707Q346,800 480,800ZM480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Arrow curving back to the left — the "Rückgängig" action of a success
+ * snackbar: the write it reports is taken back. The set marks the glyph as
+ * auto-mirrored for RTL; the app's UI is German and LTR only, so the path is
+ * used exactly as drawn (same note as MenuBookIcon).
+ */
+export function UndoIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M320,760Q303,760 291.5,748.5Q280,737 280,720Q280,703 291.5,691.5Q303,680 320,680L564,680Q627,680 673.5,640Q720,600 720,540Q720,480 673.5,440Q627,400 564,400L312,400L388,476Q399,487 399,504Q399,521 388,532Q377,543 360,543Q343,543 332,532L188,388Q182,382 179.5,375Q177,368 177,360Q177,352 179.5,345Q182,338 188,332L332,188Q343,177 360,177Q377,177 388,188Q399,199 399,216Q399,233 388,244L312,320L564,320Q661,320 730.5,383Q800,446 800,540Q800,634 730.5,697Q661,760 564,760L320,760Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/**
  * The cross as a raw SVG string, for the one place where the DOM is built
  * imperatively (the removable inline artifacts in StepEditor). Keep this the
  * single source: the CloseIcon component below renders exactly the same

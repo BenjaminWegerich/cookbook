@@ -8,7 +8,7 @@ Endpoints:
 
     GET  /health                liveness, unauthenticated, cheap
     GET  /keep/state            the meal plan and shopping list, for app start
-    POST /keep/mealplan         add a dish to "Essensplan", replacing its entries
+    POST /keep/mealplan         add dish lines to "Essensplan", replacing their entries
     POST /keep/shopping         add a recipe's ingredients to the list (501 for now)
     POST /keep/shopping/sort    reorder the list by category/aisle     (501 for now)
 
@@ -278,16 +278,19 @@ def create_app(
 
     @app.post("/keep/mealplan")
     def keep_mealplan() -> Response:
-        """Add a dish to the meal plan, replacing the entries that name it.
+        """Add dish lines to the meal plan, replacing the entries that name them.
 
-        Body: `{"add": "<entry text>", "remove": ["<entry text>", ...]}`. `add` is
-        the complete line to put at the top of "Essensplan" (recipe title plus size
-        suffix); `remove` are the exact texts of every line that names the same
-        recipe — checked or not, and whatever size it states. The rule that decides
-        which lines those are lives in the app (`packages/core/src/mealPlan.ts`,
-        next to the parser), so the client decides *what* is the same dish and this
-        boundary only executes the action — the same division that keeps the app
-        from learning Keep's model.
+        Body: `{"add": "<entry text>" | ["<entry text>", ...], "remove": [...]}`.
+        `add` is the complete line — or the lines, in reading order — to put at the
+        top of "Essensplan" (recipe title plus size suffix). A single string is the
+        ordinary write; a list is how the app restores what a previous write
+        replaced (undo), and an empty list is the undo of a first-time plan, which
+        only takes the added line back off. `remove` are the exact texts of every
+        line that names the same recipe — checked or not, and whatever size it
+        states. The rule that decides which lines those are lives in the app
+        (`packages/core/src/mealPlan.ts`, next to the parser), so the client decides
+        *what* is the same dish and this boundary only executes the action — the
+        same division that keeps the app from learning Keep's model.
 
         The answer is the meal plan after the write, in the shape one checklist has
         in `GET /keep/state` (`{"mealplan": {"title", "items"}}`), so the app can
@@ -298,9 +301,15 @@ def create_app(
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
             raise BadRequest("A JSON object body is required.")
-        entry = payload.get("add")
-        if not isinstance(entry, str) or entry.strip() == "":
-            raise BadRequest("The body needs a non-empty 'add' entry text.")
+        raw_add = payload.get("add")
+        if isinstance(raw_add, str):
+            added = [raw_add.strip()]
+        elif isinstance(raw_add, list) and all(isinstance(text, str) for text in raw_add):
+            added = [text.strip() for text in raw_add]
+        else:
+            raise BadRequest("The body needs an 'add' entry text or a list of entry texts.")
+        if any(text == "" for text in added):
+            raise BadRequest("Every added entry text must be non-empty.")
         remove = payload.get("remove", [])
         if remove is None:
             remove = []
@@ -308,7 +317,9 @@ def create_app(
             not isinstance(text, str) or text.strip() == "" for text in remove
         ):
             raise BadRequest("'remove' must be a list of entry texts.")
-        return jsonify(client_factory(settings).add_meal_plan_entry(entry.strip(), remove))
+        if not added and not remove:
+            raise BadRequest("The body must add or remove at least one entry text.")
+        return jsonify(client_factory(settings).add_meal_plan_entries(added, remove))
 
     @app.post("/keep/shopping")
     def keep_shopping() -> Response:

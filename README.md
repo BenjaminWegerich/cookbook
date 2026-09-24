@@ -77,3 +77,4 @@ loadable state.
 - [docs/quantity_scaling.md](docs/quantity_scaling.md) — how quantities change when a recipe is scaled (ladder logic)
 - [docs/additional_quantity_specifications.md](docs/additional_quantity_specifications.md) — how quantities are displayed (base + additional units)
 - [docs/recipe_structure.md](docs/recipe_structure.md) — recipe structure
+- [docs/ui_patterns.md](docs/ui_patterns.md) — reusable UI patterns (the snackbar)
