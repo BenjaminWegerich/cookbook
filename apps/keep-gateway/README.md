@@ -56,16 +56,17 @@ Keep or in `gkeepapi` cannot leak into the app.
 
 ```json
 {
-  "add": "Kürbissuppe (6 Portionen)",
-  "remove": ["Kürbissuppe", "Kürbissuppe (4 Portionen)"]
+  "add": "Kürbissuppe: https://drive.google.com/file/d/<id>/view#portionen=6",
+  "remove": ["Kürbissuppe", "Kürbissuppe: https://drive.google.com/file/d/<id>/view#portionen=4"]
 }
 ```
 
-`add` is the complete line (or the lines, in reading order) to put at the top of "Essensplan"
-(recipe title plus size suffix); `remove` are the exact texts of every line that names the same
-recipe — checked or not, and whatever size it states. The app owns the rule that decides which
-lines those are (`mealPlanEntriesForTitle` in `packages/core/src/mealPlan.ts`, next to the
-parser), so the gateway only executes the action.
+`add` is the complete line (or the lines, in reading order) to put at the top of "Essensplan" —
+the recipe title plus the app's chosen entry shape, today an export link whose fragment carries
+the size; the gateway treats the text as opaque. `remove` are the exact texts of every line that
+names the same recipe — checked or not, and whatever size it states. The app owns the rule that
+decides which lines those are (`mealPlanEntriesForTitle` in `packages/core/src/mealPlan.ts`,
+next to the parser), so the gateway only executes the action.
 
 The same endpoint carries the app's undo (the snackbar's "Rückgängig"): `add` is then a list of
 the lines the previous write replaced, in their original order, or an empty list when it only
@@ -76,7 +77,7 @@ rejected. The answer is the changed list in the checklist shape of `GET /keep/st
 {
   "mealplan": {
     "title": "Essensplan",
-    "items": [{ "text": "Kürbissuppe (6 Portionen)", "checked": false, "indented": false }]
+    "items": [{ "text": "Kürbissuppe: https://…/view#portionen=6", "checked": false, "indented": false }]
   }
 }
 ```

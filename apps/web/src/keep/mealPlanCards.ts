@@ -26,6 +26,7 @@
  */
 
 import {
+  mealPlanEntryLabel,
   parseMealPlanText,
   plannedAmountFitsRecipe,
   type MealPlanRecipeInfo,
@@ -39,8 +40,15 @@ import type { KeepItem } from './keepClient';
 export interface MealPlanCard {
   /** Stable React key: position in Keep's order plus the entry text. */
   key: string;
-  /** The entry's complete text, trimmed. */
+  /** The entry's complete text, trimmed (the exact Keep line). */
   text: string;
+  /**
+   * The entry in human form without its export URL — "Kürbissuppe (6
+   * Portionen)", or the whole text when it states no parsable size. This is what
+   * an unrecognized card shows and what the search matches; the raw `text` would
+   * put a long URL on the card.
+   */
+  displayText: string;
   /** The recognized recipe (photo + title), or null when unrecognized. */
   recipe: StoredRecipe | null;
   /** The size the entry states, when it fits the recognized recipe. */
@@ -89,6 +97,9 @@ export async function resolveMealPlan(
       meta = {
         type: loaded.type,
         ...(loaded.yield_unit !== undefined ? { yieldUnit: loaded.yield_unit } : {}),
+        // The written yield bounds the yields the export bakes, so the fit check
+        // can refuse a size whose cooking view does not exist.
+        ...(loaded.yield !== undefined ? { yieldQuantity: loaded.yield } : {}),
       };
     } catch {
       meta = null;
@@ -133,6 +144,7 @@ export async function resolveMealPlan(
     cards.push({
       key: `${index}:${text}`,
       text,
+      displayText: mealPlanEntryLabel(parsed.title, parsed.planned),
       recipe: recognized ? recipe : null,
       planned: recognized ? parsed.planned : null,
     });

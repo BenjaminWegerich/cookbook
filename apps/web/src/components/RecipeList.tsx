@@ -112,13 +112,14 @@ function RecipeList({
     [recipes, needle],
   );
 
-  // A meal-plan card is searched by its complete text, not only by the matched
-  // title: "Kürbissuppe (6 Portionen)" is found by "portionen" as well.
+  // A meal-plan card is searched by its human text, not only by the matched
+  // title: "Kürbissuppe (6 Portionen)" is found by "portionen" as well. The
+  // export URL of the raw Keep line is deliberately not searched.
   const visiblePlanCards = useMemo(
     () =>
       mealPlanCards === null || needle === ''
         ? mealPlanCards
-        : mealPlanCards.filter((card) => card.text.toLowerCase().includes(needle)),
+        : mealPlanCards.filter((card) => card.displayText.toLowerCase().includes(needle)),
     [mealPlanCards, needle],
   );
 
@@ -210,13 +211,14 @@ function RecipeList({
           }
           // Unrecognized: the same card look, but the overview behind it is the
           // destination that lets the entry be replaced by or turned into a
-          // recipe (or dropped from the plan).
+          // recipe (or dropped from the plan). The card shows the entry's human
+          // form — a Cookbook line's export URL would otherwise fill the title.
           return (
             <li key={card.key}>
               <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
-                <TitleThumb title={card.text} />
+                <TitleThumb title={card.displayText} />
                 <span className="recipe-card-title">
-                  <span className="recipe-card-title-text">{card.text}</span>
+                  <span className="recipe-card-title-text">{card.displayText}</span>
                   <span className="recipe-badge recipe-badge-unknown">
                     <ErrorIcon className="recipe-badge-icon" />
                     <span>Kein Cookbook-Rezept</span>

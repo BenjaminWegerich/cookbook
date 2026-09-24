@@ -233,15 +233,20 @@ constraints.
    add a thin server-side piece without a rewrite.
 7. **Sharing format — pre-computed HTML export in Drive, regenerated automatically.**
    Sharing works by exporting a recipe as a self-contained HTML file stored in Google Drive.
-   The file contains the recipe plus a pre-computed table: for each allowed serving option
-   (integer ladder values 1–30, i.e. 18 options) and each ingredient, the final display
-   strings — no master data is embedded and no scaling/display logic runs at runtime.
-   A small embedded script is permitted for step-by-step navigation (serving picker, step
-   forward/back), so the exported file also serves as the cooking view (ROADMAP, Phase 1).
+   The file contains the recipe plus a pre-computed table: for every allowed size and each
+   ingredient, the final display strings — no master data is embedded and no scaling/display
+   logic runs at runtime. A finished dish bakes the integer ladder serving counts 1–30; an
+   ingredient recipe bakes the ladder yields within ±2 decades of its written yield, so it can be
+   cooked at another size just like a dish.
+   A small embedded script is permitted for step-by-step navigation (the size picker, step
+   forward/back) and to open the view the URL fragment asks for, so the exported file also
+   serves as the cooking view (ROADMAP, Phase 1). A meal-plan entry in Google Keep links the
+   export with the chosen size in that fragment, so a planned dish opens at exactly the amount it
+   was planned for.
    The app regenerates the export
    automatically whenever the canonical recipe is saved, updating the file in place (same
    Drive file ID), so a shared link always shows the current version and never breaks.
-   Friends need no app install; they open the HTML in any browser and pick a serving count.
+   Friends need no app install; they open the HTML in any browser and pick a size.
    No reachable server required.
 8. **Canonical recipe format — Markdown + YAML front matter, one file per recipe.** Each
    recipe is a single Markdown file: YAML front matter holds the metadata and the ingredient

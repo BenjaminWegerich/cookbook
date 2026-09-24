@@ -21,6 +21,7 @@ export * from './ingredientCsv.js';
 export * from './ingredientRegistry.js';
 export * from './ladder.js';
 export * from './mealPlan.js';
+export * from './planLink.js';
 export * from './recipe/artifacts.js';
 export * from './recipe/exportHtml.js';
 export * from './recipe/ingredientList.js';
@@ -30,6 +31,7 @@ export * from './recipe/serialize.js';
 export * from './recipe/timeValues.js';
 export * from './recipe/types.js';
 export * from './recipe/validate.js';
+export * from './recipe/yieldViews.js';
 
 /** Version of the core module, kept in sync with packages/core/package.json. */
 export const VERSION = '0.1.0';

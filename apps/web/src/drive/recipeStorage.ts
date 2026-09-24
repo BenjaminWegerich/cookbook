@@ -70,6 +70,28 @@ export interface StoredRecipe {
   title: string;
   /** The recipe's photo sibling, when one exists. */
   image?: RecipeImage;
+  /**
+   * The recipe's HTML export sibling (`<title>.html`), when one exists. The
+   * meal-plan write puts its Drive link into the Keep entry, so a planned dish
+   * can be opened from the Keep app (see ../keep/mealPlanCards and
+   * @cookbook/core's mealPlanEntryText). Missing after a failed export write,
+   * which degrades the entry to the linkless shape.
+   */
+  exportFileId?: string;
+}
+
+/**
+ * The Drive viewer link of one file (`https://drive.google.com/file/d/<id>/view`).
+ *
+ * This is the shape every Cookbook link uses: the sub-recipe links inside an
+ * export, and the meal-plan entry that points at a recipe's export. On Android
+ * the Drive app renders a shared `.html` file as the page itself (verified by
+ * the user); desktop browsers show its source, which is why the Sharing
+ * milestone may later move the export to a real host — the URL is built in one
+ * place still.
+ */
+export function driveViewUrl(fileId: string): string {
+  return `https://drive.google.com/file/d/${fileId}/view`;
 }
 
 /**
@@ -116,6 +138,18 @@ export async function listRecipes(token: string): Promise<StoredRecipe[]> {
     }
   }
 
+  // Index the HTML exports by basename too (first match wins), so a plan write
+  // can link the Keep entry at the recipe's cooking view without a second Drive
+  // listing.
+  const exportsByBase = new Map<string, string>();
+  for (const file of files) {
+    if (!file.name.endsWith(EXPORT_EXTENSION)) continue;
+    const base = file.name.slice(0, -EXPORT_EXTENSION.length);
+    if (base !== '' && !exportsByBase.has(base)) {
+      exportsByBase.set(base, file.id);
+    }
+  }
+
   const recipes: StoredRecipe[] = [];
   for (const file of files) {
     if (!file.name.endsWith(RECIPE_EXTENSION)) continue;
@@ -125,6 +159,7 @@ export async function listRecipes(token: string): Promise<StoredRecipe[]> {
       fileId: file.id,
       title,
       ...(imagesByBase.has(title) ? { image: imagesByBase.get(title) } : {}),
+      ...(exportsByBase.has(title) ? { exportFileId: exportsByBase.get(title) } : {}),
     });
   }
   recipes.sort((a, b) => a.title.localeCompare(b.title, 'de'));
@@ -306,7 +341,7 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
     if (!file.name.endsWith(EXPORT_EXTENSION)) continue;
     const title = file.name.slice(0, -EXPORT_EXTENSION.length);
     if (title === '') continue;
-    links[title] = `https://drive.google.com/file/d/${file.id}/view`;
+    links[title] = driveViewUrl(file.id);
   }
   const content = generateRecipeHtml(recipe, links);
   if (existing !== undefined) {

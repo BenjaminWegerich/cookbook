@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { mealPlanEntriesForTitle, type Recipe } from '@cookbook/core';
+import {
+  mealPlanEntriesForTitle,
+  mealPlanEntryLabel,
+  parseMealPlanText,
+  type Recipe,
+} from '@cookbook/core';
 
 import {
   getAccessToken,
@@ -772,7 +777,7 @@ function App() {
               onMealPlan: true,
               planned: card.planned,
             }
-          : { kind: 'unknown', text: card.text },
+          : { kind: 'unknown', text: card.text, displayText: card.displayText },
       );
       setNav('overview');
     },
@@ -817,8 +822,13 @@ function App() {
       const replace = mealPlanEntriesForTitle(texts, targetRecipe.title);
       await planMeal(entryText, replace);
       closeOverview();
+      // The written line is "<Titel>: <URL>#…" and would read poorly in the
+      // notice; the parser gives back the human form ("Kürbissuppe (6
+      // Portionen)") for it. The exact line stays the undo's business.
+      const written = parseMealPlanText(entryText);
+      const label = mealPlanEntryLabel(written.title, written.planned);
       showSnackbar({
-        text: `${entryText} zum Essensplan hinzugefügt. Die Einkaufsliste bleibt unverändert.`,
+        text: `${label} zum Essensplan hinzugefügt. Die Einkaufsliste bleibt unverändert.`,
         action: {
           label: 'Rückgängig',
           busyLabel: 'Wird rückgängig gemacht …',
@@ -830,7 +840,7 @@ function App() {
               const reason = err instanceof Error ? err.message : String(err);
               showSnackbar({
                 tone: 'error',
-                text: `„${entryText}“ konnte nicht rückgängig gemacht werden. ${reason}`,
+                text: `„${label}“ konnte nicht rückgängig gemacht werden. ${reason}`,
               });
             }
           },

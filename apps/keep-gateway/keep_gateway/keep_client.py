@@ -288,7 +288,8 @@ class KeepClient:
 
         `entries` are the complete lines the app wants to see, in the order they
         should read from the top: one line for the ordinary write
-        ("Kürbissuppe (6 Portionen)"), several for an undo that restores the
+        ("Kürbissuppe: https://…/view#portionen=6" — the app's line shape, which
+        the gateway treats as opaque text), several for an undo that restores the
         lines a previous write replaced, none for an undo that only takes the
         added line back off (the dish had not been planned before). `replace` are
         the exact texts of every line that names the same recipe — checked or not,

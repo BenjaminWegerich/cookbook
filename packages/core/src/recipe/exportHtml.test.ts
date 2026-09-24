@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { NNBSP, renderAQS } from '../additionalUnits.js';
+import { formatBQ, NNBSP, renderAQS } from '../additionalUnits.js';
 import { scaleAQ } from '../aqLadder.js';
 import { difference, scale } from '../ladder.js';
 import { parseRecipe } from './parse.js';
@@ -88,6 +88,72 @@ describe('generateRecipeHtml — finished dish', () => {
     const plain = generateRecipeHtml(WRAPS);
     expect(plain).not.toContain('class="sub-recipe-link"');
     expect(plain).not.toContain('{{');
+  });
+
+  it('selects a view on load instead of showing every serving option', () => {
+    // Regression guard: the embedded script used to define `selectServing` and
+    // never call it, so the first paint stacked all 30 views. The initial call
+    // is the one fed by the URL fragment; the written size is the fallback.
+    expect(html).toContain("!selectServing(params['portionen'])");
+    expect(html).toContain('selectServing(activeServing())');
+  });
+});
+
+describe('generateRecipeHtml — ingredient recipe yield views', () => {
+  const sauce: Recipe = parseRecipe(`---
+title: Béchamelsauce
+type: ingredient_recipe
+yield: 500
+yield_unit: ml
+reference:
+  - Milch
+prep_time: 15 min
+---
+## Zubereitung
+1. - 25 g Butter
+   - 300 ml Milch
+   Butter schmelzen und mit Milch aufgießen.
+2. In {{50 ml Milch}} auflösen und köcheln.
+`);
+
+  const html = generateRecipeHtml(sauce);
+
+  it('bakes one view per yield rung, ±2 decades around the written yield', () => {
+    expect(html.match(/class="serving-view/g) ?? []).toHaveLength(65);
+    expect(html).toContain(`data-yield="500" data-yield-label="500${NNBSP}ml"`);
+    // The extremes of the range: 5 ml and 50 l.
+    expect(html).toContain('data-yield="5"');
+    expect(html).toContain(`data-yield="50000" data-yield-label="50${NNBSP}l"`);
+  });
+
+  it('marks the written yield as the fallback view', () => {
+    expect(html).toContain('class="serving-view is-written" data-yield="500"');
+  });
+
+  it('scales the master list, the headline and the reference per view', () => {
+    const delta = difference(sauce.yield!, 5000); // 500 ml → 5 l
+    // The headline uses formatBQ, so the view steps ml → l at 1000.
+    expect(html).toContain(
+      `${formatBQ(5000, 'ml')} (${renderAQS('Milch', scale(300, delta), 'ml')})`,
+    );
+    expect(html).toContain(renderAQS('Butter', scale(25, delta), 'g'));
+  });
+
+  it('offers the chips and the stepper, with the powers of ten plus the written size', () => {
+    expect(html).toContain('class="yield-chip active" data-yield="500"');
+    expect(html).toContain('class="yield-chip" data-yield="10000"');
+    expect(html).toContain('class="yield-value"');
+    expect(html).toContain('class="yield-step-button yield-step-down"');
+    expect(html).toContain('class="yield-step-button yield-step-up"');
+    // Out of the baked range, so never offered.
+    expect(html).not.toContain('class="yield-chip" data-yield="100000"');
+  });
+
+  it('opens on the fragment yield and normalizes kg/l', () => {
+    expect(html).toContain("params['menge']");
+    expect(html).toContain('.serving-view.is-written');
+    // A hand-written kg/l link finds the same view as the g/ml one.
+    expect(html).toContain('amount = amount * 1000');
   });
 });
 

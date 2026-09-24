@@ -19,8 +19,11 @@
  *   reference;
  * - "Abbrechen" closes the overlay without planning. "Zum Essensplan
  *   hinzufügen" performs the write: it hands the caller the complete entry text
- *   (`mealPlanEntryText`: recipe title plus size suffix, e.g.
- *   "Kürbissuppe (6 Portionen)") and waits. App owns the meal-plan state, so it
+ *   (`mealPlanEntryText`). With the recipe's export URL that is
+ *   "Kürbissuppe: https://…/view#portionen=6" — title, link and the chosen size
+ *   in the URL's fragment, so the Keep item can be tapped through to the cooking
+ *   view at exactly that size. Without a URL (a failed export write) it falls
+ *   back to "Kürbissuppe (6 Portionen)". App owns the meal-plan state, so it
  *   also knows which existing entries were recognized as this recipe and must be
  *   replaced; this sheet only chooses the size. On success the caller closes the
  *   whole flow; on failure the sheet stays open and shows the reason next to the
@@ -30,8 +33,10 @@
  * The selectable sizes are exactly what the meal plan accepts
  * (packages/core/src/mealPlan.ts): a finished dish takes an integer standard
  * number 1–30 ("6 Portionen"), an ingredient recipe a ladder value in its own
- * family unit ("500 g" / "1,5 l"). Because the controls are the editor's own,
- * they only ever produce such a value — the write needs no re-validation.
+ * family unit that also has a baked export view — the picker is bounded by
+ * `yieldViewQuantities` (±2 decades around the written yield, see
+ * packages/core/src/recipe/yieldViews.ts). Because the controls only ever
+ * produce such a value, the write needs no re-validation.
  *
  * The overlay is a layer inside the recipe overview, not a screen of its own:
  * the overview owns Escape and the browser Back for it (RecipeOverviewHandle),
@@ -47,6 +52,7 @@ import {
   integerLadderValues,
   mealPlanEntryText,
   scale,
+  yieldViewQuantities,
   type PlannedAmount,
   type Recipe,
 } from '@cookbook/core';
@@ -65,6 +71,14 @@ const SERVING_OPTIONS = integerLadderValues(1, 30);
 interface MealPlanSheetProps {
   /** The parsed recipe; the size it is written in is the pre-selected default. */
   recipe: Recipe;
+  /**
+   * The Drive link of the recipe's HTML export, when it has one. The written
+   * Keep entry becomes `<Titel>: <URL>#portionen=6` / `#menge=500g`, so the
+   * dish carries a tap-through to the cooking view that opens at the chosen
+   * size (core's `mealPlanEntryText`). Without it (a failed export write) the
+   * entry uses the linkless parenthetical shape.
+   */
+  exportUrl?: string;
   /** Closes the overlay without planning ("Abbrechen", backdrop, Escape, Back). */
   onClose: () => void;
   /**
@@ -78,7 +92,7 @@ interface MealPlanSheetProps {
 /**
  * The meal-plan overlay (see file header).
  */
-function MealPlanSheet({ recipe, onClose, onConfirm }: MealPlanSheetProps) {
+function MealPlanSheet({ recipe, exportUrl, onClose, onConfirm }: MealPlanSheetProps) {
   const isDish = recipe.type === 'finished_dish';
   /** The recipe's own family unit; the meal plan only accepts a size in it. */
   const family = recipe.yield_unit === 'ml' ? 'ml' : 'g';
@@ -90,6 +104,15 @@ function MealPlanSheet({ recipe, onClose, onConfirm }: MealPlanSheetProps) {
   const [busy, setBusy] = useState(false);
   /** Reason the write failed, shown next to the buttons (null = no failure). */
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * The yields the recipe's export bakes a view for (±2 decades around the
+   * written yield, core's recipe/yieldViews.ts). The picker is bounded by it, so
+   * every size offered here is one the Keep entry's link can really open; the
+   * core's fit check refuses anything outside it too.
+   */
+  const bakedYields =
+    isDish || recipe.yield === undefined ? null : yieldViewQuantities(recipe.yield);
 
   /** The size the user picked. */
   const selectedSize = isDish ? servings : yieldQuantity;
@@ -124,7 +147,7 @@ function MealPlanSheet({ recipe, onClose, onConfirm }: MealPlanSheetProps) {
     setBusy(true);
     setError(null);
     try {
-      await onConfirm(mealPlanEntryText(recipe.title, planned));
+      await onConfirm(mealPlanEntryText(recipe.title, planned, exportUrl));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setBusy(false);
@@ -168,7 +191,14 @@ function MealPlanSheet({ recipe, onClose, onConfirm }: MealPlanSheetProps) {
           // quantity is chosen here — no Gewicht/Volumen switch.
           <div className="field">
             <span className="field-label">Ergiebigkeit</span>
-            <QuantityPicker value={yieldQuantity} onChange={setYieldQuantity} family={family} />
+            <QuantityPicker
+              value={yieldQuantity}
+              onChange={setYieldQuantity}
+              family={family}
+              {...(bakedYields !== null
+                ? { min: bakedYields[0]!, max: bakedYields[bakedYields.length - 1]! }
+                : {})}
+            />
           </div>
         )}
 

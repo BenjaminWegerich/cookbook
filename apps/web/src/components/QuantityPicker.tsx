@@ -43,14 +43,35 @@ interface QuantityPickerProps {
   onChange: (quantity: number) => void;
   /** The ingredient's family unit (g/ml) — null = unitless quantity (`{{100}}`). */
   family: QuantityFamily | null;
+  /**
+   * Lowest selectable family-unit value (default `QUANTITY_MIN`). The meal-plan
+   * sheet narrows the pool to the yields the recipe's export bakes, so it never
+   * offers a size whose cooking view does not exist.
+   */
+  min?: number;
+  /** Highest selectable family-unit value (default `QUANTITY_MAX`). */
+  max?: number;
 }
 
 /**
  * The quantity input (see file header). Used for ingredient quantities in the
- * sheet and for the Ergiebigkeit in the editor's Kopfdaten.
+ * sheet, for the Ergiebigkeit in the editor's Kopfdaten, and for the planned
+ * size in the meal-plan sheet (which passes `min`/`max` to bound the pool).
  */
-function QuantityPicker({ value, onChange, family }: QuantityPickerProps) {
+function QuantityPicker({ value, onChange, family, min, max }: QuantityPickerProps) {
   const suggestions = suggestedChips(family);
+
+  /** The selectable pool of this mode: the editor's full bounds, narrowed by
+   *  the caller's `min`/`max` (family unit only — a unitless count keeps the AQ
+   *  ladder, whose bounds are not a caller's business). */
+  const boundMin =
+    family === null ? AQ_MIN : Math.max(QUANTITY_MIN, min === undefined ? QUANTITY_MIN : min);
+  const boundMax =
+    family === null ? AQ_MAX : Math.min(QUANTITY_MAX, max === undefined ? QUANTITY_MAX : max);
+  /** The suggested chips that are inside the pool. */
+  const visibleSuggestions = suggestions.filter(
+    (chip) => chip.quantity >= boundMin && chip.quantity <= boundMax,
+  );
 
   /** Mirror of the latest `value` prop. Updated optimistically on every step
    *  so the press-and-hold repeat keeps climbing the ladder even before the
@@ -105,7 +126,7 @@ function QuantityPicker({ value, onChange, family }: QuantityPickerProps) {
       next = scaleAQ(base, delta);
       if (next === current) return false;
     } else {
-      next = Math.min(QUANTITY_MAX, Math.max(QUANTITY_MIN, scale(current, delta)));
+      next = Math.min(boundMax, Math.max(boundMin, scale(current, delta)));
       if (next === current) return false;
     }
     valueRef.current = next; // optimistic: repeat cadence is render-independent
@@ -129,15 +150,13 @@ function QuantityPicker({ value, onChange, family }: QuantityPickerProps) {
     }, HOLD_FIRST_REPEAT_MS);
   };
 
-  const boundMin = family === null ? AQ_MIN : QUANTITY_MIN;
-  const boundMax = family === null ? AQ_MAX : QUANTITY_MAX;
   const minReached = value !== undefined && value <= boundMin;
   const maxReached = value !== undefined && value >= boundMax;
 
   return (
     <div className="quantity-picker">
       <div className="suggested-chips" role="group" aria-label="Vorgeschlagene Mengen">
-        {suggestions.map((chip) => (
+        {visibleSuggestions.map((chip) => (
           <button
             key={chip.quantity}
             type="button"

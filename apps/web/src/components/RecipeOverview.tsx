@@ -81,7 +81,7 @@ import {
   type Recipe,
 } from '@cookbook/core';
 
-import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
+import { driveViewUrl, readRecipe, type StoredRecipe } from '../drive/recipeStorage';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import {
   CalendarAddIcon,
@@ -123,8 +123,14 @@ export type RecipeOverviewTarget =
     }
   | {
       kind: 'unknown';
-      /** The unrecognized entry's complete text (also its title here). */
+      /** The unrecognized entry's complete text — the exact Keep line. */
       text: string;
+      /**
+       * The same entry without its export URL, for the title and the avatar. A
+       * Cookbook-written line is `<Titel>: <URL>`; showing it raw would put a
+       * long link on the sheet. The removal action keeps using `text`.
+       */
+      displayText: string;
     };
 
 interface RecipeOverviewProps {
@@ -309,7 +315,8 @@ function RecipeOverview({
     if (recipe !== null) onAiEdit(recipe);
   };
 
-  const title = target.kind === 'unknown' ? target.text : (details?.title ?? target.recipe.title);
+  const title =
+    target.kind === 'unknown' ? target.displayText : (details?.title ?? target.recipe.title);
   const description = details?.description;
   // Times use the core display helper, so number and unit are joined with the
   // narrow no-break space like everywhere else (docs/CODING_CONVENTIONS.md).
@@ -356,7 +363,7 @@ function RecipeOverview({
             it gets the same letter avatar the list card shows. */}
         <div className="overview-hero">
           {target.kind === 'unknown' ? (
-            <TitleThumb title={target.text} />
+            <TitleThumb title={target.displayText} />
           ) : (
             <RecipeThumb recipe={target.recipe} token={token} />
           )}
@@ -575,10 +582,18 @@ function RecipeOverview({
       </div>
 
       {/* The meal-plan overlay: a layer above this sheet, opened by "Einplanen"
-          (known recipe, not on the plan). It closes back onto the sheet. */}
-      {planOpen && details !== null && (
+          (known recipe, not on the plan). It closes back onto the sheet. The
+          export URL travels with it, so the written Keep entry can link the
+          cooking view; a recipe whose export write failed has none and the entry
+          falls back to the linkless shape. */}
+      {planOpen && details !== null && target.kind === 'recipe' && (
         <MealPlanSheet
           recipe={details}
+          exportUrl={
+            target.recipe.exportFileId !== undefined
+              ? driveViewUrl(target.recipe.exportFileId)
+              : undefined
+          }
           onClose={() => setPlanOpen(false)}
           onConfirm={onAddToMealPlan}
         />

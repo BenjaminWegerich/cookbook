@@ -23,7 +23,7 @@ export const MIN_X = -16;
 /** Largest table index (rung value 1000). */
 export const MAX_X = 48;
 /** One decade on the ladder spans 16 steps: 10^(16/16) = 10. */
-const STEPS_PER_DECADE = 16;
+export const STEPS_PER_DECADE = 16;
 
 /** Integer thousandths of one unit; all table BQ values have ≤ 2 decimals. */
 const THOUSANDTHS = 1000;

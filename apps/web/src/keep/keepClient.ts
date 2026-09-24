@@ -232,10 +232,11 @@ export async function fetchKeepState(gatewayToken: string): Promise<KeepState> {
  * Writes the meal plan: puts `add` at the top, replacing the `remove` entries.
  *
  * `add` are the complete lines to place, in reading order (top first):
- * `mealPlanEntryText` for the ordinary write ("Kürbissuppe (6 Portionen)"), or
- * the lines a previous write replaced when the app restores them (undo).
- * `remove` are the exact texts of the entries the app recognized as the same
- * recipe, checked or not. The app owns that recognition rule — it needs the
+ * `mealPlanEntryText` for the ordinary write ("Kürbissuppe: <Export-URL>#portionen=6",
+ * or the linkless "Kürbissuppe (6 Portionen)" when the recipe has no export
+ * file), or the lines a previous write replaced when the app restores them
+ * (undo). `remove` are the exact texts of the entries the app recognized as the
+ * same recipe, checked or not. The app owns that recognition rule — it needs the
  * recipe's type and family unit — so the gateway only executes the action.
  *
  * The answer is the meal plan after the write, so the caller can update it

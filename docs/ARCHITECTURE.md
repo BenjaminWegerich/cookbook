@@ -73,12 +73,17 @@
 
 ### HTML share export
 
-- Self-contained HTML file with the recipe and pre-computed display values for each allowed
-  serving option (integer ladder values 1–30); no logic or master data embedded.
-- Generated from the core logic and a recipe file.
-- Stored in Drive, regenerated automatically on every recipe save (updated in place, so
-  shared links stay valid).
-- Friends open it in any browser and pick a serving count — no app, no server.
+- Self-contained HTML file with the recipe and pre-computed display values for every allowed
+  size; no logic and no master data embedded, so no scaling runs at runtime.
+  - a finished dish bakes the integer ladder serving counts 1–30;
+  - an ingredient recipe bakes the ladder yields within ±2 decades of its written yield
+    (`packages/core/src/recipe/yieldViews.ts`), the same range the meal plan accepts.
+- Generated from the core logic and a recipe file, stored in Drive and regenerated automatically
+  on every recipe save (updated in place, so shared links stay valid).
+- The page opens on the written size or on the size its URL fragment asks for
+  (`#portionen=6`, `#menge=500g`); a meal-plan entry links the export with that fragment, so a
+  planned dish opens at exactly the amount it was planned for.
+- Friends open it in any browser and pick a size — no app, no server.
 
 ### Keep gateway (backend module)
 
@@ -143,18 +148,20 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   order, „Sammlung“ every recipe of the collection; both render the same card grid, and the
   search field refines whichever tab is active. The view opens on „Essensplan“ once Keep is
   ready and on „Sammlung“ otherwise.
-- **Recognition.** An entry is a recipe when its text — without an optional ` (6 Portionen)`,
-  ` (500 g)` or ` (1,5 l)` suffix — is the exact, case-sensitive title of a recipe file, and a
-  present suffix fits the recipe: an integer ladder value 1–30 on a finished dish, a ladder
-  value in the recipe's own family unit on an ingredient recipe. The logic is framework-free
-  and unit-tested in `packages/core/src/mealPlan.ts`. Only suffixed entries need a recipe file
-  read, and the Drive content cache makes repeated entries free.
+- **Recognition.** An entry is a recipe when its text — without a trailing export link and
+  without an optional ` (6 Portionen)`, ` (500 g)` or ` (1,5 l)` suffix — is the exact,
+  case-sensitive title of a recipe file, and a stated size fits the recipe: an integer ladder
+  value 1–30 on a finished dish, a ladder value in the recipe's own family unit on an ingredient
+  recipe, and one the recipe's export really bakes. The logic is framework-free and unit-tested
+  in `packages/core/src/mealPlan.ts`. Only entries that state a size need a recipe file read, and
+  the Drive content cache makes repeated entries free.
 - **Cards.** Recognized entries use the known card format; in „Sammlung“ a planned recipe
   carries the inline „Eingeplant“ badge. Unrecognized entries render with the shared letter
-  avatar, the entry's complete text and a danger „Kein Cookbook-Rezept“ badge, and are
-  tappable: the recipe overview is their destination, where the entry can be replaced by an
-  existing recipe or by a new one (manual or AI) or dropped from the plan with „Vom Plan
-  entfernen“. A badge is never a hitbox of its own — the whole card is.
+  avatar, the entry's text without the export link (title and stated size) and a danger
+  „Kein Cookbook-Rezept“ badge, and are tappable: the recipe overview is their destination,
+  where the entry can be replaced by an existing recipe or by a new one (manual or AI) or
+  dropped from the plan with „Vom Plan entfernen“. A badge is never a hitbox of its own — the
+  whole card is.
 - **Recipe overview.** A card opens the overview sheet in one of three forms. A recipe that is
   not on the meal plan is unchanged. A planned recipe shows the entry's stated size first in
   its caption/value row („Geplant 6 Portionen“ / „Geplant 1,5 l“), turns „Einplanen“ into
@@ -163,10 +170,15 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   replace/drop destination described above. The „Jetzt kochen“, „Umplanen“, „Vom Plan
   entfernen“ and „Eintrag ersetzen“ actions are still placeholders; „Einplanen“ writes the
   dish to the meal plan.
-- **Meal-plan write.** „Zum Essensplan hinzufügen“ sends the complete entry line (recipe title
-  plus the chosen size, e.g. „Kürbissuppe (6 Portionen)“, built by `mealPlanEntryText` in
-  `packages/core/src/mealPlan.ts`) and the exact texts of every line naming the same recipe —
-  checked or not, and whatever size it states (`mealPlanEntriesForTitle` next to the parser).
+- **Meal-plan write.** „Zum Essensplan hinzufügen“ sends the complete entry line and the exact
+  texts of every line naming the same recipe — checked or not, and whatever size it states
+  (`mealPlanEntriesForTitle` next to the parser). The line is built by `mealPlanEntryText` and
+  carries the recipe's export link with the chosen size in its fragment: „Kürbissuppe:
+  https://drive.google.com/file/d/<id>/view#portionen=6“. Keep has no hyperlink-with-text, so
+  the raw URL has to stand in the item, and the fragment is what makes the tapped cooking view
+  open at the planned amount (the same keys in `packages/core/src/planLink.ts` are read by the
+  export's embedded script). A recipe without an export file falls back to the linkless
+  „Kürbissuppe (6 Portionen)“.
   The app owns that rule; the gateway only executes the action. It places the new line above
   every remaining item with the spike's sort-id rule, deletes the replaced entries, syncs once
   and verifies the result before answering the changed list — a write is never reported as
