@@ -29,9 +29,11 @@
  *   edit, upload = choose/replace photo, trash = destructive, cross = remove,
  *   star = reference quantity, arrows = reorder.
  * - the ingredient tags share one style and always appear in the order
- *   "NEU" (danger) - "REZEPT" (terracotta, chain link) - "REFERENZ" (olive,
- *   filled star + ×), so every ingredient row reads the same way in both lists;
- *   only the master list carries the star toggle.
+ *   "NEU" (danger, star badge) - "REZEPT" (terracotta, chain link) -
+ *   "REFERENZ" (olive, filled star + ×), so every ingredient row reads the
+ *   same way in both lists; every tag leads with its symbol (docs/
+ *   CODING_CONVENTIONS.md, "inline badges"); only the master list carries the
+ *   star toggle.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -96,6 +98,7 @@ import {
   ArrowUpIcon,
   CloseIcon,
   LinkIcon,
+  NewReleasesIcon,
   StarFilledIcon,
   StarIcon,
   TrashIcon,
@@ -1752,7 +1755,12 @@ function RecipeEditor({
                                   ingredient.quantity,
                                   ingredient.unit,
                                 )}
-                                {isNewName && <span className="ingredient-tag tag-new">neu</span>}
+                                {isNewName && (
+                                  <span className="ingredient-tag tag-new">
+                                    <NewReleasesIcon className="tag-icon" />
+                                    <span>Neu</span>
+                                  </span>
+                                )}
                                 {jumpTarget !== undefined && (
                                   <button
                                     type="button"
@@ -1918,7 +1926,12 @@ function RecipeEditor({
                     <li key={ingredient.name} className="ingredient-row">
                       <span className="ingredient-line">
                         {safeRenderAQS(ingredient.name, ingredient.quantity, ingredient.unit)}
-                        {isNewName && <span className="ingredient-tag tag-new">neu</span>}
+                        {isNewName && (
+                          <span className="ingredient-tag tag-new">
+                            <NewReleasesIcon className="tag-icon" />
+                            <span>Neu</span>
+                          </span>
+                        )}
                         {jumpTarget !== undefined && (
                           <button
                             type="button"

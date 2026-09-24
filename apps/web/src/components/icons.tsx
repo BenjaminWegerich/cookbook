@@ -159,6 +159,20 @@ export function LinkIcon({ className }: IconProps) {
   );
 }
 
+/** New releases (star badge with a check) — the "Neu" tag (name not yet in the
+ *  master data). The set's own "new" marker, so a badge signals novelty with the
+ *  same visual grammar as the other tags (colour + symbol before the text). */
+export function NewReleasesIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M438,452L380,509Q369,520 352.5,520T324,508Q313,497 313,480T324,452L410,366Q422,354 438,354T466,366L636,536Q648,548 647.5,564T636,592Q624,604 607.5,604.5T579,593L438,452ZM326,90L268,188L158,212Q143,215 134,227.5T127,255L138,368L63,454Q53,465 53,480T63,506L138,592L127,705Q125,720 134,732.5T158,748L268,772L326,870Q334,883 348,887.5T376,886L480,842L584,886Q598,892 612,887.5T634,870L692,772L802,748Q817,745 826,732.5T833,705L822,592L897,506Q907,495 907,480T897,454L822,368L833,255Q835,240 826,227.5T802,212L692,188L634,90Q626,77 612,72.5T584,74L480,118L376,74Q362,68 348,72.5T326,90ZM378,162L480,206L584,162L640,258L750,284L740,396L814,480L740,566L750,678L640,702L582,798L480,754L376,798L320,702L210,678L220,566L146,480L220,396L210,282L320,258L378,162Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 /** Add (plus) — "create / add" beside a label and the quantity stepper's "+". */
 export function PlusIcon({ className }: IconProps) {
   return (

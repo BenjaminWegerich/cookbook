@@ -883,10 +883,11 @@
 }
 
 /* Ingredient tags ("NEU" / "REZEPT" / "REFERENZ"), one style for all: a small
-   all-caps marker directly after the ingredient name. "NEU" warns that the name
-   is not in the master data yet, "REZEPT" marks a sub-recipe use (tapping it
-   jumps to the ingredient recipe) and "REFERENZ" mirrors the star toggle: its
-   × clears the reference role, exactly like tapping the star again. */
+   all-caps marker directly after the ingredient name, always led by its symbol.
+   "NEU" (star badge) warns that the name is not in the master data yet, "REZEPT"
+   (chain link) marks a sub-recipe use (tapping it jumps to the ingredient
+   recipe) and "REFERENZ" (filled star) mirrors the star toggle: its × clears the
+   reference role, exactly like tapping the star again. */
 .ingredient-tag {
   display: inline-flex;
   align-items: center;

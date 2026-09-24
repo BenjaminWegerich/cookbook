@@ -90,6 +90,17 @@
   append a single muted, italic marker `(optional)` (class `optional-mark`) to their label.
   No asterisks, no `Pflichtfeld` wording — required is the implicit default, only the
   exception is named.
+- **Inline badges lead with a symbol:** every inline badge — the small marker that
+  sits directly after a value to label its state, i.e. the ingredient tags (`Neu`,
+  `Rezept`, `Referenz`) — carries a symbol in front of its text, so a badge is
+  readable at a glance and never plain coloured text. The symbol comes from the
+  shared icon set (`components/icons.tsx`) and follows the badge's meaning, not its
+  colour: `Neu` = "new releases" (the name is not in the master data yet), `Rezept`
+  = "link" (opens the ingredient's own recipe), `Referenz` = filled "star" (mirrors
+  the star toggle). A badge's own controls follow the same rule as any other icon
+  (an icon-only control like the reference tag's × never replaces the badge's
+  leading symbol). Badges keep one shared style and the text stays a short noun in
+  source case — the all caps are a CSS effect, as with `.field-label`.
 - **Field captions are all caps:** form labels above inputs/controls (`.field-label`) are
   displayed in all caps via `text-transform: uppercase` in the CSS. Keep the markup and
   stored strings in normal German case (`"Titel"`, not `"TITEL"`) — the caps are purely
