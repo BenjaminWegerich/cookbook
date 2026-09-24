@@ -55,7 +55,8 @@ The gateway is built and deployed (`apps/keep-gateway/`, Cloud Run, `europe-west
 boundary and the read path are done and verified against the live account, a log-based alert
 watches for a rejected credential, and a €1 budget guardrail caps the project's spend. It owns
 its copy of the spike's authentication and failure-diagnosis code, so the deployed image stays
-self-contained. What remains is the frontend and the three write actions.
+self-contained. The read-only frontend is built (tabs, recognition, session token). What
+remains is the meal-plan recipe overview and the three write actions.
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -83,16 +84,21 @@ frontend and the actual features.
    one JSON line per run. Anything other than `ok` means stop and fix the token path first.
    Verify with:
    `gcloud logging read 'resource.labels.job_name="keep-gate2-probe"' --limit 200 --format='value(textPayload)' --freshness=7d`
-2. **Frontend integration with graceful degradation** (N5): detect whether a gateway is
-   reachable; if not, hide the Keep actions and keep the app fully usable. The core must not
-   depend on Keep — this is a documented non-functional requirement, not a nicety. This one
-   starts with agreeing the UI with Ben (where the actions live, how the gateway token is
-   entered) rather than with code.
-3. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
+2. [x] **Frontend integration with graceful degradation** (N5): the app probes the gateway,
+   asks for the token automatically after the Google login (memory only, reopenable from the
+   „Essensplan“ tab) and keeps working unchanged when the gateway is missing or unreachable.
+   The meal-plan view is built and agreed with Ben: „Essensplan“ / „Sammlung“ tabs, recognition
+   of meal-plan entries (`packages/core/src/mealPlan.ts`) and the „Eingeplant“ /
+   „Kein Cookbook-Rezept“ badges. The gateway URL is the build variable
+   `VITE_KEEP_GATEWAY_URL` (repository variable for the Pages build).
+3. **Meal-plan recipe overview** (next step): a recognized plan card opens the overview with the
+   entry's planned size (servings/yield), so the dish can be viewed, edited and scaled from the
+   plan; an unrecognized entry gets a destination of its own there.
+4. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
    needs a category. Extend `docs/ingredients.csv` (and the Drive `zutaten.csv`) with it.
-4. **Implement the three Keep actions**: add a dish to the meal plan, add a recipe's scaled
+5. **Implement the three Keep actions**: add a dish to the meal plan, add a recipe's scaled
    ingredients to the shopping list (including linked Zutaten-Rezepte), and sort by category.
-5. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
+6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
    query may-be-in-stock), which builds on the same gateway.
 
 Two things to carry over rather than rediscover:

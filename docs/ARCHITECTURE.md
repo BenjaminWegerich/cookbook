@@ -9,8 +9,10 @@
 > the rows (the step text may contain display-only inline artifacts for scaled
 > quantities, see [storage_format.md](storage_format.md) §4/§5). AI-assisted create/edit,
 > Gemini and sharing integrations follow in the upcoming roadmap tasks. The Google Keep
-> integration has started: its gateway skeleton (`apps/keep-gateway/`) reads both Keep
-> lists over a thin HTTP boundary.
+> integration has started: its gateway (`apps/keep-gateway/`) reads both Keep lists over a
+> thin HTTP boundary, and the web app shows the meal plan as a second view of the recipe list
+> („Essensplan“ / „Sammlung“ tabs, entry recognition, „Eingeplant“ badge) behind a
+> session-only gateway token, degrading to "Keep off" when the gateway is unreachable.
 
 ## Components
 
@@ -125,6 +127,30 @@
   master token in the first place.
 - Sorting is applied server-side (`List.sort_items`) from the ingredient category master
   data, never in the client.
+
+#### Frontend integration (meal plan)
+
+Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
+
+- **Two tabs below the search bar.** „Essensplan“ lists the non-checked Keep entries in Keep's
+  order, „Sammlung“ every recipe of the collection; both render the same card grid, and the
+  search field refines whichever tab is active. The view opens on „Essensplan“ once Keep is
+  ready and on „Sammlung“ otherwise.
+- **Recognition.** An entry is a recipe when its text — without an optional ` (6 Portionen)`,
+  ` (500 g)` or ` (1,5 l)` suffix — is the exact, case-sensitive title of a recipe file, and a
+  present suffix fits the recipe: an integer ladder value 1–30 on a finished dish, a ladder
+  value in the recipe's own family unit on an ingredient recipe. The logic is framework-free
+  and unit-tested in `packages/core/src/mealPlan.ts`. Only suffixed entries need a recipe file
+  read, and the Drive content cache makes repeated entries free.
+- **Cards.** Recognized entries use the known card format; in „Sammlung“ a planned recipe
+  carries the inline „Eingeplant“ badge. Unrecognized entries render with the shared letter
+  avatar, the entry's complete text and a danger „Kein Cookbook-Rezept“ badge, and are not
+  tappable until the overview step gives them a destination. A badge is never a hitbox of its
+  own — the whole card is.
+- **Gateway token.** Asked for automatically after the Google login (once per session,
+  dismissible) and reopenable from the „Essensplan“ tab; held in memory only, like the AI API
+  key (N6). The gateway URL is the build-time variable `VITE_KEEP_GATEWAY_URL`; without it the
+  feature is off.
 
 #### Why the token must be minted in the cloud
 
