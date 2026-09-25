@@ -7,7 +7,9 @@ import {
   formatBQ,
   formatDecimal,
   roundToAQ,
+  resolveReorderPoint,
   selectAQ,
+  selectAQForEntry,
   renderAQS,
   masterIngredientNames,
 } from './additionalUnits.js';
@@ -45,6 +47,25 @@ describe('generated additional-unit master data', () => {
     expect(byName.get('Becher')).toBe(true);
     expect(byName.get('EL')).toBe(false);
     expect(byName.get('TL')).toBe(false);
+  });
+
+  it('marks Becher as a shopping unit and the spoons as recipe measures (Shopping Unit)', () => {
+    // Shopping Unit (docs/additional_quantity_specifications.md §3.1): true when
+    // ingredients are bought in this unit. A Becher names a purchase; a spoon is
+    // only a recipe measure.
+    const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.shoppingUnit]));
+    expect(byName.get('Becher')).toBe(true);
+    expect(byName.get('EL')).toBe(false);
+    expect(byName.get('TL')).toBe(false);
+  });
+
+  it('states the shopping-unit flag for every unit (the cell is mandatory)', () => {
+    // The generator rejects an empty Shopping Unit cell, so every compiled unit
+    // carries an explicit boolean — no unit silently defaults into or out of the
+    // shopping list.
+    for (const unit of ADDITIONAL_UNITS) {
+      expect(typeof unit.shoppingUnit).toBe('boolean');
+    }
   });
 
   it('defines the two schemes as documented', () => {
@@ -100,8 +121,21 @@ describe('generated additional-unit master data', () => {
   });
 
   it('includes a bare ingredient (Cashews) without additional units in the seed', () => {
-    expect(INGREDIENT_MAPPINGS.Cashews).toEqual({ bu: 'g', entries: [] });
+    expect(INGREDIENT_MAPPINGS.Cashews).toEqual({ bu: 'g', reorderPoint: 0, entries: [] });
     expect(masterIngredientNames()).toContain('Cashews');
+  });
+
+  it('carries the generated reorder point for every ingredient', () => {
+    // Spot-check the seed values from docs/ingredients.csv (0 = only bought for
+    // a recipe, a number = a base-unit quantity on stock after a shopping trip).
+    expect(INGREDIENT_MAPPINGS.Mehl?.reorderPoint).toBe(1000);
+    expect(INGREDIENT_MAPPINGS.Zucker?.reorderPoint).toBe(1000);
+    expect(INGREDIENT_MAPPINGS.Milch?.reorderPoint).toBe(0);
+    // Every seed ingredient must state a reorder point (the field is mandatory).
+    for (const entry of Object.values(INGREDIENT_MAPPINGS)) {
+      expect(typeof entry.reorderPoint).toBe('number');
+      expect(Number.isNaN(entry.reorderPoint)).toBe(false);
+    }
   });
 
   it('only references AQ ladder values in the schemes (no drift)', () => {
@@ -247,6 +281,77 @@ describe('renderAQS exact units (§6.3)', () => {
     expect(selected?.au.name).toBe('Becher');
     expect(selected?.au.exact).toBe(true);
     expect(selected?.factor).toBe(400);
+  });
+});
+
+describe('selectAQForEntry (draft mappings)', () => {
+  it('selects from an explicit entry instead of the registry', () => {
+    const entry = { bu: 'g', entries: [{ au: 'Becher', factor: 400, priority: 1 }] };
+    expect(selectAQForEntry(entry, 400, 'g')?.au.name).toBe('Becher');
+    expect(selectAQForEntry(entry, 400, 'ml')).toBeNull();
+    expect(selectAQForEntry(undefined, 400, 'g')).toBeNull();
+  });
+});
+
+describe('resolveReorderPoint (create form)', () => {
+  /** A draft entry as the create form builds it: valid rows, ascending priority. */
+  const draft = (
+    bu: string,
+    entries: ReadonlyArray<{ au: string; factor: number; priority: number }>,
+  ) => ({ bu, entries });
+
+  it("snaps to the exact unit's amount (the Creme-Fraiche example)", () => {
+    // Becher is exact (160 g per unit): 150 g ÷ 160 g = 0,9375 rounds to one
+    // Becher (a tie resolves toward the larger AQ), so the preview and the
+    // stored value are 160 g — a stock level is a whole number of packages.
+    const entry = draft('g', [{ au: 'Becher', factor: 160, priority: 1 }]);
+    const resolved = resolveReorderPoint('Creme Fraiche', entry, 150, 'g');
+    expect(resolved.preview).toBe(`1${NNBSP}Becher Creme Fraiche (160${NNBSP}g)`);
+    expect(resolved.storedValue).toBe(160);
+  });
+
+  it('applies the draft mappings even though the ingredient is not registered', () => {
+    // The create form saves the mappings together with the ingredient; the
+    // preview must already use them while they are still unsaved.
+    expect(masterIngredientNames()).not.toContain('Creme Fraiche');
+    const entry = draft('g', [{ au: 'Becher', factor: 160, priority: 1 }]);
+    expect(resolveReorderPoint('Creme Fraiche', entry, 150, 'g').preview).toContain('Becher');
+  });
+
+  it('keeps the entered value for an approximate unit', () => {
+    // EL is approximate (a heaped spoon), so the entered weight stays the
+    // authoritative reading; only the count is rounded.
+    const entry = draft('g', [{ au: 'EL', factor: 10, priority: 1 }]);
+    const resolved = resolveReorderPoint('Creme Fraiche', entry, 50, 'g');
+    expect(resolved.preview).toBe(`5${NNBSP}EL Creme Fraiche (50${NNBSP}g)`);
+    expect(resolved.storedValue).toBe(50);
+  });
+
+  it('renders 0 as the base form and stores 0', () => {
+    const entry = draft('g', [{ au: 'Becher', factor: 160, priority: 1 }]);
+    const resolved = resolveReorderPoint('Creme Fraiche', entry, 0, 'g');
+    expect(resolved.preview).toBe(`0${NNBSP}g Creme Fraiche`);
+    expect(resolved.storedValue).toBe(0);
+  });
+
+  it('renders Infinity as "unbegrenzt" and stores Infinity', () => {
+    const resolved = resolveReorderPoint('Wasser', undefined, Infinity, 'ml');
+    expect(resolved.preview).toBe('unbegrenzt Wasser');
+    expect(resolved.storedValue).toBe(Infinity);
+  });
+
+  it('falls back to the entered value without mappings', () => {
+    const resolved = resolveReorderPoint('Cashews', draft('g', []), 150, 'g');
+    expect(resolved.preview).toBe(`150${NNBSP}g Cashews`);
+    expect(resolved.storedValue).toBe(150);
+  });
+
+  it('omits the name while the create form has none yet', () => {
+    // A blank create flow previews the level before a name is typed; the
+    // arrangement must not leave a dangling double space.
+    const entry = draft('g', [{ au: 'Becher', factor: 160, priority: 1 }]);
+    expect(resolveReorderPoint('', entry, 150, 'g').preview).toBe(`1${NNBSP}Becher (160${NNBSP}g)`);
+    expect(resolveReorderPoint('', entry, 0, 'g').preview).toBe(`0${NNBSP}g`);
   });
 });
 

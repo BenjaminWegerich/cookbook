@@ -27,6 +27,7 @@ describe('ingredient registry', () => {
     setIngredientMappings({
       Käse: {
         bu: 'g',
+        reorderPoint: 0,
         entries: [
           { au: 'Becher', factor: 200, priority: 1 },
           { au: 'EL', factor: 12, priority: 2 },
@@ -41,7 +42,7 @@ describe('ingredient registry', () => {
 
   it('serves selectAQ/renderAQS for a registered ingredient', () => {
     setIngredientMappings({
-      Käse: { bu: 'g', entries: [{ au: 'Becher', factor: 200, priority: 1 }] },
+      Käse: { bu: 'g', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200, priority: 1 }] },
     });
     const selected = selectAQ('Käse', 400, 'g');
     expect(selected).not.toBeNull();
@@ -52,7 +53,7 @@ describe('ingredient registry', () => {
 
   it('registers a bare ingredient (no additional units) and renders its base form', () => {
     setIngredientMappings({
-      Cashews: { bu: 'g', entries: [] },
+      Cashews: { bu: 'g', reorderPoint: 0, entries: [] },
     });
     expect(masterIngredientNames()).toEqual(['Cashews']);
     expect(mappingsFor('Cashews')?.bu).toBe('g');
@@ -64,7 +65,7 @@ describe('ingredient registry', () => {
 
   it('renders the base form when no scheme passes for a registered ingredient', () => {
     setIngredientMappings({
-      Pfeffer: { bu: 'g', entries: [{ au: 'TL', factor: 3, priority: 1 }] },
+      Pfeffer: { bu: 'g', reorderPoint: 0, entries: [{ au: 'TL', factor: 3, priority: 1 }] },
     });
     // 500 g ÷ 3 g per TL ≈ 167 → rounds to a ladder value far above the
     // integers_up_to_10 scheme → no AQS passes, the base form is shown.
@@ -73,7 +74,7 @@ describe('ingredient registry', () => {
 
   it('resetIngredientMappings restores the seed', () => {
     setIngredientMappings({
-      Käse: { bu: 'g', entries: [{ au: 'Becher', factor: 200, priority: 1 }] },
+      Käse: { bu: 'g', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200, priority: 1 }] },
     });
     resetIngredientMappings();
     expect(allIngredientMappings()).toEqual(INGREDIENT_MAPPINGS);

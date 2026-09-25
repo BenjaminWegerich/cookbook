@@ -30,7 +30,12 @@
  */
 
 import { aqNotation, aqToNumber, roundToAQValue } from './aqLadder.js';
-import { ADDITIONAL_UNITS, NUMBER_SCHEMES, type AdditionalUnit } from './additionalUnitsData.js';
+import {
+  ADDITIONAL_UNITS,
+  NUMBER_SCHEMES,
+  type AdditionalUnit,
+  type IngredientEntry,
+} from './additionalUnitsData.js';
 import { pos } from './ladder.js';
 import { allIngredientMappings, mappingsFor } from './ingredientRegistry.js';
 
@@ -88,25 +93,40 @@ export interface AdditionalQuantity {
 }
 
 /**
- * Selects the additional quantity specification for an ingredient (§6).
+ * The parts of an ingredient entry that drive AU selection: its fixed base unit
+ * and its AU mappings. The reorder point takes no part in it, so a **draft**
+ * entry — the create form's not-yet-saved mapping rows — can be selected from
+ * directly (see selectAQForEntry and resolveReorderPoint).
+ */
+export type AuSelectableEntry = Pick<IngredientEntry, 'bu' | 'entries'>;
+
+/**
+ * Selects the additional quantity specification for an explicit entry (§6).
  *
- * Mappings are evaluated in ascending priority order (the generated data is
- * pre-sorted); the first mapping whose rounded AQ passes its number scheme
- * wins. An ingredient whose master-data base unit differs from `bu` has no
- * applicable AQS (§7) — the conversion factor is expressed in the
- * ingredient's fixed base unit.
+ * Mappings are evaluated in ascending priority order (the caller passes them
+ * pre-sorted); the first mapping whose rounded AQ passes its number scheme wins.
+ * An entry whose base unit differs from `bu` has no applicable AQS (§7) — the
+ * conversion factor is expressed in the ingredient's fixed base unit.
  *
- * @param ingredient ingredient name (key into INGREDIENT_MAPPINGS)
- * @param bq stored base quantity — must be a standard ladder value (§3, else throws)
- * @param bu stored base unit (g / kg / ml / l)
+ * This is the registry-independent core of selectAQ: the create form passes its
+ * unsaved draft mappings here so the preview already reflects them.
+ *
+ * @param entry the ingredient's base unit + AU mappings, or undefined when the
+ *   name is not registered
+ * @param bq stored/entered base quantity — must be a standard ladder value (§3,
+ *   else throws)
+ * @param bu base unit the quantity is expressed in (g / kg / ml / l)
  * @returns the selected AQ + AU, or null when no AQS applies (base form)
  */
-export function selectAQ(ingredient: string, bq: number, bu: string): AdditionalQuantity | null {
+export function selectAQForEntry(
+  entry: AuSelectableEntry | undefined,
+  bq: number,
+  bu: string,
+): AdditionalQuantity | null {
   // Rejects non-standard base quantities (§3): they do not exist in the app.
   pos(bq);
-  const entry = mappingsFor(ingredient);
-  // No master-data entry (unregistered name) or a mismatched base unit — and
-  // bare ingredients (empty entries) — have no AQS (§7): base form only.
+  // No entry (unregistered name) or a mismatched base unit — and bare
+  // ingredients (empty entries) — have no AQS (§7): base form only.
   if (entry === undefined || entry.bu !== bu) {
     return null;
   }
@@ -126,6 +146,19 @@ export function selectAQ(ingredient: string, bq: number, bu: string): Additional
     }
   }
   return null;
+}
+
+/**
+ * Selects the additional quantity specification for a registered ingredient
+ * (§6) — the registry-backed shorthand of selectAQForEntry.
+ *
+ * @param ingredient ingredient name (key into INGREDIENT_MAPPINGS)
+ * @param bq stored base quantity — must be a standard ladder value (§3, else throws)
+ * @param bu stored base unit (g / kg / ml / l)
+ * @returns the selected AQ + AU, or null when no AQS applies (base form)
+ */
+export function selectAQ(ingredient: string, bq: number, bu: string): AdditionalQuantity | null {
+  return selectAQForEntry(mappingsFor(ingredient), bq, bu);
 }
 
 /**
@@ -210,6 +243,32 @@ export function formatAQValue(value: number): string {
 }
 
 /**
+ * Renders the selected unit's arrangement with the placeholders substituted
+ * (§4). Shared by renderAQS (a registered ingredient) and resolveReorderPoint
+ * (the create form's draft entry). `ingredient` may be empty in the draft case,
+ * which drops the arrangement's space before the name.
+ */
+function renderSelectedAQ(
+  ingredient: string,
+  selected: AdditionalQuantity,
+  bu: string,
+  shownBq: number,
+): string {
+  // The arrangement binds <BQ> and <BU> together with a narrow no-break
+  // space; substitute that pair with the formatted base quantity first (the
+  // <NNBSP> placeholder is consumed here, before the general substitution).
+  const line = selected.au.arrangement
+    .replace('<BQ><NNBSP><BU>', formatBQ(shownBq, bu))
+    .replaceAll('<AQ>', formatAQ(selected.aq))
+    .replaceAll('<AU>', selected.au.name)
+    .replaceAll('<IN>', ingredient)
+    .replaceAll('<NNBSP>', NNBSP);
+  // The create form can preview an entry before a name is typed; the
+  // arrangement would then leave a dangling space ("1 Becher  (160 g)").
+  return ingredient === '' ? line.replaceAll('  ', ' ') : line;
+}
+
+/**
  * Renders the full display line for an ingredient (§4): the selected unit's
  * arrangement template with <AQ> <AU> <IN> <BQ> <BU> and <NNBSP> (U+202F)
  * substituted, or the base form "<BQ> <BU> <IN>" when no AQS applies. The AQ
@@ -232,13 +291,61 @@ export function renderAQS(ingredient: string, bq: number, bu: string): string {
   }
   // Exact unit (§6.3): the count is the source of truth for the shown amount.
   const shownBq = selected.au.exact ? aqToNumber(selected.aq) * selected.factor : bq;
-  // The arrangement binds <BQ> and <BU> together with a narrow no-break
-  // space; substitute that pair with the formatted base quantity first (the
-  // <NNBSP> placeholder is consumed here, before the general substitution).
-  return selected.au.arrangement
-    .replace('<BQ><NNBSP><BU>', formatBQ(shownBq, bu))
-    .replaceAll('<AQ>', formatAQ(selected.aq))
-    .replaceAll('<AU>', selected.au.name)
-    .replaceAll('<IN>', ingredient)
-    .replaceAll('<NNBSP>', NNBSP);
+  return renderSelectedAQ(ingredient, selected, bu, shownBq);
+}
+
+/** The resolved create-form reorder point: its preview line and the value to store. */
+export interface ReorderPointResolution {
+  /** The display line for the chosen stock level ("1 Becher Creme Fraiche (160 g)"). */
+  readonly preview: string;
+  /** The base quantity to store in the master data (0, a ladder value, or Infinity). */
+  readonly storedValue: number;
+}
+
+/**
+ * Resolves a reorder point against an ingredient's (possibly not-yet-saved) AU
+ * mappings — the create form's stock-level field.
+ *
+ * The reorder point is a base quantity, but it names a *stock state*: what is on
+ * the shelf after a shopping trip, not what a recipe calls for. That difference
+ * is why an **exact** unit does not merely change the preview here, as it does
+ * for a recipe row (§6.3): the **stored** value snaps to the exact amount,
+ * because stock comes in whole packages. 150 g entered for a 160 g Becher is
+ * previewed and stored as 160 g — there is no such thing as 150 g of a 160 g
+ * tub. Approximate units and the base form keep the entered value.
+ *
+ * The three stock levels of the master data (docs/storage_format.md §9):
+ * - `0` — only ever bought for a recipe; the base form is shown ("0 g …");
+ * - `Infinity` — infinite stock (water); the preview reads "unbegrenzt …";
+ * - a positive ladder value — the entered base quantity, snapped as described
+ *   above when an exact unit is selected.
+ *
+ * The mappings come from the caller rather than the registry so the create form
+ * can preview its unsaved rows.
+ *
+ * @param ingredient the ingredient name for the preview ("" = not yet named)
+ * @param entry the draft or registered entry (undefined = no mappings yet)
+ * @param bq the entered reorder point: 0, a ladder value, or Infinity
+ * @param bu the base unit family (g / ml)
+ */
+export function resolveReorderPoint(
+  ingredient: string,
+  entry: AuSelectableEntry | undefined,
+  bq: number,
+  bu: string,
+): ReorderPointResolution {
+  if (bq === Infinity) {
+    return {
+      preview: ingredient === '' ? 'unbegrenzt' : `unbegrenzt ${ingredient}`,
+      storedValue: Infinity,
+    };
+  }
+  // 0 is a valid reorder point but not a ladder value (§3): no AU applies.
+  const selected = bq === 0 ? null : selectAQForEntry(entry, bq, bu);
+  if (selected === null) {
+    const base = formatBQ(bq, bu);
+    return { preview: ingredient === '' ? base : `${base} ${ingredient}`, storedValue: bq };
+  }
+  const storedValue = selected.au.exact ? aqToNumber(selected.aq) * selected.factor : bq;
+  return { preview: renderSelectedAQ(ingredient, selected, bu, storedValue), storedValue };
 }

@@ -1116,12 +1116,13 @@ function RecipeEditor({
   const handleCreateIngredient = async (
     name: string,
     bu: string,
+    reorderPoint: number,
     entries: NewIngredientEntry[],
   ): Promise<void> => {
     setCreateSaving(true);
     setCreateError(null);
     try {
-      await appendIngredientMasterData(token, name, bu, entries);
+      await appendIngredientMasterData(token, name, bu, reorderPoint, entries);
       setCreateSheet(null);
       if (sheetContext !== null) {
         setSheet(sheetContext.sheet);
@@ -2068,7 +2069,9 @@ function RecipeEditor({
           initialName={createSheet.name}
           saving={createSaving}
           error={createError}
-          onSave={(name, bu, entries) => void handleCreateIngredient(name, bu, entries)}
+          onSave={(name, bu, reorderPoint, entries) =>
+            void handleCreateIngredient(name, bu, reorderPoint, entries)
+          }
           onEdited={() => setCreateError(null)}
           onClose={handleCreateClose}
         />

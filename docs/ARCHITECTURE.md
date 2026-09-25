@@ -66,13 +66,15 @@
 - Single source of truth, read by the web app, the HTML export, and (later) the backend
   module and the Gemini for Home preparation.
 - Ingredient master data lives in two CSV files in the same Drive folder — `zutaten.csv`
-  (ingredient list: name + base unit) and `zutaten-umrechnungen.csv` (AU mappings), in the
-  canonical formats of docs/ingredients.csv + docs/ingredient_unit_mappings.csv: the app
-  loads both into the core ingredient registry at startup, and they are authoritative once
-  they exist — the repo CSVs are the built-in seed used on first run. New ingredients are
-  created from the recipe editor („Neue Zutat anlegen“), which appends to both files and
-  re-registers them. The split keeps ingredient-level fields (name, base unit, later e.g.
-  category) in one row per ingredient, separate from the AU mappings.
+  (ingredient list: name + base unit + reorder point) and `zutaten-umrechnungen.csv`
+  (AU mappings), in the canonical formats of docs/ingredients.csv +
+  docs/ingredient_unit_mappings.csv: the app loads both into the core ingredient registry
+  at startup, and they are authoritative once they exist — the repo CSVs are the built-in
+  seed used on first run. New ingredients are created from the recipe editor („Neue Zutat
+  anlegen“), which collects name, base unit, reorder point and AU mappings, appends to both
+  files and re-registers them. The split keeps ingredient-level fields (name, base unit,
+  reorder point, later e.g. category) in one row per ingredient, separate from the AU
+  mappings.
 
 ### HTML share export
 

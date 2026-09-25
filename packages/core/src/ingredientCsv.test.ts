@@ -13,15 +13,19 @@ import {
 } from './ingredientCsv.js';
 
 /** The canonical ingredient list (docs format) as a fixture. */
-const LIST_TEXT = ['Ingredient;Base Unit', 'Joghurt;g', 'Zucker;g', 'Milch;ml', 'Cashews;g'].join(
-  '\n',
-);
+const LIST_TEXT = [
+  'Ingredient;Base Unit;Reorder Point',
+  'Joghurt;g;0',
+  'Zucker;g;1000',
+  'Milch;ml;0',
+  'Cashews;g;inf',
+].join('\n');
 
 const LIST: IngredientList = {
-  Joghurt: 'g',
-  Zucker: 'g',
-  Milch: 'ml',
-  Cashews: 'g',
+  Joghurt: { bu: 'g', reorderPoint: 0 },
+  Zucker: { bu: 'g', reorderPoint: 1000 },
+  Milch: { bu: 'ml', reorderPoint: 0 },
+  Cashews: { bu: 'g', reorderPoint: Infinity },
 };
 
 /** The canonical AU mappings (docs format, dot decimals) as a fixture. */
@@ -44,10 +48,11 @@ const MAPPINGS: IngredientMappingsByIngredient = {
   ],
 };
 
-/** The merged registry shape: base unit from the list, entries from the mappings. */
+/** The merged registry shape: base unit + reorder point from the list, entries from the mappings. */
 const MERGED: IngredientMappings = {
   Joghurt: {
     bu: 'g',
+    reorderPoint: 0,
     entries: [
       { au: 'Becher', factor: 400, priority: 1 },
       { au: 'EL', factor: 24, priority: 2 },
@@ -55,13 +60,14 @@ const MERGED: IngredientMappings = {
   },
   Zucker: {
     bu: 'g',
+    reorderPoint: 1000,
     entries: [
       { au: 'EL', factor: 12, priority: 1 },
       { au: 'TL', factor: 4, priority: 2 },
     ],
   },
-  Milch: { bu: 'ml', entries: [] },
-  Cashews: { bu: 'g', entries: [] },
+  Milch: { bu: 'ml', reorderPoint: 0, entries: [] },
+  Cashews: { bu: 'g', reorderPoint: Infinity, entries: [] },
 };
 
 describe('parseIngredientListCsv', () => {
@@ -74,8 +80,39 @@ describe('parseIngredientListCsv', () => {
     expect(parseIngredientListCsv(sloppy)).toEqual(LIST);
   });
 
+  it('parses the legacy two-column header with the neutral reorder point 0', () => {
+    // Files written before the reorder-point column existed keep loading; the
+    // next serialization upgrades them (see the round-trip test below).
+    const legacy = ['Ingredient;Base Unit', 'Joghurt;g', 'Zucker;g'].join('\n');
+    expect(parseIngredientListCsv(legacy)).toEqual({
+      Joghurt: { bu: 'g', reorderPoint: 0 },
+      Zucker: { bu: 'g', reorderPoint: 0 },
+    });
+  });
+
+  it('parses the infinity token case-insensitively', () => {
+    expect(
+      parseIngredientListCsv(`${LIST_TEXT.replace('Cashews;g;inf', 'Cashews;g;INF')}`),
+    ).toEqual(LIST);
+  });
+
+  it('rejects an empty reorder point (the field is mandatory)', () => {
+    expect(() => parseIngredientListCsv(LIST_TEXT.replace('Joghurt;g;0', 'Joghurt;g;'))).toThrow(
+      /leerer Meldebestand/,
+    );
+  });
+
+  it('rejects a negative or non-numeric reorder point', () => {
+    expect(() => parseIngredientListCsv(LIST_TEXT.replace('Joghurt;g;0', 'Joghurt;g;-5'))).toThrow(
+      /ungültiger Meldebestand/,
+    );
+    expect(() =>
+      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;g;0', 'Joghurt;g;viel')),
+    ).toThrow(/ungültiger Meldebestand/);
+  });
+
   it('throws on a row with too many columns', () => {
-    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nCashews;g;extra`)).toThrow(
+    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nCashews;g;0;extra`)).toThrow(
       /unerwartete Spaltenzahl/,
     );
   });
@@ -95,7 +132,7 @@ describe('parseIngredientListCsv', () => {
   });
 
   it('throws on a duplicate ingredient name', () => {
-    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nJoghurt;ml`)).toThrow(/doppelte Zutat/);
+    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nJoghurt;ml;0`)).toThrow(/doppelte Zutat/);
   });
 });
 
@@ -175,8 +212,8 @@ describe('mergeIngredientMasterData', () => {
 
   it('keeps ingredients from the list without mappings as bare entries', () => {
     const merged = mergeIngredientMasterData(LIST, MAPPINGS);
-    expect(merged.Milch).toEqual({ bu: 'ml', entries: [] });
-    expect(merged.Cashews).toEqual({ bu: 'g', entries: [] });
+    expect(merged.Milch).toEqual({ bu: 'ml', reorderPoint: 0, entries: [] });
+    expect(merged.Cashews).toEqual({ bu: 'g', reorderPoint: Infinity, entries: [] });
   });
 
   it('throws when a mapping references an ingredient that is not in the list', () => {
@@ -196,6 +233,21 @@ describe('serializeIngredientListCsv and serializeIngredientMappingsCsv', () => 
     expect(serializeIngredientListCsv(parseIngredientListCsv(LIST_TEXT))).toBe(`${LIST_TEXT}\n`);
     expect(serializeIngredientMappingsCsv(parseIngredientMappingsCsv(MAPPINGS_TEXT))).toBe(
       `${MAPPINGS_TEXT}\n`,
+    );
+  });
+
+  it('writes the canonical inf token for an infinite reorder point', () => {
+    expect(serializeIngredientListCsv(LIST)).toContain('Cashews;g;inf');
+    // A user typing the JavaScript spelling is not the canonical form.
+    expect(() =>
+      parseIngredientListCsv(LIST_TEXT.replace('Cashews;g;inf', 'Cashews;g;Infinity')),
+    ).toThrow(/ungültiger Meldebestand/);
+  });
+
+  it('upgrades a legacy two-column file to the three-column format', () => {
+    const legacy = 'Ingredient;Base Unit\nJoghurt;g\n';
+    expect(serializeIngredientListCsv(parseIngredientListCsv(legacy))).toBe(
+      'Ingredient;Base Unit;Reorder Point\nJoghurt;g;0\n',
     );
   });
 });

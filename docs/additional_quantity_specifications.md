@@ -41,7 +41,7 @@
 | Base unit (BU) | The unit of the BQS: g / kg / ml / l. | g |
 | Additional quantity specification (AQS) | The computed display form added to the BQS. | "1 Becher" |
 | Additional quantity (AQ) | The numeric value of the AQS; an AQ ladder value (fraction) after rounding. | 1+1/4 |
-| Additional unit (AU) | The unit the AQS is expressed in. Defines the display arrangement and the number scheme. | Becher |
+| Additional unit (AU) | The unit the AQS is expressed in. Defines the display arrangement, the number scheme, and whether it is a shopping unit. | Becher |
 
 The abbreviations (BQS, BQ, BU, AQS, AQ, AU) are conversational shorthand only;
 the full English terms above are the canonical names. Concrete identifiers for
@@ -52,8 +52,8 @@ they belong to the implementation phase.
 
 The logic is driven by three master-data entities. Their concrete storage design is decided:
 the master data lives in four CSV tables in the repository — `docs/number_schemes.csv` (scheme
-matrix), `docs/additional_units.csv` (units with arrangement, scheme and exactness),
-`docs/ingredients.csv` (ingredient list with base unit),
+matrix), `docs/additional_units.csv` (units with arrangement, scheme, exactness and the
+shopping-unit flag), `docs/ingredients.csv` (ingredient list with base unit),
 `docs/ingredient_unit_mappings.csv` (mappings with factor and priority) — and is compiled into a
 TypeScript module by `scripts/generate-additional-data.mjs`, which validates cross-references and
 guards the scheme matrix against drift from the ladder's AQ column (see
@@ -65,7 +65,10 @@ guards the scheme matrix against drift from the ladder's AQ column (see
    - a **number scheme** (see §5),
    - an **exactness flag** (`Unit Exact`, see §6.3): `yes` when the unit fixes
      the base amount by definition (a 400 g Becher, a 200 g Block), `no` when
-     the factor is only a measured average (a carrot of roughly 80 g).
+     the factor is only a measured average (a carrot of roughly 80 g),
+   - a **shopping-unit flag** (`Shopping Unit`, see §3.1): `yes` when ingredients
+     are bought in this unit (a Becher), `no` when the unit is only a recipe
+     measure (TL, EL).
 2. **Ingredient–additional-unit mappings** — for each ingredient and each AU
    mapped to it:
    - a **conversion factor**: the amount of base unit per one additional unit
@@ -75,6 +78,24 @@ guards the scheme matrix against drift from the ladder's AQ column (see
    units. An ingredient may have **no additional units** at all (e.g. Cashews)
    and then always renders in the base form (§4).
 3. **Number schemes** — named subsets of the AQ ladder values (see §5).
+
+### 3.1 Shopping Unit
+
+- The **shopping-unit flag** (`Shopping Unit` in `docs/additional_units.csv`) states whether
+  ingredients are bought in this unit: `yes` for a unit that names a purchase ("Becher",
+  "Packung"), `no` for a unit that is only a recipe measure ("TL", "EL"). The cell is mandatory
+  — a unit without the flag is a master-data error, so a new unit can never silently default
+  into or out of the shopping list (unlike `Unit Exact`, which defaults to `yes`).
+- The flag is a property of the **unit**, not of the ingredient or the mapping, and it drives
+  the shopping-list flow. It does **not** affect the display in any way: AQS selection (§6),
+  exactness (§6.3) and rendering (§4) ignore it, and a shopping unit is converted and displayed
+  like any other AU.
+- **One unit, one meaning — distinct names for variants.** A unit is identified by its **name**:
+  the mappings reference it by name and the runtime registry keys units by name, so two rows
+  sharing one name are ambiguous (and rejected by the generator). The rare unit that is a
+  shopping unit for some ingredients but not for others is therefore modelled as **two units
+  with distinct names**, one `yes` and one `no`. This mirrors the exact/approximate rule of §6.3:
+  the flag belongs to the unit, so two meanings need two units.
 
 ## 4. Display Arrangement
 
@@ -194,6 +215,12 @@ The last two rows show the approximate case of §6.3: the count is rounded ("1 E
   rewritten, so it stays a ladder value, scaling stays closed over the ladder
   (quantity_scaling.md §3), and the merge/summing rules are untouched. The exact
   derivation happens after selection and outside scaling.
+- **One exception: the ingredient master data's reorder point**
+  (storage_format.md §9). It names a stock state, not a recipe amount, and stock
+  comes in whole packages — so when an exact unit applies, the create form stores
+  the exact amount (a 160 g Becher turns a picked 150 g into a stored 160 g). The
+  reorder point is not part of a recipe, so scaling and the merge rules are
+  unaffected.
 - Reference table for an exact unit with factor 200 (1 Block = 200 g), showing
   the stored amount, the rounded count and the shown amount:
 
@@ -212,7 +239,8 @@ The last two rows show the approximate case of §6.3: the count is rounded ("1 E
 - If an ingredient's factor is only approximate, mark the unit `no` — or, when
   the same unit name would otherwise have to be both, define a **separate unit**
   for the exact case (e.g. "EL" vs. "EL gestrichen"): the flag is a property of
-  the unit, so two different meanings need two units.
+  the unit, so two different meanings need two units. The same reading applies to
+  the shopping-unit flag, and the variants there need distinct names too (§3.1).
 - The seed follows that reading: **Becher is exact**, **EL and TL are
   approximate** (a spoon is heaped or level depending on the ingredient). An
   empty `Unit Exact` cell means `yes`, so a newly added unit is exact unless the

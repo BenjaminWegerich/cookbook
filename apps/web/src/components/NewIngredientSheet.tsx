@@ -3,12 +3,21 @@
  *
  * Opened from the ingredient sheet ("Neue Zutat anlegen") when the typed name
  * is neither in the master data nor an ingredient recipe. It collects the
- * master-data fields (name, base unit g/ml, and an optional factor + priority
- * per known additional unit — Becher / EL / TL; all optional: an ingredient
- * without additional units is valid) and hands them to the parent, which
- * persists them to the Drive master data (ingredientMasterData.ts). After
- * saving, the ingredient sheet re-appears with the name now valid; the recipe
- * addition is confirmed there separately (decided with the user).
+ * master-data fields (name, base unit g/ml, the reorder point, and an optional
+ * factor + priority per known additional unit — Becher / EL / TL; the mappings
+ * are all optional: an ingredient without additional units is valid) and hands
+ * them to the parent, which persists them to the Drive master data
+ * (ingredientMasterData.ts). After saving, the ingredient sheet re-appears with
+ * the name now valid; the recipe addition is confirmed there separately
+ * (decided with the user).
+ *
+ * The reorder point is picked with the same QuantityPicker as a recipe quantity
+ * (suggested chips + stepper) and previewed as the ingredient line it will
+ * produce. The preview resolves against the *unsaved* mapping rows of this form,
+ * so adding a Becher mapping updates the line immediately; an exact unit snaps
+ * the stored value to its amount (core resolveReorderPoint,
+ * docs/storage_format.md §9). Its default is 0 ("only ever bought for a
+ * recipe"); "∞" selects infinite stock.
  *
  * Every mapping carries an explicit priority (1 = most preferred, unique per
  * ingredient, §7 of the AQS spec). As a convenience the mappings of an
@@ -25,11 +34,12 @@ import { useState } from 'react';
 
 import {
   ADDITIONAL_UNITS,
-  NNBSP,
-  formatDecimal,
   masterIngredientNames,
   mappingsFor,
+  resolveReorderPoint,
 } from '@cookbook/core';
+
+import QuantityPicker from './QuantityPicker';
 
 /** One filled mapping row handed to the parent for persistence. */
 export interface NewIngredientEntry {
@@ -46,8 +56,9 @@ interface NewIngredientSheetProps {
   saving: boolean;
   /** Drive error of the last save attempt (German, from the storage layer). */
   error: string | null;
-  /** Called with the master data to create. */
-  onSave: (name: string, bu: string, entries: NewIngredientEntry[]) => void;
+  /** Called with the master data to create; `reorderPoint` is the resolved
+   *  value (already snapped to an exact unit's amount). */
+  onSave: (name: string, bu: string, reorderPoint: number, entries: NewIngredientEntry[]) => void;
   /** Called when the user edits any form field — the parent forgets the
    *  stale Drive error of the last attempt (its cause may be gone now). */
   onEdited: () => void;
@@ -133,29 +144,6 @@ function currentSaveErrorMessage(name: string, rows: MappingRow[]): string | nul
 }
 
 /**
- * Builds the live summary line of what will be saved, e.g. "Basis: ml — EL (15 ml),
- * TL (5 ml)". Only fully valid rows are shown, so a half-typed row never renders
- * as "NaN"; save-time validation still reports the offending row. Number and
- * unit in the factors are joined with a narrow no-break space (NNBSP) like all
- * quantity displays (docs/CODING_CONVENTIONS.md).
- */
-function buildSummary(bu: string, entries: NewIngredientEntry[]): string | null {
-  const valid = entries.filter(
-    (entry) =>
-      Number.isFinite(entry.factor) &&
-      entry.factor > 0 &&
-      Number.isInteger(entry.priority) &&
-      entry.priority > 0,
-  );
-  if (valid.length === 0) {
-    return null;
-  }
-  return `Basis: ${bu} — ${valid
-    .map((entry) => `${entry.au} (${formatDecimal(entry.factor)}${NNBSP}${bu})`)
-    .join(', ')}`;
-}
-
-/**
  * The bottom sheet with the master-data form (see file header). Renders on
  * top of the ingredient sheet; the backdrop closes it (back to the sheet).
  */
@@ -169,6 +157,8 @@ function NewIngredientSheet({
 }: NewIngredientSheetProps) {
   const [name, setName] = useState(initialName);
   const [bu, setBu] = useState<'g' | 'ml'>('g');
+  /** The reorder point: a base-unit quantity, 0 (the default), or Infinity. */
+  const [reorderPoint, setReorderPoint] = useState(0);
   /** Factor inputs keyed by additional-unit name; empty string = row skipped. */
   const [factors, setFactors] = useState<Record<string, string>>({});
   /** Priority inputs keyed by additional-unit name; empty string = not set. */
@@ -223,7 +213,35 @@ function NewIngredientSheet({
     }))
     .sort((a, b) => a.priority - b.priority);
 
-  const summary = buildSummary(bu, entries);
+  /**
+   * The rows that would actually be saved (a finite positive factor and a
+   * positive-integer priority). The reorder-point preview resolves against
+   * exactly these, so a half-typed row neither shows up in the preview nor
+   * changes the stored value.
+   */
+  const validEntries = entries.filter(
+    (entry) =>
+      Number.isFinite(entry.factor) &&
+      entry.factor > 0 &&
+      Number.isInteger(entry.priority) &&
+      entry.priority > 0,
+  );
+
+  /**
+   * The draft master-data entry the preview resolves against: the base unit and
+   * the not-yet-saved mapping rows of this form (resolveReorderPoint reads the
+   * mappings from its argument, so the ingredient need not exist in the
+   * registry yet).
+   */
+  const draftEntry = { bu, entries: validEntries };
+
+  /**
+   * The reorder point as it will read and be stored. An exact unit snaps the
+   * stored value to its amount (a 160 g Becher turns a selected 150 g into
+   * 160 g); the preview uses the draft mappings, so an AU row added below
+   * updates the line immediately.
+   */
+  const reorder = resolveReorderPoint(trimmedName, draftEntry, reorderPoint, bu);
 
   /**
    * The message of the last failed save attempt, shown only while the current
@@ -287,7 +305,7 @@ function NewIngredientSheet({
       return;
     }
     setLocalError(null);
-    onSave(trimmedName, bu, entries);
+    onSave(trimmedName, bu, reorder.storedValue, entries);
   };
 
   return (
@@ -394,7 +412,29 @@ function NewIngredientSheet({
           ))}
         </div>
 
-        {summary !== null && <p className="aqs-preview">{summary}</p>}
+        {/* The reorder point: what is on the shelf after a shopping trip. Same
+            picker as a recipe quantity (chips + stepper), plus 0 and ∞; the
+            preview below resolves against the mapping rows above — unsaved. */}
+        <div className="field">
+          <span className="field-label">Vorrat</span>
+          <QuantityPicker
+            value={reorderPoint}
+            onChange={(next) => {
+              setReorderPoint(next);
+              markEdited();
+            }}
+            family={bu}
+            allowZero
+            allowInfinite
+          />
+        </div>
+
+        <div className="field">
+          <span className="field-label">Vorschau</span>
+          <p className="aqs-preview" aria-live="polite">
+            {reorder.preview}
+          </p>
+        </div>
 
         {(shownLocalError ?? error) !== null && (
           <p className="field-error" role="alert">

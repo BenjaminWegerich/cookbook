@@ -4,8 +4,8 @@
  * The user's authoritative ingredient master data lives in two CSV files
  * inside the Cookbook folder:
  * - `zutaten.csv` — the ingredient list: one row per ingredient
- *   (`Ingredient;Base Unit`); ingredient-level fields can be added as further
- *   columns later without touching the mapping file;
+ *   (`Ingredient;Base Unit;Reorder Point`); ingredient-level fields can be
+ *   added as further columns later without touching the mapping file;
  * - `zutaten-umrechnungen.csv` — the AU mappings: one row per
  *   ingredient–additional-unit mapping (`Ingredient;Additional Unit;
  *   Conversion Factor;Priority`); an ingredient without additional units
@@ -104,6 +104,10 @@ export async function loadIngredientMasterData(token: string): Promise<void> {
  *
  * @param name the new ingredient name
  * @param bu the base unit family ("g" or "ml")
+ * @param reorderPoint the base-unit quantity that is definitely on stock after
+ *   a shopping trip: 0 (only ever bought for a recipe), a positive value (an
+ *   exact unit's amount when one applies — the create sheet resolves it, see
+ *   core resolveReorderPoint), or Infinity (always in stock)
  * @param entries the additional units with their g/ml factors and unique
  *   positive-integer priorities (may be empty — an ingredient without
  *   additional units is valid master data); the entries are stored sorted by
@@ -113,6 +117,7 @@ export async function appendIngredientMasterData(
   token: string,
   name: string,
   bu: string,
+  reorderPoint: number,
   entries: ReadonlyArray<{ au: string; factor: number; priority: number }>,
 ): Promise<void> {
   const folderId = await ensureRecipeFolder(token);
@@ -143,6 +148,9 @@ export async function appendIngredientMasterData(
     ...current,
     [name]: {
       bu,
+      // Resolved by the create sheet: 0, a positive base quantity (snapped to
+      // an exact unit's amount when one applies), or Infinity.
+      reorderPoint,
       entries: sorted.map((entry) => ({
         au: entry.au,
         factor: entry.factor,

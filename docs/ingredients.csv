@@ -1,12 +1,12 @@
-Ingredient;Base Unit
-Joghurt;g
-Zucker;g
-Mehl;g
-Butter;g
-Milch;ml
-Sahne;ml
-Olivenöl;ml
-Zitronensaft;ml
-Honig;g
-Haferflocken;g
-Cashews;g
+Ingredient;Base Unit;Reorder Point
+Joghurt;g;0
+Zucker;g;1000
+Mehl;g;1000
+Butter;g;500
+Milch;ml;0
+Sahne;ml;0
+Olivenöl;ml;500
+Zitronensaft;ml;0
+Honig;g;500
+Haferflocken;g;500
+Cashews;g;0

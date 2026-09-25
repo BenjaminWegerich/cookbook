@@ -259,27 +259,46 @@ prep_time: 15 min
 
 ## 9. Ingredient Master Data Files
 
-The collection's ingredient master data (name → base unit → additional units with
-factors) lives in two CSV files inside the recipe folder, in the same canonical formats
-as the repo seeds (`docs/ingredients.csv` + `docs/ingredient_unit_mappings.csv`):
+The collection's ingredient master data (name → base unit → reorder point → additional
+units with factors) lives in two CSV files inside the recipe folder, in the same canonical
+formats as the repo seeds (`docs/ingredients.csv` + `docs/ingredient_unit_mappings.csv`):
 
     zutaten.csv                  (ingredient list)
-    Ingredient;Base Unit
-    Joghurt;g
-    Cashews;g
+    Ingredient;Base Unit;Reorder Point
+    Joghurt;g;0
+    Cashews;g;0
 
     zutaten-umrechnungen.csv     (AU mappings; an ingredient without additional
     Ingredient;Additional Unit;Conversion Factor;Priority   units has no rows here)
     Joghurt;Becher;400;1
 
-The ingredient list is the authoritative source of ingredient names and their fixed
-base unit — one row per ingredient, so ingredient-level fields (e.g. a category) can be
-added as further columns later. The mappings file is a pure overlay; an ingredient
-without additional units (e.g. Cashews) exists only in the list and always renders in
-the base form (see additional_quantity_specifications.md §4).
+The ingredient list is the authoritative source of ingredient names, their fixed base
+unit and their reorder point — one row per ingredient, so ingredient-level fields (e.g. a
+category) can be added as further columns later.
 
-The additional **units** themselves — display arrangement, number scheme, and the
-`Unit Exact` flag (see additional_quantity_specifications.md §6.3) — are not part of the
+The reorder point is the base-unit (g/ml) quantity that is definitely on stock directly
+after a shopping trip, independent of the meal plan. It is a mandatory cell and need not
+be a ladder value: `0` = the ingredient is only ever bought for a recipe; a positive
+number = that much is on stock even without a planned recipe (1000 g of flour means the
+shopping list is refilled once the last pack is opened, outside the app); `inf` = infinite
+stock (realistically only water). A file written before this column existed (header
+`Ingredient;Base Unit`) still loads: its ingredients get the neutral reorder point 0, and
+the next write adds the column.
+
+New ingredients are created in the web app („Neue Zutat anlegen“) with a stock picker
+(suggested chips, stepper, live preview). When an **exact** additional unit applies, the
+stored value snaps to that unit's base amount rather than the picked quantity: a 160 g
+Becher turns a picked 150 g into the stored 160 g, because stock comes in whole packages
+(the one place where an exact unit changes what is stored, not only the display — see
+additional_quantity_specifications.md §6.3). „∞“ in the picker stores `inf`.
+
+The mappings file is a pure overlay; an ingredient without additional units (e.g.
+Cashews) exists only in the list and always renders in the base form (see
+additional_quantity_specifications.md §4).
+
+The additional **units** themselves — display arrangement, number scheme, the
+`Unit Exact` flag (see additional_quantity_specifications.md §6.3) and the `Shopping Unit`
+flag (see additional_quantity_specifications.md §3.1) — are not part of the
 user's Drive files: they are built-in definitions compiled from `docs/additional_units.csv`
 into the core package. Only the ingredient list and the mappings are user data.
 
