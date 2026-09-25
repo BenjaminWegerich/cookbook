@@ -187,7 +187,7 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
 - **Cards.** Recognized entries use the known card format; in „Sammlung“ a planned recipe
   carries the inline „Eingeplant“ badge. Unrecognized entries render with the shared letter
   avatar, the entry's text without the export link (title and stated size) and a danger
-  „Kein Cookbook-Rezept“ badge, and are tappable: the recipe overview is their destination,
+  „Unbekannt“ badge, and are tappable: the recipe overview is their destination,
   where the entry can be replaced by an existing recipe or by a new one (manual or AI) or
   dropped from the plan with „Vom Plan entfernen“. A badge is never a hitbox of its own — the
   whole card is.

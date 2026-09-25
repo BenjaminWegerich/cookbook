@@ -346,7 +346,7 @@ export function SearchIcon({ className }: IconProps) {
 
 /**
  * Circle with an exclamation mark — a problem the user should notice, used by
- * the "Kein Cookbook-Rezept" badge: the meal-plan entry does not name a recipe
+ * the "Unbekannt" badge: the meal-plan entry does not name a recipe
  * of the collection (or its stated size does not fit).
  */
 export function ErrorIcon({ className }: IconProps) {

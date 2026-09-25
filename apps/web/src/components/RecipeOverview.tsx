@@ -21,14 +21,12 @@
  *    rather than deleting it. The "Eingeplant" badge appears only when
  *    the card was opened from the "Sammlung" tab (target `source`
  *    `collection`): in "Essensplan" the tab itself already states that the dish
- *    is planned. The badge sits on its own line under the title, not inline
- *    with it: in the cards an inline badge works because the title is clamped
- *    to two lines, while the overview's heading is the full, freely wrapping
- *    name, where an inline badge would land mid-wrap and read as part of the
- *    name (decided with the user).
+ *    is planned. The badge sits in the bottom-left corner *inside* the hero
+ *    image, ringed in white so it stays readable on any photo (the same
+ *    placement the recipe cards use).
  * 3. **Unrecognized meal-plan entry** — no recipe behind it: the entry's
  *    complete text is the title, the shared letter avatar is the hero, and the
- *    danger "Kein Cookbook-Rezept" badge marks it. It carries exactly one
+ *    danger "Unbekannt" badge marks it. It carries exactly one
  *    constructive action, "Eintrag ersetzen" (accent fill, growing), which
  *    opens a menu with "Bestehendes Rezept auswählen", "Rezept manuell
  *    anlegen" and "Rezept mit KI anlegen"; next to it "Vom Plan entfernen"
@@ -426,12 +424,29 @@ function RecipeOverview({
         {/* List entry data: renders before the file read finishes. The wrapper
             carries the hero size; the square thumb fills it (see the row-sizing
             note in recipe-overview.css). An unrecognized entry has no photo, so
-            it gets the same letter avatar the list card shows. */}
+            it gets the same letter avatar the list card shows. The plan status
+            badge sits in the bottom-left corner *inside* the image, ringed in
+            white so it stays readable on any photo: the positive "Eingeplant"
+            badge for a planned collection recipe, the danger "Unbekannt" badge
+            for an unrecognized entry. */}
         <div className="overview-hero">
           {target.kind === 'unknown' ? (
             <TitleThumb title={target.displayText} />
           ) : (
             <RecipeThumb recipe={target.recipe} token={token} />
+          )}
+          {target.kind === 'unknown' ? (
+            <span className="recipe-badge recipe-badge-unknown recipe-badge-on-media">
+              <ErrorIcon className="recipe-badge-icon" />
+              <span>Unbekannt</span>
+            </span>
+          ) : (
+            showPlannedBadge && (
+              <span className="recipe-badge recipe-badge-planned recipe-badge-on-media">
+                <EventAvailableIcon className="recipe-badge-icon" />
+                <span>Eingeplant</span>
+              </span>
+            )
           )}
         </div>
 
@@ -439,27 +454,6 @@ function RecipeOverview({
           <h2 className="overview-title" id="overview-title">
             {title}
           </h2>
-
-          {/* Plan status on its own line under the title (see the file header):
-              the positive "Eingeplant" badge for a planned collection recipe, the
-              danger "Kein Cookbook-Rezept" badge for an unrecognized entry. */}
-          {target.kind === 'unknown' ? (
-            <div className="overview-badges">
-              <span className="recipe-badge recipe-badge-unknown">
-                <ErrorIcon className="recipe-badge-icon" />
-                <span>Kein Cookbook-Rezept</span>
-              </span>
-            </div>
-          ) : (
-            showPlannedBadge && (
-              <div className="overview-badges">
-                <span className="recipe-badge recipe-badge-planned">
-                  <EventAvailableIcon className="recipe-badge-icon" />
-                  <span>Eingeplant</span>
-                </span>
-              </div>
-            )
-          )}
 
           {target.kind === 'recipe' && description !== undefined && description !== '' && (
             <p className="overview-description">{description}</p>

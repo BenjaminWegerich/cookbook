@@ -322,26 +322,19 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* The card's title area below the media area: the title text only, since the
+   badge now lies on the media above. Plain block layout is enough — the clamped
+   text below is its own block child. */
 .recipe-card-title {
-  /* A wrapping flex row: the title text and the badge share a line while the
-     title's full text fits next to the badge, and the badge moves to its own
-     line otherwise. Flex also centers the badge on the title's line — as an
-     inline element next to a clamped box (`overflow: hidden`) it would align to
-     that box's bottom edge (CSS uses the bottom margin edge as the baseline of
-     an overflow-hidden inline box) and sit visibly too low. */
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: var(--space-2);
+  display: block;
   padding: var(--space-3) var(--space-4) var(--space-4);
   font-size: var(--text-md);
   font-weight: 600;
   line-height: 1.3;
 }
 
-/* The title text: at most two lines, then an ellipsis. The badge is a sibling
-   flex item, so it is never part of the clamp. `min-width: 0` lets the text
-   shrink below its longest word and `overflow-wrap: anywhere` breaks a long
+/* The title text: at most two lines, then an ellipsis. `min-width: 0` lets the
+   text shrink below its longest word and `overflow-wrap: anywhere` breaks a long
    unbreakable word (a URL in a title, in practice) instead of widening the
    card. */
 .recipe-card-title-text {
@@ -353,10 +346,13 @@
   overflow-wrap: anywhere;
 }
 
-/* Card badges: small all-caps markers directly after the card title, one look
-   for both (the editor's ingredient tags use the same recipe). A badge is plain
-   content inside the card and never a hitbox of its own — the whole card is the
-   single tap target. The gap to the title comes from the row's `column-gap`. */
+/* Card badges: small all-caps state markers, one look for every instance (the
+   editor's ingredient tags use the same recipe). A badge is plain content
+   inside its card or row and never a hitbox of its own — the whole card is the
+   single tap target. On the cards and in the overview the badge lies on the
+   media area (bottom-left, `.recipe-badge-on-media` below); in the
+   shopping-list selection it stays inline after the entry's text
+   (styles/shopping-list-select.css). */
 .recipe-badge {
   display: inline-flex;
   align-items: center;
@@ -388,10 +384,30 @@
   background: var(--color-olive);
 }
 
-/* "Kein Cookbook-Rezept" (Essensplan tab): the entry does not name a recipe of
+/* "Unbekannt" (Essensplan tab): the entry does not name a recipe of
    the collection, so nothing here can be scaled or cooked from. */
 .recipe-badge-unknown {
   background: var(--color-danger);
+}
+
+/* A badge that lies *on* the media area (card photo / letter avatar, overview
+   hero): pinned to the bottom-left corner of the image at one ladder step from
+   its edges. The white ring around the fill (the paper surface colour) keeps
+   the badge readable on any photo; the shopping-list selection deliberately
+   does not use this class — there the badge stays after the entry's text. */
+.recipe-badge-on-media {
+  position: absolute;
+  inset-block-end: var(--space-3);
+  inset-inline-start: var(--space-3);
+  border: 2px solid var(--color-surface);
+}
+
+/* Wrapper that puts a card's media area and its overlaid badge into one
+   positioning context. Plain block, so the square thumb keeps filling the card
+   width exactly as it did as a direct child. */
+.recipe-media {
+  position: relative;
+  display: block;
 }
 
 /* Square media area of a recipe card — the photo cropped to a square, or the

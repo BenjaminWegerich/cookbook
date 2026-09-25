@@ -66,7 +66,7 @@ interface RecipeListProps {
  *   text is a recipe title, plus an optional fitting size suffix) renders in
  *   the known card format; every other entry renders as a card with a
  *   placeholder image derived from its text, its complete text as the title and
- *   a danger-colored "Kein Cookbook-Rezept" badge. Tapping either card opens
+ *   a danger-colored "Unbekannt" badge. Tapping either card opens
  *   the overview: the recognized one with its stated size and "Umplanen", the
  *   unrecognized one as the destination for replacing or dropping the entry.
  * - **Sammlung** shows every recipe of the collection, whether it is on the
@@ -226,7 +226,9 @@ function RecipeList({
             return (
               <li key={card.key}>
                 <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
-                  <RecipeThumb recipe={recipe} token={token} />
+                  <span className="recipe-media">
+                    <RecipeThumb recipe={recipe} token={token} />
+                  </span>
                   <span className="recipe-card-title">
                     <span className="recipe-card-title-text">{recipe.title}</span>
                   </span>
@@ -241,13 +243,15 @@ function RecipeList({
           return (
             <li key={card.key}>
               <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
-                <TitleThumb title={card.displayText} />
+                <span className="recipe-media">
+                  <TitleThumb title={card.displayText} />
+                  <span className="recipe-badge recipe-badge-unknown recipe-badge-on-media">
+                    <ErrorIcon className="recipe-badge-icon" />
+                    <span>Unbekannt</span>
+                  </span>
+                </span>
                 <span className="recipe-card-title">
                   <span className="recipe-card-title-text">{card.displayText}</span>
-                  <span className="recipe-badge recipe-badge-unknown">
-                    <ErrorIcon className="recipe-badge-icon" />
-                    <span>Kein Cookbook-Rezept</span>
-                  </span>
                 </span>
               </button>
             </li>
@@ -273,15 +277,17 @@ function RecipeList({
         {visibleRecipes.map((recipe) => (
           <li key={recipe.fileId}>
             <button type="button" className="recipe-card" onClick={() => onOpenRecipe(recipe)}>
-              <RecipeThumb recipe={recipe} token={token} />
-              <span className="recipe-card-title">
-                <span className="recipe-card-title-text">{recipe.title}</span>
+              <span className="recipe-media">
+                <RecipeThumb recipe={recipe} token={token} />
                 {plannedRecipeTitles.has(recipe.title) && (
-                  <span className="recipe-badge recipe-badge-planned">
+                  <span className="recipe-badge recipe-badge-planned recipe-badge-on-media">
                     <EventAvailableIcon className="recipe-badge-icon" />
                     <span>Eingeplant</span>
                   </span>
                 )}
+              </span>
+              <span className="recipe-card-title">
+                <span className="recipe-card-title-text">{recipe.title}</span>
               </span>
             </button>
           </li>

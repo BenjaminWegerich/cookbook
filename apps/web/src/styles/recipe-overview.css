@@ -56,8 +56,10 @@
    a percentage width does not reserve its row height, so the image overflowed
    its row and painted over the details. Here the wrapper is an ordinary block
    item whose height is set by its in-flow child (the square thumb), which sizes
-   the row reliably. */
+   the row reliably. It is also the positioning context of the plan status badge
+   that lies on the image (`.recipe-badge-on-media`, see recipe-list.css). */
 .overview-hero {
+  position: relative;
   width: 56%;
   margin-inline: auto;
 }
@@ -87,19 +89,6 @@
      the sheet. The title is not clamped here: the overview is the readable
      detail view, so it shows the full name. */
   overflow-wrap: anywhere;
-}
-
-/* The plan status row: the "Eingeplant" or "Kein Cookbook-Rezept" badge on its
-   own line under the title. In the cards the badge sits inline because the title
-   text is clamped to two lines; the overview's heading is the full, freely
-   wrapping name, where an inline badge would land mid-wrap and read as part of
-   the name (decided with the user). The row reuses the card badge recipe
-   (.recipe-badge in recipe-list.css) unchanged — same symbol, same colour. */
-.overview-badges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 /* Arbeitszeit / Gesamtzeit / Geplant as one compact caption/value row. */

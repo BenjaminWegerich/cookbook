@@ -104,7 +104,7 @@ frontend and the actual features.
    „Essensplan“ tab) and keeps working unchanged when the gateway is missing or unreachable.
    The meal-plan view is built and agreed with Ben: „Essensplan“ / „Sammlung“ tabs, recognition
    of meal-plan entries (`packages/core/src/mealPlan.ts`) and the „Eingeplant“ /
-   „Kein Cookbook-Rezept“ badges. The gateway URL is the build variable
+   „Unbekannt“ badges. The gateway URL is the build variable
    `VITE_KEEP_GATEWAY_URL` (repository variable for the Pages build).
 3. [x] **Meal-plan recipe overview**: a recognized plan card opens the overview with the
    entry's planned size (servings/yield) shown first in its caption/value row, so the dish
