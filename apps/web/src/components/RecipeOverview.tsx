@@ -64,9 +64,10 @@
  * - one action row: "Jetzt kochen" (skillet) is the primary action, growing to
  *   fill the row so it is as wide as possible, next to "Einplanen"/"Umplanen"
  *   (calendar with plus / with pencil) and the "Mehr" button (vertical three
- *   dots), which stay only as wide as their labels need. "Jetzt kochen" is a
- *   placeholder for now: it reports that the feature is not built yet instead of
- *   silently doing nothing. The unrecognized entry's three "Eintrag ersetzen"
+ *   dots), which stay only as wide as their labels need. "Jetzt kochen" opens
+ *   the recipe's HTML export in a new tab — at the plan's size when the dish is
+ *   planned at one, otherwise at the export's own default (the written size);
+ *   see `startCooking`. The unrecognized entry's three "Eintrag ersetzen"
  *   entries are built (replace overlay, prefilled editor, prefilled AI create).
  * - a recognized recipe's plan state is rendered from the *live* plan App
  *   derives (`livePlan`), not only from the snapshot the target was opened with.
@@ -102,12 +103,13 @@ import type { Ref } from 'react';
 import {
   displayTimeText,
   formatPlannedAmount,
+  withPlanSize,
   writtenPlannedAmount,
   type PlannedAmount,
   type Recipe,
 } from '@cookbook/core';
 
-import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
+import { readRecipe, recipeExportUrl, type StoredRecipe } from '../drive/recipeStorage';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import {
   CalendarAddIcon,
@@ -410,9 +412,42 @@ function RecipeOverview({
     };
   }, [openMenu]);
 
-  /** Reports a not-yet-built action instead of letting the tap do nothing. */
-  const notBuiltYet = (label: string): void => {
-    setNotice(`„${label}“ folgt in einer späteren Version.`);
+  /**
+   * "Jetzt kochen": opens the recipe's pre-computed HTML export — its cooking
+   * view — in a new tab. The size rides in the URL exactly like it does on a
+   * meal-plan link (core's `withPlanSize`): a dish that is on the plan opens at
+   * the size the entry states, so the cooking view is the amount that was
+   * planned — the same amount the sheet's "Geplant" value names. A dish that is
+   * *not* on the plan, and a planned entry that states no size at all, opens the
+   * export's own default: the size the recipe is written in. Nothing has to be
+   * read for that, because the export falls back to its written view when the
+   * URL carries no size — which is why this action works before the details
+   * load.
+   *
+   * A new tab (decided with the user), not the current one: the Drive access
+   * token is memory-only, so navigating this tab away would demand a fresh
+   * Google sign-in on return. A recipe whose HTML export is missing (a failed
+   * export write) has no cooking view to open, so the tap reports that instead
+   * of opening a dead link — it stays enabled and explains itself, because the
+   * missing file is not visible next to the button (docs/CODING_CONVENTIONS.md,
+   * unavailable buttons).
+   */
+  const startCooking = (): void => {
+    if (recipe === null) return;
+    if (recipe.exportFileId === undefined) {
+      setNotice(
+        'Für dieses Rezept gibt es noch keine Kochansicht. Speichere es erneut, um sie zu erzeugen.',
+      );
+      return;
+    }
+    // The plan's promised size, when the entry states one; otherwise the
+    // export's own default (the written size), which is also exactly what a
+    // size-less plan entry means — so no size parameter is added then.
+    const url =
+      onMealPlan && planned !== null
+        ? withPlanSize(recipeExportUrl(recipe.exportFileId), planned)
+        : recipeExportUrl(recipe.exportFileId);
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   /**
@@ -657,11 +692,7 @@ function RecipeOverview({
             </>
           ) : (
             <>
-              <button
-                type="button"
-                className="overview-action is-primary"
-                onClick={() => notBuiltYet('Jetzt kochen')}
-              >
+              <button type="button" className="overview-action is-primary" onClick={startCooking}>
                 <SkilletIcon />
                 <span>Jetzt kochen</span>
               </button>

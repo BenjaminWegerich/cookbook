@@ -203,8 +203,11 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   list: a planned recipe's „Vom Plan entfernen“ (in its „Mehr“ menu) and an unrecognized
   entry's own „Vom Plan entfernen“ button both check the entry off. The sheet renders the
   *live* plan App derives from the current resolution, so its „Geplant“ value, its „Eingeplant“
-  badge and its travel action follow the plan while it is open. „Jetzt kochen“ is still a
-  placeholder. An unrecognized entry's „Eintrag ersetzen“ menu is built in all three entries:
+  badge and its travel action follow the plan while it is open. „Jetzt kochen“ opens the
+  recipe's HTML export in a new tab, at the size the plan states when the dish is planned and
+  otherwise at the recipe's written default size; a missing export file is reported instead of
+  opening a dead link. An unrecognized entry's „Eintrag ersetzen“ menu is built in all three
+  entries:
   „Bestehendes Rezept auswählen“ opens a second overlay of the sheet, which searches the
   collection, takes the size in the familiar control and overwrites the one unrecognized entry
   with the chosen recipe in the known format (a 1:1 replacement, undone by the notice's

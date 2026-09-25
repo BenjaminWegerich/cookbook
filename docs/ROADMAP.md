@@ -59,12 +59,13 @@ self-contained. The read-only frontend, the meal-plan recipe overview and the me
 are built (tabs, recognition, the Google sign-in, the overview's three card forms,
 „Zum Essensplan hinzufügen“, which links the entry at the recipe's cooking view through the
 deployed export host, „Umplanen“ with its size change, and „Vom Plan entfernen“, which ticks
-the entry off and can be undone). „Jetzt kochen“ is still a placeholder; the „Eintrag
-ersetzen“ menu is built (an unrecognized entry can be replaced by an existing recipe 1:1 with
-an undo notice, or turned into a new recipe through the prefilled editor or AI screen, which
-return to the entry's overview). The shopping flow is built as well („Einkaufsliste schreiben“
-selects the planned dishes, the pantry sheet „Vorräte auswählen“ sets each stock, and the
-difference goes to „Einkaufsliste“). What remains is the aisle sort and expanding linked
+the entry off and can be undone). „Jetzt kochen“ opens the recipe's HTML export in a new tab,
+at the size the plan states when the dish is planned — otherwise at the recipe's written default
+size; the „Eintrag ersetzen“ menu is built (an unrecognized entry can be replaced by an existing
+recipe 1:1 with an undo notice, or turned into a new recipe through the prefilled editor or AI
+screen, which return to the entry's overview). The shopping flow is built as well („Einkaufsliste
+schreiben“ selects the planned dishes, the pantry sheet „Vorräte auswählen“ sets each stock, and
+the difference goes to „Einkaufsliste“). What remains is the aisle sort and expanding linked
 Zutaten-Rezepte in the shopping list.
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
@@ -122,7 +123,9 @@ frontend and the actual features.
    can be viewed, edited and scaled from the plan; an unrecognized entry gets a destination
    of its own there („Eintrag ersetzen“ / „Vom Plan entfernen“). „Einplanen“ performs the
    write, „Umplanen“ changes the size and „Vom Plan entfernen“ ticks the entry off (step 5);
-   „Jetzt kochen“ is still a placeholder; the „Eintrag ersetzen“ menu is built:
+   „Jetzt kochen“ opens the recipe's HTML export in a new tab, at the size the plan states when
+   the dish is planned and otherwise at the recipe's written default size; the „Eintrag
+   ersetzen“ menu is built:
    `ReplaceRecipeSheet` replaces the entry 1:1 with a chosen recipe and size (undo notice), and
    the two create entries open the editor or the AI screen prefilled with the entry's complete
    text and return to the entry's overview.
