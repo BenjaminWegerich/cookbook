@@ -20,9 +20,13 @@
  * (Google access tokens live about an hour) is the ordinary reason — and only if that also
  * fails does the status fall back to `needs-signin`.
  *
- * The hook deliberately does not depend on the Drive session: Keep and Google Drive are
- * separate credentials on separate scopes. App decides *when* to offer the connection, not
- * this module.
+ * The hook deliberately does not depend on the Drive *credential*: Keep and Google Drive are
+ * separate credentials on separate scopes. App decides *when* to offer the connection, not this
+ * module — and that "when" now matters, because Google's popup window serves only **one
+ * gesture-less sign-in per page load**: measured on a cold start, the first silent flow returned
+ * its token and the second one was closed with `popup_closed`, whichever credential went second.
+ * The app therefore spends that one silent flow on Drive (it gates the whole app) and tells this
+ * hook when the Drive login is done, via `UseKeepOptions.enabled`.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -167,7 +171,18 @@ function isRefusedSignIn(error: unknown): boolean {
   return error instanceof KeepClientError && error.code === 'unauthorized';
 }
 
-export function useKeep(): UseKeepResult {
+/** What App tells the hook about the app's own login (see the file header). */
+export interface UseKeepOptions {
+  /**
+   * True once the Drive login is done — a token exists, so Drive's own sign-in is no longer
+   * using the page's one gesture-less OAuth popup (see the file header). While it is false the
+   * hook probes the gateway but does not ask Google for an identity token: that request would
+   * be the second silent flow of the page load and Google would close it again.
+   */
+  enabled: boolean;
+}
+
+export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
   const [status, setStatus] = useState<KeepStatus>(() => (isKeepConfigured() ? 'checking' : 'off'));
   const [state, setState] = useState<KeepState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -192,6 +207,16 @@ export function useKeep(): UseKeepResult {
         setState(null);
         setStatus('unreachable');
         setError('Das Keep-Gateway ist nicht erreichbar.');
+        return;
+      }
+      if (!enabled) {
+        // The Drive login has not happened yet, so Drive's silent sign-in owns the page's one
+        // gesture-less popup (see the file header). Report the ordinary first-run state without
+        // spending a second flow on a request Google would close again; the effect re-runs with
+        // `enabled` true as soon as the Drive token exists.
+        setState(null);
+        setStatus('needs-signin');
+        setError(null);
         return;
       }
       try {
@@ -223,7 +248,7 @@ export function useKeep(): UseKeepResult {
     return () => {
       cancelled = true;
     };
-  }, [attempt]);
+  }, [attempt, enabled]);
 
   const connect = useCallback(async (): Promise<void> => {
     setStatus('loading');

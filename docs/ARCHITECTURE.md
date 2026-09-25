@@ -259,11 +259,24 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   „Essensplan“ tab; the token is held in memory only, like the AI API key (N6), and nothing has
   to be looked up by hand any more. An expired token is renewed silently; only when Google
   needs a gesture does the tab offer „Keep verbinden“. The gateway URL is the build-time
-  variable `VITE_KEEP_GATEWAY_URL`; without it the feature is off. Two constraints on that
-  silent start, both observed on 2026-09-24: it needs exactly **one** Google account signed into
-  the browser (with several, Google answers no silent request at all, so every reload costs one
-  tap per credential — signing out of the extra accounts brings the silent start back), and
-  development builds report a declined silent request to the browser console
+  variable `VITE_KEEP_GATEWAY_URL`; without it the feature is off. The app asks Google for
+  **two** credentials (the Drive token and this identity token) through the same GIS token
+  flow, and that flow has exactly **one** popup window per page. Measured on 2026-09-25: a
+  second sign-in started in the same tick as the first one's token was closed again with
+  `popup_closed` — on either credential, whichever went second. That was the reported „the popup
+  opens and closes instantly, then I have to tap ‚Mit Google verbinden‘“ — the Drive sign-in,
+  which gates the whole app, was the one losing. The app therefore serialises its flows and
+  keeps a minimum distance between them (`POPUP_FLOW_SPACING_MS` in
+  `apps/web/src/auth/googleAuth.ts`), and it spends the page's first silent flow on Drive: the
+  Keep hook receives the Drive login state (`UseKeepOptions.enabled`) and only then asks for its
+  identity token. A silent attempt is never started while the tab is in the background — a
+  hidden tab that pops a window up only shows an unexplained flash. What remains inherent:
+  `prompt: 'none'` suppresses Google's screens, not GIS's popup window, so a successful silent
+  sign-in still shows a brief flash. Two further facts for the runbook: the silent start needs
+  exactly **one** Google account signed into the browser (with several, Google answers no silent
+  request at all, so every reload costs one tap per credential — signing out of the extra
+  accounts brings the silent start back), observed 2026-09-24; and development builds report a
+  declined silent request to the browser console
   (`[cookbook] silent Google sign-in for … failed: …`), which is the fastest way to tell a
   browser restriction from a missing grant.
 

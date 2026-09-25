@@ -326,14 +326,13 @@ function App() {
    * Keep connection state — the optional add-on (N5). The app stays fully
    * usable while it is off, unreachable or unauthenticated; the two list tabs
    * simply show their connection state instead of meal-plan cards.
+   *
+   * `enabled` is the Drive login: the page load has exactly one gesture-less
+   * OAuth popup to spend, and it goes to Drive, which gates the whole app (see
+   * the header of useKeep.ts). Only once that login is done may the hook ask
+   * Google for its own identity token.
    */
-  const keep = useKeep();
-  /**
-   * `keep.retry` is referentially stable, but the hook's result object is not
-   * (it is rebuilt each render). Naming the function here lets the automatic
-   * connect effect below depend on it alone instead of on the whole object.
-   */
-  const retryKeep = keep.retry;
+  const keep = useKeep({ enabled: token !== null });
   /**
    * The app's transient notices (docs/ui_patterns.md). They live at the root so
    * every screen can report a finished action the same way; the timer, the queue
@@ -934,42 +933,12 @@ function App() {
       : null;
 
   /**
-   * True while the recipe list is the visible layer (no editor, AI screen,
-   * selection page, sheet or menu above it) — the precondition for the automatic
-   * attempt below.
-   */
-  const listVisible = !editorOpen && !aiOpen && !createMenuOpen && !overviewOpen && !shoppingOpen;
-
-  /**
    * True while the bundled selection page is the visible layer (no editor, AI
    * screen or overview sheet above it). It is *not* the condition for mounting
    * it: the page stays mounted while a layer of its flow sits above it, so the
    * checked dishes survive the detour and the flow returns to them.
    */
   const shoppingVisible = shoppingOpen && !pantryOpen && !editorOpen && !aiOpen && !overviewOpen;
-
-  /** Fires the automatic Keep attempt at most once per page session. */
-  const keepAttemptedRef = useRef(false);
-
-  /**
-   * The automatic Keep connection (decided with the user: once the Google login is done, the
-   * app connects Keep without being asked). There is nothing to type any more — the sign-in
-   * replaced the pasted code — so this is one *silent* attempt: if Google has the grant
-   * already, the meal plan simply appears; if it needs a gesture, the "Essensplan" tab keeps
-   * offering the connection and the app stays fully usable without Keep (N5).
-   *
-   * It fires once per page session and only from the visible list, so it never lands on top
-   * of another layer. Waiting for `token` is what makes it work: on a cold start the Keep
-   * hook's own attempt can run before the GIS script has loaded, and this is the retry that
-   * happens once GIS is usable.
-   */
-  useEffect(() => {
-    if (keepAttemptedRef.current) return;
-    if (token === null || keep.status !== 'needs-signin') return;
-    if (!listVisible) return;
-    keepAttemptedRef.current = true;
-    retryKeep();
-  }, [token, keep.status, listVisible, retryKeep]);
 
   /**
    * Opens the overview for a card of the "Sammlung" tab. The resolution already

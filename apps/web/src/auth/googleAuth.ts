@@ -67,11 +67,13 @@ interface TokenSource {
 }
 
 /**
- * How long a token attempt may stay unresolved before it is aborted. A
- * safety net only: normally GIS reports a blocked or closed popup through
- * `error_callback` (and a user gesture supersedes a silent attempt, see
- * `request`), so this timer just bounds the undocumented case in
- * which a silently blocked popup never fires any callback.
+ * How long an *open* token popup may stay unresolved before its attempt is
+ * aborted. A safety net only: normally GIS reports a blocked or closed popup
+ * through `error_callback` (and a user gesture supersedes a silent attempt, see
+ * `request`), so this timer just bounds the undocumented case in which a
+ * silently blocked popup never fires any callback. The timer starts with the
+ * popup, not with the request — a queued attempt must not run down its patience
+ * while it waits for the shared popup window (see `takePopupTurn`).
  */
 const TOKEN_REQUEST_TIMEOUT_MS = 60_000;
 
@@ -82,6 +84,120 @@ const TOKEN_REQUEST_TIMEOUT_MS = 60_000;
  * A pending silent attempt is superseded by a tap on the login button anyway.
  */
 const SILENT_REQUEST_TIMEOUT_MS = 10_000;
+
+/**
+ * GIS serves every token request through **one** popup window per page and reuses it, so two
+ * flows do not coexist: starting a second one while the first is still open navigates that same
+ * window away, and a second one started in the same tick as the first one's token arrives is
+ * closed again immediately. Measured with the development diagnostics on a cold start, where the
+ * app asked for both credentials at once: the popup that went second always died with
+ * `popup_closed`, on either credential. The user-visible failure was the reported "the popup
+ * opens and closes instantly, then I have to tap 'Mit Google verbinden'" — the Drive sign-in,
+ * which gates the whole app, was the one that lost the race.
+ *
+ * Two rules follow, and both are implemented here and in the callers: only one flow at a time
+ * (`popupTurn`), with a minimum distance between two of them (`POPUP_FLOW_SPACING_MS`), and the
+ * page's first silent flow is spent on the credential the app cannot work without — App passes
+ * the Drive login state to the Keep hook for that (see `UseKeepOptions.enabled`).
+ *
+ * `popupTurn` is the flow that currently owns the window. A silent request waits for it and
+ * re-checks after every wake-up, so a gesture that took the window in the meantime is respected
+ * instead of being overwritten. A gesture never waits: a tap takes the window immediately (it
+ * supersedes a pending silent attempt, see `request`), and that claim is also what tells the
+ * queued silent requests to give way.
+ */
+let popupTurn: Promise<void> | null = null;
+
+/** When the next *silent* flow may open its popup (see `POPUP_FLOW_SPACING_MS`). */
+let popupFreeAt = 0;
+
+/**
+ * Minimum gap between two popup flows.
+ *
+ * A popup opened in the same tick as the previous flow's token was closed again with
+ * `popup_closed` (see the lock above); opening it after the previous popup had time to disappear
+ * worked. That gap used to come from the Keep hook's gateway probe, which is incidental timing
+ * rather than a guarantee, so it is made explicit here. The value is a safety margin, not a tuned
+ * measurement: the first flow of a page load never waits, and a tap never waits.
+ */
+const POPUP_FLOW_SPACING_MS = 1000;
+
+/** One flow's claim on the popup window. */
+interface PopupTurn {
+  /** True while this claim still owns the window (a gesture may have taken it over). */
+  owned: () => boolean;
+  /** Hands the window on to the next waiting flow. */
+  release: () => void;
+}
+
+/** Takes the popup window for a flow that has to start now. */
+function claimPopupTurn(): PopupTurn {
+  let releaseTurn!: () => void;
+  const turn = new Promise<void>((resolve) => {
+    releaseTurn = resolve;
+  });
+  popupTurn = turn;
+  return {
+    owned: () => popupTurn === turn,
+    release: () => {
+      // A later claim (a gesture that took over) may own the window by now.
+      if (popupTurn === turn) popupTurn = null;
+      popupFreeAt = Date.now() + POPUP_FLOW_SPACING_MS;
+      releaseTurn();
+    },
+  };
+}
+
+/** Waits out the spacing between two flows. */
+function waitForPopupSpacing(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+/**
+ * Waits until no flow owns the popup window, then takes it — and holds it back for the spacing
+ * above, so a silent flow never opens its popup right behind another one.
+ */
+async function takePopupTurn(): Promise<() => void> {
+  for (;;) {
+    while (popupTurn !== null) {
+      await popupTurn;
+    }
+    const turn = claimPopupTurn();
+    const remaining = popupFreeAt - Date.now();
+    if (remaining <= 0) {
+      return turn.release;
+    }
+    await waitForPopupSpacing(remaining);
+    // A gesture may have taken the window while it was held back; queue again instead of
+    // opening a second popup on top of the account chooser.
+    if (turn.owned()) {
+      return turn.release;
+    }
+    turn.release();
+  }
+}
+
+/**
+ * Resolves as soon as the tab is in the foreground, immediately when it already is.
+ *
+ * A silent attempt must not open a popup window from a background tab: the user is looking at
+ * another tab or window and only sees an unexplained OAuth window flashing up (reported for a
+ * Cookbook tab that sits in the background while the user works elsewhere). Deferring the
+ * attempt until the tab is visible costs nothing — the sign-in has no deadline of its own.
+ */
+function whenDocumentVisible(): Promise<void> {
+  if (document.visibilityState === 'visible') {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState !== 'visible') return;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      resolve();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  });
+}
 
 /** True when the GIS script (index.html) has loaded and the API is usable. */
 export function isGoogleAuthAvailable(): boolean {
@@ -247,48 +363,88 @@ function createTokenSource(scope: string, label: string): TokenSource {
     }
 
     let ownAttempt: TokenAttempt | null = null;
+    /** Hands the shared popup window on when this attempt settles (see `takePopupTurn`). */
+    let releaseTurn: (() => void) | null = null;
+
     const inFlight = new Promise<string>((resolve, reject) => {
-      // Abort attempts that never settle (see the timeout constants above).
-      const timeout = window.setTimeout(
-        () => {
-          // A silent attempt that reaches this timer produced no callback at all, which is its
-          // own diagnosis: the request was blocked before GIS could answer.
-          if (silent) reportSilentFailure(label, 'no answer before the timeout');
-          reject(new Error('Die Google-Anmeldung hat zu lange gedauert. Bitte versuche es erneut.'));
-        },
-        silent ? SILENT_REQUEST_TIMEOUT_MS : TOKEN_REQUEST_TIMEOUT_MS,
-      );
-      ownAttempt = { resolve, reject, timeout };
-      attempt = ownAttempt;
+      const own: TokenAttempt = { resolve, reject, timeout: 0 };
+      ownAttempt = own;
+      attempt = own;
       pendingByGesture = byGesture;
 
-      if (!tokenClient) {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope,
-          callback: handleTokenResponse,
-          error_callback: handleTokenError,
-          // Not left at its default, and this is load-bearing. Google's incremental
-          // authorization (default `true`) returns a token covering *every* scope the user has
-          // granted this OAuth client — so a request for `openid email` alone would also hand
-          // back the Drive grant, and the Keep gateway would end up holding a credential over
-          // the recipe files. With `false`, each source's token covers exactly the scope it
-          // asked for. Verified against the API reference:
-          // https://developers.google.com/identity/oauth2/web/reference/js-reference
-          include_granted_scopes: false,
-        });
+      /**
+       * Opens the popup and starts the abort timer. Deliberately as late as possible: a silent
+       * attempt first waits for its turn at the shared popup window and for the tab to be in the
+       * foreground, so it neither raises a window on a hidden tab nor burns its timeout while
+       * queued behind another sign-in.
+       */
+      const open = (): void => {
+        // A queued silent attempt may have been superseded while it waited.
+        if (attempt !== own) return;
+        own.timeout = window.setTimeout(
+          () => {
+            // A silent attempt that reaches this timer produced no callback at all, which is its
+            // own diagnosis: the request was blocked before GIS could answer.
+            if (silent) reportSilentFailure(label, 'no answer before the timeout');
+            reject(
+              new Error('Die Google-Anmeldung hat zu lange gedauert. Bitte versuche es erneut.'),
+            );
+          },
+          silent ? SILENT_REQUEST_TIMEOUT_MS : TOKEN_REQUEST_TIMEOUT_MS,
+        );
+        if (!tokenClient) {
+          tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope,
+            callback: handleTokenResponse,
+            error_callback: handleTokenError,
+            // Not left at its default, and this is load-bearing. Google's incremental
+            // authorization (default `true`) returns a token covering *every* scope the user has
+            // granted this OAuth client — so a request for `openid email` alone would also hand
+            // back the Drive grant, and the Keep gateway would end up holding a credential over
+            // the recipe files. With `false`, each source's token covers exactly the scope it
+            // asked for. Verified against the API reference:
+            // https://developers.google.com/identity/oauth2/web/reference/js-reference
+            include_granted_scopes: false,
+          });
+        }
+        // The prompt is set per request, never on the client: the client is created
+        // once and reused for both attempts. "none" forbids Google's own screens
+        // (account chooser, consent) but not the popup window itself — GIS runs every
+        // token request through one, so a silent sign-in still shows a brief window.
+        // That flash is inherent to the token flow and cannot be hidden from here;
+        // "select_account" keeps the tap on the login button showing the account
+        // chooser as before.
+        tokenClient.requestAccessToken({ prompt: silent ? 'none' : 'select_account' });
+      };
+
+      if (byGesture) {
+        // A tap must never look dead: it takes the popup window straight away.
+        releaseTurn = claimPopupTurn().release;
+        open();
+        return;
       }
-      // The prompt is set per request, never on the client: the client is created
-      // once and reused for both attempts. "none" keeps the silent attempt free
-      // of any screen; "select_account" keeps the tap on the login button showing
-      // the account chooser as before.
-      tokenClient.requestAccessToken({ prompt: silent ? 'none' : 'select_account' });
+      void (async () => {
+        const release = await takePopupTurn();
+        // The attempt may have been superseded while it was queued; hand the window straight
+        // back instead of holding it for a dead flow that will never open a popup.
+        if (attempt !== own) {
+          release();
+          return;
+        }
+        releaseTurn = release;
+        await whenDocumentVisible();
+        open();
+      })().catch(reject);
     });
 
     // Clearing the module state on settle is guarded by an identity check: a
     // superseded attempt must not wipe the state of a newer one. (ownAttempt
     // stays null only if the executor threw, in which case nothing was set.)
     pendingRequest = inFlight.finally(() => {
+      // Hand the popup window on first, so a queued silent attempt can start.
+      releaseTurn?.();
+      releaseTurn = null;
       if (attempt !== null && attempt === ownAttempt) {
         window.clearTimeout(attempt.timeout);
         attempt = null;
