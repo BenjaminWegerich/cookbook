@@ -311,6 +311,13 @@
   /* Same reason as the list cell above: the media area is `width: 100%` of this
      column, so the column itself must never grow past the card. */
   grid-template-columns: minmax(0, 1fr);
+  /* Cards in one row stretch to the tallest card (the one with a two-line
+     title). The media row keeps its natural (square) height, so all left-over
+     height lands in the title row instead of being split across both rows —
+     otherwise a one-line title would be pushed down by half a line and its
+     first line would no longer line up with the two-line neighbour's. */
+  grid-template-rows: auto 1fr;
+  align-content: start;
   width: 100%;
   padding: 0;
   overflow: hidden;
