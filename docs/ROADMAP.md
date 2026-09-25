@@ -62,7 +62,10 @@ deployed export host, „Umplanen“ with its size change, and „Vom Plan entfe
 the entry off and can be undone). „Jetzt kochen“ is still a placeholder; the „Eintrag
 ersetzen“ menu is built (an unrecognized entry can be replaced by an existing recipe 1:1 with
 an undo notice, or turned into a new recipe through the prefilled editor or AI screen, which
-return to the entry's overview). What remains is the shopping-list write and the aisle sort.
+return to the entry's overview). The shopping flow is built as well („Einkaufsliste schreiben“
+selects the planned dishes, the pantry sheet „Vorräte auswählen“ sets each stock, and the
+difference goes to „Einkaufsliste“). What remains is the aisle sort and expanding linked
+Zutaten-Rezepte in the shopping list.
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -84,9 +87,15 @@ not where it is used.
       the cooking view's size picker and step navigation work there, and the promised size opens
       the right view. Before it, the app linked exports through Drive, whose viewer does not run
       the export's script.
-- [ ] Add the scaled ingredient list of a recipe to the shopping list ("Einkaufsliste"),
-      including linked Zutaten-Rezepte: a sub-recipe is scaled by the ladder-rung difference
-      to its yield so its own ingredients join the list (recipe_structure.md "The link means…").
+- [x] Add the scaled ingredient list of the meal plan's recipes to the shopping list
+      ("Einkaufsliste"): the dishes are picked per checkbox („Einkaufsliste schreiben“), the
+      pantry sheet („Vorräte auswählen“) prefills each ingredient's stock with
+      `min(need, reorder point)`, and the difference is rounded up to whole shopping units and
+      written with `POST /keep/shopping` (undo via „Rückgängig“).
+- [ ] Expand linked Zutaten-Rezepte in that list: a sub-recipe is scaled by the ladder-rung
+      difference to its yield so its own ingredients join the list
+      (recipe_structure.md "The link means…"). Today a sub-recipe contributes one line for
+      itself.
 - [ ] Sort the shopping list by category/aisle (needs ingredient category master data),
       applied server-side via `List.sort_items`.
 
@@ -124,17 +133,18 @@ frontend and the actual features.
    (the size is a query parameter on the export host), replacing the entries recognized as the
    same recipe; the gateway changes as little as possible and verifies the result), and so is
    taking a dish off the plan ([x] — „Vom Plan entfernen“ ticks the entry off in Keep via
-   `POST /keep/mealplan/check` and can be undone; changing the size reuses the meal-plan write).
-   Still open: add a recipe's scaled ingredients to the shopping list (including linked
-   Zutaten-Rezepte), and sort by category.
+   `POST /keep/mealplan/check` and can be undone; changing the size reuses the meal-plan write),
+   and so is the shopping list ([x] — „Einkaufsliste schreiben“ writes the chosen recipes'
+   ingredients via `POST /keep/shopping`, with the pantry step and an undo).
+   Still open: the linked Zutaten-Rezepte in that list, and sorting by category.
 6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
    query may-be-in-stock), which builds on the same gateway.
 
 Two things to carry over rather than rediscover:
 - **Writes must be non-destructive.** The spike proved this is achievable — a write/delete
-  cycle left the real 135-item list with identical order and sort ids — and the meal-plan
-  write already follows the technique (sort ids above every existing item, verify the result).
-  The remaining two actions must reuse it rather than reinvent it.
+  cycle left the real 135-item list with identical order and sort ids — and both list writes
+  already follow the technique (sort ids above every existing item, verify the result). The
+  aisle sort must reuse it rather than reinvent it.
 - **`spike/keep-feasibility/` is a spike, not the product.** Its tooling, tests and the
   `mint-in-cloud.py` recovery script are worth keeping; the rest exists to answer questions
   that are now answered. The gateway keeps that authentication and diagnosis logic in

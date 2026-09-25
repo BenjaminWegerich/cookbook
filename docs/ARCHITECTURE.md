@@ -119,8 +119,9 @@
 - **Built and deployed** as `apps/keep-gateway/` (Python, Flask + gunicorn) on Cloud Run in
   `europe-west3`, scale-to-zero. `GET /health` is the liveness probe — deliberately not
   `/healthz`, which Google's frontend answers itself before a `run.app` request reaches the
-  container — and `GET /keep/state` reads the meal plan and the shopping list. The three write
-  actions are defined but answer `501` until their prerequisites exist. A log-based alert
+  container — and `GET /keep/state` reads the meal plan and the shopping list. Three of the four
+  write actions are built (the plan write, ticking a dish off, the shopping list); the aisle sort
+  answers `501` until the ingredient-category step exists. A log-based alert
   watches for a rejected credential, and a €1 budget guardrail detaches billing if the project
   ever spends it (both in `deploy/cloud-run/`). The boundary fails closed (no gateway token ⇒
   every Keep route refuses) and the browser origin allowlist is explicit. The Keep code lives
@@ -242,6 +243,15 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   the changed list. Changing the size instead reuses the ordinary write: the new line replaces
   the old ones. Both notices name the entry (a recipe by title, an unrecognized line by its text
   without the export link) and repeat that the shopping list stays untouched.
+- **Adding ingredients is one write, and its undo takes back one instance per line.** The pantry
+  sheet („Vorräte auswählen“) builds the lines from the meal plan's recipes, already rounded up to
+  whole shopping units, and `POST /keep/shopping` puts them at the top of „Einkaufsliste“; the
+  snackbar's „Rückgängig“ sends those same lines as `remove`. Because the same line may be on the
+  list twice, `remove` takes off *one* instance per named text instead of every match — otherwise
+  the undo would delete a line the user had put there themselves (decided with the user). The
+  gateway places the new lines above every remaining item, syncs once and verifies the counts it
+  read before the write; a named line that Keep no longer carries fails the undo instead of
+  claiming it is back to before.
 - **Sign-in.** Started automatically once the Google login is done, reopenable from the
   „Essensplan“ tab; the token is held in memory only, like the AI API key (N6), and nothing has
   to be looked up by hand any more. An expired token is renewed silently; only when Google

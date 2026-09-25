@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from typing import Any, Iterable, NoReturn, Sequence
+from typing import Any, Iterable, Mapping, NoReturn, Sequence
 
 import gkeepapi
 import requests
@@ -206,6 +206,60 @@ def verify_meal_plan_state(
         raise KeepApiError(
             "The meal plan still carries entries the write should have replaced.",
             detail=f"still present: {stale}",
+        )
+
+
+def verify_shopping_write(
+    shopping: dict[str, Any],
+    before: Mapping[str, int],
+    added: Iterable[str],
+    removed: Iterable[str],
+) -> None:
+    """Refuse a shopping write whose result is not the exact arithmetic it asked for.
+
+    The mirror image of `verify_meal_plan_state`, with the one difference the
+    shopping list forces: because the same line may legitimately stand on it
+    twice, "correct" is not a set of texts but a *count* per text. The caller
+    records how often each text was on the list before it wrote (`before`), so
+    the state read back after the sync must satisfy the whole equation
+
+        after = before - removed + added        (per text)
+
+    That one check covers everything the app needs before it may report success:
+    every added line is there as often as it was handed over, each removed line
+    went down by exactly the number of times it was named - one instance per
+    named text, not every instance (see `add_shopping_lines`) - the added lines
+    sit at the top in the order they were given, and nothing else on the list
+    moved or disappeared. `verify_meal_plan_state` cannot state it that way: there
+    a line means "this dish is planned", which is why it compares a set.
+
+    A mismatch is a `KeepApiError`: the write reached Keep but did not land as
+    asked, and the app must not show the ingredients as on the list.
+    """
+    # A single line may arrive as a plain string (the shape `verify_meal_plan_state`
+    # tolerates); iterating it would silently compare single characters.
+    added_list = [added] if isinstance(added, str) else list(added)
+    removed_list = [removed] if isinstance(removed, str) else list(removed)
+    # Compare on the content: Keep may keep surrounding whitespace that the
+    # app's parsed texts do not carry.
+    texts = [item["text"].strip() for item in shopping["items"]]
+
+    expected: Counter[str] = Counter({text.strip(): count for text, count in before.items()})
+    expected.subtract(text.strip() for text in removed_list)
+    expected.update(text.strip() for text in added_list)
+    # `add_shopping_lines` refuses a removal the list cannot satisfy, so no count
+    # can drop below zero here; `+expected` only drops the texts that went to zero.
+    if Counter(texts) != +expected:
+        raise KeepApiError(
+            "The shopping list did not end up as the write asked.",
+            detail=f"expected {dict(+expected)}, found {dict(Counter(texts))}",
+        )
+
+    expected_order = [text.strip() for text in added_list]
+    if texts[: len(expected_order)] != expected_order:
+        raise KeepApiError(
+            "The shopping list did not place the new lines at the top.",
+            detail=f"expected top {expected_order!r}, found {texts[: len(expected_order)]!r}",
         )
 
 
@@ -453,11 +507,93 @@ class KeepClient:
         verify_meal_plan_checked_state(mealplan_state, checked, unchecked)
         return {"mealplan": mealplan_state}
 
-    # ----------------------------------------------------------------------------------
-    # The remaining write actions (the write-action step). Both must follow the same
-    # non-destructive recipe as `add_meal_plan_entries`: place what we create with sort ids
-    # above every existing item, change as little as possible, and verify the state we read
-    # back. They stay absent until their prerequisites exist (ingredient categories for the
-    # aisle sort, the scaled-line payload for the shopping list); the HTTP layer answers 501
-    # for them in the meantime.
-    # ----------------------------------------------------------------------------------
+    def add_shopping_lines(self, add: Sequence[str], remove: Iterable[str]) -> dict[str, Any]:
+        """Put `add` at the top of the shopping list, taking the named lines back off.
+
+        The mirror image of `add_meal_plan_entries`, with **one deliberate
+        difference in what `remove` means**, because the shopping list is a list of
+        things to buy and the same line may legitimately stand on it more than once:
+
+          * `add` are the complete lines the app wants to see in "Einkaufsliste", in
+            the order they should read from the top: one line per ingredient, in the
+            app's display form and already rounded up to whole shopping units. That
+            form and that arithmetic live in the app (`packages/core/src/shoppingList.ts`
+            and the pantry sheet); the gateway treats a line as opaque text.
+          * `remove` is a **multiset subtraction**: each named text takes exactly
+            *one* matching item off the list, never every item carrying it. The app's
+            undo hands back the lines a previous write added, so if "1 Packung Milch"
+            was already on the list (typed by hand, or left by an earlier run), the
+            add makes it two and the undo makes it one again - a sweep of every match
+            would delete both and silently lose the user's own entry. The instances
+            this gateway placed sit above everything that was there before, and
+            `shopping.items` is display order (top first), so a text that exists twice
+            loses *our* instance first.
+
+        A text named in `remove` that the list does not carry (that many times) is a
+        `KeepApiError` before anything is written, not a silent no-op: the app must
+        not report "back to before" for an undo that did not take the line off.
+
+        Non-destructive in the same way as the meal-plan write: the removals happen
+        first, the new items get sort ids above every remaining item, and the whole
+        change is one sync. The list read back from that sync is verified
+        (`verify_shopping_write`) against the counts this method saw before it wrote,
+        so the app never reports ingredients as on the list on the strength of an
+        unverified write.
+
+        The answer carries only the shopping list: it is the list this action changed
+        (same reasoning as the meal-plan write).
+        """
+        added = [text.strip() for text in add]
+        if any(text == "" for text in added):
+            raise ValueError("Added line texts must be non-empty.")
+        removed = [text.strip() for text in remove]
+        if any(text == "" for text in removed):
+            raise ValueError("Removed line texts must be non-empty.")
+        # A write that neither adds nor removes would sync an untouched list and
+        # (worse) could look like a successful one; the HTTP boundary already
+        # refuses it, and this guard keeps a direct caller from the same mistake.
+        if not added and not removed:
+            raise ValueError("A shopping write must add or remove at least one line.")
+
+        keep = authenticate(self._config)
+        shopping = find_list_by_title(keep, self._config.shopping_title)
+
+        # The baseline the verification measures against, taken before anything is
+        # written: what has to hold afterwards is how the counts *changed*, not a
+        # fixed target count (which cannot be known - the list belongs to the user).
+        before = Counter(item.text.strip() for item in shopping.items)
+
+        # Every named removal must be satisfiable before the add, so an add can never
+        # be what a removal takes off, and an undo over a line the user deleted in Keep
+        # in the meantime is reported instead of quietly doing nothing.
+        missing = sorted(text for text, count in Counter(removed).items() if before[text] < count)
+        if missing:
+            raise KeepApiError(
+                "The shopping list no longer carries a line the action named.",
+                detail=f"cannot remove: {missing}",
+            )
+
+        remaining = Counter(removed)
+        for item in list(shopping.items):
+            text = item.text.strip()
+            if remaining[text] > 0:
+                remaining[text] -= 1
+                item.delete()
+
+        # `List.items` already hides deleted items, so the maximum is taken over what
+        # remains: every new line ends up above all of them. A higher sort id renders
+        # closer to the top, so the first listed line gets the highest id - the reading
+        # order the app handed over survives the round trip (same technique and offset
+        # as the meal-plan write).
+        highest = max((int(item.sort) for item in shopping.items), default=0)
+        for index, text in enumerate(added):
+            shopping.add(
+                text,
+                False,
+                highest + (len(added) - index) * SORT_OFFSET_ABOVE_EXISTING,
+            )
+        sync(keep)
+
+        shopping_state = describe_list(shopping)
+        verify_shopping_write(shopping_state, before, added, removed)
+        return {"shopping": shopping_state}

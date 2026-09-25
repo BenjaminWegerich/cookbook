@@ -16,6 +16,7 @@ from keep_gateway.app import create_app
 from keep_gateway.config import GatewayConfig
 from keep_gateway.errors import (
     IdentityCheckUnavailable,
+    KeepApiError,
     KeepAuthRejected,
     ShortenFailed,
     Unauthorized,
@@ -77,6 +78,8 @@ class FakeKeepClient:
         self.writes: list[tuple[list[str], list[str]]] = []
         # Every check write, in order: (check, uncheck).
         self.checks: list[tuple[list[str], list[str]]] = []
+        # Every shopping write, in order: (add, remove).
+        self.shopping_writes: list[tuple[list[str], list[str]]] = []
 
     def read_state(self) -> dict:
         if self._error is not None:
@@ -93,6 +96,12 @@ class FakeKeepClient:
         if self._error is not None:
             raise self._error
         self.checks.append((list(check), list(uncheck)))
+        return self._state
+
+    def add_shopping_lines(self, add: list[str], remove: list[str]) -> dict:
+        if self._error is not None:
+            raise self._error
+        self.shopping_writes.append((list(add), list(remove)))
         return self._state
 
 
@@ -574,6 +583,114 @@ class GatewayBoundaryTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     # ----------------------------------------------------------------------------------
+    # Shopping list: the pantry sheet's ingredients
+    # ----------------------------------------------------------------------------------
+
+    def test_shopping_write_passes_the_lines_to_the_client(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping",
+                headers=self.auth_headers(),
+                json={"add": ["800 g Mehl", "1 l Milch"]},
+            )
+        self.assertEqual(response.status_code, 200)
+        # The app owns the line form and the shopping-unit rounding; the boundary only
+        # executes the action it is handed.
+        self.assertEqual(fake.shopping_writes, [(["800 g Mehl", "1 l Milch"], [])])
+        # The answer is the post-write state, shaped like GET /keep/state.
+        self.assertEqual(response.get_json()["shopping"]["title"], "Einkaufsliste")
+
+    def test_shopping_write_accepts_a_remove_only_body(self) -> None:
+        """The undo shape: the lines a previous write added are taken back off."""
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping",
+                headers=self.auth_headers(),
+                json={"add": [], "remove": ["800 g Mehl", "1 l Milch"]},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.shopping_writes, [([], ["800 g Mehl", "1 l Milch"])])
+
+    def test_shopping_write_trims_the_line_texts(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping",
+                headers=self.auth_headers(),
+                json={"add": ["  800 g Mehl  "], "remove": ["  1 l Milch  "]},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.shopping_writes, [(["800 g Mehl"], ["1 l Milch"])])
+
+    def test_shopping_write_rejects_a_single_string(self) -> None:
+        """Always the list form: unlike the meal plan, this route has no older shape to keep."""
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping",
+                headers=self.auth_headers(),
+                json={"add": "800 g Mehl"},
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+        self.assertEqual(fake.shopping_writes, [])
+
+    def test_shopping_write_rejects_a_malformed_or_empty_line(self) -> None:
+        app, fake = self.build_app()
+        for payload in (
+            {"add": ["800 g Mehl", 42]},
+            {"add": ["800 g Mehl"], "remove": [""]},
+        ):
+            with self.subTest(payload=payload):
+                with app.test_client() as client:
+                    response = client.post(
+                        "/keep/shopping", headers=self.auth_headers(), json=payload
+                    )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+        self.assertEqual(fake.shopping_writes, [])
+
+    def test_shopping_write_rejects_a_body_that_changes_nothing(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post("/keep/shopping", headers=self.auth_headers(), json={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+        self.assertEqual(fake.shopping_writes, [])
+
+    def test_shopping_write_requires_a_json_object(self) -> None:
+        app, _fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping",
+                headers=self.auth_headers(),
+                data="not json",
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+
+    def test_shopping_write_reports_keep_failures_with_their_code(self) -> None:
+        client_fake = FakeKeepClient(error=KeepApiError("Kein Sync."))
+        app, _fake = self.build_app(client=client_fake)
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping",
+                headers=self.auth_headers(),
+                json={"add": ["800 g Mehl"]},
+            )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json()["error"]["code"], "keep_api_error")
+
+    def test_shopping_write_still_requires_a_token(self) -> None:
+        app, _fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post("/keep/shopping", json={"add": ["800 g Mehl"]})
+        self.assertEqual(response.status_code, 401)
+
+    # ----------------------------------------------------------------------------------
     # Export-link shortener: the meal-plan line's short link
     # ----------------------------------------------------------------------------------
 
@@ -686,20 +803,20 @@ class GatewayBoundaryTests(unittest.TestCase):
     # Write actions still to come: defined in the boundary, not implemented yet
     # ----------------------------------------------------------------------------------
 
-    def test_unimplemented_write_actions_answer_501(self) -> None:
+    def test_the_aisle_sort_still_answers_501(self) -> None:
         app, _fake = self.build_app()
-        for path in ("/keep/shopping", "/keep/shopping/sort"):
-            with self.subTest(path=path):
-                with app.test_client() as client:
-                    response = client.post(path, headers=self.auth_headers(), json={})
-                self.assertEqual(response.status_code, 501)
-                self.assertEqual(response.get_json()["error"]["code"], "not_implemented")
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping/sort", headers=self.auth_headers(), json={}
+            )
+        self.assertEqual(response.status_code, 501)
+        self.assertEqual(response.get_json()["error"]["code"], "not_implemented")
 
     def test_write_actions_still_require_a_token(self) -> None:
         """A 501 must not be reachable anonymously, or the seam would be untested."""
         app, _fake = self.build_app()
         with app.test_client() as client:
-            response = client.post("/keep/shopping")
+            response = client.post("/keep/shopping/sort")
         self.assertEqual(response.status_code, 401)
 
     # ----------------------------------------------------------------------------------

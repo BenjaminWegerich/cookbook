@@ -10,7 +10,7 @@ Endpoints:
     GET  /keep/state            the meal plan and shopping list, for app start
     POST /keep/mealplan         add dish lines to "Essensplan", replacing their entries
     POST /keep/mealplan/check   tick or untick meal-plan lines ("Vom Plan entfernen")
-    POST /keep/shopping         add a recipe's ingredients to the list (501 for now)
+    POST /keep/shopping         add a recipe's ingredients to the list
     POST /keep/shopping/sort    reorder the list by category/aisle     (501 for now)
     POST /shorten               shorten one export URL for a meal-plan line
 
@@ -81,13 +81,12 @@ HTTP_ERROR_CODES: dict[int, str] = {
 # What each unwritten endpoint will do, quoted back in its 501 so the frontend (and a
 # curious curl) is told the truth instead of being handed an empty success.
 PENDING_ACTIONS: dict[str, str] = {
-    "/keep/shopping": "Adding a recipe's ingredients to the shopping list",
     "/keep/shopping/sort": "Sorting the shopping list by category",
 }
 
-# A factory is anything that turns configuration into a reader with `read_state()`.
-# The real one is `KeepClient`; the tests hand in a fake, which is how the boundary is
-# verified without a Google account or a network.
+# A factory is anything that turns configuration into a Keep client: the real one is
+# `KeepClient` (`read_state()` plus one method per write action); the tests hand in a fake,
+# which is how the boundary is verified without a Google account or a network.
 ClientFactory = Callable[[GatewayConfig], Any]
 
 # A factory is anything that turns configuration into a shortener with `shorten(target)`.
@@ -386,10 +385,40 @@ def create_app(
 
     @app.post("/keep/shopping")
     def keep_shopping() -> Response:
-        """Add a recipe's scaled ingredients ("Einkaufsliste"). Part of the write-action step."""
-        raise NotImplementedYet(
-            f"{PENDING_ACTIONS['/keep/shopping']} is not implemented yet."
-        )
+        """Add the ingredients of the planned dishes to "Einkaufsliste", on top of the list.
+
+        Body: `{"add": ["<line>", ...], "remove": ["<line>", ...]}` — always the
+        list form, for both directions. Unlike the meal-plan write there is no
+        earlier request shape to stay compatible with (this route answered 501
+        until the write existed), so the boundary stays strict instead of also
+        accepting a single string: the app sends lists, and a body that is not one
+        is a bad request rather than a guess.
+
+        `add` are the complete lines to put at the top of "Einkaufsliste", in the
+        order they should read: one line per ingredient, in the app's display form
+        and already rounded up to whole shopping units. `remove` are the exact
+        texts the undo takes back off. The app owns that line form and that
+        arithmetic (`packages/core/src/shoppingList.ts` and the pantry sheet);
+        this boundary treats a line as opaque text and only executes the action.
+
+        `remove` takes one instance per named text off the list - not every item
+        carrying it - so an undo cannot delete an identical line the user had put
+        on the list themselves (see `KeepClient.add_shopping_lines`). A body that
+        changes nothing is refused.
+
+        The answer is the shopping list after the write, in the shape one checklist
+        has in `GET /keep/state` (`{"shopping": {"title", "items"}}`), so the app can
+        update it without a second request - and only that list, because it is the
+        one the action changed.
+        """
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise BadRequest("A JSON object body is required.")
+        added = _entry_texts(payload, "add")
+        removed = _entry_texts(payload, "remove")
+        if not added and not removed:
+            raise BadRequest("The body must add or remove at least one line.")
+        return jsonify(client_factory(settings).add_shopping_lines(added, removed))
 
     @app.post("/keep/shopping/sort")
     def keep_shopping_sort() -> Response:

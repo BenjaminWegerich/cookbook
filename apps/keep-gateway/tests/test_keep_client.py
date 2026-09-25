@@ -281,6 +281,68 @@ class VerifyMealPlanStateTests(unittest.TestCase):
         )
 
 
+class VerifyShoppingWriteTests(unittest.TestCase):
+    """The shopping write's own check: counts, not a set - a list may repeat a line."""
+
+    @staticmethod
+    def state(*texts: str) -> dict:
+        return {
+            "title": "Einkaufsliste",
+            "items": [{"text": text} for text in texts],
+        }
+
+    def test_accepts_added_lines_on_top_of_the_existing_ones(self) -> None:
+        keep_client.verify_shopping_write(
+            self.state("800 g Mehl", "1 Packung Milch"),
+            {"1 Packung Milch": 1},
+            ["800 g Mehl"],
+            [],
+        )
+
+    def test_accepts_an_undo_that_leaves_the_users_own_duplicate_behind(self) -> None:
+        """1 x Milch was there, the write made it 2, the undo makes it 1 again."""
+        keep_client.verify_shopping_write(
+            self.state("1 Packung Milch"),
+            {"1 Packung Milch": 2},
+            [],
+            ["1 Packung Milch"],
+        )
+
+    def test_reports_an_added_line_that_did_not_land(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_shopping_write(
+                self.state("1 Packung Milch"), {"1 Packung Milch": 1}, ["800 g Mehl"], []
+            )
+
+    def test_reports_a_named_line_that_was_not_taken_off(self) -> None:
+        """The undo named a text the list still carries twice: not a successful undo."""
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_shopping_write(
+                self.state("1 Packung Milch", "1 Packung Milch"),
+                {"1 Packung Milch": 2},
+                [],
+                ["1 Packung Milch"],
+            )
+
+    def test_reports_an_untouched_line_that_disappeared(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_shopping_write(self.state(), {"1 Packung Milch": 1}, [], [])
+
+    def test_reports_added_lines_in_the_wrong_order(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_shopping_write(
+                self.state("800 g Mehl", "1 Packung Milch"),
+                {},
+                ["1 Packung Milch", "800 g Mehl"],
+                [],
+            )
+
+    def test_matches_texts_ignoring_surrounding_whitespace(self) -> None:
+        keep_client.verify_shopping_write(
+            self.state("  1 Packung Milch  "), {"1 Packung Milch": 1}, [], []
+        )
+
+
 class ListThatDropsWrites(FakeList):
     """A list whose `add` silently does nothing — a server that stored something else."""
 
@@ -572,6 +634,128 @@ class AddMealPlanEntriesTests(unittest.TestCase):
 
         with self.assertRaises(KeepApiError):
             client.add_meal_plan_entries(["Kürbissuppe (6 Portionen)"], [])
+
+
+class AddShoppingLinesTests(unittest.TestCase):
+    """The shopping write: place the ingredients on top, take one instance per undo line off."""
+
+    def _client_with(self, shopping: FakeList):
+        """A `KeepClient` whose authentication and list lookup are replaced by fakes."""
+        keep = mock.MagicMock()
+        for patch in (
+            mock.patch.object(keep_client, "authenticate", return_value=keep),
+            mock.patch.object(keep_client, "find_list_by_title", return_value=shopping),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+        return keep_client.KeepClient(make_config()), keep
+
+    def test_places_the_lines_at_the_top_and_answers_only_the_shopping_list(self) -> None:
+        shopping = FakeList(
+            "Einkaufsliste",
+            [
+                FakeItem("500 g Kartoffeln", sort=5000),
+                FakeItem("2 Zwiebeln", checked=True, sort=3000),
+            ],
+        )
+        client, keep = self._client_with(shopping)
+
+        state = client.add_shopping_lines(["800 g Mehl", "1 l Milch"], [])
+
+        # One sync carries the whole change, and the new lines sit above the rest.
+        keep.sync.assert_called_once()
+        self.assertEqual(
+            [item["text"] for item in state["shopping"]["items"]],
+            ["800 g Mehl", "1 l Milch", "500 g Kartoffeln", "2 Zwiebeln"],
+        )
+        added = next(item for item in shopping._items if item.text == "800 g Mehl")
+        self.assertGreater(added.sort, 5000)
+        # A line the write did not name keeps its own state (here: ticked off).
+        self.assertTrue(state["shopping"]["items"][3]["checked"])
+        # Only the changed list is answered: the write never touches (or reads) the meal
+        # plan, so a missing note cannot fail a successful write.
+        self.assertEqual(set(state), {"shopping"})
+
+    def test_the_undo_leaves_an_identical_line_the_user_had_put_on_the_list(self) -> None:
+        """The duplicate case the multiset rule exists for: 1 x Milch -> 2 x -> 1 x again.
+
+        A sweep of every matching text would take both off and silently lose the line
+        the user had typed themselves (or left from an earlier run).
+        """
+        shopping = FakeList("Einkaufsliste", [FakeItem("1 Packung Milch", sort=1000)])
+        client, _keep = self._client_with(shopping)
+
+        state = client.add_shopping_lines(["1 Packung Milch", "800 g Mehl"], [])
+        self.assertEqual(
+            [item["text"] for item in state["shopping"]["items"]],
+            ["1 Packung Milch", "800 g Mehl", "1 Packung Milch"],
+        )
+
+        state = client.add_shopping_lines([], ["1 Packung Milch", "800 g Mehl"])
+
+        self.assertEqual([item["text"] for item in state["shopping"]["items"]], ["1 Packung Milch"])
+        # The surviving instance is the user's own: ours sat on top and went first.
+        self.assertEqual([item.sort for item in shopping.items], [1000])
+
+    def test_a_removal_takes_off_one_instance_per_named_text(self) -> None:
+        shopping = FakeList(
+            "Einkaufsliste",
+            [
+                FakeItem("1 Packung Milch", sort=3000),
+                FakeItem("1 Packung Milch", sort=1000),
+            ],
+        )
+        client, _keep = self._client_with(shopping)
+
+        state = client.add_shopping_lines([], ["1 Packung Milch"])
+
+        self.assertEqual([item["text"] for item in state["shopping"]["items"]], ["1 Packung Milch"])
+
+    def test_matches_named_texts_ignoring_surrounding_whitespace(self) -> None:
+        """Keep may keep whitespace the app's parsed texts do not carry."""
+        shopping = FakeList("Einkaufsliste", [FakeItem("  800 g Mehl  ", sort=1000)])
+        client, _keep = self._client_with(shopping)
+
+        state = client.add_shopping_lines([], ["800 g Mehl"])
+
+        self.assertEqual(state["shopping"]["items"], [])
+
+    def test_refuses_a_removal_the_list_does_not_carry(self) -> None:
+        """An undo over a line the user deleted in Keep must not pass as a no-op."""
+        shopping = FakeList("Einkaufsliste", [FakeItem("800 g Mehl", sort=1000)])
+        client, keep = self._client_with(shopping)
+
+        with self.assertRaises(KeepApiError):
+            client.add_shopping_lines(["1 l Milch"], ["2 Zwiebeln"])
+
+        # Nothing is written at all: the refusal comes before the add, so the caller
+        # cannot end up with half the action applied.
+        keep.sync.assert_not_called()
+        self.assertEqual([item.text for item in shopping.items], ["800 g Mehl"])
+
+    def test_refuses_a_write_that_neither_adds_nor_removes(self) -> None:
+        shopping = FakeList("Einkaufsliste", [FakeItem("800 g Mehl", sort=1000)])
+        client, keep = self._client_with(shopping)
+
+        with self.assertRaises(ValueError):
+            client.add_shopping_lines([], [])
+        keep.sync.assert_not_called()
+        self.assertEqual([item.text for item in shopping.items], ["800 g Mehl"])
+
+    def test_refuses_an_empty_line_text(self) -> None:
+        shopping = FakeList("Einkaufsliste")
+        client, keep = self._client_with(shopping)
+
+        with self.assertRaises(ValueError):
+            client.add_shopping_lines(["  "], [])
+        keep.sync.assert_not_called()
+
+    def test_a_write_that_does_not_land_raises_instead_of_reporting_success(self) -> None:
+        shopping = ListThatDropsWrites("Einkaufsliste", [FakeItem("800 g Mehl", sort=1000)])
+        client, _keep = self._client_with(shopping)
+
+        with self.assertRaises(KeepApiError):
+            client.add_shopping_lines(["1 l Milch"], [])
 
 
 if __name__ == "__main__":

@@ -12,12 +12,12 @@ spike that proved the approach is in [`spike/keep-feasibility/`](../../spike/kee
 
 **Status: deployed and verified.** The service runs on Cloud Run in `europe-west3`
 (scale-to-zero), `GET /health` answers, and the read path returns both real Keep lists end to
-end. Both meal-plan writes are implemented — the plan write (`POST /keep/mealplan`) and ticking
-a dish off (`POST /keep/mealplan/check`); the shopping-list write and the aisle sort still
-answer `501 not_implemented` until their prerequisites exist (the ingredient-category and
-write-action steps). The meal-plan line links the cooking view through a short TinyURL when the
-deployment has a `TINYURL_API_TOKEN` (`POST /shorten`); without one the long export URL is
-written, so the shortener is optional. Deployment, the credential alert and the €1
+end. All three write actions are implemented — the plan write (`POST /keep/mealplan`), ticking
+a dish off (`POST /keep/mealplan/check`) and adding the planned ingredients to the shopping
+list (`POST /keep/shopping`); the aisle sort still answers `501 not_implemented` until the
+ingredient-category step exists. The meal-plan line links the cooking view through a short
+TinyURL when the deployment has a `TINYURL_API_TOKEN` (`POST /shorten`); without one the long
+export URL is written, so the shortener is optional. Deployment, the credential alert and the €1
 spend guardrail are all in place — see
 [`deploy/cloud-run/README.md`](deploy/cloud-run/README.md).
 
@@ -30,7 +30,7 @@ spend guardrail are all in place — see
 | `POST` | `/keep/mealplan`       | Add dish lines to "Essensplan".                       | works |
 | `POST` | `/keep/mealplan/check` | Tick meal-plan lines off / back on ("Vom Plan entfernen"). | works |
 | `POST` | `/shorten`             | Shorten one export URL for a meal-plan line.         | works with a token, else `503` |
-| `POST` | `/keep/shopping`       | Add a recipe's scaled ingredients to "Einkaufsliste". | `501` until the write-action step |
+| `POST` | `/keep/shopping`       | Add a recipe's scaled ingredients to "Einkaufsliste". | works |
 | `POST` | `/keep/shopping/sort`  | Reorder the shopping list by category/aisle.          | `501` until the category and write-action steps |
 
 Everything under `/keep/` and `/shorten` requires `Authorization: Bearer <token>`: the caller's
@@ -126,6 +126,27 @@ sync, and the state read back is verified (a named line that is missing, or that
 the requested state, is a `keep_api_error` instead of a reported success). The answer is the
 changed list in the same shape as `POST /keep/mealplan`.
 
+`POST /keep/shopping` puts the ingredients of the planned dishes at the top of "Einkaufsliste" —
+the pantry sheet's "Einkaufsliste schreiben" and its "Rückgängig":
+
+```json
+{
+  "add": ["800 g Mehl", "1 Packung Milch"],
+  "remove": []
+}
+```
+
+Always the list form, for both directions. `add` are the complete lines to put at the top, in the
+order they should read, already rounded up to whole shopping units by the app (that line form and
+that arithmetic live in `packages/core/src/shoppingList.ts` and the pantry sheet; the gateway
+treats a line as opaque text). `remove` are the exact texts the undo takes back off, and it is a
+**multiset subtraction**: each named text takes one instance off the list, never every match, so an
+undo cannot delete an identical line the user had put on the list themselves. The new lines get
+sort ids above every remaining item, the change is one sync, and the state read back is verified
+against the counts the write saw before it wrote (otherwise a `keep_api_error`); a body that
+neither adds nor removes, and a removal the list no longer carries, are refused. The answer is the
+changed list in the same shape as `POST /keep/mealplan`.
+
 Every failure — including `404` and `405` — answers with the same shape, so the app can
 branch on a stable code and switch Keep features off cleanly (N5):
 
@@ -143,8 +164,8 @@ branch on a stable code and switch Keep features off cleanly (N5):
 | `keep_unreachable` | 502 | Network error, or the private API answered non-JSON (blocked host). | Retry; if permanent, move the service. |
 | `keep_list_missing` | 502 | A configured note is not visible to the throwaway account. | Check the note is still shared and its title. |
 | `keep_api_error` | 502 | Any other `gkeepapi` failure. | See the server log line. |
-| `not_implemented` | 501 | Documented action, not built yet. | The shopping-list write and the aisle sort. |
-| `bad_request` | 400 | Malformed body, a write body without a usable `add` entry text, or a `/shorten` target that is not an `https://` URL. | Check the JSON body. |
+| `not_implemented` | 501 | Documented action, not built yet. | The aisle sort. |
+| `bad_request` | 400 | Malformed body, a write body without a usable entry text, or a `/shorten` target that is not an `https://` URL. | Check the JSON body. |
 | `shortening_disabled` | 503 | No `TINYURL_API_TOKEN` is configured. | The app writes the long export URL; nothing to fix unless short links are wanted. |
 | `shorten_failed` | 502 | TinyURL refused, timed out, or answered unusably. | The app writes the long export URL; the diagnosis is in the server log line. |
 | `internal_error` | 500 | Unexpected failure. | The traceback is in the log, not the response. |
@@ -255,6 +276,12 @@ detaches billing if the project ever spends it, troubleshooting and teardown —
   their kebab-case names because they are loaded by path.
 - **Writes stay non-destructive.** Every write action follows the recipe the spike proved on
   the real 135-item list: place what we create with sort ids above every existing item, change
-  as little as possible, and verify the state read back. The meal-plan write is the first one
-  built (`KeepClient.add_meal_plan_entries`); the shopping-list write and the aisle sort follow
-  it.
+  as little as possible, and verify the state read back. Both list writes are built
+  (`KeepClient.add_meal_plan_entries`, `add_shopping_lines`); the aisle sort must follow the
+  same recipe.
+- **A shopping-list removal takes one instance per named text.** The list is a list of things to
+  buy, so the same line may stand on it twice — typed by the user, or left by an earlier run.
+  `POST /keep/shopping` therefore treats `remove` as a multiset subtraction rather than deleting
+  every match: the app's undo returns the lines a write added, and an identical line the user
+  had put there themselves survives. The instances this gateway created sit above everything
+  that was already there, so a text that exists twice loses ours first.

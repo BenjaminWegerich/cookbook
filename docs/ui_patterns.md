@@ -27,8 +27,8 @@ screen after an action finished, says what just happened, and — where there is
 real way back — offers one action. It is the app's confirmation layer for work
 that has already been done and has closed the screen it was done on.
 
-**The instances so far.** All four report a meal-plan write from the recipe
-overview:
+**The instances so far.** The first four report a meal-plan write from the recipe
+overview, the fifth the shopping list:
 
 > `<Titel> (<Größe>) zum Essensplan hinzugefügt. Die Einkaufsliste bleibt unverändert.`
 > with the action **Rückgängig** („Einplanen“).
@@ -43,6 +43,10 @@ overview:
 > `„<Vorheriger Eintrag>“ durch <Titel> (<Größe>) ersetzt. Die Einkaufsliste bleibt unverändert.`
 > with the action **Rückgängig** („Eintrag ersetzen“ → „Bestehendes Rezept auswählen“ on an
 > unrecognized entry).
+
+> `X Zutaten für Y Rezepte zur Einkaufsliste hinzugefügt.`
+> with the action **Rückgängig** („Einkaufsliste schreiben“ on the pantry sheet
+> „Vorräte auswählen“).
 
 ### 1.1 When to use it — and when not
 
@@ -223,6 +227,18 @@ added lines above every remaining item and verifies the result before answering,
 so a restored block reappears in order and a write is never reported as
 successful unverified.
 
+**The shopping list is the one place where the undo cannot be a restore.** Its
+write (`POST /keep/shopping`) puts the ingredient lines the pantry sheet built at
+the top of „Einkaufsliste“, and „Rückgängig“ sends those same lines back as
+`remove` — but the gateway takes off **one instance per named text**, never every
+match. The list is a list of things to buy, so the same line may stand on it
+twice: the write makes „1 Packung Milch“ two lines, the undo makes it one again,
+and the user's own entry survives (decided with the user — a sweep of every
+matching text would delete it). The instances the gateway created sit above
+everything that was already there, so a text that exists twice loses ours first.
+A named line that Keep no longer carries fails the undo instead of reporting
+"back to before".
+
 **Honest limits, to keep in mind when reusing the pattern:**
 
 - The restore brings the texts back at the **top** of the list, not at their old
@@ -233,7 +249,8 @@ successful unverified.
 - The undo is a snapshot of what the app last wrote. Changes made in Keep in the
   meantime are not reconciled; the notice's 6 s window is the realistic scope.
 - The undo is available only while the notice is on screen. After that, the
-  normal meal-plan actions apply ("Vom Plan entfernen", re-planning).
+  normal meal-plan actions apply ("Vom Plan entfernen", re-planning) — and in the
+  shopping flow the list can simply be written again.
 
 ### 1.9 Implementation map
 
@@ -243,7 +260,7 @@ successful unverified.
 | Look and ARIA | `apps/web/src/components/Snackbar.tsx` | renders the head of the queue; tones, symbols, action button |
 | Styles | `apps/web/src/styles/snackbar.css` | card, placement, tone symbols, entrance |
 | Symbols | `apps/web/src/components/icons.tsx` | `CheckCircleIcon`, `UndoIcon` (Material Symbols Rounded from the set's own source) |
-| The meal-plan notices | `apps/web/src/App.tsx` | enqueues them after a successful write; wires `Rückgängig` |
+| The notices (meal plan and shopping list) | `apps/web/src/App.tsx` | enqueues them after a successful write; wires `Rückgängig` |
 | Write + undo client | `apps/web/src/keep/keepClient.ts` (`writeMealPlan`), `apps/web/src/keep/useKeep.ts` (`planMeal`, `undoMealPlan`) | the one write shape both directions use |
 | Check + undo client | `apps/web/src/keep/keepClient.ts` (`setMealPlanChecked`), `apps/web/src/keep/useKeep.ts` (`checkMealPlan`, `uncheckMealPlan`) | ticking a dish off the plan and its undo |
 | Gateway | `apps/keep-gateway/keep_gateway/app.py`, `keep_client.py` | accepts one or several added lines, ticks/unticks lines, verifies the result |
