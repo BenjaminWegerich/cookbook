@@ -212,7 +212,10 @@ function IngredientSheet({
         suggestions.push(title);
       }
     }
-    suggestions = suggestions.slice(0, 6);
+    // A suggestion the field already holds exactly is not offered again: an
+    // adopted suggestion (or a name typed out in full) has moved into the
+    // field and must not appear a second time in the list below it.
+    suggestions = suggestions.filter((candidate) => candidate.toLowerCase() !== needle).slice(0, 6);
   }
 
   /**

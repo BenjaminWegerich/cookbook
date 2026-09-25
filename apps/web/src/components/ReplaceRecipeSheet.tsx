@@ -20,7 +20,8 @@
  *   away. It works like the ingredient sheet's name picker (./IngredientSheet):
  *   suggestions appear only while something is typed — recipe titles containing
  *   the text, capped at six — and picking one pastes its complete title into the
- *   field, which makes it the only suggestion. The picked recipe is simply the
+ *   field, which empties the list: the picked title has moved into the field and
+ *   is not listed below it again. The picked recipe is simply the
  *   one whose title the field then holds exactly, so a hand-typed full title
  *   selects it too;
  * - once a recipe is picked and its file has been read, the familiar size input
@@ -160,13 +161,13 @@ function ReplaceRecipeSheet({
    * sheet. Computed per render from `recipes`, which never changes while the
    * sheet is open. Nothing is offered while the field is empty — the list is a
    * reaction to typing, never a browser of the whole collection. Once the field
-   * holds a recipe's exact title, that title is the *only* suggestion: picking
-   * one (which pastes its complete title) collapses the list onto the pick
-   * instead of letting related titles fan out around it.
+   * holds a recipe's exact title, that recipe has moved into the field (a
+   * clicked suggestion, or a title typed out in full): the list stays empty
+   * instead of repeating the pick or fanning related titles out around it.
    */
   const suggestions = useMemo(() => {
     if (needle === '') return [];
-    if (selected !== null) return [selected];
+    if (selected !== null) return [];
     return recipes
       .filter((recipe) => recipe.title.toLowerCase().includes(needle))
       .slice(0, MAX_SUGGESTIONS);
@@ -385,8 +386,10 @@ function ReplaceRecipeSheet({
         )}
 
         {/* Nothing matches the typed text: a quiet report instead of a blank
-            area, so the field never looks broken. */}
-        {trimmedQuery !== '' && suggestions.length === 0 && (
+            area, so the field never looks broken. Suppressed while the field
+            holds a recipe's exact title — the list is empty because the pick
+            moved into the field, not because nothing was found. */}
+        {trimmedQuery !== '' && selected === null && suggestions.length === 0 && (
           <p className="recipe-search-empty" role="status">
             {`Kein Rezept für „${trimmedQuery}“ gefunden.`}
           </p>
