@@ -100,7 +100,8 @@ closed when the identity configuration is missing. Do not add an unauthenticated
 The meal-plan line links the recipe's cooking view; without a shortener that link is the whole
 Apps Script address plus the Drive file id. `TINYURL_API_TOKEN` — the API token of a free
 TinyURL account — lets the gateway shorten it, so the Keep line reads
-`Kürbissuppe (6 Portionen): https://tinyurl.com/k7f2qa`. The gateway calls TinyURL's API
+`Kürbissuppe (6 Portionen): tinyurl.com/k7f2qa` (the app drops the scheme; Keep links the bare
+host too). The gateway calls TinyURL's API
 server-side (`POST /shorten`), because that API sends no CORS header the Pages origin could use
 and the token may never ship in the browser bundle.
 

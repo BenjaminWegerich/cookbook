@@ -22,6 +22,12 @@
  * `plannedFromUrl` (planLink.ts). A link without a size (`Titel: <url>`) names
  * the dish without one, and the export opens at the recipe's written size.
  *
+ * A *shortened* link carries no size (see `mealPlanEntryTextWithShortLink`), so
+ * the size stands in the visible parenthetical and the link is written without
+ * its scheme — Keep links the bare form anyway:
+ *
+ *     Kürbissuppe (6 Portionen): tinyurl.com/k7f2qa
+ *
  * **Without the link** — the shape written before the link existed, and still
  * used when a recipe has no export file:
  *
@@ -84,13 +90,27 @@ const YIELD_SUFFIX =
   /^(?<title>.*?)[\s\u00a0\u202f]+\((?<amount>\d+(?:[.,]\d+)?)[\s\u00a0\u202f]+(?<unit>\p{L}+)\)$/u;
 
 /**
- * A trailing export URL, separated from the title by whitespace and/or a colon
- * (`Titel: https://…`, `Titel https://…`). It must be the *last* token: an
- * entry with text after the URL is not a Cookbook link line and stays one whole
- * title candidate. The title part is lazy, so the last URL wins.
+ * The host of a short link as the app writes it: without its scheme, because
+ * the "https://" of a tinyurl adds nothing to the Keep line and Keep links a
+ * bare `tinyurl.com/…` just the same. Any other link keeps its scheme.
+ */
+const BARE_SHORT_LINK_HOST = 'tinyurl.com';
+
+/**
+ * A trailing link, separated from the title by whitespace and/or a colon
+ * (`Titel: https://…`, `Titel https://…`), in either of the two written forms
+ * (see the module docstring): a scheme-carrying URL on any host — the long
+ * export link, the Drive fallback, a hand-written link — or a *bare* short
+ * link (`Titel (6 Portionen): tinyurl.com/k7f2qa`).
+ *
+ * The link must be the *last* token: an entry with text after it is not a
+ * Cookbook link line and stays one whole title candidate. The title part is
+ * lazy, so the last link wins. The bare form is deliberately restricted to the
+ * shortener's own host — a scheme-less anything-else would make a text that
+ * merely mentions a domain look like a Cookbook link line.
  */
 const TRAILING_LINK =
-  /^(?<head>[\s\S]*?)(?:[\s\u00a0\u202f]*:)?[\s\u00a0\u202f]+(?<url>https?:\/\/\S+)[\s\u00a0\u202f]*$/u;
+  /^(?<head>[\s\S]*?)(?:[\s\u00a0\u202f]*:)?[\s\u00a0\u202f]+(?:(?<url>https?:\/\/\S+)|(?<bare>(?:www\.)?tinyurl\.com\/\S+))[\s\u00a0\u202f]*$/u;
 
 /** Serving words accepted for a finished dish, singular and plural. */
 const SERVING_UNITS = new Set(['portion', 'portionen', 'person', 'personen']);
@@ -131,6 +151,20 @@ function parseYieldSuffix(text: string): { title: string; planned: PlannedAmount
 }
 
 /**
+ * The export link of a parsed text, with the scheme restored when the line
+ * carried the bare short-link form ("tinyurl.com/k7f2qa").
+ *
+ * The scheme is what the rest of the app trades in — `plannedFromUrl` and the
+ * reuse in `existingPlanLink` both read a URL — so the bare form is a display
+ * choice of the Keep line, never a second link shape to handle downstream.
+ */
+function withScheme(raw: string): string {
+  return raw.startsWith(BARE_SHORT_LINK_HOST) || raw.startsWith(`www.${BARE_SHORT_LINK_HOST}`)
+    ? `https://${raw}`
+    : raw;
+}
+
+/**
  * Splits one meal-plan entry text into its recipe-title candidate, the optional
  * planned size and the optional export link (see the module docstring). The
  * text is trimmed; a size in the link's fragment wins over a parenthetical
@@ -144,11 +178,14 @@ export function parseMealPlanText(text: string): ParsedMealPlanText {
   let link: string | null = null;
   if (linkMatch !== null && linkMatch.groups !== undefined) {
     const candidate = linkMatch.groups.head!.trim();
-    // A line that is nothing but a URL names no dish, so it stays an ordinary
+    // Exactly one of the two alternative groups matched: the scheme-carrying
+    // URL, or the bare short-link host the line was written with.
+    const raw = linkMatch.groups.url ?? withScheme(linkMatch.groups.bare ?? '');
+    // A line that is nothing but a link names no dish, so it stays an ordinary
     // (unrecognized) title candidate.
-    if (candidate !== '') {
+    if (candidate !== '' && raw !== '') {
       head = candidate;
-      link = linkMatch.groups.url!;
+      link = raw;
     }
   }
 
@@ -278,14 +315,31 @@ export function mealPlanEntryText(
 }
 
 /**
+ * A short link without its scheme: `https://tinyurl.com/k7f2qa` becomes
+ * `tinyurl.com/k7f2qa`.
+ *
+ * This is how the line is *written into Keep*; the rest of the app keeps the
+ * URL the shortener answered, and `parseMealPlanText` puts the scheme back on
+ * read (`withScheme`).
+ */
+function withoutScheme(shortUrl: string): string {
+  return shortUrl.replace(/^https?:\/\//i, '');
+}
+
+/**
  * The meal-plan entry for a dish at a chosen size, linking a *short* URL.
  *
- * A short link ("https://tinyurl.com/k7f2qa") shows no size of its own, so the
- * size moves back into the visible parenthetical label — "Kürbissuppe (6
- * Portionen): https://tinyurl.com/k7f2qa". The promised size still travels with
- * the link: it is baked into the short link's target before shortening
+ * A short link ("tinyurl.com/k7f2qa") shows no size of its own, so the size
+ * moves back into the visible parenthetical label — "Kürbissuppe (6
+ * Portionen): tinyurl.com/k7f2qa". The promised size still travels with the
+ * link: it is baked into the short link's target before shortening
  * (`withPlanSize`), so tapping the line opens the cooking view at exactly that
  * size.
+ *
+ * The link is written without its "https://" because Keep links a bare
+ * `tinyurl.com/…` anyway and the scheme only lengthens the line. The scheme is
+ * restored when the line is read back, so the value the parser reports — and
+ * with it the reuse in `existingPlanLink` — is the shortener's own URL.
  *
  * `parseMealPlanText` reads this shape back — the URL states no size, so the
  * parser falls back to the parenthetical, exactly like a hand-written
@@ -298,7 +352,7 @@ export function mealPlanEntryTextWithShortLink(
   planned: PlannedAmount,
   shortUrl: string,
 ): string {
-  return `${mealPlanEntryLabel(title, planned)}: ${shortUrl.trim()}`;
+  return `${mealPlanEntryLabel(title, planned)}: ${withoutScheme(shortUrl.trim())}`;
 }
 
 /** True when two planned amounts name the same size in the same unit. */

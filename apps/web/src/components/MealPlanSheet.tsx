@@ -36,9 +36,10 @@
  * - "Abbrechen" closes the overlay without writing. The writing button hands the
  *   caller the chosen size; App builds the Keep line there, because only App
  *   knows the recipe's export file, the entries to replace and the shortener.
- *   With a short link that is "Kürbissuppe (6 Portionen): https://tinyurl.com/…"
+ *   With a short link that is "Kürbissuppe (6 Portionen): tinyurl.com/…"
  *   — the size as the visible label, the promised size baked into the short
- *   link's target — and without a shortener the long export link stays
+ *   link's target, and the link written without its scheme because Keep links
+ *   the bare host too — and without a shortener the long export link stays
  *   ("Kürbissuppe: https://…/exec?f=…&portionen=6"). A recipe without an export
  *   file falls back to "Kürbissuppe (6 Portionen)". On failure the sheet stays
  *   open and shows the reason next to the button, while the button reports the

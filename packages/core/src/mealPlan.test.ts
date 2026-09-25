@@ -4,9 +4,10 @@
  * Both accepted shapes were agreed with the user:
  * - the link shape the app writes today — `Titel: <Export-URL>` with the chosen
  *   size in the URL's fragment (`#portionen=6`, `#menge=500g`);
- * - the short-link shape — `Titel (6 Portionen): https://tinyurl.com/…` — where
- *   the URL states no size, so the visible parenthetical carries it (baked into
- *   the short link's target before shortening);
+ * - the short-link shape — `Titel (6 Portionen): tinyurl.com/…` — where the URL
+ *   states no size, so the visible parenthetical carries it (baked into the
+ *   short link's target before shortening). The line drops the scheme because
+ *   Keep links the bare host too; the parser restores it on read;
  * - the linkless shape with a parenthetical size — `Titel (6 Portionen)`,
  *   `Titel (500 g)`, `Titel (1,5 l)` — with a space or a narrow no-break space
  *   between number and unit.
@@ -228,6 +229,30 @@ describe('parseMealPlanText — link shape', () => {
     expect(parseMealPlanText(`Kürbissuppe (6 Portionen): ${DRIVE_URL}`).planned).toEqual({
       kind: 'servings',
       servings: 6,
+    });
+  });
+
+  it('reads a bare short link as a link and restores its scheme', () => {
+    // The shape the app writes into Keep (mealPlanEntryTextWithShortLink).
+    const parsed = parseMealPlanText('Kürbissuppe (6 Portionen): tinyurl.com/k7f2qa');
+    expect(parsed.title).toBe('Kürbissuppe');
+    expect(parsed.planned).toEqual({ kind: 'servings', servings: 6 });
+    expect(parsed.link).toBe('https://tinyurl.com/k7f2qa');
+    expect(parseMealPlanText('Kürbissuppe (6 Portionen): www.tinyurl.com/k7f2qa').link).toBe(
+      'https://www.tinyurl.com/k7f2qa',
+    );
+  });
+
+  it('leaves a bare domain that is not the shortener host unrecognized', () => {
+    // A scheme-less anything-else is not a Cookbook link line: the whole text
+    // stays the title candidate, so a note that merely mentions a domain is
+    // never mistaken for a planned dish.
+    const text = 'Kürbissuppe: drive.google.com/file/d/FILE_ID/view';
+    expect(parseMealPlanText(text)).toEqual({
+      text,
+      title: text,
+      planned: null,
+      link: null,
     });
   });
 });
@@ -474,19 +499,41 @@ describe('mealPlanEntryLabel', () => {
 });
 
 describe('mealPlanEntryTextWithShortLink', () => {
+  /** The shortener's own answer: the scheme-carrying URL. */
   const SHORT_URL = 'https://tinyurl.com/k7f2qa';
+  /** The same link as the Keep line carries it: without the scheme. */
+  const BARE_SHORT_URL = 'tinyurl.com/k7f2qa';
 
   it('writes the size as the visible label, because the short link hides it', () => {
     expect(
       mealPlanEntryTextWithShortLink('Kürbissuppe', { kind: 'servings', servings: 6 }, SHORT_URL),
-    ).toBe(`Kürbissuppe (6${NNBSP}Portionen): ${SHORT_URL}`);
+    ).toBe(`Kürbissuppe (6${NNBSP}Portionen): ${BARE_SHORT_URL}`);
     expect(
       mealPlanEntryTextWithShortLink(
         'Béchamelsauce',
         { kind: 'yield', quantity: 1500, baseUnit: 'ml' },
         SHORT_URL,
       ),
-    ).toBe(`Béchamelsauce (1,5${NNBSP}l): ${SHORT_URL}`);
+    ).toBe(`Béchamelsauce (1,5${NNBSP}l): ${BARE_SHORT_URL}`);
+  });
+
+  it('writes the link without its scheme, and reads the shortener URL back', () => {
+    // Keep links a bare `tinyurl.com/…` too, so the scheme is dead weight in the
+    // line. The parser restores it, so the value the app trades in stays the
+    // shortener's own URL.
+    const text = mealPlanEntryTextWithShortLink(
+      'Soljanka',
+      { kind: 'servings', servings: 4 },
+      SHORT_URL,
+    );
+    expect(text).toBe(`Soljanka (4${NNBSP}Portionen): ${BARE_SHORT_URL}`);
+    expect(parseMealPlanText(text).link).toBe(SHORT_URL);
+  });
+
+  it('keeps a link that carries no scheme of its own bare', () => {
+    expect(
+      mealPlanEntryTextWithShortLink('Soljanka', { kind: 'servings', servings: 4 }, BARE_SHORT_URL),
+    ).toBe(`Soljanka (4${NNBSP}Portionen): ${BARE_SHORT_URL}`);
   });
 
   it('round-trips through the parser to the same title, size and link', () => {
@@ -507,7 +554,7 @@ describe('mealPlanEntryTextWithShortLink', () => {
         { kind: 'servings', servings: 4 },
         ` ${SHORT_URL} `,
       ),
-    ).toBe(`Soljanka (4${NNBSP}Portionen): ${SHORT_URL}`);
+    ).toBe(`Soljanka (4${NNBSP}Portionen): ${BARE_SHORT_URL}`);
   });
 
   it('is still collected as an instance of its recipe by the removal rule', () => {

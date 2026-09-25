@@ -219,9 +219,12 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   has to stand in the item; the fragment on a Drive fallback link is the same size in the shape
   that page could read. Since the host URL is enormous, the gateway shortens that link on
   request (`POST /shorten`, TinyURL token `TINYURL_API_TOKEN`) and the line becomes
-  „Kürbissuppe (6 Portionen): https://tinyurl.com/…“ — the size moves into the visible label
-  because the short link hides it, while the link's *target* still carries the size. Links are
-  created on demand per (recipe, size) and reused from the plan when it already carries one;
+  „Kürbissuppe (6 Portionen): tinyurl.com/…“ — the size moves into the visible label
+  because the short link hides it, while the link's *target* still carries the size. The short
+  link is written without its `https://`, because Keep links a bare `tinyurl.com/…` too and the
+  scheme only lengthens the line; `parseMealPlanText` restores it on read, so the link the app
+  reuses stays the shortener's own URL. Links are created on demand per (recipe, size) and
+  reused from the plan when it already carries one;
   without a token, or when TinyURL fails, the long URL is written as before. A recipe without an
   export file falls back to the linkless „Kürbissuppe (6 Portionen)“.
   The app owns that rule; the gateway only executes the action. It places the new line above

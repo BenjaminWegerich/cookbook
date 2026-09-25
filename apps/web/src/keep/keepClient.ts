@@ -311,7 +311,9 @@ export async function writeShoppingList(
  * URL as raw text (Keep has no hyperlink-with-text), and the Apps Script host address plus the
  * Drive file id make it enormous. The promised size is already part of `target`, so the short
  * link's target opens the cooking view at the right size — the app writes the size as the
- * line's parenthetical label, because a short link does not show it.
+ * line's parenthetical label, because a short link does not show it, and drops the link's
+ * "https://" (App's `mealPlanEntryTextWithShortLink`), because Keep links the bare host too.
+ * The answer here stays the scheme-carrying URL the shortener returned.
  *
  * A failure is not an error the caller has to handle: the long export URL still opens the
  * cooking view, so the caller catches this and composes the long line instead. The two new

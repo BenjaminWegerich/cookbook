@@ -93,10 +93,11 @@ rejected. The answer is the changed list in the checklist shape of `GET /keep/st
 { "url": "https://<export-host>/exec?f=<id>&portionen=6" }
 ```
 
-The answer is `{ "shortUrl": "https://tinyurl.com/k7f2qa" }`. The meal-plan line carries its
-link as raw text (Keep has no hyperlink-with-text), and the Apps Script address plus the Drive
-file id make that line enormous; with a short link the line reads
-"Kürbissuppe (6 Portionen): https://tinyurl.com/k7f2qa".
+The answer is `{ "shortUrl": "https://tinyurl.com/k7f2qa" }` — the scheme-carrying URL; the app
+drops the `https://` when it writes the line. The meal-plan line carries its link as raw text
+(Keep has no hyperlink-with-text), and the Apps Script address plus the Drive file id make that
+line enormous; with a short link the line reads
+"Kürbissuppe (6 Portionen): tinyurl.com/k7f2qa" — Keep links the bare host too.
 
 The app asks here at the moment a dish is planned, never in advance, because one link exists per
 (recipe, size): the promised size is baked into the link's *target*, since a redirect does not
