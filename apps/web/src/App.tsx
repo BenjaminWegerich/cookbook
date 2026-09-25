@@ -710,6 +710,25 @@ function App() {
     mealPlan !== null && mealPlan.source === keep.state ? mealPlan.resolution : null;
 
   /**
+   * The open overview's *live* plan state, derived from the current resolution,
+   * or null when there is none (Keep off, the resolution is between two Keep
+   * states, or the target is an unrecognized entry — nothing of this applies to
+   * it). The sheet prefers this over the snapshot baked into the target because
+   * the plan can move while the sheet is open: the previous notice's
+   * "Rückgängig" can re-plan or remove the dish, and the meal plan may only
+   * resolve after the sheet was opened. Its badge, its "Geplant" value and its
+   * travel action must follow that. Between a write and the re-resolved plan the
+   * sheet falls back to the snapshot, which is why the target still carries one.
+   */
+  const overviewLivePlan =
+    overviewTarget?.kind === 'recipe' && mealPlanResolution !== null
+      ? {
+          onMealPlan: mealPlanResolution.plannedRecipeTitles.has(overviewTarget.recipe.title),
+          planned: mealPlanResolution.plannedAmounts.get(overviewTarget.recipe.title) ?? null,
+        }
+      : null;
+
+  /**
    * True while the recipe list is the visible layer (no editor, AI screen,
    * sheet or menu above it) — the precondition for the automatic attempt below.
    */
@@ -789,9 +808,11 @@ function App() {
     setNav(null);
   }, [setNav]);
 
-  /** The Keep write actions (stable), pulled out so the callback below can depend on them. */
+  /** The Keep write actions (stable), pulled out so the callbacks below can depend on them. */
   const planMeal = keep.planMeal;
   const undoMealPlan = keep.undoMealPlan;
+  const checkMealPlan = keep.checkMealPlan;
+  const uncheckMealPlan = keep.uncheckMealPlan;
 
   /**
    * Performs the meal-plan write for the open overview's recipe. The overlay
@@ -849,6 +870,138 @@ function App() {
     },
     [overviewTarget, keep.state, planMeal, undoMealPlan, closeOverview, showSnackbar],
   );
+
+  /**
+   * Performs the "Umplanen" write for the open overview's recipe: replaces the
+   * recipe's current entries with one at the newly chosen size. The overlay hands
+   * over the complete new entry text; the entries to replace are every line of
+   * the raw Keep plan that names the same recipe (core's
+   * `mealPlanEntriesForTitle`) — the same rule the first-time plan uses, so the
+   * dish ends up on the plan exactly once and its link carries the new size.
+   *
+   * Unlike "Vom Plan entfernen", this does *not* keep the overview open: the
+   * whole flow closes back to the list like planning does (decided with the
+   * user), so only "Abbrechen" returns to the overview. The card there already
+   * carries the new size through the re-resolved plan. A failure is thrown on to
+   * the overlay, which stays open and shows the reason next to the button.
+   *
+   * "Rückgängig" is the same full restore as planning's undo: it removes the
+   * line this write added and puts back the exact lines it replaced
+   * (`undoMealPlan`). Both texts are captured here, because only this callback
+   * knows what the write actually changed.
+   */
+  const changeMealPlanAmount = useCallback(
+    async (entryText: string): Promise<void> => {
+      const targetRecipe = overviewTarget?.kind === 'recipe' ? overviewTarget.recipe : null;
+      if (targetRecipe === null) return;
+      // The raw Keep items, not the resolved cards: the cards hide checked
+      // entries, and a ticked-off line is still a duplicate in Keep.
+      const texts = (keep.state?.mealplan.items ?? []).map((item) => item.text);
+      const replace = mealPlanEntriesForTitle(texts, targetRecipe.title);
+      await planMeal(entryText, replace);
+      closeOverview();
+      showSnackbar({
+        text: `Menge für ${targetRecipe.title} auf dem Essensplan geändert. Die Einkaufsliste bleibt unverändert.`,
+        action: {
+          label: 'Rückgängig',
+          busyLabel: 'Wird rückgängig gemacht …',
+          icon: <UndoIcon className="button-icon" />,
+          run: async (): Promise<void> => {
+            try {
+              await undoMealPlan(entryText, replace);
+            } catch (err) {
+              const reason = err instanceof Error ? err.message : String(err);
+              showSnackbar({
+                tone: 'error',
+                text: `Die Änderung für „${targetRecipe.title}“ konnte nicht rückgängig gemacht werden. ${reason}`,
+              });
+            }
+          },
+        },
+      });
+    },
+    [overviewTarget, keep.state, planMeal, undoMealPlan, closeOverview, showSnackbar],
+  );
+
+  /**
+   * Takes the open overview's meal-plan entry off the plan: a recognized recipe
+   * ("Mehr" → "Vom Plan entfernen") or an unrecognized entry (its own danger
+   * button), which has no recipe behind it. Removing deliberately *checks* the
+   * Keep lines instead of deleting them, so the user can still see in Keep what
+   * was cooked; `checkMealPlan` is therefore the write and `uncheckMealPlan` its
+   * undo.
+   *
+   * What is checked differs by card type, and both cases hand the gateway the
+   * exact Keep texts:
+   * - a recognized recipe owns every line naming it in the raw plan (core's
+   *   `mealPlanEntriesForTitle`), the same recognition rule the write uses, so
+   *   duplicates all move together;
+   * - an unrecognized entry *is* its one line — the target's complete text,
+   *   which the recognized path would parse apart.
+   *
+   * The whole flow closes back to the list (decided with the user), exactly like
+   * the two write overlays, so only "Abbrechen" or the close button returns to
+   * the sheet.
+   *
+   * The Keep connection state can fail, and the button that triggered this has
+   * no place to show a reason, so a failure is reported as its own error notice
+   * instead of being thrown. The success notice names the entry the way the
+   * sheet does — a recipe by title, an unrecognized entry by its text without
+   * the export link — because it is the dish that left the plan, not one of its
+   * Keep lines.
+   */
+  const removeFromMealPlan = useCallback((): void => {
+    void (async (): Promise<void> => {
+      if (overviewTarget === null) return;
+      let entries: string[];
+      let name: string;
+      if (overviewTarget.kind === 'recipe') {
+        // The raw Keep items, not the resolved cards: the cards hide checked
+        // entries, and a ticked-off line is still a duplicate in Keep.
+        const texts = (keep.state?.mealplan.items ?? []).map((item) => item.text);
+        entries = mealPlanEntriesForTitle(texts, overviewTarget.recipe.title);
+        name = overviewTarget.recipe.title;
+      } else {
+        // The unrecognized entry's complete text is the exact Keep line; its
+        // display text (the line without the export URL) is what the sheet shows
+        // as the title and what the notice names.
+        entries = [overviewTarget.text];
+        name = overviewTarget.displayText;
+      }
+      try {
+        await checkMealPlan(entries);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        showSnackbar({
+          tone: 'error',
+          text: `„${name}“ konnte nicht vom Essensplan entfernt werden. ${reason}`,
+        });
+        return;
+      }
+      closeOverview();
+      showSnackbar({
+        text: `${name} vom Essensplan entfernt. Die Einkaufsliste bleibt unverändert.`,
+        action: {
+          label: 'Rückgängig',
+          busyLabel: 'Wird rückgängig gemacht …',
+          icon: <UndoIcon className="button-icon" />,
+          run: async (): Promise<void> => {
+            try {
+              // Ticking the lines back on is the exact inverse of the removal, so
+              // the dish reappears on the plan with the size it had.
+              await uncheckMealPlan(entries);
+            } catch (err) {
+              const reason = err instanceof Error ? err.message : String(err);
+              showSnackbar({
+                tone: 'error',
+                text: `„${name}“ konnte nicht wieder eingeplant werden. ${reason}`,
+              });
+            }
+          },
+        },
+      });
+    })();
+  }, [overviewTarget, keep.state, checkMealPlan, uncheckMealPlan, closeOverview, showSnackbar]);
 
   /**
    * Shows the base recipe in the editor (`draft` prefills a brand-new recipe)
@@ -1197,6 +1350,9 @@ function App() {
           onEdit={openEditor}
           onAiEdit={openAiEdit}
           onAddToMealPlan={addToMealPlan}
+          onChangeAmount={changeMealPlanAmount}
+          onRemoveFromMealPlan={removeFromMealPlan}
+          livePlan={overviewLivePlan}
         />
       )}
 

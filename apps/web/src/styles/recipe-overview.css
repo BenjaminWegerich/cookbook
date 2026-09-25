@@ -322,6 +322,17 @@
   color: var(--color-ink-muted);
 }
 
+/* The menu's destructive entry ("Vom Plan entfernen") carries the danger colour
+   on its label and its symbol, so the one action that changes the meal plan is
+   readable as such at a glance. The selector names the button element and the
+   shared `.danger-text` class explicitly: the generic `.overview-menu button`
+   and `.overview-menu svg` rules above would otherwise win on specificity and
+   repaint the entry in the plain ink colour. */
+.overview-menu button.danger-text,
+.overview-menu button.danger-text svg {
+  color: var(--color-danger);
+}
+
 /* Feedback line for the placeholder actions (not built yet). */
 .overview-notice {
   margin: 0;

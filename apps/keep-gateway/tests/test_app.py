@@ -69,6 +69,8 @@ class FakeKeepClient:
         self._error = error
         # Every write the boundary performed, in order: (entries, replacements).
         self.writes: list[tuple[list[str], list[str]]] = []
+        # Every check write, in order: (check, uncheck).
+        self.checks: list[tuple[list[str], list[str]]] = []
 
     def read_state(self) -> dict:
         if self._error is not None:
@@ -79,6 +81,12 @@ class FakeKeepClient:
         if self._error is not None:
             raise self._error
         self.writes.append((list(entries), list(replace)))
+        return self._state
+
+    def set_meal_plan_checked(self, check: list[str], uncheck: list[str]) -> dict:
+        if self._error is not None:
+            raise self._error
+        self.checks.append((list(check), list(uncheck)))
         return self._state
 
 
@@ -427,6 +435,113 @@ class GatewayBoundaryTests(unittest.TestCase):
         app, _fake = self.build_app()
         with app.test_client() as client:
             response = client.post("/keep/mealplan", json={"add": "Kürbissuppe"})
+        self.assertEqual(response.status_code, 401)
+
+    # ----------------------------------------------------------------------------------
+    # POST /keep/mealplan/check ("Vom Plan entfernen" and its undo)
+    # ----------------------------------------------------------------------------------
+
+    def test_mealplan_check_passes_both_directions_to_the_client(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan/check",
+                headers=self.auth_headers(),
+                json={"check": ["Kürbissuppe (6 Portionen)"], "uncheck": ["Brot"]},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.checks, [(["Kürbissuppe (6 Portionen)"], ["Brot"])])
+        self.assertEqual(response.get_json()["mealplan"]["title"], "Essensplan")
+
+    def test_mealplan_check_accepts_each_direction_alone(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            check_only = client.post(
+                "/keep/mealplan/check",
+                headers=self.auth_headers(),
+                json={"check": ["Kürbissuppe"]},
+            )
+            uncheck_only = client.post(
+                "/keep/mealplan/check",
+                headers=self.auth_headers(),
+                json={"uncheck": ["Kürbissuppe"]},
+            )
+        self.assertEqual(check_only.status_code, 200)
+        self.assertEqual(uncheck_only.status_code, 200)
+        self.assertEqual(fake.checks, [(["Kürbissuppe"], []), ([], ["Kürbissuppe"])])
+
+    def test_mealplan_check_trims_the_entry_texts(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan/check",
+                headers=self.auth_headers(),
+                json={"check": ["  Kürbissuppe  "]},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.checks, [(["Kürbissuppe"], [])])
+
+    def test_mealplan_check_rejects_a_missing_or_empty_direction(self) -> None:
+        app, fake = self.build_app()
+        bodies = (
+            {},
+            {"check": [], "uncheck": []},
+            {"check": ""},
+            {"check": ["x", ""]},
+            {"check": [1]},
+            {"uncheck": "x"},
+        )
+        for body in bodies:
+            with self.subTest(body=body):
+                with app.test_client() as client:
+                    response = client.post(
+                        "/keep/mealplan/check", headers=self.auth_headers(), json=body
+                    )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+        self.assertEqual(fake.checks, [])
+
+    def test_mealplan_check_rejects_the_same_entry_in_both_directions(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan/check",
+                headers=self.auth_headers(),
+                json={"check": ["Kürbissuppe"], "uncheck": ["Kürbissuppe"]},
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+        self.assertEqual(fake.checks, [])
+
+    def test_mealplan_check_requires_a_json_object(self) -> None:
+        app, _fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan/check",
+                headers=self.auth_headers(),
+                data="not json",
+                content_type="text/plain",
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+
+    def test_mealplan_check_reports_keep_failures_with_their_code(self) -> None:
+        app, _fake = self.build_app(
+            client=FakeKeepClient(error=KeepAuthRejected("Google rejected the Keep credential."))
+        )
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/mealplan/check",
+                headers=self.auth_headers(),
+                json={"check": ["Kürbissuppe"]},
+            )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json()["error"]["code"], "keep_auth_rejected")
+
+    def test_mealplan_check_still_requires_a_token(self) -> None:
+        app, _fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post("/keep/mealplan/check", json={"check": ["Kürbissuppe"]})
         self.assertEqual(response.status_code, 401)
 
     # ----------------------------------------------------------------------------------

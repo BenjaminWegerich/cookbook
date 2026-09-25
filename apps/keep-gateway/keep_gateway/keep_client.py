@@ -100,6 +100,60 @@ def describe_list(target: node.List) -> dict[str, Any]:
     return {"title": target.title or "", "items": items}
 
 
+def verify_meal_plan_checked_state(
+    mealplan: dict[str, Any], checked: Iterable[str], unchecked: Iterable[str]
+) -> None:
+    """Refuse a check/uncheck whose result is not exactly what was asked.
+
+    The app's "Vom Plan entfernen" ticks a meal-plan line off and its undo ticks
+    it back on; both must be verified before the app reports success, exactly
+    like the add/replace write (`verify_meal_plan_state`). For every text:
+
+      * it must still be present in the list. A line the user deleted in Keep in
+        the meantime cannot be ticked, and a silent no-op must not look like a
+        success - the app would remove a card that is no longer there;
+      * every item carrying that text must be in the requested state. A dish can
+        have more than one line (the app's own duplicate rule recognizes every
+        instance of one recipe), and "removed from the plan" means all of them.
+
+    A text asked for in both directions is a caller bug, not a Keep problem, and
+    is refused before any request (see `KeepClient.set_meal_plan_checked`).
+    """
+    # Compare on the content: Keep may keep surrounding whitespace that the
+    # app's parsed texts do not carry.
+    wanted_checked = [text.strip() for text in checked]
+    wanted_unchecked = [text.strip() for text in unchecked]
+    items = [
+        {"text": item["text"].strip(), "checked": bool(item["checked"])}
+        for item in mealplan["items"]
+    ]
+    present = {item["text"] for item in items}
+
+    for text in wanted_checked:
+        if text not in present:
+            raise KeepApiError(
+                "The meal plan no longer carries an entry the action named.",
+                detail=f"cannot check a missing entry: {text!r}",
+            )
+        if any(item["text"] == text and not item["checked"] for item in items):
+            raise KeepApiError(
+                "A meal-plan entry the action named was not checked.",
+                detail=f"still unchecked: {text!r}",
+            )
+
+    for text in wanted_unchecked:
+        if text not in present:
+            raise KeepApiError(
+                "The meal plan no longer carries an entry the action named.",
+                detail=f"cannot uncheck a missing entry: {text!r}",
+            )
+        if any(item["text"] == text and item["checked"] for item in items):
+            raise KeepApiError(
+                "A meal-plan entry the action named was still checked.",
+                detail=f"still checked: {text!r}",
+            )
+
+
 def verify_meal_plan_state(
     mealplan: dict[str, Any], added: Iterable[str], replaced: Iterable[str]
 ) -> None:
@@ -344,6 +398,59 @@ class KeepClient:
 
         mealplan_state = describe_list(mealplan)
         verify_meal_plan_state(mealplan_state, added, replaced)
+        return {"mealplan": mealplan_state}
+
+    def set_meal_plan_checked(
+        self, check: Iterable[str], uncheck: Iterable[str]
+    ) -> dict[str, Any]:
+        """Tick ("check") or untick meal-plan lines, changing nothing else.
+
+        This is the app's "Vom Plan entfernen" and its undo. Removing a dish from
+        the meal plan deliberately does **not** delete the Keep line: it is
+        ticked off, so the user can still see in Keep what was cooked. `check`
+        are the exact texts to tick, `uncheck` the exact texts to tick back on;
+        the app owns the rule that decides which lines belong to a recipe
+        (`mealPlanEntriesForTitle` in `packages/core/src/mealPlan.ts`), so this
+        method only executes the action it is handed.
+
+        Only the `checked` flag is written - the text, the sort ids and every
+        unrelated item stay exactly as they are, and the whole change is one
+        sync. The list read back from that sync is verified
+        (`verify_meal_plan_checked_state`) before it is returned, so the app
+        never removes a card on the strength of an unverified write. The answer
+        carries only the meal plan, the one list this action changed.
+        """
+        checked = [text.strip() for text in check]
+        unchecked = [text.strip() for text in uncheck]
+        if any(text == "" for text in [*checked, *unchecked]):
+            raise ValueError("Checked entry texts must be non-empty.")
+        # A write that changes nothing would sync an untouched list and (worse)
+        # could look like a successful one; the HTTP boundary already refuses
+        # it, and this guard keeps a direct caller from the same mistake.
+        if not checked and not unchecked:
+            raise ValueError("A check write must check or uncheck at least one entry.")
+        overlap = set(checked) & set(unchecked)
+        if overlap:
+            raise ValueError(
+                f"An entry cannot be checked and unchecked at once: {sorted(overlap)}"
+            )
+
+        keep = authenticate(self._config)
+        mealplan = find_list_by_title(keep, self._config.mealplan_title)
+
+        # One lookup for both directions, so a text can only ever land in one
+        # state. `wanted.get` returns None for an entry the action does not name,
+        # which is what leaves every other line untouched.
+        wanted: dict[str, bool] = {text: True for text in checked}
+        wanted.update({text: False for text in unchecked})
+        for item in mealplan.items:
+            state = wanted.get(item.text.strip())
+            if state is not None:
+                item.checked = state
+        sync(keep)
+
+        mealplan_state = describe_list(mealplan)
+        verify_meal_plan_checked_state(mealplan_state, checked, unchecked)
         return {"mealplan": mealplan_state}
 
     # ----------------------------------------------------------------------------------

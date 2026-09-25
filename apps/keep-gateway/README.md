@@ -12,9 +12,10 @@ spike that proved the approach is in [`spike/keep-feasibility/`](../../spike/kee
 
 **Status: deployed and verified.** The service runs on Cloud Run in `europe-west3`
 (scale-to-zero), `GET /health` answers, and the read path returns both real Keep lists end to
-end. The meal-plan write (`POST /keep/mealplan`) is implemented; the shopping-list write and
-the aisle sort still answer `501 not_implemented` until their prerequisites exist (the
-ingredient-category and write-action steps). Deployment, the credential alert and the €1
+end. Both meal-plan writes are implemented — the plan write (`POST /keep/mealplan`) and ticking
+a dish off (`POST /keep/mealplan/check`); the shopping-list write and the aisle sort still
+answer `501 not_implemented` until their prerequisites exist (the ingredient-category and
+write-action steps). Deployment, the credential alert and the €1
 spend guardrail are all in place — see
 [`deploy/cloud-run/README.md`](deploy/cloud-run/README.md).
 
@@ -25,6 +26,7 @@ spend guardrail are all in place — see
 | `GET`  | `/health`              | Liveness. No Keep call, no token, no config details. | works |
 | `GET`  | `/keep/state`          | Meal plan and shopping list, in Keep's display order. | works |
 | `POST` | `/keep/mealplan`       | Add dish lines to "Essensplan".                       | works |
+| `POST` | `/keep/mealplan/check` | Tick meal-plan lines off / back on ("Vom Plan entfernen"). | works |
 | `POST` | `/keep/shopping`       | Add a recipe's scaled ingredients to "Einkaufsliste". | `501` until the write-action step |
 | `POST` | `/keep/shopping/sort`  | Reorder the shopping list by category/aisle.          | `501` until the category and write-action steps |
 
@@ -81,6 +83,25 @@ rejected. The answer is the changed list in the checklist shape of `GET /keep/st
   }
 }
 ```
+
+`POST /keep/mealplan/check` ticks meal-plan lines off or back on, without deleting them — the
+recipe overview's "Vom Plan entfernen" and its "Rückgängig":
+
+```json
+{
+  "check": ["Kürbissuppe: https://drive.google.com/file/d/<id>/view#portionen=6"],
+  "uncheck": []
+}
+```
+
+`check` are the exact texts to tick off, `uncheck` the exact texts to tick back on. At least one
+of the two must be non-empty and no text may name both; a malformed body is a `400`. The app owns
+the rule that decides which lines belong to a recipe (`mealPlanEntriesForTitle` in
+`packages/core/src/mealPlan.ts`), so the gateway only executes the action. Only the `checked`
+flag changes — text, sort ids and every unrelated item stay as they are — the change is one
+sync, and the state read back is verified (a named line that is missing, or that did not reach
+the requested state, is a `keep_api_error` instead of a reported success). The answer is the
+changed list in the same shape as `POST /keep/mealplan`.
 
 Every failure — including `404` and `405` — answers with the same shape, so the app can
 branch on a stable code and switch Keep features off cleanly (N5):

@@ -194,9 +194,14 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   its caption/value row („Geplant 6 Portionen“ / „Geplant 1,5 l“), turns „Einplanen“ into
   „Umplanen“ and carries the „Eingeplant“ badge only when it was opened from „Sammlung“ — on
   the „Essensplan“ tab the tab itself already says it. An unrecognized entry opens the
-  replace/drop destination described above. The „Jetzt kochen“, „Umplanen“, „Vom Plan
-  entfernen“ and „Eintrag ersetzen“ actions are still placeholders; „Einplanen“ writes the
-  dish to the meal plan.
+  replace/drop destination described above. „Einplanen“ writes the dish to the meal plan;
+  „Umplanen“ opens the same overlay in a replan mode that pre-selects the plan's stated size
+  and replaces the entry with „Menge ändern“. Every carry-out action ends the flow back at the
+  list: a planned recipe's „Vom Plan entfernen“ (in its „Mehr“ menu) and an unrecognized
+  entry's own „Vom Plan entfernen“ button both check the entry off. The sheet renders the
+  *live* plan App derives from the current resolution, so its „Geplant“ value, its „Eingeplant“
+  badge and its travel action follow the plan while it is open. „Jetzt kochen“ and the three
+  „Eintrag ersetzen“ entries are still placeholders.
 - **Meal-plan write.** „Zum Essensplan hinzufügen“ sends the complete entry line and the exact
   texts of every line naming the same recipe — checked or not, and whatever size it states
   (`mealPlanEntriesForTitle` next to the parser). The line is built by `mealPlanEntryText` and
@@ -211,6 +216,15 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   successful unverified. Success is reported by the shared snackbar with a full undo
   („Rückgängig“ puts the replaced lines back; the gateway accepts one or several added lines
   for exactly that, see [ui_patterns.md](ui_patterns.md)).
+- **Removing from the plan is a check, not a delete.** „Vom Plan entfernen“ ticks the entry's
+  Keep lines off (`POST /keep/mealplan/check`) instead of deleting them, so the lines stay
+  visible in Keep as cooked; the success snackbar's „Rückgängig“ ticks them back on. The app
+  sends the exact texts it recognized as the entry: a recognized recipe's lines by the same
+  `mealPlanEntriesForTitle` rule the write uses, an unrecognized entry's one complete line. The
+  gateway writes only the `checked` flag, syncs once and verifies the result before answering
+  the changed list. Changing the size instead reuses the ordinary write: the new line replaces
+  the old ones. Both notices name the entry (a recipe by title, an unrecognized line by its text
+  without the export link) and repeat that the shopping list stays untouched.
 - **Sign-in.** Started automatically once the Google login is done, reopenable from the
   „Essensplan“ tab; the token is held in memory only, like the AI API key (N6), and nothing has
   to be looked up by hand any more. An expired token is renewed silently; only when Google

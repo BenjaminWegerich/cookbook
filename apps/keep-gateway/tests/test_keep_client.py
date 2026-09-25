@@ -288,6 +288,173 @@ class ListThatDropsWrites(FakeList):
         return FakeItem(text)
 
 
+class VerifyMealPlanCheckedStateTests(unittest.TestCase):
+    """The check write's own check: a tick that did not land must never look like success."""
+
+    @staticmethod
+    def state(*items: tuple[str, bool]) -> dict:
+        return {
+            "title": "Essensplan",
+            "items": [{"text": text, "checked": checked} for text, checked in items],
+        }
+
+    def test_accepts_a_checked_entry(self) -> None:
+        keep_client.verify_meal_plan_checked_state(
+            self.state(("Kürbissuppe (6 Portionen)", True), ("Brot", False)),
+            ["Kürbissuppe (6 Portionen)"],
+            [],
+        )
+
+    def test_accepts_an_unchecked_entry(self) -> None:
+        """The undo shape: a line that was ticked off is ticked back on."""
+        keep_client.verify_meal_plan_checked_state(
+            self.state(("Kürbissuppe (6 Portionen)", False)),
+            [],
+            ["Kürbissuppe (6 Portionen)"],
+        )
+
+    def test_matches_ignoring_surrounding_whitespace(self) -> None:
+        keep_client.verify_meal_plan_checked_state(
+            self.state(("  Kürbissuppe  ", True)), ["Kürbissuppe"], []
+        )
+
+    def test_reports_a_missing_entry(self) -> None:
+        """A line the user deleted in Keep cannot be ticked."""
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_meal_plan_checked_state(
+                self.state(("Brot", False)), ["Kürbissuppe"], []
+            )
+
+    def test_reports_an_entry_that_was_not_checked(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_meal_plan_checked_state(
+                self.state(("Kürbissuppe", False)), ["Kürbissuppe"], []
+            )
+
+    def test_reports_an_entry_that_was_not_unchecked(self) -> None:
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_meal_plan_checked_state(
+                self.state(("Kürbissuppe", True)), [], ["Kürbissuppe"]
+            )
+
+    def test_checks_every_duplicate_of_the_same_text(self) -> None:
+        """A dish with two lines is only off the plan when both are ticked."""
+        with self.assertRaises(KeepApiError):
+            keep_client.verify_meal_plan_checked_state(
+                self.state(("Kürbissuppe", True), ("Kürbissuppe", False)),
+                ["Kürbissuppe"],
+                [],
+            )
+
+
+class ListThatDropsChecks(FakeList):
+    """A list whose check marks never stick — a server that stored something else."""
+
+    @property
+    def items(self) -> list[FakeItem]:
+        return [
+            FakeItem(item.text, checked=False, sort=item.sort) for item in super().items
+        ]
+
+
+class SetMealPlanCheckedTests(unittest.TestCase):
+    """The check write: tick exactly the named lines, leave everything else alone."""
+
+    def _client_with(self, plan: FakeList):
+        """A `KeepClient` whose authentication and list lookup are replaced by fakes."""
+        keep = mock.MagicMock()
+        for patch in (
+            mock.patch.object(keep_client, "authenticate", return_value=keep),
+            mock.patch.object(keep_client, "find_list_by_title", return_value=plan),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+        return keep_client.KeepClient(make_config()), keep
+
+    def test_checks_the_named_entry_and_leaves_the_rest_untouched(self) -> None:
+        plan = FakeList(
+            "Essensplan",
+            [
+                FakeItem("Kürbissuppe (6 Portionen)", sort=5000),
+                FakeItem("Brot", sort=3000),
+            ],
+        )
+        client, keep = self._client_with(plan)
+
+        state = client.set_meal_plan_checked(["Kürbissuppe (6 Portionen)"], [])
+
+        # One sync carries the whole change, and only the checked flag moved: the
+        # text and the sort id of every item are exactly what they were.
+        keep.sync.assert_called_once()
+        plan_items = [item for item in plan._items if item.text != "Brot"]
+        self.assertEqual(plan_items[0].sort, 5000)
+        brot = next(item for item in plan._items if item.text == "Brot")
+        self.assertEqual((brot.checked, brot.sort), (False, 3000))
+        self.assertTrue(
+            next(
+                item
+                for item in state["mealplan"]["items"]
+                if item["text"] == "Kürbissuppe (6 Portionen)"
+            )["checked"]
+        )
+        # Only the changed list is answered: the check never reads the shopping
+        # list, so a missing note cannot fail a successful write.
+        self.assertEqual(set(state), {"mealplan"})
+
+    def test_unchecks_a_line_again(self) -> None:
+        """The undo shape: the line goes back on the plan untouched."""
+        plan = FakeList(
+            "Essensplan", [FakeItem("Kürbissuppe (6 Portionen)", checked=True, sort=5000)]
+        )
+        client, keep = self._client_with(plan)
+
+        state = client.set_meal_plan_checked([], ["Kürbissuppe (6 Portionen)"])
+
+        keep.sync.assert_called_once()
+        self.assertFalse(state["mealplan"]["items"][0]["checked"])
+
+    def test_matches_texts_ignoring_surrounding_whitespace(self) -> None:
+        """Keep may keep whitespace the app's parsed texts do not carry."""
+        plan = FakeList("Essensplan", [FakeItem("  Kürbissuppe  ", sort=5000)])
+        client, _keep = self._client_with(plan)
+
+        state = client.set_meal_plan_checked(["Kürbissuppe"], [])
+
+        self.assertTrue(state["mealplan"]["items"][0]["checked"])
+
+    def test_refuses_a_write_that_changes_nothing(self) -> None:
+        plan = FakeList("Essensplan", [FakeItem("Kürbissuppe", sort=1000)])
+        client, keep = self._client_with(plan)
+
+        with self.assertRaises(ValueError):
+            client.set_meal_plan_checked([], [])
+        keep.sync.assert_not_called()
+
+    def test_refuses_the_same_entry_in_both_directions(self) -> None:
+        plan = FakeList("Essensplan", [FakeItem("Kürbissuppe", sort=1000)])
+        client, keep = self._client_with(plan)
+
+        with self.assertRaises(ValueError):
+            client.set_meal_plan_checked(["Kürbissuppe"], ["Kürbissuppe"])
+        keep.sync.assert_not_called()
+        self.assertFalse(plan._items[0].checked)
+
+    def test_refuses_an_empty_entry_text(self) -> None:
+        plan = FakeList("Essensplan", [FakeItem("Kürbissuppe", sort=1000)])
+        client, keep = self._client_with(plan)
+
+        with self.assertRaises(ValueError):
+            client.set_meal_plan_checked([""], [])
+        keep.sync.assert_not_called()
+
+    def test_a_write_that_does_not_land_raises_instead_of_reporting_success(self) -> None:
+        plan = ListThatDropsChecks("Essensplan", [FakeItem("Kürbissuppe", sort=1000)])
+        client, _keep = self._client_with(plan)
+
+        with self.assertRaises(KeepApiError):
+            client.set_meal_plan_checked(["Kürbissuppe"], [])
+
+
 class AddMealPlanEntriesTests(unittest.TestCase):
     """The write path: replace what the app recognized, place the new entries on top."""
 

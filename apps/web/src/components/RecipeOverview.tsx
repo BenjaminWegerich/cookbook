@@ -13,7 +13,12 @@
  * 2. **Known recipe on the meal plan** — the same details, plus the size the
  *    meal-plan entry states as a "Geplant" caption/value item in the existing
  *    meta row (`formatPlannedAmount` in @cookbook/core), and "Einplanen" becomes "Umplanen" with
- *    the calendar-and-pencil glyph. The "Eingeplant" badge appears only when
+ *    the calendar-and-pencil glyph. "Umplanen" opens the same overlay in its
+ *    replan mode, which pre-selects the plan's size and changes the entry with
+ *    "Menge ändern" (./MealPlanSheet). "Vom Plan entfernen" does not sit in the
+ *    action row: it is the last entry of this variant's "Mehr" menu (decided
+ *    with the user), painted in the danger colour, and it *checks* the Keep line
+ *    rather than deleting it. The "Eingeplant" badge appears only when
  *    the card was opened from the "Sammlung" tab (target `source`
  *    `collection`): in "Essensplan" the tab itself already states that the dish
  *    is planned. The badge sits on its own line under the title, not inline
@@ -50,10 +55,18 @@
  * - one action row: "Jetzt kochen" (skillet) is the primary action, growing to
  *   fill the row so it is as wide as possible, next to "Einplanen"/"Umplanen"
  *   (calendar with plus / with pencil) and the "Mehr" button (vertical three
- *   dots), which stay only as wide as their labels need. "Jetzt kochen",
- *   "Umplanen", "Vom Plan entfernen" and the three "Eintrag ersetzen" entries
- *   are placeholders for now: they report that the feature is not built yet
- *   instead of silently doing nothing.
+ *   dots), which stay only as wide as their labels need. "Jetzt kochen" and the
+ *   three "Eintrag ersetzen" entries are placeholders for now: they report that
+ *   the feature is not built yet instead of silently doing nothing.
+ * - a recognized recipe's plan state is rendered from the *live* plan App
+ *   derives (`livePlan`), not only from the snapshot the target was opened with.
+ *   Every action here ends the whole flow (the two overlay writes and "Vom Plan
+ *   entfernen"), but the plan can still move while the sheet is open — the
+ *   previous notice's "Rückgängig", or the meal plan resolving after the sheet
+ *   was opened — so its badge, its "Geplant" value and its travel action follow
+ *   the plan rather than a stale snapshot. The snapshot stays the fallback for
+ *   the moment between a write and the re-resolved plan (and when Keep is off,
+ *   where nothing is planned anyway).
  * - the meal-plan overlay is a layer of this sheet, not a screen of its own:
  *   Escape and the browser Back close it first and the sheet only after it
  *   (RecipeOverviewHandle), and a recipe is only offered once its file has been
@@ -65,8 +78,9 @@
  *   the overview's per-recipe action must not be named "Zur Liste hinzufügen".
  * - "Mehr" (and, for an unrecognized entry, "Eintrag ersetzen") opens its
  *   actions as a small popover above the row: "Manuell bearbeiten" opens the
- *   editor, "Mit KI bearbeiten" opens the AI-edit screen. The menu is closed by
- *   an outside tap, Escape and any chosen entry.
+ *   editor, "Mit KI bearbeiten" opens the AI-edit screen, and a planned recipe
+ *   additionally offers "Vom Plan entfernen". The menu is closed by an outside
+ *   tap, Escape and any chosen entry.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -145,11 +159,38 @@ interface RecipeOverviewProps {
   /** Opens the AI-edit screen ("Mehr" → "Mit KI bearbeiten"). */
   onAiEdit: (recipe: StoredRecipe) => void;
   /**
-   * Performs the meal-plan write for the size chosen in the overlay (App owns
-   * the meal-plan state, so it also knows which entries to replace). Resolves
-   * when the dish is planned; rejects with the reason when it failed.
+   * Performs the meal-plan write for the size chosen in the "Einplanen"
+   * overlay (App owns the meal-plan state, so it also knows which entries to
+   * replace). Resolves when the dish is planned; rejects with the reason when it
+   * failed. Planning ends the whole flow.
    */
   onAddToMealPlan: (entryText: string) => Promise<void>;
+  /**
+   * Performs the "Umplanen" write for the size chosen in the overlay: replaces
+   * the recipe's entries with one at the new size. Resolves when the plan holds
+   * the new size — App then closes the whole flow back to the list, exactly like
+   * planning — and rejects with the reason when it failed.
+   */
+  onChangeAmount: (entryText: string) => Promise<void>;
+  /**
+   * Takes the open meal-plan entry off the plan: a recognized recipe's "Mehr" →
+   * "Vom Plan entfernen", or the unrecognized entry's own danger button. App
+   * owns the Keep write and the undo notice; this callback only closes the menu
+   * (where there is one) and hands over, because the entry cannot report a
+   * failure itself. On success App closes the whole flow.
+   */
+  onRemoveFromMealPlan: () => void;
+  /**
+   * The recipe's *current* plan state, derived by App from the live meal plan,
+   * or null while none is resolved (Keep off or loading, or the recipe is the
+   * unrecognized variant). The sheet prefers it over the target's own snapshot:
+   * the plan can move while the sheet is open — a previous notice's
+   * "Rückgängig", or the meal plan resolving after the sheet was opened — so its
+   * badge, its "Geplant" value and its travel action must follow the plan while
+   * it is visible. The snapshot stays the fallback for the moment between a
+   * write and the re-resolved plan (see App).
+   */
+  livePlan: { onMealPlan: boolean; planned: PlannedAmount | null } | null;
   /** Browser-back consumer handle (React 19: ref is a regular prop). */
   ref?: Ref<RecipeOverviewHandle>;
 }
@@ -181,6 +222,9 @@ function RecipeOverview({
   onEdit,
   onAiEdit,
   onAddToMealPlan,
+  onChangeAmount,
+  onRemoveFromMealPlan,
+  livePlan,
   ref,
 }: RecipeOverviewProps) {
   /** The full recipe; null while it is being read from Drive (recipe target). */
@@ -208,6 +252,19 @@ function RecipeOverview({
   const recipe = target.kind === 'recipe' ? target.recipe : null;
   /** File to read for the details; null for an unrecognized entry (no read). */
   const fileId = recipe?.fileId ?? null;
+  /**
+   * The plan state the sheet renders: the live derivation when App has one, the
+   * snapshot the target was opened with otherwise (see the prop's doc). Both
+   * fields belong together, so one expression decides them.
+   */
+  const onMealPlan =
+    target.kind === 'recipe'
+      ? livePlan !== null
+        ? livePlan.onMealPlan
+        : target.onMealPlan
+      : false;
+  const planned: PlannedAmount | null =
+    target.kind === 'recipe' ? (livePlan !== null ? livePlan.planned : target.planned) : null;
 
   // Read the recipe file for the details the list entry does not carry. The
   // sheet unmounts when it closes, so every open starts from the initial null
@@ -315,6 +372,17 @@ function RecipeOverview({
     if (recipe !== null) onAiEdit(recipe);
   };
 
+  /**
+   * "Vom Plan entfernen": closes the menu (when the button sits in one) and
+   * hands the write to App, which owns the Keep action and the undo notice. App
+   * closes the whole flow on success, so the user lands back on the list — the
+   * card there has lost its "Eingeplant" badge, or is gone from "Essensplan".
+   */
+  const removeFromPlan = (): void => {
+    setOpenMenu(null);
+    onRemoveFromMealPlan();
+  };
+
   const title =
     target.kind === 'unknown' ? target.displayText : (details?.title ?? target.recipe.title);
   const description = details?.description;
@@ -327,16 +395,14 @@ function RecipeOverview({
       ? displayTimeText(details.total_time)
       : null;
   /** The meal-plan size as display text (recipe target only), or null. */
-  const plannedText =
-    target.kind === 'recipe' && target.planned !== null
-      ? formatPlannedAmount(target.planned)
-      : null;
+  const plannedText = planned !== null ? formatPlannedAmount(planned) : null;
   /**
    * The "Eingeplant" badge is shown only when a planned recipe was opened from
    * "Sammlung": on the "Essensplan" tab the tab already carries that statement.
+   * Like the size above it follows the live plan, so taking the dish off the
+   * plan removes the badge while this sheet is still open.
    */
-  const showPlannedBadge =
-    target.kind === 'recipe' && target.source === 'collection' && target.onMealPlan;
+  const showPlannedBadge = target.kind === 'recipe' && target.source === 'collection' && onMealPlan;
 
   return (
     <>
@@ -500,11 +566,11 @@ function RecipeOverview({
                   </div>
                 )}
               </div>
-              <button
-                type="button"
-                className="overview-action is-danger"
-                onClick={() => notBuiltYet('Vom Plan entfernen')}
-              >
+              {/* An unrecognized entry has no "Mehr" menu, so its removal keeps
+                  its own danger button. It runs the same App write as a planned
+                  recipe's menu entry: the entry's complete Keep line is ticked
+                  off (not deleted) and the flow closes back to the list. */}
+              <button type="button" className="overview-action is-danger" onClick={removeFromPlan}>
                 <EventBusyIcon />
                 <span>Vom Plan entfernen</span>
               </button>
@@ -519,11 +585,19 @@ function RecipeOverview({
                 <SkilletIcon />
                 <span>Jetzt kochen</span>
               </button>
-              {target.onMealPlan ? (
+              {onMealPlan ? (
+                // "Umplanen" opens the same overlay in its replan mode: the size
+                // the plan states is pre-selected and "Menge ändern" replaces the
+                // entry. It needs the parsed recipe just like "Einplanen" (the
+                // written size for the reference readout, the pre-selected size
+                // from the plan), so it stays unavailable until the file read
+                // finishes — the loading or error line above it is the cause.
+                // Taking the dish off the plan is not here but behind "Mehr".
                 <button
                   type="button"
                   className="overview-action"
-                  onClick={() => notBuiltYet('Umplanen')}
+                  onClick={() => setPlanOpen(true)}
+                  disabled={details === null}
                 >
                   <CalendarEditIcon />
                   <span>Umplanen</span>
@@ -567,6 +641,24 @@ function RecipeOverview({
                       <SparkleIcon />
                       <span>Mit KI bearbeiten</span>
                     </button>
+                    {/* "Vom Plan entfernen" is a planned recipe's destructive
+                        action, so it sits last and in the danger colour. It only
+                        exists while the dish is on the plan: the menu is built
+                        from the live plan state, so the entry disappears the
+                        moment the dish is taken off. The action *checks* the Keep
+                        line (App owns that write and the undo notice) — it does
+                        not delete it. */}
+                    {onMealPlan && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="danger-text"
+                        onClick={removeFromPlan}
+                      >
+                        <EventBusyIcon />
+                        <span>Vom Plan entfernen</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -582,20 +674,29 @@ function RecipeOverview({
       </div>
 
       {/* The meal-plan overlay: a layer above this sheet, opened by "Einplanen"
-          (known recipe, not on the plan). It closes back onto the sheet. The
-          export URL travels with it, so the written Keep entry can link the
-          cooking view; a recipe whose export write failed has none and the entry
-          falls back to the linkless shape. */}
+          (known recipe, not planned) or "Umplanen" (planned). It closes back
+          onto the sheet. The mode follows the live plan: a planned dish gets
+          the replan form, which pre-selects the plan's size. The export URL
+          travels with it, so the written Keep entry can link the cooking view;
+          a recipe whose export write failed has none and the entry falls back
+          to the linkless shape.
+
+          Both modes end the flow in App on success (App closes the overview
+          there, like "Zum Essensplan hinzufügen" always did), so only
+          "Abbrechen" leads back to the overview. A failure rejects, the overlay
+          catches it and stays open with the reason next to its button. */}
       {planOpen && details !== null && target.kind === 'recipe' && (
         <MealPlanSheet
+          mode={onMealPlan ? 'replan' : 'plan'}
           recipe={details}
+          previous={planned}
           exportUrl={
             target.recipe.exportFileId !== undefined
               ? recipeExportUrl(target.recipe.exportFileId)
               : undefined
           }
           onClose={() => setPlanOpen(false)}
-          onConfirm={onAddToMealPlan}
+          onConfirm={onMealPlan ? onChangeAmount : onAddToMealPlan}
         />
       )}
     </>

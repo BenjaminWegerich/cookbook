@@ -24,11 +24,18 @@ screen after an action finished, says what just happened, and — where there is
 real way back — offers one action. It is the app's confirmation layer for work
 that has already been done and has closed the screen it was done on.
 
-**The one instance so far.** Adding a dish to the meal plan from the recipe
-overview: the meal-plan overlay closes and the list shows
+**The instances so far.** All three report a meal-plan write from the recipe
+overview:
 
 > `<Titel> (<Größe>) zum Essensplan hinzugefügt. Die Einkaufsliste bleibt unverändert.`
-> with the action **Rückgängig**.
+> with the action **Rückgängig** („Einplanen“).
+
+> `Menge für <Titel> auf dem Essensplan geändert. Die Einkaufsliste bleibt unverändert.`
+> with the action **Rückgängig** („Umplanen“ → „Menge ändern“).
+
+> `<Titel> vom Essensplan entfernt. Die Einkaufsliste bleibt unverändert.`
+> with the action **Rückgängig** („Mehr“ → „Vom Plan entfernen“ on a recognized recipe, or an
+> unrecognized entry's own „Vom Plan entfernen“).
 
 ### 1.1 When to use it — and when not
 
@@ -187,6 +194,22 @@ gateway: a Cookbook-written entry carries the recipe's export link, with the cho
 size as a query parameter. That shape is why the meal-plan notice can name a dish
 whose line would otherwise read as a URL (see `mealPlanEntryLabel`).
 
+Removing a dish is a **second contract** (`POST /keep/mealplan/check`), because it
+must not delete the line — it ticks it off:
+
+```jsonc
+{ "check": ["Kürbissuppe: https://…/exec?f=<id>&portionen=6"],  // may be []
+  "uncheck": [] }                                              // the undo
+```
+
+`check` / `uncheck` are the exact texts to tick off / tick back on. At least one
+of the two must be non-empty, no text may appear in both, and every named line
+must exist and end up in the requested state — a line the user deleted in Keep in
+the meantime fails the write instead of reporting success. The gateway writes
+only the `checked` flag, syncs once and verifies the result. "Vom Plan entfernen"
+and its "Rückgängig" therefore tick the same line off and on again rather than
+deleting and re-adding it, so the line stays visible in Keep as cooked.
+
 A write that neither adds nor removes is refused; a pure removal (`add: []` with
 a non-empty `remove`) is the undo of a first-time plan. The gateway places the
 added lines above every remaining item and verifies the result before answering,
@@ -213,9 +236,10 @@ successful unverified.
 | Look and ARIA | `apps/web/src/components/Snackbar.tsx` | renders the head of the queue; tones, symbols, action button |
 | Styles | `apps/web/src/styles/snackbar.css` | card, placement, tone symbols, entrance |
 | Symbols | `apps/web/src/components/icons.tsx` | `CheckCircleIcon`, `UndoIcon` (Material Symbols Rounded from the set's own source) |
-| The meal-plan notice | `apps/web/src/App.tsx` | enqueues it after a successful write; wires `Rückgängig` |
+| The meal-plan notices | `apps/web/src/App.tsx` | enqueues them after a successful write; wires `Rückgängig` |
 | Write + undo client | `apps/web/src/keep/keepClient.ts` (`writeMealPlan`), `apps/web/src/keep/useKeep.ts` (`planMeal`, `undoMealPlan`) | the one write shape both directions use |
-| Gateway | `apps/keep-gateway/keep_gateway/app.py`, `keep_client.py` | accepts one or several added lines, verifies the result |
+| Check + undo client | `apps/web/src/keep/keepClient.ts` (`setMealPlanChecked`), `apps/web/src/keep/useKeep.ts` (`checkMealPlan`, `uncheckMealPlan`) | ticking a dish off the plan and its undo |
+| Gateway | `apps/keep-gateway/keep_gateway/app.py`, `keep_client.py` | accepts one or several added lines, ticks/unticks lines, verifies the result |
 
 The host is rendered once at the app root (`<Snackbar host={snackbar} />`), so
 any screen can report an outcome without owning a layer.

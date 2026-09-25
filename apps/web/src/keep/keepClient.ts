@@ -269,6 +269,37 @@ export async function writeMealPlan(
 }
 
 /**
+ * Ticks ("checks") or unticks meal-plan lines, changing nothing else.
+ *
+ * This is the recipe overview's "Vom Plan entfernen" and its undo. Removing a
+ * dish from the meal plan deliberately does not delete the Keep line: it is
+ * ticked off, so the line stays visible in Keep as "cooked", and the undo ticks
+ * it back on. `check` are the exact texts to tick, `uncheck` the exact texts to
+ * tick back on. The app owns the rule that decides which lines belong to a
+ * recipe — it needs the recipe's type and family unit — so the gateway only
+ * executes the action it is handed (same division as `writeMealPlan`).
+ *
+ * The answer is the meal plan after the write, so the caller can update it
+ * without a second request; only that list comes back, because it is the one
+ * the action changed (see `writeMealPlan`).
+ */
+export async function setMealPlanChecked(
+  gatewayToken: string,
+  check: readonly string[],
+  uncheck: readonly string[],
+): Promise<KeepChecklist> {
+  const body = await requestJson('/keep/mealplan/check', gatewayToken, {
+    method: 'POST',
+    body: { check: [...check], uncheck: [...uncheck] },
+  });
+  const mealplan = isRecord(body) ? parseChecklist(body.mealplan) : null;
+  if (mealplan === null) {
+    throw new KeepClientError('invalid_response', 'Das Keep-Gateway hat unerwartet geantwortet.');
+  }
+  return mealplan;
+}
+
+/**
  * Cheap liveness probe (no Keep call, no token). Used before trying a sign-in,
  * so the UI can tell "the gateway is down" from "we still need a sign-in"
  * without sending an unauthenticated `/keep/state` request.

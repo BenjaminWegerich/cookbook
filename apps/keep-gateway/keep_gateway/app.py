@@ -9,6 +9,7 @@ Endpoints:
     GET  /health                liveness, unauthenticated, cheap
     GET  /keep/state            the meal plan and shopping list, for app start
     POST /keep/mealplan         add dish lines to "Essensplan", replacing their entries
+    POST /keep/mealplan/check   tick or untick meal-plan lines ("Vom Plan entfernen")
     POST /keep/shopping         add a recipe's ingredients to the list (501 for now)
     POST /keep/shopping/sort    reorder the list by category/aisle     (501 for now)
 
@@ -118,6 +119,24 @@ def _presented_token() -> str | None:
         return None
     token = header[len(BEARER_PREFIX):].strip()
     return token or None
+
+
+def _entry_texts(payload: dict[str, Any], field: str) -> list[str]:
+    """Read one optional list of entry texts from a request body, trimmed.
+
+    A missing or null field is an empty list: the write routes need it only when
+    the action names entries, and the shared write contract lets `add` be empty.
+    Anything that is not a list of non-empty strings is a bad request, so a
+    malformed body can never reach the Keep client.
+    """
+    value = payload.get(field, [])
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(
+        not isinstance(text, str) or text.strip() == "" for text in value
+    ):
+        raise BadRequest(f"'{field}' must be a list of entry texts.")
+    return [text.strip() for text in value]
 
 
 # --------------------------------------------------------------------------------------
@@ -310,16 +329,39 @@ def create_app(
             raise BadRequest("The body needs an 'add' entry text or a list of entry texts.")
         if any(text == "" for text in added):
             raise BadRequest("Every added entry text must be non-empty.")
-        remove = payload.get("remove", [])
-        if remove is None:
-            remove = []
-        if not isinstance(remove, list) or any(
-            not isinstance(text, str) or text.strip() == "" for text in remove
-        ):
-            raise BadRequest("'remove' must be a list of entry texts.")
+        remove = _entry_texts(payload, "remove")
         if not added and not remove:
             raise BadRequest("The body must add or remove at least one entry text.")
         return jsonify(client_factory(settings).add_meal_plan_entries(added, remove))
+
+    @app.post("/keep/mealplan/check")
+    def keep_mealplan_check() -> Response:
+        """Tick ("check") or untick meal-plan lines, changing nothing else.
+
+        Body: `{"check": ["<entry text>", ...], "uncheck": ["<entry text>", ...]}`.
+
+        This is the recipe overview's "Vom Plan entfernen" and its undo. Removing
+        a dish from the plan does not delete the Keep line - it is ticked off, so
+        the line stays visible in Keep as "cooked" - and "Rückgängig" ticks it
+        back on. `check` are the exact texts to tick, `uncheck` the exact texts
+        to tick back on; the app owns the rule that decides which lines belong to
+        a recipe, so this boundary only executes the action. A body that changes
+        nothing, or that names the same entry in both directions, is refused.
+
+        The answer is the meal plan after the write, in the shape one checklist
+        has in `GET /keep/state`, so the app can update it without a second
+        request - and only that list, because it is the one the action changed.
+        """
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise BadRequest("A JSON object body is required.")
+        checked = _entry_texts(payload, "check")
+        unchecked = _entry_texts(payload, "uncheck")
+        if not checked and not unchecked:
+            raise BadRequest("The body must check or uncheck at least one entry text.")
+        if set(checked) & set(unchecked):
+            raise BadRequest("An entry text cannot be checked and unchecked at once.")
+        return jsonify(client_factory(settings).set_meal_plan_checked(checked, unchecked))
 
     @app.post("/keep/shopping")
     def keep_shopping() -> Response:

@@ -56,10 +56,11 @@ boundary and the read path are done and verified against the live account, a log
 watches for a rejected credential, and a €1 budget guardrail caps the project's spend. It owns
 its copy of the spike's authentication and failure-diagnosis code, so the deployed image stays
 self-contained. The read-only frontend, the meal-plan recipe overview and the meal-plan write
-are built (tabs, recognition, the Google sign-in, the overview's three card forms and
+are built (tabs, recognition, the Google sign-in, the overview's three card forms,
 „Zum Essensplan hinzufügen“, which links the entry at the recipe's cooking view through the
-deployed export host). The overview's other actions are still placeholders; what remains is
-the shopping-list write and the aisle sort.
+deployed export host, „Umplanen“ with its size change, and „Vom Plan entfernen“, which ticks
+the entry off and can be undone). „Jetzt kochen“ and the three „Eintrag ersetzen“ entries are
+still placeholders; what remains is the shopping-list write and the aisle sort.
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -105,16 +106,19 @@ frontend and the actual features.
 3. [x] **Meal-plan recipe overview**: a recognized plan card opens the overview with the
    entry's planned size (servings/yield) shown first in its caption/value row, so the dish
    can be viewed, edited and scaled from the plan; an unrecognized entry gets a destination
-   of its own there („Eintrag ersetzen“ / „Vom Plan entfernen“). „Einplanen“ now performs the
-   write (step 5); the other buttons are still placeholders.
+   of its own there („Eintrag ersetzen“ / „Vom Plan entfernen“). „Einplanen“ performs the
+   write, „Umplanen“ changes the size and „Vom Plan entfernen“ ticks the entry off (step 5);
+   „Jetzt kochen“ and the three „Eintrag ersetzen“ entries are still placeholders.
 4. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
    needs a category. Extend `docs/ingredients.csv` (and the Drive `zutaten.csv`) with it.
-5. **Implement the three Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
+5. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
    (the size is a query parameter on the export host), replacing the entries recognized as the
-   same recipe; the gateway changes as little as possible and verifies the result). Still open: add a
-   recipe's scaled ingredients to the shopping list (including linked Zutaten-Rezepte), and sort
-   by category.
+   same recipe; the gateway changes as little as possible and verifies the result), and so is
+   taking a dish off the plan ([x] — „Vom Plan entfernen“ ticks the entry off in Keep via
+   `POST /keep/mealplan/check` and can be undone; changing the size reuses the meal-plan write).
+   Still open: add a recipe's scaled ingredients to the shopping list (including linked
+   Zutaten-Rezepte), and sort by category.
 6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
    query may-be-in-stock), which builds on the same gateway.
 

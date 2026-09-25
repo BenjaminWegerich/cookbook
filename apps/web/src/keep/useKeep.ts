@@ -34,6 +34,7 @@ import {
   fetchKeepState,
   isKeepConfigured,
   keepErrorMessage,
+  setMealPlanChecked,
   writeMealPlan,
   type KeepState,
 } from './keepClient';
@@ -72,6 +73,24 @@ export interface UseKeepResult {
    * Adopts the state the gateway reports back and maps a failure exactly like `planMeal`.
    */
   undoMealPlan: (entry: string, restore: readonly string[]) => Promise<void>;
+  /**
+   * Takes dishes off the meal plan without deleting them: the named lines are ticked off in
+   * Keep ("Vom Plan entfernen"), so they stay visible in Keep as cooked while the app's plan
+   * no longer shows them. `entries` are the exact texts of the lines the caller recognized as
+   * the recipe (it has the recipe's type and family unit, this hook does not).
+   *
+   * Adopts the state the gateway reports back, so the card's "Eingeplant" badge disappears
+   * without a second read, and maps a failure exactly like `planMeal`.
+   */
+  checkMealPlan: (entries: readonly string[]) => Promise<void>;
+  /**
+   * Undoes a `checkMealPlan` (the success pop-up's "Rückgängig"): ticks the named lines back
+   * on, so the dish is planned again. The caller captured the texts when it ticked them off —
+   * this hook has no memory of it.
+   *
+   * Adopts the state the gateway reports back and maps a failure exactly like `planMeal`.
+   */
+  uncheckMealPlan: (entries: readonly string[]) => Promise<void>;
   /** Re-runs the current step (probe, silent sign-in and read) — the retry action. */
   retry: () => void;
 }
@@ -282,5 +301,61 @@ export function useKeep(): UseKeepResult {
     [state, runMealPlanWrite],
   );
 
-  return { status, state, error, connect, planMeal, undoMealPlan, retry };
+  /**
+   * Runs one check write and adopts the list the gateway answers. Both directions (tick off,
+   * tick back on) share this body; a failure is mapped onto the status by
+   * `reportWriteFailure` and rethrown.
+   */
+  const runMealPlanCheck = useCallback(
+    async (check: readonly string[], uncheck: readonly string[]): Promise<void> => {
+      try {
+        const updated = await withIdentityToken((token) =>
+          setMealPlanChecked(token, check, uncheck),
+        );
+        // The endpoint answers the changed list; the shopping list is untouched.
+        setState((current) => (current === null ? current : { ...current, mealplan: updated }));
+        setStatus('ready');
+        setError(null);
+      } catch (err) {
+        reportWriteFailure(err);
+        throw err;
+      }
+    },
+    [reportWriteFailure],
+  );
+
+  const checkMealPlan = useCallback(
+    async (entries: readonly string[]): Promise<void> => {
+      // No loaded state means Keep was never read, so the caller could not compute which
+      // entries belong to the recipe. Refuse instead of ticking nothing.
+      if (state === null) {
+        throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
+      }
+      await runMealPlanCheck(entries, []);
+    },
+    [state, runMealPlanCheck],
+  );
+
+  const uncheckMealPlan = useCallback(
+    async (entries: readonly string[]): Promise<void> => {
+      // Same guard as `checkMealPlan`: without the loaded list there is nothing to tick back on.
+      if (state === null) {
+        throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
+      }
+      await runMealPlanCheck([], entries);
+    },
+    [state, runMealPlanCheck],
+  );
+
+  return {
+    status,
+    state,
+    error,
+    connect,
+    planMeal,
+    undoMealPlan,
+    checkMealPlan,
+    uncheckMealPlan,
+    retry,
+  };
 }
