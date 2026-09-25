@@ -8,8 +8,11 @@ import { CloseIcon, ErrorIcon, EventAvailableIcon, SearchIcon } from './icons';
 import RecipeThumb from './RecipeThumb';
 import TitleThumb from './TitleThumb';
 
-/** The two views of the list, as tab ids (UI labels are German). */
-type RecipeTab = 'mealplan' | 'collection';
+/**
+ * The two views of the list, as tab ids (UI labels are German). App owns the
+ * active tab (see the `tab` prop): the header's counter follows the view.
+ */
+export type RecipeTab = 'mealplan' | 'collection';
 
 /** The two tabs in display order (labels are the German UI strings). */
 const TABS: { id: RecipeTab; label: string }[] = [
@@ -29,6 +32,14 @@ const LONGEST_TAB_LABEL = TABS.reduce<string>(
 
 interface RecipeListProps {
   recipes: StoredRecipe[];
+  /**
+   * The active tab. App owns it (not the list) because the header's counter
+   * follows the view: "Sammlung" counts recipes and their planned share,
+   * "Essensplan" counts the Keep entries and their unknown share.
+   */
+  tab: RecipeTab;
+  /** Called when the user picks a tab (tap) or swipes onto the neighbouring one. */
+  onTabChange: (tab: RecipeTab) => void;
   /** Drive access token, forwarded to the card media areas for photo downloads. */
   token: string;
   /** Called when the user taps a recipe card (opens the recipe overview). */
@@ -83,6 +94,8 @@ interface RecipeListProps {
  */
 function RecipeList({
   recipes,
+  tab,
+  onTabChange,
   token,
   onOpenRecipe,
   onOpenPlanCard,
@@ -94,15 +107,6 @@ function RecipeList({
   onRetryKeep,
 }: RecipeListProps) {
   const [query, setQuery] = useState('');
-  /**
-   * The tab the user picked, or null while they have not touched the tabs. The
-   * default (decided with the user) is "Essensplan" once Keep is connected and
-   * "Sammlung" otherwise — a stored null keeps the app from jumping to an empty
-   * meal plan before the token is entered, and lets the view follow the
-   * connection the moment it becomes ready.
-   */
-  const [pickedTab, setPickedTab] = useState<RecipeTab | null>(null);
-  const tab: RecipeTab = pickedTab ?? (keepStatus === 'ready' ? 'mealplan' : 'collection');
 
   /**
    * The pager behind the two tab bodies: a horizontal swipe on the card area
@@ -122,7 +126,7 @@ function RecipeList({
   } = useSwipePager({
     index: TABS.findIndex((entry) => entry.id === tab),
     count: TABS.length,
-    onIndexChange: (next) => setPickedTab(TABS[next].id),
+    onIndexChange: (next) => onTabChange(TABS[next].id),
   });
 
   // Normalized once so the per-render filters below only repeat the cheap
@@ -337,7 +341,7 @@ function RecipeList({
                 type="button"
                 className={tab === entry.id ? 'recipe-tab recipe-tab-active' : 'recipe-tab'}
                 aria-pressed={tab === entry.id}
-                onClick={() => setPickedTab(entry.id)}
+                onClick={() => onTabChange(entry.id)}
               >
                 <span>{entry.label}</span>
                 <span className="recipe-tab-sizer" aria-hidden="true">

@@ -23,7 +23,7 @@ import AiCreateSheet, {
   type AiHandoff,
 } from './components/AiCreateSheet';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
-import RecipeList from './components/RecipeList';
+import RecipeList, { type RecipeTab } from './components/RecipeList';
 import RecipeOverview, {
   type RecipeOverviewHandle,
   type RecipeOverviewTarget,
@@ -179,6 +179,15 @@ function App() {
    *  the login button); shows a status line on the login panel meanwhile. */
   const [connecting, setConnecting] = useState(false);
   const [recipes, setRecipes] = useState<StoredRecipe[] | null>(null);
+  /**
+   * The tab of the recipe list the user picked, or null while they have not
+   * touched the tabs. App owns it (not the list) because the header's counter
+   * follows the view. Null keeps the default open: "Essensplan" once Keep is
+   * connected and "Sammlung" otherwise — a stored null keeps the app from
+   * jumping to an empty meal plan before the token is entered, and lets the view
+   * follow the connection the moment it becomes ready.
+   */
+  const [listTab, setListTab] = useState<RecipeTab | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Non-fatal warning when the Drive master data could not be loaded; the
    *  built-in seed keeps the app functional (see ingredientMasterData.ts). */
@@ -1213,15 +1222,59 @@ function App() {
     setAiHandoff(null);
   }, []);
 
-  /** Status line in the header, German. It carries nothing but the count: while
-   *  the list is loading and while the collection is empty, the body already
-   *  says so in place of the list — the screen must not carry the same text
-   *  twice. */
-  const subtitle = !token
-    ? 'Nicht verbunden'
-    : recipes === null || recipes.length === 0
-      ? ''
-      : `${recipes.length} ${recipes.length === 1 ? 'Rezept' : 'Rezepte'}`;
+  /**
+   * The active tab of the recipe list. The list renders it, the header's
+   * counter below reads it. Null means the user has not picked one yet, so the
+   * default (decided with the user) is "Essensplan" once Keep is connected and
+   * "Sammlung" otherwise.
+   */
+  const activeListTab: RecipeTab = listTab ?? (keep.status === 'ready' ? 'mealplan' : 'collection');
+
+  /**
+   * Titles recognized on the meal plan, or the stable empty set while Keep is
+   * off or its plan has not resolved. Named here because the header counter and
+   * the list both read it.
+   */
+  const plannedRecipeTitles = mealPlanResolution?.plannedRecipeTitles ?? NO_PLANNED_TITLES;
+
+  /**
+   * The header's status line(s), German, following the active tab:
+   *
+   * - "Sammlung": `x Rezepte,` and, below it, `davon y eingeplant` — y is how
+   *   many of the collection's recipes the meal plan uses (the "Eingeplant"
+   *   badge; a dish planned twice still counts once, as one of the x).
+   * - "Essensplan": `x Einträge auf dem Essensplan,` and, below it, `davon y
+   *   unbekannt` — y is how many of Keep's entries are not recognized as a
+   *   recipe (the "Unbekannt" badge; every entry counts, even a repeated one).
+   *
+   * The first line ends in a comma in both views: it carries the stack on to
+   * the "davon …" share below it.
+   *
+   * The list of lines is empty while the active view has nothing to count yet:
+   * on the collection that is the loading/empty case the body already states in
+   * place of the list, on the meal plan a resolution that is not there (Keep
+   * off, connecting, still loading or failed). The header then stays silent
+   * rather than claiming a zero it cannot know, and never repeats the body's
+   * text on the same screen.
+   */
+  const subtitleLines: string[] = (() => {
+    if (token === null) return ['Nicht verbunden'];
+    if (recipes === null || recipes.length === 0) return [];
+    if (activeListTab === 'mealplan') {
+      if (mealPlanResolution === null) return [];
+      const entries = mealPlanResolution.cards.length;
+      const unknown = mealPlanResolution.cards.filter((card) => card.recipe === null).length;
+      return [
+        `${entries} ${entries === 1 ? 'Eintrag' : 'Einträge'} auf dem Essensplan,`,
+        `davon ${unknown} unbekannt`,
+      ];
+    }
+    const planned = recipes.filter((recipe) => plannedRecipeTitles.has(recipe.title)).length;
+    return [
+      `${recipes.length} ${recipes.length === 1 ? 'Rezept' : 'Rezepte'},`,
+      `davon ${planned} eingeplant`,
+    ];
+  })();
 
   return (
     <>
@@ -1303,7 +1356,13 @@ function App() {
           <header className="app-header">
             <h1>Cookbook</h1>
             <p className="app-subtitle" role="status">
-              {subtitle}
+              {subtitleLines.map((line, index) => (
+                // Each line is its own block, so the counter reads as a two-line
+                // stack in the header's top right corner (see .app-subtitle-line).
+                <span key={index} className="app-subtitle-line">
+                  {line}
+                </span>
+              ))}
             </p>
           </header>
 
@@ -1352,11 +1411,13 @@ function App() {
           ) : (
             <RecipeList
               recipes={recipes}
+              tab={activeListTab}
+              onTabChange={setListTab}
               token={token}
               onOpenRecipe={openCollectionOverview}
               onOpenPlanCard={openMealPlanOverview}
               mealPlanCards={mealPlanResolution?.cards ?? null}
-              plannedRecipeTitles={mealPlanResolution?.plannedRecipeTitles ?? NO_PLANNED_TITLES}
+              plannedRecipeTitles={plannedRecipeTitles}
               keepStatus={keep.status}
               keepError={keep.error}
               onConnectKeep={() => void keep.connect()}

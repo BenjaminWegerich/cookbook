@@ -25,11 +25,20 @@
 }
 
 /* Status line in the header's top right corner: as a flex child it sits beside
-   the heading, so it carries no leading margin of its own. */
+   the heading, so it carries no leading margin of its own. It holds one or two
+   lines (a count plus its "davon …" share), which are right-aligned so the
+   stack hugs the corner: the shorter line ends flush with the longer one instead
+   of leaving a ragged right edge. */
 .app-subtitle {
   margin: 0;
+  text-align: right;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+}
+
+/* One counter line: the two lines stack, no line break markup needed. */
+.app-subtitle-line {
+  display: block;
 }
 
 /* Small quiet text buttons (editor headers: Zurück / Abbrechen / …). They lay
