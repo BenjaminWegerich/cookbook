@@ -214,6 +214,60 @@
   color: var(--color-on-accent);
 }
 
+/* ---- Swipeable tab panes (Essensplan / Sammlung) ------------------------ */
+
+/* The two tab bodies live side by side in one track. A horizontal drag on the
+   viewport moves the track and the release snaps onto the neighbouring tab (see
+   ../hooks/useSwipePager.ts). The viewport is full-bleed — the page gutters move
+   inside the panes — so a card sliding toward the screen edge is clipped by the
+   screen itself, and the cards' shadows stay inside the clipping box. Its height
+   is set from the active pane (inline style): the viewport clips at that height,
+   so the taller tab never reserves dead space below the shorter one. */
+.recipe-panes {
+  overflow: hidden;
+  /* The browser keeps vertical panning and pinch-zoom; the horizontal drag is
+     handed to the pager, which is what makes a swipe reliable without
+     disabling the page's own scrolling or the user's zoom. */
+  touch-action: pan-y pinch-zoom;
+  margin-inline: calc(-1 * var(--app-padding));
+}
+
+.recipe-panes-track {
+  display: flex;
+  /* Each pane keeps its own content height — the active pane is measured, and a
+     stretched sibling would report the tallest pane instead. */
+  align-items: flex-start;
+  will-change: transform;
+  /* The snap after a release, same 180 ms as the app's other entrances; while
+     the finger drives the track the transition is off. */
+  transition: transform 180ms ease-out;
+}
+
+.recipe-panes-dragging .recipe-panes-track {
+  transition: none;
+}
+
+/* A drag over card titles and badges must never start a text selection. */
+.recipe-panes-dragging {
+  user-select: none;
+}
+
+.recipe-pane {
+  flex: 0 0 100%;
+  min-width: 0;
+  padding-inline: var(--app-padding);
+  /* Room for the last card row's shadow: the viewport clips at the pane's
+     height, so the shadow has to fall inside it. */
+  padding-block-end: var(--space-5);
+}
+
+/* No snap animation for users who asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .recipe-panes-track {
+    transition: none;
+  }
+}
+
 /* ---- Recipe list -------------------------------------------------------- */
 
 .recipe-list {

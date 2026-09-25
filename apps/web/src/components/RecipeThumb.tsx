@@ -80,7 +80,10 @@ function RecipeThumb({ recipe, token }: RecipeThumbProps) {
   if (photoUrl !== null) {
     return (
       <span className="recipe-thumb" aria-hidden="true">
-        <img src={photoUrl} alt="" />
+        {/* `draggable={false}`: a native image drag would take the pointer away
+            from the home screen's horizontal swipe (useSwipePager), so a mouse
+            drag over a photo has to stay a scroll/pager gesture. */}
+        <img src={photoUrl} alt="" draggable={false} />
       </span>
     );
   }

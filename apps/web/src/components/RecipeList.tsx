@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
 import type { StoredRecipe } from '../drive/recipeStorage';
+import { useSwipePager } from '../hooks/useSwipePager';
 import type { MealPlanCard } from '../keep/mealPlanCards';
 import type { KeepStatus } from '../keep/useKeep';
 import { CloseIcon, ErrorIcon, EventAvailableIcon, SearchIcon } from './icons';
@@ -73,7 +74,10 @@ interface RecipeListProps {
  *
  * The search filters whichever tab is active (title for recipes, complete
  * entry text for meal-plan cards), so the tabs act as an additional refinement,
- * never as a replacement for the search. The whole card is the hitbox — the
+ * never as a replacement for the search. The two tab bodies also sit side by
+ * side in a swipeable pager: a horizontal swipe on the card area follows the
+ * finger and snaps onto the neighbouring tab, the phone-native counterpart of
+ * tapping a tab (../hooks/useSwipePager). The whole card is the hitbox — the
  * badges are plain content inside it, never a target of their own. UI language
  * is German (see docs/CODING_CONVENTIONS.md).
  */
@@ -99,6 +103,27 @@ function RecipeList({
    */
   const [pickedTab, setPickedTab] = useState<RecipeTab | null>(null);
   const tab: RecipeTab = pickedTab ?? (keepStatus === 'ready' ? 'mealplan' : 'collection');
+
+  /**
+   * The pager behind the two tab bodies: a horizontal swipe on the card area
+   * commits the neighbouring pane exactly like tapping its tab, so the picked
+   * tab stays authoritative over the Keep-driven default (see
+   * ../hooks/useSwipePager). The search field and the tab control sit outside
+   * the swipe area and are never dragged.
+   */
+  const {
+    viewportRef,
+    viewportStyle,
+    trackRef,
+    trackStyle,
+    paneRefs,
+    handlers: pagerHandlers,
+    dragging: pagerDragging,
+  } = useSwipePager({
+    index: TABS.findIndex((entry) => entry.id === tab),
+    count: TABS.length,
+    onIndexChange: (next) => setPickedTab(TABS[next].id),
+  });
 
   // Normalized once so the per-render filters below only repeat the cheap
   // includes comparisons, not the normalization. Empty query and thus an empty
@@ -318,7 +343,31 @@ function RecipeList({
         </div>
       </div>
 
-      {tab === 'mealplan' ? renderMealPlan() : renderCollection()}
+      {/* The two tab bodies side by side in one track: a horizontal drag on the
+          viewport moves the track and the release snaps onto the neighbour tab
+          (../hooks/useSwipePager). Both bodies are rendered, since the drag has
+          to reveal the next one; the off-screen pane is `inert`, so it can
+          neither be focused nor reached by assistive tech. The pane order is
+          TABS, the same order the tab control uses. */}
+      <div
+        className={pagerDragging ? 'recipe-panes recipe-panes-dragging' : 'recipe-panes'}
+        ref={viewportRef}
+        style={viewportStyle}
+        {...pagerHandlers}
+      >
+        <div className="recipe-panes-track" ref={trackRef} style={trackStyle}>
+          {TABS.map((entry, paneIndex) => (
+            <div
+              key={entry.id}
+              className="recipe-pane"
+              ref={paneRefs[paneIndex]}
+              inert={tab !== entry.id}
+            >
+              {entry.id === 'mealplan' ? renderMealPlan() : renderCollection()}
+            </div>
+          ))}
+        </div>
+      </div>
     </>
   );
 }
