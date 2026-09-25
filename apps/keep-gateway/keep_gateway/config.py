@@ -2,8 +2,9 @@
 
 The service is stateless, so there is nothing to configure per request and nothing to
 persist: Cloud Run injects the values at container start and every request reads the same
-frozen object. Secrets arrive through Secret Manager (`KEEP_MASTER_TOKEN`) and plain
-environment variables (`KEEP_EMAIL`, `KEEP_DEVICE_ID`), exactly as in the feasibility spike.
+frozen object. Secrets arrive through Secret Manager (`KEEP_MASTER_TOKEN`, and
+`TINYURL_API_TOKEN` for the export-link shortener) and plain environment variables
+(`KEEP_EMAIL`, `KEEP_DEVICE_ID`), exactly as in the feasibility spike.
 
 Two rules are load-bearing and are therefore enforced here rather than at the call site:
 
@@ -38,6 +39,7 @@ ENV_OAUTH_CLIENT_ID = "KEEP_OAUTH_CLIENT_ID"
 ENV_ALLOWED_EMAILS = "KEEP_ALLOWED_EMAILS"
 ENV_DEV_ACCESS_TOKEN = "KEEP_DEV_ACCESS_TOKEN"
 ENV_ALLOWED_ORIGINS = "KEEP_GATEWAY_ALLOWED_ORIGINS"
+ENV_TINYURL_API_TOKEN = "TINYURL_API_TOKEN"
 ENV_PORT = "PORT"
 
 
@@ -72,6 +74,12 @@ class GatewayConfig:
     # repr() so it cannot leak through a log line.
     dev_access_token: str = field(default="", repr=False)
 
+    # TinyURL API token for the export-link shortener (`short_links.py`). A secret: it can
+    # create links under the owner's TinyURL account, so it belongs in Secret Manager and is
+    # kept out of repr() like the dev token. Empty means "shortening off" - the app keeps
+    # writing the long export URL, which is exactly the pre-shortener behaviour.
+    tinyurl_api_token: str = field(default="", repr=False)
+
     # Browser origins allowed to call the gateway, comma-separated in the environment.
     # Empty means "no cross-origin caller is accepted": the web app is a static bundle on
     # another origin, so a deployment that forgets this simply gets no Keep features.
@@ -98,6 +106,14 @@ class GatewayConfig:
         )
         return [name for name, value in pairs if not value]
 
+    def shortening_configured(self) -> bool:
+        """True when the export-link shortener has a token, so `/shorten` may be served.
+
+        Deliberately a configuration question and not an error path: without the token the
+        endpoint fails closed (`shortening_disabled`) and the app writes the long URL.
+        """
+        return self.tinyurl_api_token != ""
+
 
 def load_config(environ: Mapping[str, str] | None = None) -> GatewayConfig:
     """Build the configuration from the process environment.
@@ -122,6 +138,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> GatewayConfig:
             if email.strip()
         ),
         dev_access_token=source.get(ENV_DEV_ACCESS_TOKEN, "").strip(),
+        tinyurl_api_token=source.get(ENV_TINYURL_API_TOKEN, "").strip(),
         allowed_origins=tuple(
             origin.strip()
             for origin in source.get(ENV_ALLOWED_ORIGINS, "").split(",")

@@ -8,7 +8,7 @@ idempotent, so they are also the update path. To see the live state without re-d
 
 ```sh
 gcloud run services list --region europe-west3   # keep-gateway (the service)
-gcloud secrets list                              # keep-master-token-cloud
+gcloud secrets list                              # keep-master-token-cloud, tinyurl-api-token
 gcloud run jobs list --region europe-west3       # keep-gate2-probe (durability sampler), keep-mint
 gcloud functions describe stop-billing --region europe-west3   # the spend guardrail
 gcloud scheduler jobs list --location europe-west3             # keep-gate2-probe-6h
@@ -86,13 +86,74 @@ authenticates with it through the same `keep_client` code the service uses.
 | `--max-instances` | 2 | bounds what a leaked URL can cost |
 | `--concurrency` | 8 | matches gunicorn's thread count; the request rate is a household's |
 | `KEEP_MASTER_TOKEN` | Secret Manager `keep-master-token-cloud:latest` | the cloud-minted credential |
+| `TINYURL_API_TOKEN` | Secret Manager `tinyurl-api-token:latest`, when it exists | shortens the meal-plan line's export link; absent ⇒ the app writes the long URL |
 | `KEEP_OAUTH_CLIENT_ID` | the web client id (default: read from `apps/web/.env`) | the audience a caller's token must name; without it every call is refused |
 | `KEEP_ALLOWED_EMAILS` | default `benjaminwegerich@gmail.com` | who may call. Empty ⇒ nobody, never "anybody" |
 | `KEEP_GATEWAY_ALLOWED_ORIGINS` | the Pages origin + `http://localhost:5173` | CORS is closed by default; a foreign `Origin` is refused anyway |
 
 **The service URL is public.** That is deliberate (the browser must reach it) and safe only
-because every `/keep/*` route requires a Google-confirmed sign-in and fails closed when the
-identity configuration is missing. Do not add an unauthenticated Keep route.
+because every `/keep/*` and `/shorten` route requires a Google-confirmed sign-in and fails
+closed when the identity configuration is missing. Do not add an unauthenticated Keep route.
+
+## The TinyURL secret (optional)
+
+The meal-plan line links the recipe's cooking view; without a shortener that link is the whole
+Apps Script address plus the Drive file id. `TINYURL_API_TOKEN` — the API token of a free
+TinyURL account — lets the gateway shorten it, so the Keep line reads
+`Kürbissuppe (6 Portionen): https://tinyurl.com/k7f2qa`. The gateway calls TinyURL's API
+server-side (`POST /shorten`), because that API sends no CORS header the Pages origin could use
+and the token may never ship in the browser bundle.
+
+**Optional by design.** `provision.sh` binds the secret only when it exists *and* has a
+version; without it the gateway answers `shortening_disabled` and the app writes the long URL,
+exactly as before. Nothing else changes.
+
+Create it once. The `read` command waits for the token without echoing it — paste with
+`Ctrl+Shift+V` (or a right-click) and press Enter — and `--data-file=-` reads it from that pipe,
+so it never appears in the shell history. Run the block **line by line**, or at least run the
+`read` line on its own: pasting the whole block at once would feed the following `printf` line
+to the prompt instead of the token.
+
+```sh
+cd apps/keep-gateway
+export PATH="$PWD/../../spike/keep-feasibility/.tools/google-cloud-sdk/bin:$PATH"
+gcloud config set project cookbook-keep --quiet
+
+read -rsp "TinyURL API token: " TINYURL_TOKEN && echo
+printf '%s' "$TINYURL_TOKEN" | \
+  gcloud secrets create tinyurl-api-token --replication-policy=automatic --data-file=-
+unset TINYURL_TOKEN
+```
+
+If you would rather see what you paste, put the token into a temporary file and pass the file
+instead, then delete it again:
+
+```sh
+gcloud secrets create tinyurl-api-token --replication-policy=automatic \
+  --data-file="$HOME/tinyurl-token.txt"
+shred -u "$HOME/tinyurl-token.txt"
+```
+
+Then redeploy — this grants the runtime service account `secretAccessor` on the secret and binds
+it as `TINYURL_API_TOKEN`:
+
+```sh
+./deploy/cloud-run/provision.sh
+```
+
+The summary line `shorten on (tinyurl-api-token)` proves the binding. To **rotate** the token,
+add a version and redeploy:
+
+```sh
+read -rsp "TinyURL API token: " TINYURL_TOKEN && echo
+printf '%s' "$TINYURL_TOKEN" | gcloud secrets versions add tinyurl-api-token --data-file=-
+unset TINYURL_TOKEN
+./deploy/cloud-run/provision.sh
+```
+
+What the token can do is narrow: it creates links under the TinyURL account and nothing else —
+no Drive file, no Keep note. The links themselves are permanent, so a failure to *create* one
+only means the Keep line stays long.
 
 ## Retiring the pasted token
 
@@ -286,6 +347,8 @@ gcloud run services delete keep-gateway --region europe-west3 --quiet
 gcloud run jobs delete keep-mint --region europe-west3 --quiet
 # (keep-gateway-token is gone already if the sign-in switch was completed)
 gcloud secrets delete keep-master-token-cloud --quiet
+# harmless: the next meal-plan line simply carries the long export URL again
+gcloud secrets delete tinyurl-api-token --quiet
 gcloud logging metrics delete keep_auth_rejected --quiet
 
 # the guardrail

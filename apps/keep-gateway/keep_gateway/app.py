@@ -12,6 +12,7 @@ Endpoints:
     POST /keep/mealplan/check   tick or untick meal-plan lines ("Vom Plan entfernen")
     POST /keep/shopping         add a recipe's ingredients to the list (501 for now)
     POST /keep/shopping/sort    reorder the list by category/aisle     (501 for now)
+    POST /shorten               shorten one export URL for a meal-plan line
 
 Three cross-cutting rules live here rather than at the call sites:
 
@@ -20,7 +21,9 @@ Three cross-cutting rules live here rather than at the call sites:
     configuration means "off" (503), never "open". Who may call is the gateway-authentication
     decision (see ARCHITECTURE.md): the web app's Google sign-in, confirmed with Google by
     `identity.py`. That replaced a shared token the user had to paste per session; the whole
-    change is `_require_google_identity` plus the verifier behind it.
+    change is `_require_google_identity` plus the verifier behind it. `/shorten` sits behind
+    the same gate: the owner's TinyURL token is what pays for a link, so the route must not be
+    an open shortener on a public URL.
   * **CORS is closed by default.** The web app is a static bundle on another origin, so the
     browser needs an allowlist; only explicitly configured origins receive the headers, and
     a request that *carries* a foreign Origin is refused outright.
@@ -48,9 +51,11 @@ from .errors import (
     GatewayNotConfigured,
     NotImplementedYet,
     OriginNotAllowed,
+    ShortenUnavailable,
     Unauthorized,
 )
 from .identity import CallerVerifier, GoogleIdentityVerifier
+from .short_links import MAX_TARGET_LENGTH, TinyUrlShortener
 
 logger = logging.getLogger("keep_gateway")
 
@@ -84,6 +89,15 @@ PENDING_ACTIONS: dict[str, str] = {
 # The real one is `KeepClient`; the tests hand in a fake, which is how the boundary is
 # verified without a Google account or a network.
 ClientFactory = Callable[[GatewayConfig], Any]
+
+# A factory is anything that turns configuration into a shortener with `shorten(target)`.
+# The real one is `TinyUrlShortener`; the tests hand in a fake so no request reaches TinyURL.
+ShortenerFactory = Callable[[GatewayConfig], Any]
+
+# The paths that carry the caller's identity: the Keep routes (the master token can write to
+# the user's Keep account) and `/shorten` (the owner's TinyURL token pays for every link).
+# Everything else is public, which in practice means `/health` alone.
+PROTECTED_PREFIXES = ("/keep/", "/shorten")
 
 
 # --------------------------------------------------------------------------------------
@@ -148,12 +162,14 @@ def create_app(
     config: GatewayConfig | None = None,
     client_factory: ClientFactory | None = None,
     identity_verifier: CallerVerifier | None = None,
+    shortener_factory: ShortenerFactory | None = None,
 ) -> Flask:
     """Build the Flask application.
 
-    Configuration, the Keep client and the caller verifier are injected so the app can be
-    constructed with test doubles; production calls `create_app()` with none of them and gets
-    the environment, the real `KeepClient` and the real Google-backed verifier.
+    Configuration, the Keep client, the caller verifier and the shortener are injected so the
+    app can be constructed with test doubles; production calls `create_app()` with none of
+    them and gets the environment, the real `KeepClient`, the real Google-backed verifier and
+    the real TinyURL client.
     """
     settings = config if config is not None else load_config()
     # Imported here, not at module import time, so the boundary can be imported (and its
@@ -166,6 +182,11 @@ def create_app(
         identity_verifier
         if identity_verifier is not None
         else GoogleIdentityVerifier(settings.oauth_client_id, settings.allowed_emails)
+    )
+    shortener = (
+        shortener_factory(settings)
+        if shortener_factory is not None
+        else TinyUrlShortener(settings.tinyurl_api_token)
     )
 
     app = Flask(__name__)
@@ -214,15 +235,15 @@ def create_app(
 
     @app.before_request
     def _require_google_identity() -> Response | None:
-        """Authenticate every Keep route against the caller's Google sign-in.
+        """Authenticate every route in `PROTECTED_PREFIXES` against the caller's Google sign-in.
 
         Fail-closed three times over: a deployment without a client id or an allowlist refuses
-        to serve Keep routes at all (503); a missing, foreign or unlisted sign-in is a 401; and
-        a Google check that cannot run is a 503 rather than a pass. The only other way in is
+        to serve protected routes at all (503); a missing, foreign or unlisted sign-in is a 401;
+        and a Google check that cannot run is a 503 rather than a pass. The only other way in is
         `KEEP_DEV_ACCESS_TOKEN`, which exists so an operator can curl a local run and is unset
         in every deployment.
         """
-        if not request.path.startswith("/keep/"):
+        if not request.path.startswith(PROTECTED_PREFIXES):
             return None
         missing = settings.missing_auth_config()
         if missing:
@@ -376,6 +397,41 @@ def create_app(
         raise NotImplementedYet(
             f"{PENDING_ACTIONS['/keep/shopping/sort']} is not implemented yet."
         )
+
+    @app.post("/shorten")
+    def shorten() -> Response:
+        """Shorten one export URL for a meal-plan line.
+
+        Body: `{"url": "<the export host URL including its promised size>"}`. The answer is
+        `{"shortUrl": "https://tinyurl.com/<alias>"}`.
+
+        Why the meal plan needs this: the Keep line carries the export URL as raw text (Keep
+        has no hyperlink-with-text), and the Apps Script address plus the Drive file id make
+        the line enormous. The promised size is already part of `url`, so the short link's
+        target opens the right cooking view - the app writes the size as the line's
+        parenthetical label, because the short link itself no longer shows it.
+
+        Deliberately narrow: only `https://` targets, a bounded length, and the same Google
+        sign-in as the Keep routes. A missing token is `shortening_disabled`; the app treats
+        every failure here as "write the long URL", so this route never blocks a plan write.
+        """
+        if not settings.shortening_configured():
+            raise ShortenUnavailable(
+                "Kurzlinks sind in dieser Installation nicht eingerichtet.",
+                detail="TINYURL_API_TOKEN is not set",
+            )
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise BadRequest("A JSON object body is required.")
+        target = payload.get("url")
+        if not isinstance(target, str) or target.strip() == "":
+            raise BadRequest("The body needs a 'url' to shorten.")
+        target = target.strip()
+        if len(target) > MAX_TARGET_LENGTH:
+            raise BadRequest("The URL to shorten is too long.")
+        if not target.startswith("https://"):
+            raise BadRequest("Only https:// URLs can be shortened.")
+        return jsonify({"shortUrl": shortener.shorten(target)})
 
     # ----------------------------------------------------------------------------------
     # Error shape: one JSON contract for every failure

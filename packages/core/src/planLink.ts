@@ -116,3 +116,34 @@ export function plannedFromUrl(url: string): PlannedAmount | null {
   }
   return { kind: 'yield', quantity: quantity * conversion.factor, baseUnit: conversion.baseUnit };
 }
+
+/**
+ * Gives `url` the size of `planned`, replacing a size the URL already carries
+ * (a hand-edited link): the caller's size is the only truth, and two would let
+ * the reader pick the stale one.
+ *
+ * The separator follows the URL's shape. An export-host URL already has a query
+ * (`?f=<fileId>`) and takes the size as another parameter (`&portionen=6`); a
+ * bare Drive viewer URL takes it as the fragment (`#portionen=6`), the shape its
+ * page could read if it ran the export's script at all. `plannedFromUrl` reads
+ * both back.
+ *
+ * This is also the target the app hands to the link shortener: the short link's
+ * *target* must carry the size, because a redirect does not reliably forward a
+ * fragment or an extra parameter, so the size is baked in before shortening.
+ */
+export function withPlanSize(url: string, planned: PlannedAmount): string {
+  const [withoutFragment = url] = url.split('#', 1);
+  const [path = withoutFragment, query] = withoutFragment.split('?', 2);
+  const keptParams = (query ?? '')
+    .split('&')
+    .filter(
+      (part) =>
+        part !== '' &&
+        !part.startsWith(`${PLAN_FRAGMENT_SERVINGS}=`) &&
+        !part.startsWith(`${PLAN_FRAGMENT_YIELD}=`),
+    );
+  const base = keptParams.length > 0 ? `${path}?${keptParams.join('&')}` : path;
+  const separator = keptParams.length > 0 ? '&' : '#';
+  return `${base}${separator}${planSizeQuery(planned)}`;
+}

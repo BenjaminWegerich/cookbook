@@ -73,7 +73,10 @@ not where it is used.
 - [x] Add a dish to the meal plan (the "Essensplan" list in Google Keep): the app writes the
       entry with its chosen size and a link to the recipe's HTML export — the size is a query
       parameter on the export host, so the cooking view opens on it — and replaces the entries
-      recognized as the same recipe.
+      recognized as the same recipe. The line's link is shortened through TinyURL on demand
+      (gateway `POST /shorten`, token `TINYURL_API_TOKEN`), so Keep shows
+      „Kürbissuppe (6 Portionen): https://tinyurl.com/…“; without a token the long export URL is
+      written unchanged.
 - [x] Deploy the export host (`apps/export-host/README.md`) and set the repository variable
       `VITE_EXPORT_HOST_URL`. Deployed and verified on 2026-09-24 in Google Keep's in-app browser:
       the cooking view's size picker and step navigation work there, and the promised size opens

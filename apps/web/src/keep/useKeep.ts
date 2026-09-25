@@ -35,6 +35,7 @@ import {
   isKeepConfigured,
   keepErrorMessage,
   setMealPlanChecked,
+  shortenUrl,
   writeMealPlan,
   type KeepState,
 } from './keepClient';
@@ -65,6 +66,16 @@ export interface UseKeepResult {
    * sheet can show the reason.
    */
   planMeal: (entry: string, replace: readonly string[]) => Promise<void>;
+  /**
+   * Asks the gateway for a short link to one export URL. Resolves the short URL, or null when
+   * shortening is off, unreachable or refused.
+   *
+   * Deliberately never changes the connection status: a missing shortener is not a Keep
+   * failure, and the caller answers null by writing the long export URL — the app's behaviour
+   * before the shortener existed. The link is created on demand, when a dish is planned; it is
+   * never pre-generated for sizes nobody chose.
+   */
+  shortenExportUrl: (target: string) => Promise<string | null>;
   /**
    * Undoes a `planMeal` write (the success pop-up's "Rückgängig"): removes the entry that
    * was added and puts the `restore` lines the write replaced back on the plan. The caller
@@ -290,6 +301,21 @@ export function useKeep(): UseKeepResult {
     [state, runMealPlanWrite],
   );
 
+  /**
+   * Shortens one export URL through the gateway, or answers null.
+   *
+   * Every failure is swallowed on purpose (see the interface doc): the write must succeed
+   * without a shortener, and a status/error change here would show a Keep failure for what is
+   * only a missing refinement. The link itself is optional; the line is not.
+   */
+  const shortenExportUrl = useCallback(async (target: string): Promise<string | null> => {
+    try {
+      return await withIdentityToken((token) => shortenUrl(token, target));
+    } catch {
+      return null;
+    }
+  }, []);
+
   const undoMealPlan = useCallback(
     async (entry: string, restore: readonly string[]): Promise<void> => {
       // Same guard as `planMeal`: without the loaded list there is nothing to restore onto.
@@ -353,6 +379,7 @@ export function useKeep(): UseKeepResult {
     error,
     connect,
     planMeal,
+    shortenExportUrl,
     undoMealPlan,
     checkMealPlan,
     uncheckMealPlan,

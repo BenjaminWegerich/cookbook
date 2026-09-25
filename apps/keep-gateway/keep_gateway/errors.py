@@ -102,6 +102,28 @@ class OriginNotAllowed(GatewayError):
     code = "origin_not_allowed"
 
 
+class ShortenUnavailable(GatewayError):
+    """No TinyURL token is configured, so an export link cannot be shortened.
+
+    Fail-soft, not a failure the user must act on: the app answers it by writing the long
+    export URL, exactly as it did before the shortener existed.
+    """
+
+    status = HTTPStatus.SERVICE_UNAVAILABLE
+    code = "shortening_disabled"
+
+
+class ShortenFailed(GatewayError):
+    """TinyURL refused, timed out, or answered something the shortener cannot use.
+
+    Also fail-soft at the call site (the app falls back to the long URL), but kept apart from
+    `ShortenUnavailable` because it means the service was tried and did not deliver.
+    """
+
+    status = HTTPStatus.BAD_GATEWAY
+    code = "shorten_failed"
+
+
 class NotImplementedYet(GatewayError):
     """A documented endpoint that the skeleton defines but does not implement yet.
 

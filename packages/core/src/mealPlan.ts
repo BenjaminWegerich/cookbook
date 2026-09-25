@@ -56,14 +56,7 @@
 
 import { NNBSP, formatBQ, formatDecimal } from './additionalUnits.js';
 import { integerLadderValues, pos } from './ladder.js';
-import {
-  convertYieldUnit,
-  PLAN_FRAGMENT_SERVINGS,
-  PLAN_FRAGMENT_YIELD,
-  planSizeQuery,
-  plannedFromUrl,
-  type PlannedAmount,
-} from './planLink.js';
+import { convertYieldUnit, plannedFromUrl, withPlanSize, type PlannedAmount } from './planLink.js';
 import { yieldViewFitsWrittenYield } from './recipe/yieldViews.js';
 import type { RecipeType, Unit } from './recipe/types.js';
 
@@ -261,33 +254,6 @@ export function mealPlanEntryLabel(title: string, planned: PlannedAmount | null)
 }
 
 /**
- * Gives `url` the size of `planned`, replacing a size the URL already carries
- * (a hand-edited link): this write's size is the only truth, and two would let
- * the reader pick the stale one.
- *
- * The separator follows the URL's shape. An export-host URL already has a query
- * (`?f=<fileId>`) and takes the size as another parameter (`&portionen=6`); a
- * bare Drive viewer URL takes it as the fragment (`#portionen=6`), the shape its
- * page could read if it ran the export's script at all. `plannedFromUrl` reads
- * both back.
- */
-function withPlanSize(url: string, planned: PlannedAmount): string {
-  const [withoutFragment = url] = url.split('#', 1);
-  const [path = withoutFragment, query] = withoutFragment.split('?', 2);
-  const keptParams = (query ?? '')
-    .split('&')
-    .filter(
-      (part) =>
-        part !== '' &&
-        !part.startsWith(`${PLAN_FRAGMENT_SERVINGS}=`) &&
-        !part.startsWith(`${PLAN_FRAGMENT_YIELD}=`),
-    );
-  const base = keptParams.length > 0 ? `${path}?${keptParams.join('&')}` : path;
-  const separator = keptParams.length > 0 ? '&' : '#';
-  return `${base}${separator}${planSizeQuery(planned)}`;
-}
-
-/**
  * The meal-plan entry for a dish at a chosen size.
  *
  * With an export URL, the entry is `<Titel>: <URL>` and the size rides in the
@@ -309,6 +275,71 @@ export function mealPlanEntryText(
     return `${title} (${formatPlannedAmount(planned)})`;
   }
   return `${title}: ${withPlanSize(exportUrl.trim(), planned)}`;
+}
+
+/**
+ * The meal-plan entry for a dish at a chosen size, linking a *short* URL.
+ *
+ * A short link ("https://tinyurl.com/k7f2qa") shows no size of its own, so the
+ * size moves back into the visible parenthetical label — "Kürbissuppe (6
+ * Portionen): https://tinyurl.com/k7f2qa". The promised size still travels with
+ * the link: it is baked into the short link's target before shortening
+ * (`withPlanSize`), so tapping the line opens the cooking view at exactly that
+ * size.
+ *
+ * `parseMealPlanText` reads this shape back — the URL states no size, so the
+ * parser falls back to the parenthetical, exactly like a hand-written
+ * "Titel (6 Portionen): <url>" — which keeps the app's plan recognition, its
+ * "Geplant" value and the duplicate rule working unchanged. It is also why a
+ * dead short link is recoverable: the line still names the dish and its size.
+ */
+export function mealPlanEntryTextWithShortLink(
+  title: string,
+  planned: PlannedAmount,
+  shortUrl: string,
+): string {
+  return `${mealPlanEntryLabel(title, planned)}: ${shortUrl.trim()}`;
+}
+
+/** True when two planned amounts name the same size in the same unit. */
+function samePlannedAmount(a: PlannedAmount, b: PlannedAmount): boolean {
+  if (a.kind === 'servings' && b.kind === 'servings') {
+    return a.servings === b.servings;
+  }
+  if (a.kind === 'yield' && b.kind === 'yield') {
+    return a.baseUnit === b.baseUnit && a.quantity === b.quantity;
+  }
+  return false;
+}
+
+/**
+ * The link an existing meal-plan entry already carries for `title` at `planned`,
+ * or null when none does — the app's free cache for a short link.
+ *
+ * Before it asks the shortener for a link, the app looks at the plan lines it is
+ * about to replace. Re-planning the same dish at the same size (moving it to the
+ * top, or changing it back) then reuses the link instead of creating a second one
+ * for the same target. A hand-written line that names the size in its
+ * parenthetical keeps the link the user chose, which is the same courtesy.
+ *
+ * Deliberately narrow, so the long export URL is never mistaken for a reusable
+ * one: the entry's link must state no size itself (`plannedFromUrl` — a long host
+ * or Drive link the app wrote carries `portionen=` / `menge=`), while the
+ * entry's *parenthetical* must state exactly the requested size.
+ */
+export function existingPlanLink(
+  texts: readonly string[],
+  title: string,
+  planned: PlannedAmount,
+): string | null {
+  for (const text of texts) {
+    const parsed = parseMealPlanText(text);
+    if (parsed.link === null || parsed.title !== title) continue;
+    if (plannedFromUrl(parsed.link) !== null) continue;
+    if (parsed.planned === null || !samePlannedAmount(parsed.planned, planned)) continue;
+    return parsed.link;
+  }
+  return null;
 }
 
 /**

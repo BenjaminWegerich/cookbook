@@ -14,7 +14,12 @@ import unittest
 
 from keep_gateway.app import create_app
 from keep_gateway.config import GatewayConfig
-from keep_gateway.errors import IdentityCheckUnavailable, KeepAuthRejected, Unauthorized
+from keep_gateway.errors import (
+    IdentityCheckUnavailable,
+    KeepAuthRejected,
+    ShortenFailed,
+    Unauthorized,
+)
 
 # Fixed values for the test deployment. The caller's token and the verifier are both fakes;
 # nothing here touches Google or a real credential.
@@ -56,6 +61,7 @@ def make_config(**overrides: object) -> GatewayConfig:
         "allowed_emails": frozenset({CALLER_EMAIL}),
         "dev_access_token": "",
         "allowed_origins": (ALLOWED_ORIGIN,),
+        "tinyurl_api_token": "fake-tinyurl-token",
     }
     values.update(overrides)
     return GatewayConfig(**values)  # type: ignore[arg-type]
@@ -110,6 +116,26 @@ class FakeIdentityVerifier:
         return self._email
 
 
+class FakeShortener:
+    """Stands in for `TinyUrlShortener`: records targets, returns a fixed link or fails."""
+
+    def __init__(
+        self,
+        short: str = "https://tinyurl.com/abc123",
+        error: Exception | None = None,
+    ) -> None:
+        self._short = short
+        self._error = error
+        # Every target the boundary asked to shorten, in order.
+        self.targets: list[str] = []
+
+    def shorten(self, target: str) -> str:
+        self.targets.append(target)
+        if self._error is not None:
+            raise self._error
+        return self._short
+
+
 class GatewayBoundaryTests(unittest.TestCase):
     """One app per test, built from configuration plus a fake Keep client."""
 
@@ -129,15 +155,18 @@ class GatewayBoundaryTests(unittest.TestCase):
         *,
         client: FakeKeepClient | None = None,
         verifier: FakeIdentityVerifier | None = None,
+        shortener: FakeShortener | None = None,
         **config_overrides: object,
     ):
-        """Create the boundary with fakes for Keep and for the caller identity."""
+        """Create the boundary with fakes for Keep, the caller identity and the shortener."""
         fake = client if client is not None else FakeKeepClient()
         checker = verifier if verifier is not None else FakeIdentityVerifier()
+        links = shortener if shortener is not None else FakeShortener()
         app = create_app(
             config=make_config(**config_overrides),
             client_factory=lambda _config: fake,
             identity_verifier=checker,
+            shortener_factory=lambda _config: links,
         )
         app.config["TESTING"] = True
         return app, fake
@@ -543,6 +572,115 @@ class GatewayBoundaryTests(unittest.TestCase):
         with app.test_client() as client:
             response = client.post("/keep/mealplan/check", json={"check": ["Kürbissuppe"]})
         self.assertEqual(response.status_code, 401)
+
+    # ----------------------------------------------------------------------------------
+    # Export-link shortener: the meal-plan line's short link
+    # ----------------------------------------------------------------------------------
+
+    # A realistic target: the export host URL with the promised size, which is what the app
+    # shortens. The size stays in the target, because the short link itself will not show it.
+    SHORTEN_TARGET = "https://script.google.com/macros/s/abc/exec?f=1AbCdEf&portionen=6"
+
+    def test_shorten_returns_the_link_and_passes_the_target(self) -> None:
+        shortener = FakeShortener(short="https://tinyurl.com/kuerbis6")
+        app, _fake = self.build_app(shortener=shortener)
+        with app.test_client() as client:
+            response = client.post(
+                "/shorten",
+                headers=self.auth_headers(),
+                json={"url": self.SHORTEN_TARGET},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"shortUrl": "https://tinyurl.com/kuerbis6"})
+        self.assertEqual(shortener.targets, [self.SHORTEN_TARGET])
+
+    def test_shorten_rejects_a_target_that_is_not_https(self) -> None:
+        """The endpoint must not become a shortener for arbitrary, non-export URLs."""
+        app, _fake = self.build_app()
+        for payload in (
+            {},
+            {"url": ""},
+            {"url": "   "},
+            {"url": "http://script.google.com/macros/s/abc/exec"},
+            {"url": "https://" + "a" * 3000},
+            "not an object",
+        ):
+            with self.subTest(payload=payload):
+                with app.test_client() as client:
+                    response = client.post("/shorten", headers=self.auth_headers(), json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+
+    def test_shorten_is_disabled_without_a_token(self) -> None:
+        """No token is a fail-closed 503 - and the shortener is never called."""
+        shortener = FakeShortener()
+        app, _fake = self.build_app(shortener=shortener, tinyurl_api_token="")
+        with app.test_client() as client:
+            response = client.post(
+                "/shorten",
+                headers=self.auth_headers(),
+                json={"url": self.SHORTEN_TARGET},
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.get_json()["error"]["code"], "shortening_disabled")
+        self.assertEqual(shortener.targets, [])
+
+    def test_shorten_reports_a_shortener_failure(self) -> None:
+        """A TinyURL failure reaches the app as its own code; the app then writes the long URL."""
+        app, _fake = self.build_app(
+            shortener=FakeShortener(error=ShortenFailed("Der Kurzlink konnte nicht erzeugt werden."))
+        )
+        with app.test_client() as client:
+            response = client.post(
+                "/shorten",
+                headers=self.auth_headers(),
+                json={"url": self.SHORTEN_TARGET},
+            )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json()["error"]["code"], "shorten_failed")
+
+    def test_shorten_still_requires_a_token(self) -> None:
+        app, _fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post("/shorten", json={"url": self.SHORTEN_TARGET})
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.get_json()["error"]["code"], "unauthorized")
+
+    def test_shorten_fails_closed_without_identity_config(self) -> None:
+        """The same fail-closed rule as the Keep routes: an unconfigured deployment is off."""
+        app, _fake = self.build_app(allowed_emails=frozenset())
+        with app.test_client() as client:
+            response = client.post(
+                "/shorten",
+                headers=self.auth_headers(),
+                json={"url": self.SHORTEN_TARGET},
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.get_json()["error"]["code"], "gateway_not_configured")
+
+    def test_shorten_rejects_a_foreign_origin(self) -> None:
+        """The origin gate covers `/shorten` too: it is not a public CORS endpoint."""
+        headers = {"Authorization": f"Bearer {CALLER_TOKEN}", "Origin": FOREIGN_ORIGIN}
+        app, _fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post("/shorten", headers=headers, json={"url": self.SHORTEN_TARGET})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"]["code"], "origin_not_allowed")
+
+    def test_shorten_preflight_is_answered_without_a_token(self) -> None:
+        """A POST with a JSON body is preflighted; the 204 must carry the CORS headers."""
+        app, _fake = self.build_app()
+        with app.test_client() as client:
+            response = client.options(
+                "/shorten",
+                headers={
+                    "Origin": ALLOWED_ORIGIN,
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "authorization,content-type",
+                },
+            )
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), ALLOWED_ORIGIN)
 
     # ----------------------------------------------------------------------------------
     # Write actions still to come: defined in the boundary, not implemented yet

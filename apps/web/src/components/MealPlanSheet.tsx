@@ -33,16 +33,15 @@
  *   the user) — it is a readout, not another form field, and the overview
  *   already names the recipe. The line is omitted when the recipe defines no
  *   reference;
- * - "Abbrechen" closes the overlay without writing. The writing button performs
- *   the write: it hands the caller the complete entry text
- *   (`mealPlanEntryText`). With the recipe's export URL that is
- *   "Kürbissuppe: https://…/view#portionen=6" — title, link and the chosen size
- *   in the URL's fragment, so the Keep item can be tapped through to the cooking
- *   view at exactly that size. Without a URL (a failed export write) it falls
- *   back to "Kürbissuppe (6 Portionen)". App owns the meal-plan state, so it
- *   also knows which existing entries were recognized as this recipe and must be
- *   replaced; this sheet only chooses the size. On failure the sheet stays open
- *   and shows the reason next to the button, while the button reports the
+ * - "Abbrechen" closes the overlay without writing. The writing button hands the
+ *   caller the chosen size; App builds the Keep line there, because only App
+ *   knows the recipe's export file, the entries to replace and the shortener.
+ *   With a short link that is "Kürbissuppe (6 Portionen): https://tinyurl.com/…"
+ *   — the size as the visible label, the promised size baked into the short
+ *   link's target — and without a shortener the long export link stays
+ *   ("Kürbissuppe: https://…/exec?f=…&portionen=6"). A recipe without an export
+ *   file falls back to "Kürbissuppe (6 Portionen)". On failure the sheet stays
+ *   open and shows the reason next to the button, while the button reports the
  *   running write ("Wird hinzugefügt …" / "Wird geändert …", the shared busy
  *   label).
  *
@@ -69,7 +68,6 @@ import { useState } from 'react';
 import {
   difference,
   integerLadderValues,
-  mealPlanEntryText,
   scale,
   yieldViewQuantities,
   type PlannedAmount,
@@ -101,36 +99,25 @@ interface MealPlanSheetProps {
    * falls back to the size the recipe is written in, and `plan` mode ignores it.
    */
   previous: PlannedAmount | null;
-  /**
-   * The Drive link of the recipe's HTML export, when it has one. The written
-   * Keep entry becomes `<Titel>: <URL>#portionen=6` / `#menge=500g`, so the
-   * dish carries a tap-through to the cooking view that opens at the chosen
-   * size (core's `mealPlanEntryText`). Without it (a failed export write) the
-   * entry uses the linkless parenthetical shape.
-   */
-  exportUrl?: string;
   /** Closes the overlay without writing ("Abbrechen", backdrop, Escape, Back). */
   onClose: () => void;
   /**
-   * Performs the write with the complete entry text (see the file header).
-   * Resolves when the plan holds the choice — App then closes the whole flow, so
-   * this overlay unmounts with the overview — and rejects with the reason when
-   * it failed, which keeps the overlay open.
+   * Performs the write for the chosen size. App builds the complete Keep line
+   * there — the recipe's export link, shortened when the gateway can do it, or
+   * the long URL as before; a recipe without an export file falls back to the
+   * linkless parenthetical shape — because only App knows the recipe's export
+   * file, the existing plan entries to replace and the shortener. Resolves when
+   * the plan holds the choice (App then closes the whole flow, so this overlay
+   * unmounts with the overview) and rejects with the reason when it failed,
+   * which keeps the overlay open.
    */
-  onConfirm: (entryText: string) => Promise<void>;
+  onConfirm: (planned: PlannedAmount) => Promise<void>;
 }
 
 /**
  * The meal-plan overlay (see file header).
  */
-function MealPlanSheet({
-  mode,
-  recipe,
-  previous,
-  exportUrl,
-  onClose,
-  onConfirm,
-}: MealPlanSheetProps) {
+function MealPlanSheet({ mode, recipe, previous, onClose, onConfirm }: MealPlanSheetProps) {
   const isDish = recipe.type === 'finished_dish';
   /** The recipe's own family unit; the meal plan only accepts a size in it. */
   const family = recipe.yield_unit === 'ml' ? 'ml' : 'g';
@@ -197,14 +184,15 @@ function MealPlanSheet({
 
   /**
    * Confirms the choice. The write itself belongs to App (it owns the meal-plan
-   * state and the removal list); on success the caller closes the whole flow, so
-   * this overlay unmounts and only the failure path has state to restore.
+   * state, the removal list and the entry text); on success the caller closes
+   * the whole flow, so this overlay unmounts and only the failure path has state
+   * to restore.
    */
   const handleConfirm = async (): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
-      await onConfirm(mealPlanEntryText(recipe.title, planned, exportUrl));
+      await onConfirm(planned);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setBusy(false);

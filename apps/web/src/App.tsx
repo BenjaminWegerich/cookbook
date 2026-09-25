@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  existingPlanLink,
   mealPlanEntriesForTitle,
   mealPlanEntryLabel,
+  mealPlanEntryText,
+  mealPlanEntryTextWithShortLink,
   parseMealPlanText,
+  withPlanSize,
+  type PlannedAmount,
   type Recipe,
 } from '@cookbook/core';
 
@@ -27,7 +32,7 @@ import Snackbar from './components/Snackbar';
 import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
-import { listRecipes, type StoredRecipe } from './drive/recipeStorage';
+import { listRecipes, recipeExportUrl, type StoredRecipe } from './drive/recipeStorage';
 import { useEscapeTrigger } from './hooks/useLeaveGuard';
 import { useScrollMemory } from './hooks/useScrollMemory';
 import { useSnackbar } from './hooks/useSnackbar';
@@ -813,12 +818,50 @@ function App() {
   const undoMealPlan = keep.undoMealPlan;
   const checkMealPlan = keep.checkMealPlan;
   const uncheckMealPlan = keep.uncheckMealPlan;
+  const shortenExportUrl = keep.shortenExportUrl;
+
+  /**
+   * Builds the Keep line for one chosen size: the recipe's export link, shortened when the
+   * gateway can do it, otherwise the long URL exactly as before.
+   *
+   * Why the shortener is called here and not ahead of time: one short link exists per
+   * (recipe, size), because the promised size is baked into the link's target — a redirect
+   * does not reliably forward an appended parameter, and Apps Script never sees a fragment.
+   * Pre-generating them for every possible yield would create dozens of links per recipe that
+   * are never tapped, and would go stale as soon as the recipe's written yield (and with it
+   * the range of sizes the export bakes) changes. So a link is created at the moment a dish is
+   * planned, and reused whenever the plan already carries one for the same size.
+   *
+   * Reuse comes from the plan itself (`existingPlanLink`), which is free and needs no second
+   * store: the lines that are about to be replaced are exactly the entries for this recipe.
+   * A recipe without an export file keeps the linkless parenthetical shape.
+   */
+  const resolveMealPlanEntry = useCallback(
+    async (
+      recipe: StoredRecipe,
+      planned: PlannedAmount,
+      texts: readonly string[],
+    ): Promise<string> => {
+      const exportUrl =
+        recipe.exportFileId !== undefined ? recipeExportUrl(recipe.exportFileId) : undefined;
+      if (exportUrl === undefined) {
+        return mealPlanEntryText(recipe.title, planned);
+      }
+      const reused = existingPlanLink(texts, recipe.title, planned);
+      const shortUrl = reused ?? (await shortenExportUrl(withPlanSize(exportUrl, planned)));
+      return shortUrl === null
+        ? mealPlanEntryText(recipe.title, planned, exportUrl)
+        : mealPlanEntryTextWithShortLink(recipe.title, planned, shortUrl);
+    },
+    [shortenExportUrl],
+  );
 
   /**
    * Performs the meal-plan write for the open overview's recipe. The overlay
-   * hands over the complete entry text (title + chosen size); the entries to
-   * replace are every line of the raw Keep plan that names the same recipe —
-   * checked or not, and whatever size it states (core's
+   * hands over the chosen size; the entry text is built here
+   * (`resolveMealPlanEntry` — export link, shortened when possible), and the
+   * entries to replace are every line of the raw Keep plan that names the same
+   * recipe — checked or not, and whatever size it states (core's
    * `mealPlanEntriesForTitle`) — so the dish ends up on the plan exactly once.
    * The app owns that rule; the gateway only executes it.
    *
@@ -834,16 +877,17 @@ function App() {
    * already closed by then.
    */
   const addToMealPlan = useCallback(
-    async (entryText: string): Promise<void> => {
+    async (planned: PlannedAmount): Promise<void> => {
       const targetRecipe = overviewTarget?.kind === 'recipe' ? overviewTarget.recipe : null;
       if (targetRecipe === null) return;
       // The raw Keep items, not the resolved cards: the cards hide checked
       // entries, and a ticked-off line is still a duplicate in Keep.
       const texts = (keep.state?.mealplan.items ?? []).map((item) => item.text);
       const replace = mealPlanEntriesForTitle(texts, targetRecipe.title);
+      const entryText = await resolveMealPlanEntry(targetRecipe, planned, texts);
       await planMeal(entryText, replace);
       closeOverview();
-      // The written line is "<Titel>: <URL>#…" and would read poorly in the
+      // The written line is "<Titel>: <URL>" and would read poorly in the
       // notice; the parser gives back the human form ("Kürbissuppe (6
       // Portionen)") for it. The exact line stays the undo's business.
       const written = parseMealPlanText(entryText);
@@ -868,16 +912,26 @@ function App() {
         },
       });
     },
-    [overviewTarget, keep.state, planMeal, undoMealPlan, closeOverview, showSnackbar],
+    [
+      overviewTarget,
+      keep.state,
+      planMeal,
+      undoMealPlan,
+      closeOverview,
+      showSnackbar,
+      resolveMealPlanEntry,
+    ],
   );
 
   /**
    * Performs the "Umplanen" write for the open overview's recipe: replaces the
    * recipe's current entries with one at the newly chosen size. The overlay hands
-   * over the complete new entry text; the entries to replace are every line of
-   * the raw Keep plan that names the same recipe (core's
-   * `mealPlanEntriesForTitle`) — the same rule the first-time plan uses, so the
-   * dish ends up on the plan exactly once and its link carries the new size.
+   * over the chosen size; the entry text is built here (`resolveMealPlanEntry`,
+   * like planning — an existing short link at that size is reused), and the
+   * entries to replace are every line of the raw Keep plan that names the same
+   * recipe (core's `mealPlanEntriesForTitle`) — the same rule the first-time plan
+   * uses, so the dish ends up on the plan exactly once and its link opens the new
+   * size.
    *
    * Unlike "Vom Plan entfernen", this does *not* keep the overview open: the
    * whole flow closes back to the list like planning does (decided with the
@@ -891,13 +945,14 @@ function App() {
    * knows what the write actually changed.
    */
   const changeMealPlanAmount = useCallback(
-    async (entryText: string): Promise<void> => {
+    async (planned: PlannedAmount): Promise<void> => {
       const targetRecipe = overviewTarget?.kind === 'recipe' ? overviewTarget.recipe : null;
       if (targetRecipe === null) return;
       // The raw Keep items, not the resolved cards: the cards hide checked
       // entries, and a ticked-off line is still a duplicate in Keep.
       const texts = (keep.state?.mealplan.items ?? []).map((item) => item.text);
       const replace = mealPlanEntriesForTitle(texts, targetRecipe.title);
+      const entryText = await resolveMealPlanEntry(targetRecipe, planned, texts);
       await planMeal(entryText, replace);
       closeOverview();
       showSnackbar({
@@ -920,7 +975,15 @@ function App() {
         },
       });
     },
-    [overviewTarget, keep.state, planMeal, undoMealPlan, closeOverview, showSnackbar],
+    [
+      overviewTarget,
+      keep.state,
+      planMeal,
+      undoMealPlan,
+      closeOverview,
+      showSnackbar,
+      resolveMealPlanEntry,
+    ],
   );
 
   /**

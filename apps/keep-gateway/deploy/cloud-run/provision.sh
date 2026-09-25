@@ -18,7 +18,7 @@
 #   ./deploy/cloud-run/provision.sh --skip-build          # redeploy the current revision
 #
 # Environment variables override every default: PROJECT, REGION, SERVICE, REPO, MASTER_SECRET,
-# OAUTH_CLIENT_ID, ALLOWED_EMAILS, MINT_JOB, ALLOWED_ORIGINS, ALERT_EMAIL, TAG.
+# TINYURL_SECRET, OAUTH_CLIENT_ID, ALLOWED_EMAILS, MINT_JOB, ALLOWED_ORIGINS, ALERT_EMAIL, TAG.
 
 set -euo pipefail
 
@@ -27,6 +27,7 @@ REGION="${REGION:-europe-west3}"
 SERVICE="${SERVICE:-keep-gateway}"
 REPO="${REPO:-keep-probe}"
 MASTER_SECRET="${MASTER_SECRET:-keep-master-token-cloud}"
+TINYURL_SECRET="${TINYURL_SECRET:-tinyurl-api-token}"
 MINT_JOB="${MINT_JOB:-keep-mint}"
 COOKIE_SECRET="${COOKIE_SECRET:-keep-oauth-token}"
 
@@ -157,6 +158,31 @@ gcloud secrets add-iam-policy-binding "$MASTER_SECRET" \
   --role="roles/secretmanager.secretAccessor" --quiet >/dev/null
 echo "read access granted to ${RUN_SA}"
 
+# --- TinyURL secret (optional) ---------------------------------------------------------
+# The shortener's API token. Unlike the master token it is created once by the operator
+# (`gcloud secrets create`, see the README) - there is nothing to mint here. It is optional
+# on purpose: without it the gateway answers `shortening_disabled` and the app keeps writing
+# the long export URL, so a deployment that never sets it stays fully functional. A secret
+# with no version is treated as absent, because Cloud Run refuses to deploy a reference to it.
+step "TinyURL secret (${TINYURL_SECRET}, optional)"
+SECRET_BINDINGS="KEEP_MASTER_TOKEN=${MASTER_SECRET}:latest"
+SHORTENING_STATE="off"
+if gcloud secrets describe "$TINYURL_SECRET" >/dev/null 2>&1; then
+  TINYURL_VERSIONS="$(gcloud secrets versions list "$TINYURL_SECRET" --format='value(name)' 2>/dev/null | wc -l)"
+  if [[ "$TINYURL_VERSIONS" -gt 0 ]]; then
+    gcloud secrets add-iam-policy-binding "$TINYURL_SECRET" \
+      --member="serviceAccount:${RUN_SA}" \
+      --role="roles/secretmanager.secretAccessor" --quiet >/dev/null
+    SECRET_BINDINGS="${SECRET_BINDINGS},TINYURL_API_TOKEN=${TINYURL_SECRET}:latest"
+    SHORTENING_STATE="on"
+    echo "present with ${TINYURL_VERSIONS} version(s) - export-link shortening is on"
+  else
+    echo "${TINYURL_SECRET} has no version, so it is not bound - export links stay long" >&2
+  fi
+else
+  echo "no ${TINYURL_SECRET} - export links stay long (the app falls back to the host URL)" >&2
+fi
+
 # --- Image -----------------------------------------------------------------------------
 step "Image"
 gcloud artifacts repositories create "$REPO" \
@@ -217,7 +243,7 @@ SERVICE_ARGS=(
   --concurrency 8
   --timeout 30
   --env-vars-file "$ENV_FILE"
-  --set-secrets "KEEP_MASTER_TOKEN=${MASTER_SECRET}:latest"
+  --set-secrets "$SECRET_BINDINGS"
   --quiet
 )
 
@@ -282,6 +308,7 @@ cat <<EOF
   image      ${IMAGE}
   origins    ${ALLOWED_ORIGINS}
   caller     ${ALLOWED_EMAILS} (via ${OAUTH_CLIENT_ID})
+  shorten    ${SHORTENING_STATE} (${TINYURL_SECRET})
   alert to   ${ALERT_EMAIL}
 
 NEXT
@@ -294,7 +321,11 @@ NEXT
      ${RETIRED_TOKEN_SECRET} still exists, delete it and remove the stored password from Google
      Passwords (see the README, "Retiring the pasted token"):
        gcloud secrets delete ${RETIRED_TOKEN_SECRET}
-  4. Budget guardrail, if not set already (free tier is a discount, not a cap):
+  4. Export-link shortening is ${SHORTENING_STATE}. It needs the operator-created secret
+     ${TINYURL_SECRET} (a TinyURL API token); create it and re-run this script to turn it on
+     (README, "The TinyURL secret"). Without it the meal-plan line carries the long export
+     URL and everything else works unchanged.
+  5. Budget guardrail, if not set already (free tier is a discount, not a cap):
        https://console.cloud.google.com/billing/budgets
 
 Teardown is in the README (section "Teardown").

@@ -15,7 +15,9 @@ spike that proved the approach is in [`spike/keep-feasibility/`](../../spike/kee
 end. Both meal-plan writes are implemented — the plan write (`POST /keep/mealplan`) and ticking
 a dish off (`POST /keep/mealplan/check`); the shopping-list write and the aisle sort still
 answer `501 not_implemented` until their prerequisites exist (the ingredient-category and
-write-action steps). Deployment, the credential alert and the €1
+write-action steps). The meal-plan line links the cooking view through a short TinyURL when the
+deployment has a `TINYURL_API_TOKEN` (`POST /shorten`); without one the long export URL is
+written, so the shortener is optional. Deployment, the credential alert and the €1
 spend guardrail are all in place — see
 [`deploy/cloud-run/README.md`](deploy/cloud-run/README.md).
 
@@ -27,13 +29,14 @@ spend guardrail are all in place — see
 | `GET`  | `/keep/state`          | Meal plan and shopping list, in Keep's display order. | works |
 | `POST` | `/keep/mealplan`       | Add dish lines to "Essensplan".                       | works |
 | `POST` | `/keep/mealplan/check` | Tick meal-plan lines off / back on ("Vom Plan entfernen"). | works |
+| `POST` | `/shorten`             | Shorten one export URL for a meal-plan line.         | works with a token, else `503` |
 | `POST` | `/keep/shopping`       | Add a recipe's scaled ingredients to "Einkaufsliste". | `501` until the write-action step |
 | `POST` | `/keep/shopping/sort`  | Reorder the shopping list by category/aisle.          | `501` until the category and write-action steps |
 
-Everything under `/keep/` requires `Authorization: Bearer <token>`: the caller's Google sign-in
-for the identity scopes (`openid email`). The service has Google confirm it and checks the
-address against `KEEP_ALLOWED_EMAILS`. A token that grants more than the identity scopes — above
-all one that could touch Drive files — is refused.
+Everything under `/keep/` and `/shorten` requires `Authorization: Bearer <token>`: the caller's
+Google sign-in for the identity scopes (`openid email`). The service has Google confirm it and
+checks the address against `KEEP_ALLOWED_EMAILS`. A token that grants more than the identity
+scopes — above all one that could touch Drive files — is refused.
 
 `GET /keep/state` answers:
 
@@ -84,6 +87,25 @@ rejected. The answer is the changed list in the checklist shape of `GET /keep/st
 }
 ```
 
+`POST /shorten` shortens one export URL for a meal-plan line:
+
+```json
+{ "url": "https://<export-host>/exec?f=<id>&portionen=6" }
+```
+
+The answer is `{ "shortUrl": "https://tinyurl.com/k7f2qa" }`. The meal-plan line carries its
+link as raw text (Keep has no hyperlink-with-text), and the Apps Script address plus the Drive
+file id make that line enormous; with a short link the line reads
+"Kürbissuppe (6 Portionen): https://tinyurl.com/k7f2qa".
+
+The app asks here at the moment a dish is planned, never in advance, because one link exists per
+(recipe, size): the promised size is baked into the link's *target*, since a redirect does not
+reliably forward an appended parameter — which is also why the size moves into the visible
+parenthetical label. Only `https://` targets up to 2000 characters are accepted, and the route
+sits behind the same Google sign-in as the Keep routes. Without a `TINYURL_API_TOKEN` it answers
+`shortening_disabled`; every failure there means the app writes the long export URL, so
+shortening never blocks a plan write.
+
 `POST /keep/mealplan/check` ticks meal-plan lines off or back on, without deleting them — the
 recipe overview's "Vom Plan entfernen" and its "Rückgängig":
 
@@ -121,7 +143,9 @@ branch on a stable code and switch Keep features off cleanly (N5):
 | `keep_list_missing` | 502 | A configured note is not visible to the throwaway account. | Check the note is still shared and its title. |
 | `keep_api_error` | 502 | Any other `gkeepapi` failure. | See the server log line. |
 | `not_implemented` | 501 | Documented action, not built yet. | The shopping-list write and the aisle sort. |
-| `bad_request` | 400 | Malformed body, or a write body without a usable `add` entry text. | Check the JSON body. |
+| `bad_request` | 400 | Malformed body, a write body without a usable `add` entry text, or a `/shorten` target that is not an `https://` URL. | Check the JSON body. |
+| `shortening_disabled` | 503 | No `TINYURL_API_TOKEN` is configured. | The app writes the long export URL; nothing to fix unless short links are wanted. |
+| `shorten_failed` | 502 | TinyURL refused, timed out, or answered unusably. | The app writes the long export URL; the diagnosis is in the server log line. |
 | `internal_error` | 500 | Unexpected failure. | The traceback is in the log, not the response. |
 
 ## Configuration
@@ -136,6 +160,7 @@ All configuration is environment variables; the service keeps no state and write
 | `KEEP_OAUTH_CLIENT_ID` | yes | The web client the app signs in with. A caller's token must name it as its audience, which is what stops a token minted for any other Google app. |
 | `KEEP_ALLOWED_EMAILS` | yes | Comma-separated accounts allowed to call the service. Empty ⇒ nobody (fail-closed), never "anybody". |
 | `KEEP_DEV_ACCESS_TOKEN` | no | Static token accepted for local `curl` only. **Never set on Cloud Run** — it is a debugging aid, not a second production path. |
+| `TINYURL_API_TOKEN` | no | API token of a free TinyURL account, used to shorten the meal-plan line's export link. Secret — Secret Manager in the cloud. Empty ⇒ export links stay long and everything else works. |
 | `KEEP_GATEWAY_ALLOWED_ORIGINS` | for browsers | Comma-separated origins allowed to call the service (the GitHub Pages URL and `http://localhost:5173` for the dev server by default). Empty ⇒ no browser caller. No wildcard. |
 | `KEEP_SHOPPING_LIST_TITLE` | no | Default `Einkaufsliste`. |
 | `KEEP_MEALPLAN_LIST_TITLE` | no | Default `Essensplan`. |
@@ -169,6 +194,7 @@ export KEEP_OAUTH_CLIENT_ID=<the web client id from apps/web/.env>
 export KEEP_ALLOWED_EMAILS=benjaminwegerich@gmail.com
 export KEEP_GATEWAY_ALLOWED_ORIGINS=http://localhost:5173
 export KEEP_DEV_ACCESS_TOKEN=local-smoke-token   # any value; local curl only
+export TINYURL_API_TOKEN=<TinyURL API token>    # optional; without it export links stay long
 ./.venv/bin/python -m keep_gateway            # or the gunicorn line from the Dockerfile
 
 curl -s http://127.0.0.1:8098/health

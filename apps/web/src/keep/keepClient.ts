@@ -75,6 +75,8 @@ export type KeepErrorCode =
   | 'not_implemented'
   | 'bad_request'
   | 'internal_error'
+  | 'shortening_disabled'
+  | 'shorten_failed'
   | 'unreachable'
   | 'invalid_response'
   | 'http_error';
@@ -266,6 +268,32 @@ export async function writeMealPlan(
     throw new KeepClientError('invalid_response', 'Das Keep-Gateway hat unerwartet geantwortet.');
   }
   return mealplan;
+}
+
+/**
+ * Asks the gateway to shorten one export URL (`POST /shorten`).
+ *
+ * The meal-plan write uses this so the Keep line stays readable: the line carries the export
+ * URL as raw text (Keep has no hyperlink-with-text), and the Apps Script host address plus the
+ * Drive file id make it enormous. The promised size is already part of `target`, so the short
+ * link's target opens the cooking view at the right size — the app writes the size as the
+ * line's parenthetical label, because a short link does not show it.
+ *
+ * A failure is not an error the caller has to handle: the long export URL still opens the
+ * cooking view, so the caller catches this and composes the long line instead. The two new
+ * codes (`shortening_disabled`, `shorten_failed`) exist so a caller that wants to distinguish
+ * "not configured" from "TinyURL refused" can, without a second error channel.
+ */
+export async function shortenUrl(gatewayToken: string, target: string): Promise<string> {
+  const body = await requestJson('/shorten', gatewayToken, {
+    method: 'POST',
+    body: { url: target },
+  });
+  const shortUrl = isRecord(body) && typeof body.shortUrl === 'string' ? body.shortUrl : null;
+  if (shortUrl === null || shortUrl.trim() === '') {
+    throw new KeepClientError('invalid_response', 'Das Keep-Gateway hat unerwartet geantwortet.');
+  }
+  return shortUrl;
 }
 
 /**

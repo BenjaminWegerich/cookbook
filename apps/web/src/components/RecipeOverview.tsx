@@ -95,7 +95,7 @@ import {
   type Recipe,
 } from '@cookbook/core';
 
-import { readRecipe, recipeExportUrl, type StoredRecipe } from '../drive/recipeStorage';
+import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import {
   CalendarAddIcon,
@@ -161,17 +161,17 @@ interface RecipeOverviewProps {
   /**
    * Performs the meal-plan write for the size chosen in the "Einplanen"
    * overlay (App owns the meal-plan state, so it also knows which entries to
-   * replace). Resolves when the dish is planned; rejects with the reason when it
-   * failed. Planning ends the whole flow.
+   * replace and builds the entry text). Resolves when the dish is planned;
+   * rejects with the reason when it failed. Planning ends the whole flow.
    */
-  onAddToMealPlan: (entryText: string) => Promise<void>;
+  onAddToMealPlan: (planned: PlannedAmount) => Promise<void>;
   /**
    * Performs the "Umplanen" write for the size chosen in the overlay: replaces
    * the recipe's entries with one at the new size. Resolves when the plan holds
    * the new size — App then closes the whole flow back to the list, exactly like
    * planning — and rejects with the reason when it failed.
    */
-  onChangeAmount: (entryText: string) => Promise<void>;
+  onChangeAmount: (planned: PlannedAmount) => Promise<void>;
   /**
    * Takes the open meal-plan entry off the plan: a recognized recipe's "Mehr" →
    * "Vom Plan entfernen", or the unrecognized entry's own danger button. App
@@ -676,10 +676,9 @@ function RecipeOverview({
       {/* The meal-plan overlay: a layer above this sheet, opened by "Einplanen"
           (known recipe, not planned) or "Umplanen" (planned). It closes back
           onto the sheet. The mode follows the live plan: a planned dish gets
-          the replan form, which pre-selects the plan's size. The export URL
-          travels with it, so the written Keep entry can link the cooking view;
-          a recipe whose export write failed has none and the entry falls back
-          to the linkless shape.
+          the replan form, which pre-selects the plan's size. The overlay hands
+          the chosen size to App, which builds the Keep line there (the export
+          link, shortened when possible).
 
           Both modes end the flow in App on success (App closes the overview
           there, like "Zum Essensplan hinzufügen" always did), so only
@@ -690,11 +689,6 @@ function RecipeOverview({
           mode={onMealPlan ? 'replan' : 'plan'}
           recipe={details}
           previous={planned}
-          exportUrl={
-            target.recipe.exportFileId !== undefined
-              ? recipeExportUrl(target.recipe.exportFileId)
-              : undefined
-          }
           onClose={() => setPlanOpen(false)}
           onConfirm={onMealPlan ? onChangeAmount : onAddToMealPlan}
         />

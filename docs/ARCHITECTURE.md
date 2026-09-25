@@ -210,8 +210,13 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   carries the recipe's export link with the chosen size: „Kürbissuppe:
   https://<export-host>/exec?f=<id>&portionen=6“. Keep has no hyperlink-with-text, so the raw URL
   has to stand in the item; the fragment on a Drive fallback link is the same size in the shape
-  that page could read. A recipe without an export file falls back to the linkless
-  „Kürbissuppe (6 Portionen)“.
+  that page could read. Since the host URL is enormous, the gateway shortens that link on
+  request (`POST /shorten`, TinyURL token `TINYURL_API_TOKEN`) and the line becomes
+  „Kürbissuppe (6 Portionen): https://tinyurl.com/…“ — the size moves into the visible label
+  because the short link hides it, while the link's *target* still carries the size. Links are
+  created on demand per (recipe, size) and reused from the plan when it already carries one;
+  without a token, or when TinyURL fails, the long URL is written as before. A recipe without an
+  export file falls back to the linkless „Kürbissuppe (6 Portionen)“.
   The app owns that rule; the gateway only executes the action. It places the new line above
   every remaining item with the spike's sort-id rule, deletes the replaced entries, syncs once
   and verifies the result before answering the changed list — a write is never reported as
