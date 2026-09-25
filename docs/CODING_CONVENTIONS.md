@@ -138,6 +138,10 @@
   app owns, and a pop the app consumes re-establishes the entry it consumed. Without that
   guard the browser takes over the gesture, navigates the tab away and the reload lands on the
   login screen (the Drive session is memory-only).
+  Which exit a screen carries follows from its kind: a page (a level of the flow) is left
+  with „Zurück" at the top left, a sheet (a change over a page) with „Abbrechen" beside
+  its primary button — the rule and the decision test live in
+  [ui_patterns.md](ui_patterns.md) §2.
 - **Sub-recipe levels stay mounted:** the „REZEPT" badge opens a sub-recipe as another editor
   level above the current one; App keeps every open level mounted and hides the ones below
   (`hidden` on a plain wrapper, plus `visible` to gate Escape). A jump therefore never discards

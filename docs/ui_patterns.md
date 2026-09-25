@@ -9,6 +9,9 @@ Patterns documented here:
 1. [Snackbar](#1-snackbar) — the transient notice at the bottom of the screen,
    with an optional action ("Rückgängig").
 
+2. [Leaving a screen](#2-leaving-a-screen) — „Zurück" at the top left as the exit
+   of a *place*, „Abbrechen" beside the primary button as the exit of a *change*.
+
 The visual ground rules the patterns sit on are binding and live in
 [CODING_CONVENTIONS.md](CODING_CONVENTIONS.md) (Design Conventions): the pixel
 ladder, the flat opaque surfaces, the one icon set (Material Symbols Rounded,
@@ -260,3 +263,113 @@ any screen can report an outcome without owning a layer.
    an established one (undo, delete); otherwise leave the label bare.
 5. Do not add a second snackbar render site, a second timer or a stacking
    container — extend the host instead.
+
+---
+
+## 2. Leaving a screen
+
+**What it is.** Every screen above the recipe list offers exactly one way out, and
+that way out is one of two controls: **„Zurück"**, a borderless text button on its
+own line at the top left above the title (`.app-header-stacked`), or
+**„Abbrechen"**, the first button of the bottom action row (`.sheet-actions`),
+immediately left of the primary button. The two are not variants of one control:
+they name two different kinds of leaving, and a screen carries exactly one of them.
+
+**The rule (decided with the user).** „Zurück" belongs to a **place**,
+„Abbrechen" belongs to a **change**:
+
+- A **place** is a level the user navigated to. It replaces the previous screen,
+  the app remembers it (its own scroll key, kept mounted, its draft preserved —
+  see the sub-recipe rule in [CODING_CONVENTIONS.md](CODING_CONVENTIONS.md)), and
+  leaving it returns to that previous level. Its exit is „Zurück" at the top left,
+  and it has **no second cancel**: its own forward action („Speichern",
+  „Einkaufsliste schreiben") stands alone at the bottom right.
+- A **change** is asked *over* a screen that stays where it is — a sheet with a
+  scrim over the list. Closing throws the pending input away and reveals that
+  screen untouched. Its exit is „Abbrechen" in the bottom action row, directly
+  left of the primary button.
+
+**One-liner:** *Does leaving mean "go back" or "never mind"? Go back → „Zurück"
+top left. Never mind → „Abbrechen" next to the commit.*
+
+### 2.1 The instances so far
+
+| Surface | Kind | Exit |
+| --- | --- | --- |
+| Recipe editor, incl. every sub-recipe level | place (scroll key `editor:<level>`) | „Zurück" |
+| „Rezept mit KI anlegen / bearbeiten" | place (scroll key `ai`) | „Zurück" |
+| „Gerichte vom Essensplan auswählen" | place (flow step) | „Zurück" |
+| „Vorräte auswählen" | place (flow step) | „Zurück" |
+| Recipe overview, create menu | browsing layer over the list | none — the scrim / close button leaves it, there is no pending decision |
+| „Zum Essensplan hinzufügen" / „Menge ändern" | change (sheet) | „Abbrechen" |
+| „Eintrag ersetzen" | change (sheet) | „Abbrechen" |
+| Ingredient sheet, new-ingredient sheet | change (sheet) | „Abbrechen" |
+| „Rezept löschen" → „… wirklich löschen?" | question pending inside a place | „Abbrechen" |
+
+The last row is no contradiction: that button drops an armed question in place. It
+never leaves a level, so it takes the transactional label — and it is the only
+reason a place may show „Abbrechen" at all.
+
+### 2.2 Decision test (first "yes" wins)
+
+1. Does a screen stay underneath, unchanged and at its own scroll position (a
+   scrim covers it)? → a **change** → **„Abbrechen"**.
+2. Is this a step with a place of its own in the flow, which the app remembers and
+   can show again? → a **place** → **„Zurück"**.
+3. Is the exit only dropping a question that is pending inside a place? →
+   **„Abbrechen"** (same label, no navigation).
+
+### 2.3 Copy
+
+- **„Zurück" is a navigation label, not an action label** — one of the few verbless
+  labels the copy rules allow ([CODING_CONVENTIONS.md](CODING_CONVENTIONS.md),
+  button labels). It reads „Zurück" on every place, and it is the same string as
+  the browser Back / swipe-back behaviour it mirrors.
+- **While the leave guard is armed** it becomes the question itself —
+  „Änderungen verwerfen?" in danger text (`RecipeEditor`, `AiCreateSheet`) —
+  because a place can hold a draft that would be lost. A sheet's „Abbrechen" never
+  changes its label and never asks: a sheet's fields are transient by rule (same
+  document, exit guard).
+- Both strings are reused verbatim. A synonym („Zurück zur Liste", „Verwerfen",
+  „Schließen") is a new pattern and needs a decision.
+
+### 2.4 Geometry, and why the positions are not interchangeable
+
+| | „Zurück" | „Abbrechen" |
+| --- | --- | --- |
+| Position | top left, own line above the title (`.app-header-stacked`, `styles/recipe-list.css`) | bottom action row, first of the row, left of the primary (`.sheet-actions`, `styles/editor.css`) |
+| Shape | `.text-button` | `.text-button` |
+| Siblings | none | the primary button of the pending decision |
+| When the write runs | stays usable; unsaved work is asked about, not blocked | disabled with the primary action |
+| Other triggers doing the same | browser / device Back, Escape, swipe-back | browser / device Back, Escape, scrim tap |
+
+The top left is where "one level up" lives: a button there must never mean "discard
+this form", or navigation and a write decision become indistinguishable. The bottom
+row is where the decision about the pending change lives: cancel and commit are the
+two answers to one question, so they share a row in the order no | yes. On a place,
+navigation and commit are therefore deliberately separated (top left vs. bottom
+right); in a sheet there is no navigation, so both answers sit together.
+
+### 2.5 A flow step that writes is still a place
+
+The editor, the AI screen and the two shopping steps all write something, and all
+four still say „Zurück". Leaving them *is* the flow's cancel — a second
+„Abbrechen" would duplicate it. Their bottom-right button is the step's next /
+commit, not a form submit with a paired abort, so it stands alone (PantrySelect's
+„Einkaufsliste schreiben" even ends the whole flow, which is why its failure is
+reported next to the button instead of in a snackbar).
+
+### 2.6 Adding a new screen
+
+1. Decide place or change with §2.2 — the answer fixes the label, the position and
+   the trigger set at once.
+2. **Place:** page header with `.app-header-stacked` + „Zurück", routed through
+   `useLeaveGuard` and App's navigation (`setNav` + `notifyBack`); nothing in the
+   action row that means "cancel".
+3. **Change:** `.sheet-actions` with „Abbrechen" + primary; no back button in a
+   header.
+4. **Never both on one level.** A „Zurück" inside a sheet, or an „Abbrechen" that
+   only goes back, is exactly the drift this pattern prevents.
+5. A place that needs a confirmation asks through the shared guard, never with a
+   second button; a "change" that needs a confirmation is no longer a change and
+   belongs in the flow as a step.
