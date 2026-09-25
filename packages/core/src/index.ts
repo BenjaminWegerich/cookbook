@@ -32,6 +32,7 @@ export * from './recipe/timeValues.js';
 export * from './recipe/types.js';
 export * from './recipe/validate.js';
 export * from './recipe/yieldViews.js';
+export * from './shoppingList.js';
 
 /** Version of the core module, kept in sync with packages/core/package.json. */
 export const VERSION = '0.1.0';

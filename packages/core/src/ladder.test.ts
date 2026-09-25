@@ -8,6 +8,8 @@ import {
   pos,
   roundToRung,
   roundedBQ,
+  rungAbove,
+  rungBelow,
   scale,
 } from './ladder.js';
 
@@ -215,5 +217,34 @@ describe('roundToRung', () => {
     expect(() => roundToRung(0)).toThrow();
     expect(() => roundToRung(-5)).toThrow();
     expect(() => roundToRung(Number.NaN)).toThrow();
+  });
+});
+
+describe('rungAbove / rungBelow', () => {
+  it('names the neighbouring rungs of a ladder value', () => {
+    expect(rungAbove(1000)).toBe(1200);
+    expect(rungBelow(1000)).toBe(900);
+    expect(rungAbove(1)).toBe(1.2);
+    expect(rungBelow(1)).toBe(0.9);
+  });
+
+  it('steps from a value that is not on the ladder (a summed need)', () => {
+    expect(rungAbove(1150)).toBe(1200);
+    expect(rungBelow(1150)).toBe(1000);
+    expect(rungAbove(0.5)).toBe(0.6);
+    expect(rungBelow(0.5)).toBe(0.4);
+  });
+
+  it('keeps the decade rule outside the table', () => {
+    expect(rungAbove(0.1)).toBe(0.12);
+    expect(rungBelow(0.1)).toBe(0.09);
+    expect(rungAbove(12000)).toBe(15000);
+  });
+
+  it('rejects non-positive or non-finite input', () => {
+    for (const value of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => rungAbove(value)).toThrow();
+      expect(() => rungBelow(value)).toThrow();
+    }
   });
 });

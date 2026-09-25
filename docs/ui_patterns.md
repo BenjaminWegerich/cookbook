@@ -24,7 +24,7 @@ screen after an action finished, says what just happened, and — where there is
 real way back — offers one action. It is the app's confirmation layer for work
 that has already been done and has closed the screen it was done on.
 
-**The instances so far.** All three report a meal-plan write from the recipe
+**The instances so far.** All four report a meal-plan write from the recipe
 overview:
 
 > `<Titel> (<Größe>) zum Essensplan hinzugefügt. Die Einkaufsliste bleibt unverändert.`
@@ -36,6 +36,10 @@ overview:
 > `<Titel> vom Essensplan entfernt. Die Einkaufsliste bleibt unverändert.`
 > with the action **Rückgängig** („Mehr“ → „Vom Plan entfernen“ on a recognized recipe, or an
 > unrecognized entry's own „Vom Plan entfernen“).
+
+> `„<Vorheriger Eintrag>“ durch <Titel> (<Größe>) ersetzt. Die Einkaufsliste bleibt unverändert.`
+> with the action **Rückgängig** („Eintrag ersetzen“ → „Bestehendes Rezept auswählen“ on an
+> unrecognized entry).
 
 ### 1.1 When to use it — and when not
 

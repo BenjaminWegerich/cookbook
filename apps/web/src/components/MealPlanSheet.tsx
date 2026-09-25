@@ -69,6 +69,7 @@ import {
   difference,
   integerLadderValues,
   scale,
+  writtenPlannedAmount,
   yieldViewQuantities,
   type PlannedAmount,
   type Recipe,
@@ -122,15 +123,31 @@ function MealPlanSheet({ mode, recipe, previous, onClose, onConfirm }: MealPlanS
   /** The recipe's own family unit; the meal plan only accepts a size in it. */
   const family = recipe.yield_unit === 'ml' ? 'ml' : 'g';
   /**
+   * The size the recipe is written in, in the plan's own shape (core's
+   * `writtenPlannedAmount`). It is the overlay's fallback and the value the app
+   * names wherever an entry states no size, so both come from one definition.
+   */
+  const written = writtenPlannedAmount(recipe);
+  /**
    * The size the overlay starts on. `replan` pre-selects the plan's stated size
    * (decided with the user) and only falls back to the written size when the
    * entry states none — or when the stated kind does not match the recipe type
-   * (impossible after the fit check, but this sheet must not guess a size).
+   * (impossible after the fit check, but this sheet must not guess a size). The
+   * nested guards mirror `written.kind === isDish` for TypeScript: the helper
+   * reads the same `recipe.type` the line above does.
    */
   const initialServings =
-    isDish && previous?.kind === 'servings' ? previous.servings : (recipe.servings ?? 1);
+    isDish && previous?.kind === 'servings'
+      ? previous.servings
+      : written.kind === 'servings'
+        ? written.servings
+        : 1;
   const initialYield =
-    !isDish && previous?.kind === 'yield' ? previous.quantity : (recipe.yield ?? 1000);
+    !isDish && previous?.kind === 'yield'
+      ? previous.quantity
+      : written.kind === 'yield'
+        ? written.quantity
+        : 1000;
   /** Selected serving count (finished dish). */
   const [servings, setServings] = useState(initialServings);
   /** Selected yield in the family unit (ingredient recipe). */

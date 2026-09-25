@@ -24,7 +24,7 @@
  * without one: the export opens at the recipe's written size.
  */
 
-import type { Unit } from './recipe/types.js';
+import type { Recipe, Unit } from './recipe/types.js';
 
 /** URL parameter that carries a serving count (`portionen=6`). */
 export const PLAN_FRAGMENT_SERVINGS = 'portionen';
@@ -45,6 +45,39 @@ export const PLAN_PRESELECT_ELEMENT_ID = 'cookbook-preselect';
  */
 export type PlannedAmount =
   { kind: 'servings'; servings: number } | { kind: 'yield'; quantity: number; baseUnit: Unit };
+
+/**
+ * The size a recipe is written in, in the shape a meal-plan entry states a size:
+ * a finished dish's serving count, an ingredient recipe's yield in its family
+ * base unit (`g` / `ml`; `kg` / `l` are display forms, docs/storage_format.md §3).
+ *
+ * This is what a meal-plan entry *without* a size means. Its link carries no
+ * size, so the export opens at the written size, and the "Einplanen" overlay
+ * starts on it. Anything that has to name the size a planned dish is really
+ * cooked at therefore falls back to it: the recipe overview's "Geplant" value
+ * and the shopping-list selection (the overview has the loaded recipe, the
+ * selection reads it through keep/mealPlanCards).
+ *
+ * The defaults (1 serving, 1000 g / ml) only apply to a recipe that states no
+ * size at all, which the storage format does not allow (docs/storage_format.md
+ * §4). They exist so a caller never has to invent a number, and they are the
+ * same starting values the "Einplanen" overlay pre-selects.
+ */
+export function writtenPlannedAmount(recipe: Recipe): PlannedAmount {
+  if (recipe.type === 'finished_dish') {
+    return { kind: 'servings', servings: recipe.servings ?? 1 };
+  }
+  // The yield goes through the same family conversion a size parsed from a link
+  // takes, so `kg` / `l` land in the base unit with their ×1000 — a parsed
+  // recipe is already normalized (recipe/parse.ts), but this module must not
+  // depend on the caller having gone through the parser.
+  const conversion = convertYieldUnit(recipe.yield_unit ?? 'g');
+  return {
+    kind: 'yield',
+    quantity: (recipe.yield ?? 1000) * (conversion?.factor ?? 1),
+    baseUnit: conversion?.baseUnit ?? 'g',
+  };
+}
 
 /**
  * Suffix units mapped to a family base unit. `g` / `ml` pass through; `kg` /

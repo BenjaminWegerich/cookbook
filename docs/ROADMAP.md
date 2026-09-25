@@ -59,8 +59,10 @@ self-contained. The read-only frontend, the meal-plan recipe overview and the me
 are built (tabs, recognition, the Google sign-in, the overview's three card forms,
 „Zum Essensplan hinzufügen“, which links the entry at the recipe's cooking view through the
 deployed export host, „Umplanen“ with its size change, and „Vom Plan entfernen“, which ticks
-the entry off and can be undone). „Jetzt kochen“ and the three „Eintrag ersetzen“ entries are
-still placeholders; what remains is the shopping-list write and the aisle sort.
+the entry off and can be undone). „Jetzt kochen“ is still a placeholder; the „Eintrag
+ersetzen“ menu is built (an unrecognized entry can be replaced by an existing recipe 1:1 with
+an undo notice, or turned into a new recipe through the prefilled editor or AI screen, which
+return to the entry's overview). What remains is the shopping-list write and the aisle sort.
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -111,7 +113,10 @@ frontend and the actual features.
    can be viewed, edited and scaled from the plan; an unrecognized entry gets a destination
    of its own there („Eintrag ersetzen“ / „Vom Plan entfernen“). „Einplanen“ performs the
    write, „Umplanen“ changes the size and „Vom Plan entfernen“ ticks the entry off (step 5);
-   „Jetzt kochen“ and the three „Eintrag ersetzen“ entries are still placeholders.
+   „Jetzt kochen“ is still a placeholder; the „Eintrag ersetzen“ menu is built:
+   `ReplaceRecipeSheet` replaces the entry 1:1 with a chosen recipe and size (undo notice), and
+   the two create entries open the editor or the AI screen prefilled with the entry's complete
+   text and return to the entry's overview.
 4. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
    needs a category. Extend `docs/ingredients.csv` (and the Drive `zutaten.csv`) with it.
 5. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan

@@ -37,6 +37,7 @@ import {
   setMealPlanChecked,
   shortenUrl,
   writeMealPlan,
+  writeShoppingList,
   type KeepState,
 } from './keepClient';
 
@@ -102,6 +103,17 @@ export interface UseKeepResult {
    * Adopts the state the gateway reports back and maps a failure exactly like `planMeal`.
    */
   uncheckMealPlan: (entries: readonly string[]) => Promise<void>;
+  /**
+   * Writes the shopping list: `add` are the ingredient lines the pantry sheet built (already
+   * rounded to whole shopping units), `remove` the exact texts an undo takes back off. Both
+   * directions use one call — the write sends the lines with an empty `remove`, its undo sends
+   * an empty `add` — because the two differ only in which texts they place and delete.
+   *
+   * Adopts the shopping list the gateway reports back (the meal plan is untouched by this
+   * action, so only that half of the state is replaced); a failure is mapped onto the status
+   * exactly like `planMeal` and rethrown, so the sheet can show the reason and stay open.
+   */
+  writeShopping: (add: readonly string[], remove: readonly string[]) => Promise<void>;
   /** Re-runs the current step (probe, silent sign-in and read) — the retry action. */
   retry: () => void;
 }
@@ -373,6 +385,46 @@ export function useKeep(): UseKeepResult {
     [state, runMealPlanCheck],
   );
 
+  /**
+   * Runs one shopping-list write and adopts the list the gateway answers. The write and its
+   * undo share this body (they differ only in which texts they add and remove); a failure is
+   * mapped onto the status by `reportWriteFailure` and rethrown.
+   */
+  const runShoppingWrite = useCallback(
+    async (add: readonly string[], remove: readonly string[]): Promise<void> => {
+      try {
+        const updated = await withIdentityToken((token) => writeShoppingList(token, add, remove));
+        // The endpoint answers the changed list; the meal plan is untouched, so the
+        // "Eingeplant" badges and the resolved cards stay exactly as they are.
+        setState((current) => (current === null ? current : { ...current, shopping: updated }));
+        setStatus('ready');
+        setError(null);
+      } catch (err) {
+        // A 501 (`not_implemented`) is not a connection problem: the gateway
+        // answers, the read works, only this one action does not exist there yet.
+        // The sheet reports it next to its button; the "Essensplan" tab must not
+        // fall into its error state for it.
+        if (!(err instanceof KeepClientError && err.code === 'not_implemented')) {
+          reportWriteFailure(err);
+        }
+        throw err;
+      }
+    },
+    [reportWriteFailure],
+  );
+
+  const writeShopping = useCallback(
+    async (add: readonly string[], remove: readonly string[]): Promise<void> => {
+      // No loaded state means Keep was never read — the write would add lines to a list the app
+      // does not know, so refuse instead (same guard as the meal-plan writes).
+      if (state === null) {
+        throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
+      }
+      await runShoppingWrite(add, remove);
+    },
+    [state, runShoppingWrite],
+  );
+
   return {
     status,
     state,
@@ -383,6 +435,7 @@ export function useKeep(): UseKeepResult {
     undoMealPlan,
     checkMealPlan,
     uncheckMealPlan,
+    writeShopping,
     retry,
   };
 }

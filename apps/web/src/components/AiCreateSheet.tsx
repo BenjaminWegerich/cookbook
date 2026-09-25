@@ -188,6 +188,13 @@ interface AiCreateSheetProps {
    */
   editTarget?: StoredRecipe;
   /**
+   * Prefill of the create task's request field. App passes the complete Keep
+   * text of an unrecognized meal-plan entry here ("Eintrag ersetzen" → "Rezept
+   * mit KI anlegen"), so the conversation starts from that dish. Ignored in
+   * `'edit'` mode, where the field is the change request.
+   */
+  initialPrompt?: string;
+  /**
    * True while this screen is the visible one. The sheet deliberately stays
    * mounted (hidden) while its own draft is edited, so its Escape trigger must
    * be off in that state — otherwise Escape would hit the editor and this sheet
@@ -321,6 +328,7 @@ export default function AiCreateSheet({
   token,
   mode = 'create',
   editTarget,
+  initialPrompt,
   visible,
   recipes,
   handoff,
@@ -341,7 +349,7 @@ export default function AiCreateSheet({
   const [keyInput, setKeyInput] = useState('');
   /** Chat transcript. */
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(initialPrompt ?? '');
   const [source, setSource] = useState('');
   /**
    * Recipe specifications below the source field (editor parity): the Typ
@@ -596,12 +604,24 @@ export default function AiCreateSheet({
           ? 'Änderung beschreiben …'
           : 'Rezept beschreiben …';
 
+  /**
+   * The prefilled request, if App handed one over (a create started from an
+   * unrecognized meal-plan entry). Kept as a value so "has the user touched the
+   * composer?" can be answered: a prefill the user never edited is not work to
+   * discard.
+   */
+  const initialPromptValue = initialPrompt ?? '';
+
   /** True when leaving would discard started work: text typed into the
    *  composer, a started conversation, or an AI draft that was never saved.
-   *  The API-key field is deliberately excluded — the key is session-only
-   *  (N6), so leaving it loses nothing. */
+   *  A prefilled entry text that is still untouched is *not* work — leaving then
+   *  discards nothing the user wrote. The API-key field is deliberately excluded
+   *  too — the key is session-only (N6), so leaving it loses nothing. */
   const hasWork =
-    description.trim() !== '' || source.trim() !== '' || messages.length > 0 || draft !== null;
+    (description !== initialPromptValue && description.trim() !== '') ||
+    source.trim() !== '' ||
+    messages.length > 0 ||
+    draft !== null;
 
   /**
    * Fingerprint of the started work (content and shape, not just presence): the
@@ -645,9 +665,10 @@ export default function AiCreateSheet({
 
   return (
     <main className="app ai-screen">
-      <header className="app-header">
+      <header className="app-header app-header-stacked">
         {/* Back button on its own line at the top left (editor placement), the
-            screen title below it. */}
+            screen title below it — the stack itself is .app-header-stacked
+            (styles/recipe-list.css), shared with the shopping-list selection. */}
         <button
           type="button"
           className={guard.armed ? 'text-button danger-text' : 'text-button'}

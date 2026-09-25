@@ -42,6 +42,13 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
 
 - Automatic transfer of a recipe's ingredients to the shopping list.
 - Scaling happens first (quantity for x people).
+- Bundled writing from the "Essensplan" tab: the button "Einkaufsliste schreiben"
+  next to the tab switcher turns the meal plan into a selection view. All dishes
+  selected there are added to the shopping list in one write, so an ingredient
+  shared by several recipes is rounded to whole packs once instead of per recipe.
+  Two recipes that each need 300 g of tofu, bought in 200 g blocks, would add two
+  blocks each on their own (four in total); written together they add three. The
+  bundling avoids this bullwhip effect — saving clicks is only a side benefit.
 - Intelligent filtering: ingredients that are always in stock are excluded automatically;
   ingredients that may be in stock are queried.
 - Transfer from the web app to a backend module (e.g., Python `gkeepapi`) that updates

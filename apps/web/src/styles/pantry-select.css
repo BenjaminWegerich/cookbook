@@ -1,0 +1,290 @@
+/**
+ * Pantry sheet styles — the "Vorräte auswählen" page (components/PantrySelect)
+ * with its compact stock stepper (components/StockStepper).
+ *
+ * The list has three columns under one header row: the ingredient name, the
+ * Vorrat stepper and the amount that is left to buy. Two layouts share one
+ * markup (decided with the user):
+ *
+ * - **from 30 rem upwards**, the table itself is the grid and the header/row
+ *   elements are `display: contents`, so every cell is an item of *one* grid:
+ *   the columns can then be sized to their content (`max-content`) and still
+ *   line up across all rows — a per-row grid would size itself to each row's own
+ *   text and let the columns jitter. `width: fit-content` makes the surface only
+ *   as wide as its content requires, so it stays a compact table on a desktop
+ *   screen instead of stretching three columns across the window;
+ * - **below 30 rem** (any phone held upright), the header and each row are their
+ *   own two-area grid: the "Einkaufen" field moves under the stepper while the
+ *   name keeps the left column, and the columns share the available width, so
+ *   nothing is squeezed into an unreadable sliver. The surface fills the page
+ *   here, as every other list of the app does.
+ *
+ * All pixel values come from the design ladder (docs/CODING_CONVENTIONS.md);
+ * colors and sizes reference the tokens in styles/tokens.css.
+ */
+
+.pantry-select {
+  display: grid;
+  gap: var(--space-6);
+  /* Room for the last element's focus ring, like the other full screens. */
+  padding-block-end: var(--space-10);
+}
+
+/* The instruction under the title: one quiet paragraph, as wide as the page
+   (the same shape as the selection page's intro). Deliberately *not* capped to a
+   reading measure — the cap would break the sentence into short lines on a
+   desktop screen while the list around it is wide (decided with the user). */
+.pantry-select-intro {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.pantry-empty,
+.pantry-load-error {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+.pantry-load-error {
+  color: var(--color-danger);
+}
+
+/* ---- The list ------------------------------------------------------------ */
+
+/* One paper surface for the whole list (the same shape as the selection page's
+   list), with hairline dividers between the rows. `overflow: hidden` lets the
+   first and last rows meet the rounded corners. */
+.pantry-table {
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* The two-area layout of a phone: name on the left, the stepper and the
+   "Einkaufen" field stacked in the right column. */
+.pantry-head,
+.pantry-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  grid-template-areas:
+    'name stock'
+    'name buy';
+  column-gap: var(--space-4);
+  row-gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+}
+
+.pantry-head {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  border-block-end: 1px solid var(--color-line);
+}
+
+.pantry-head-name {
+  grid-area: name;
+}
+
+.pantry-head-stock {
+  grid-area: stock;
+}
+
+.pantry-head-buy {
+  grid-area: buy;
+}
+
+.pantry-row + .pantry-row {
+  border-block-start: 1px solid var(--color-line);
+}
+
+/* The cell wrappers exist for the shared grid of the wide layout (see below):
+   there the name and the amount are stretched over the row's height and their
+   content is centered inside them. On a phone they are simply the two cells
+   that carry the name and the field. */
+.pantry-name-cell,
+.pantry-buy-cell {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+}
+
+.pantry-name-cell {
+  grid-area: name;
+}
+
+.pantry-buy-cell {
+  grid-area: buy;
+}
+
+/* The ingredient name: it may wrap onto a second line, but not push the row
+   taller and taller — a long name (a sub-recipe title) is clamped like the
+   selection page's row titles. */
+.pantry-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* ---- The "Einkaufen" field ---------------------------------------------- */
+
+/* The familiar preview look of the create-ingredient sheet: a read-only,
+   recessed field showing the line that will be written to Keep. It fills its
+   column and wraps its line instead of widening the column. */
+.pantry-buy {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Nothing to buy: the dash is a statement, not a value, so it reads muted. */
+.pantry-buy-empty {
+  color: var(--color-ink-muted);
+}
+
+/* ---- The stock stepper --------------------------------------------------- */
+
+/* The compact −/value/+ control of a table cell: the buttons carry the shared
+   pressed look, the value sits between them and never wraps. The gap is the
+   phone-sized one; the wide layout below has room for the app's usual spacing. */
+.stock-stepper {
+  grid-area: stock;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+
+/* The value is a *flexible, centered* box, not a text-sized one: it takes
+   whatever the two buttons leave, so the "+" stays exactly where it is while the
+   number's text grows ("800 g" → "1,15 kg" → "2 kg"). That is the same effect
+   the app's other steppers get from a fixed value width (see .quantity-value in
+   styles/editor.css); here the cell already fixes the total width, so filling it
+   is enough — and it keeps the buttons aligned across rows as a bonus. */
+.stock-stepper-value {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---- The wide layout: one grid for the whole table ----------------------- */
+
+/* The three columns sit on one line, each as wide as its content requires.
+   The header and the rows dissolve into the table's grid (`display: contents`),
+   which is what lets `max-content` tracks align across rows; the row's own
+   padding, hairline and background move onto the cells for that (a
+   `display: contents` element paints nothing). The hairline of a row is the top
+   border of its cells — they all start at the row's top edge, so the three
+   borders form one continuous line. */
+@media (min-width: 30rem) {
+  .pantry-table {
+    display: grid;
+    grid-template-columns: max-content max-content max-content;
+    /* As wide as the content needs, never wider than the viewport: the tracks
+       shrink (and their text wraps) when the space runs out. */
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .pantry-head,
+  .pantry-row {
+    display: contents;
+  }
+
+  .pantry-head-name,
+  .pantry-head-stock,
+  .pantry-head-buy,
+  .pantry-name-cell,
+  .stock-stepper,
+  .pantry-buy-cell {
+    grid-area: auto;
+    padding-block: var(--space-4);
+    border-block-start: 1px solid var(--color-line);
+  }
+
+  /* The header's own cells sit under the surface's top border; the line below
+     them belongs to the first row (its cells' top border). */
+  .pantry-head-name,
+  .pantry-head-stock,
+  .pantry-head-buy {
+    border-block-start: none;
+  }
+
+  /* The cell insets that the row padding provided on a phone: the first cell of
+     a row carries the left inset, the last one the right inset, and the space
+     between two columns is the padding of the cell to their left. */
+  .pantry-head-name,
+  .pantry-name-cell {
+    padding-inline: var(--space-5) var(--space-4);
+  }
+
+  .pantry-head-stock,
+  .stock-stepper {
+    padding-inline-end: var(--space-4);
+  }
+
+  /* The app's usual stepper spacing: `.quantity-row` in styles/editor.css keeps
+     --space-6 between a button and the value. A phone row has no room for it,
+     this layout does (decided with the user). */
+  .stock-stepper {
+    gap: var(--space-6);
+  }
+
+  /* A fixed value box here instead of the flexible one: this column is sized by
+     its content (`max-content`), so a value box that grows with its text would
+     widen the column — and with it every row of the table — while a stepper is
+     being pressed ("999 g" → "1 kg" → "1,15 kg"). 56 px (a ladder value) holds
+     the longest form the quantity format produces ("1,15 kg"); the text is
+     centered in it, exactly like the fixed value of the app's other steppers. A
+     phone keeps the flexible box, because there the column's width is already
+     fixed by the layout (decided with the user). */
+  .stock-stepper-value {
+    flex: none;
+    width: 56px;
+  }
+
+  .pantry-head-buy,
+  .pantry-buy-cell {
+    padding-inline-end: var(--space-5);
+  }
+}
+
+/* ---- Forward action ------------------------------------------------------ */
+
+/* "Einkaufsliste schreiben": accent, content width, right-aligned under the
+   list — the same arrangement the previous page's forward button uses. */
+.pantry-actions {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+}
+
+.pantry-action-note {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  text-align: end;
+}
+
+.pantry-action-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  text-align: end;
+}

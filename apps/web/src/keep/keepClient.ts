@@ -271,6 +271,40 @@ export async function writeMealPlan(
 }
 
 /**
+ * Writes the shopping list: puts `add` at the top, deleting the `remove` entries.
+ *
+ * The mirror image of `writeMealPlan`, and the same division of labour: `add`
+ * are the complete lines the app wants to see in "Einkaufsliste" — one per
+ * ingredient, in the app's own display form, already rounded up to whole
+ * shopping units — and `remove` the exact texts the undo takes back off. That
+ * form and that arithmetic live in the app (`packages/core/src/shoppingList.ts`
+ * and the pantry sheet); the gateway treats a line as opaque text and only
+ * executes the action it is handed.
+ *
+ * The answer is the shopping list after the write, so the caller can adopt it
+ * without a second request — and only that list, because it is the one the
+ * action changed (same reasoning as `writeMealPlan`).
+ */
+export async function writeShoppingList(
+  gatewayToken: string,
+  add: readonly string[],
+  remove: readonly string[],
+): Promise<KeepChecklist> {
+  const body = await requestJson('/keep/shopping', gatewayToken, {
+    method: 'POST',
+    // Always the list form: this route has no earlier shape to stay compatible
+    // with (it answered 501 until the write existed), so unlike the meal-plan
+    // write there is nothing to be lenient about.
+    body: { add: [...add], remove: [...remove] },
+  });
+  const shopping = isRecord(body) ? parseChecklist(body.shopping) : null;
+  if (shopping === null) {
+    throw new KeepClientError('invalid_response', 'Das Keep-Gateway hat unerwartet geantwortet.');
+  }
+  return shopping;
+}
+
+/**
  * Asks the gateway to shorten one export URL (`POST /shorten`).
  *
  * The meal-plan write uses this so the Keep line stays readable: the line carries the export
@@ -348,6 +382,15 @@ export async function checkKeepHealth(): Promise<boolean> {
  * programming error) is shown verbatim so it is not swallowed.
  */
 export function keepErrorMessage(error: unknown): string {
-  if (error instanceof KeepClientError) return error.message;
+  if (error instanceof KeepClientError) {
+    // `not_implemented` is the gateway's 501 for a write route that exists as a
+    // contract but not as an action yet (see PENDING_ACTIONS in
+    // apps/keep-gateway). Its own text names the pending action in English, for
+    // an operator; the user-facing reading is the app's job.
+    if (error.code === 'not_implemented') {
+      return 'Diese Aktion ist im Keep-Gateway noch nicht eingerichtet.';
+    }
+    return error.message;
+  }
   return error instanceof Error ? error.message : String(error);
 }

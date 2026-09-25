@@ -4,7 +4,14 @@ import type { StoredRecipe } from '../drive/recipeStorage';
 import { useSwipePager } from '../hooks/useSwipePager';
 import type { MealPlanCard } from '../keep/mealPlanCards';
 import type { KeepStatus } from '../keep/useKeep';
-import { CloseIcon, ErrorIcon, EventAvailableIcon, SearchIcon } from './icons';
+import {
+  CheckCircleIcon,
+  CloseIcon,
+  ErrorIcon,
+  EventAvailableIcon,
+  ListPlusIcon,
+  SearchIcon,
+} from './icons';
 import RecipeThumb from './RecipeThumb';
 import TitleThumb from './TitleThumb';
 
@@ -66,6 +73,19 @@ interface RecipeListProps {
   onConnectKeep: () => void;
   /** Re-runs the Keep load (the "Essensplan" error state). */
   onRetryKeep: () => void;
+  /**
+   * Opens the bundled shopping-list selection for the meal plan (the
+   * "Einkaufsliste schreiben" button next to the tab control). App owns that
+   * screen, because only App holds the Keep state and the overview targets.
+   */
+  onWriteShoppingList: () => void;
+  /**
+   * True while the current meal plan has already been written to the shopping
+   * list in this session (App tracks it: Keep itself cannot say whether a list
+   * belongs to the plan, and after a reload the app cannot deduce it either).
+   * The button then reads "Einkaufsliste geschrieben" and is unavailable.
+   */
+  shoppingWritten: boolean;
 }
 
 /**
@@ -82,6 +102,21 @@ interface RecipeListProps {
  *   unrecognized one as the destination for replacing or dropping the entry.
  * - **Sammlung** shows every recipe of the collection, whether it is on the
  *   meal plan or not; a planned recipe carries the inline "Eingeplant" badge.
+ *
+ * Next to the tab control sits **"Einkaufsliste schreiben"**, the entry into the
+ * bundled shopping-list selection (decided with the user): there the recipes of
+ * the meal plan are selected, and one write adds all of their ingredients at
+ * once. Bundling is the point, not only the saved clicks — two recipes that each
+ * need 300 g tofu round to two 200 g blocks on their own, but to three blocks
+ * when they are written together (./ShoppingListSelect). The button stays
+ * visible on both tabs (decided with the user); the screen it opens is a mode of
+ * "Essensplan", so it only appears while the meal plan is connected and actually
+ * carries entries.
+ *
+ * Once that flow has written the list, the button reads **"Einkaufsliste
+ * geschrieben"**, carries the check instead of the plus and is unavailable — for
+ * as long as the meal plan is the one that was written (App tracks that in
+ * memory, see the `shoppingWritten` prop).
  *
  * The search filters whichever tab is active (title for recipes, complete
  * entry text for meal-plan cards), so the tabs act as an additional refinement,
@@ -105,6 +140,8 @@ function RecipeList({
   keepError,
   onConnectKeep,
   onRetryKeep,
+  onWriteShoppingList,
+  shoppingWritten,
 }: RecipeListProps) {
   const [query, setQuery] = useState('');
 
@@ -153,6 +190,15 @@ function RecipeList({
   );
 
   const searchPlaceholder = tab === 'mealplan' ? 'Essensplan durchsuchen' : 'Rezept suchen';
+
+  /**
+   * Whether the bundled shopping-list view can be entered at all: it selects
+   * from the meal plan, so an unconnected or empty plan offers nothing to
+   * select. Deliberately the *unfiltered* cards — the button concerns the whole
+   * plan, not the current search result.
+   */
+  const canWriteShoppingList =
+    keepStatus === 'ready' && mealPlanCards !== null && mealPlanCards.length > 0;
 
   /** The "Essensplan" tab body: connection states, then the entry cards. */
   function renderMealPlan(): ReactNode {
@@ -330,9 +376,10 @@ function RecipeList({
 
         {/* Two value-picking tabs (role group + aria-pressed, the same pattern
             the editor's segmented controls use): both views show the same card
-            grid, they only filter what it contains. The row centers the
-            content-width control; the invisible sizer inside each button makes
-            both segments exactly as wide as the longest label. */}
+            grid, they only filter what it contains. The row is left-aligned and
+            holds the bundled-list entry next to the control; the invisible
+            sizer inside each button makes both segments exactly as wide as the
+            longest label. */}
         <div className="recipe-tabs-row">
           <div className="recipe-tabs" role="group" aria-label="Ansicht">
             {TABS.map((entry) => (
@@ -350,6 +397,32 @@ function RecipeList({
               </button>
             ))}
           </div>
+
+          {/* The entry into the bundled shopping-list view. It sits beside the
+              control and stays visible on both tabs, since the view it opens is
+              a mode of "Essensplan". It only exists while the plan is connected
+              and carries entries — there is nothing to select from otherwise.
+              After the flow wrote the list, the same place reports that state:
+              the symbol becomes a check, the label says so and the button is
+              unavailable (a second write would duplicate the lines, and Keep
+              itself cannot tell the app whether the list matches the plan). */}
+          {canWriteShoppingList && (
+            <button
+              type="button"
+              className="shopping-list-button"
+              onClick={onWriteShoppingList}
+              disabled={shoppingWritten}
+            >
+              {shoppingWritten ? (
+                <CheckCircleIcon className="button-icon" />
+              ) : (
+                <ListPlusIcon className="button-icon" />
+              )}
+              <span>
+                {shoppingWritten ? 'Einkaufsliste geschrieben' : 'Einkaufsliste schreiben'}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 

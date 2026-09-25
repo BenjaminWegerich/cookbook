@@ -12,11 +12,16 @@
  *   does not fit. The card shows a placeholder image derived from the text and
  *   the entry's complete text as its title.
  *
- * The recipe file is only read when it really changes the answer: a title-only
- * entry needs no file (nothing has to fit), so the common meal-plan line costs
- * no Drive round-trip. A read that fails (corrupt file, deleted between list
- * and read) leaves a suffixed entry unrecognized instead of guessing — the
- * other recipes of the plan are unaffected.
+ * Every recognized entry reads its recipe file once (cached per title, and the
+ * file's raw text is cached by the Drive layer, so repeated entries of the same
+ * recipe and the overview's own read cost nothing extra): the stated size has to
+ * be checked against the recipe, and a size-less entry still has to name the
+ * size the dish is cooked at, which only the file knows (see
+ * MealPlanCard.writtenPlanned). A read that fails (corrupt file, deleted between
+ * list and read) leaves a *suffixed* entry unrecognized instead of guessing —
+ * the other recipes of the plan are unaffected. An entry that only names the
+ * dish stays recognized without its file (there is nothing to fit); it simply
+ * carries no written size, so the shopping-list selection shows none for it.
  *
  * The returned `plannedRecipeTitles` is what puts the "Eingeplant" badge on a
  * card in the "Sammlung" tab; a recipe planned twice, or planned once and
@@ -29,8 +34,10 @@ import {
   mealPlanEntryLabel,
   parseMealPlanText,
   plannedAmountFitsRecipe,
+  writtenPlannedAmount,
   type MealPlanRecipeInfo,
   type PlannedAmount,
+  type Recipe,
 } from '@cookbook/core';
 
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
@@ -53,6 +60,15 @@ export interface MealPlanCard {
   recipe: StoredRecipe | null;
   /** The size the entry states, when it fits the recognized recipe. */
   planned: PlannedAmount | null;
+  /**
+   * The size the recipe is *written* in (core's `writtenPlannedAmount`), or null
+   * for an unrecognized card. It is the fallback for a recognized entry that
+   * states no size: such an entry means the dish at its written size — that is
+   * what its link opens — so the shopping-list selection names this amount
+   * instead of showing nothing. `planned` stays exactly what Keep says, so the
+   * "Umplanen" overlay still knows whether the entry stated a size.
+   */
+  writtenPlanned: PlannedAmount | null;
 }
 
 /** Everything the recipe list needs from the meal plan. */
@@ -71,9 +87,24 @@ export interface MealPlanResolution {
 }
 
 /**
+ * The fit-relevant facts of a loaded recipe — the shape core's
+ * `plannedAmountFitsRecipe` takes. The written yield bounds the yields the
+ * export bakes, so the fit check can refuse a size whose cooking view does not
+ * exist.
+ */
+function fitInfo(loaded: Recipe): MealPlanRecipeInfo {
+  return {
+    type: loaded.type,
+    ...(loaded.yield_unit !== undefined ? { yieldUnit: loaded.yield_unit } : {}),
+    ...(loaded.yield !== undefined ? { yieldQuantity: loaded.yield } : {}),
+  };
+}
+
+/**
  * Builds the meal-plan cards and the planned-title set. `token` is the Drive
- * access token, needed only for the recipe files that a yield suffix has to be
- * checked against.
+ * access token, needed for the recipe files: one is read per recognized entry,
+ * both to check a stated size against the recipe and to carry the recipe's
+ * written size onto the card (see MealPlanCard.writtenPlanned).
  */
 export async function resolveMealPlan(
   recipes: StoredRecipe[],
@@ -83,29 +114,22 @@ export async function resolveMealPlan(
   // Recipe titles are unique within the collection (storage_format.md §2), so
   // a title lookup is unambiguous.
   const recipesByTitle = new Map(recipes.map((recipe) => [recipe.title, recipe]));
-  /** Per-title cache: the fit-relevant facts, or null when unreadable. */
-  const metaByTitle = new Map<string, MealPlanRecipeInfo | null>();
+  /** Per-title cache of the loaded recipe file, or null when unreadable. */
+  const fileByTitle = new Map<string, Recipe | null>();
 
-  const readMeta = async (recipe: StoredRecipe): Promise<MealPlanRecipeInfo | null> => {
-    const cached = metaByTitle.get(recipe.title);
+  const readFile = async (recipe: StoredRecipe): Promise<Recipe | null> => {
+    const cached = fileByTitle.get(recipe.title);
     if (cached !== undefined) return cached;
-    let meta: MealPlanRecipeInfo | null = null;
+    let loaded: Recipe | null = null;
     try {
       // readRecipe parses freshly and shares only the cached raw text, so
       // repeated entries of the same recipe cost no second Drive request.
-      const loaded = await readRecipe(token, recipe.fileId);
-      meta = {
-        type: loaded.type,
-        ...(loaded.yield_unit !== undefined ? { yieldUnit: loaded.yield_unit } : {}),
-        // The written yield bounds the yields the export bakes, so the fit check
-        // can refuse a size whose cooking view does not exist.
-        ...(loaded.yield !== undefined ? { yieldQuantity: loaded.yield } : {}),
-      };
+      loaded = await readRecipe(token, recipe.fileId);
     } catch {
-      meta = null;
+      loaded = null;
     }
-    metaByTitle.set(recipe.title, meta);
-    return meta;
+    fileByTitle.set(recipe.title, loaded);
+    return loaded;
   };
 
   const cards: MealPlanCard[] = [];
@@ -120,14 +144,19 @@ export async function resolveMealPlan(
     const parsed = parseMealPlanText(text);
     const recipe = recipesByTitle.get(parsed.title) ?? null;
     let recognized = false;
+    /** The loaded file of a recognized entry (its written size is a card fact). */
+    let file: Recipe | null = null;
     if (recipe !== null) {
-      if (parsed.planned === null) {
-        // The entry only names the dish: nothing has to fit.
-        recognized = true;
-      } else {
-        const meta = await readMeta(recipe);
-        recognized = meta !== null && plannedAmountFitsRecipe(parsed.planned, meta);
-      }
+      // The file is read for a recognized entry also when the entry states no
+      // size: the card carries the recipe's written size as the fallback the
+      // selection shows, and only the file knows it. It is one read per distinct
+      // planned recipe (the cache above, plus readRecipe's own raw-text cache),
+      // and a size-less entry — a hand-typed Keep line — is not the common case.
+      file = await readFile(recipe);
+      recognized =
+        parsed.planned === null
+          ? true // the entry only names the dish: nothing has to fit
+          : file !== null && plannedAmountFitsRecipe(parsed.planned, fitInfo(file));
     }
     if (recognized && recipe !== null) {
       plannedRecipeTitles.add(recipe.title);
@@ -147,6 +176,7 @@ export async function resolveMealPlan(
       displayText: mealPlanEntryLabel(parsed.title, parsed.planned),
       recipe: recognized ? recipe : null,
       planned: recognized ? parsed.planned : null,
+      writtenPlanned: recognized && file !== null ? writtenPlannedAmount(file) : null,
     });
   }
 

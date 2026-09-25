@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   existingPlanLink,
@@ -23,11 +23,14 @@ import AiCreateSheet, {
   type AiHandoff,
 } from './components/AiCreateSheet';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
+import { newRecipeDraftWithTitle } from './components/recipeDrafts';
 import RecipeList, { type RecipeTab } from './components/RecipeList';
+import PantrySelect from './components/PantrySelect';
 import RecipeOverview, {
   type RecipeOverviewHandle,
   type RecipeOverviewTarget,
 } from './components/RecipeOverview';
+import ShoppingListSelect from './components/ShoppingListSelect';
 import Snackbar from './components/Snackbar';
 import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
@@ -36,13 +39,16 @@ import { listRecipes, recipeExportUrl, type StoredRecipe } from './drive/recipeS
 import { useEscapeTrigger } from './hooks/useLeaveGuard';
 import { useScrollMemory } from './hooks/useScrollMemory';
 import { useSnackbar } from './hooks/useSnackbar';
-import type { KeepState } from './keep/keepClient';
+import { keepErrorMessage, type KeepChecklist, type KeepState } from './keep/keepClient';
 import { resolveMealPlan, type MealPlanCard, type MealPlanResolution } from './keep/mealPlanCards';
 import { useKeep } from './keep/useKeep';
 import './styles/ai-create.css';
 import './styles/recipe-list.css';
 import './styles/recipe-overview.css';
 import './styles/meal-plan-sheet.css';
+import './styles/replace-recipe-sheet.css';
+import './styles/shopping-list-select.css';
+import './styles/pantry-select.css';
 import './styles/editor.css';
 import './styles/snackbar.css';
 
@@ -50,16 +56,20 @@ import './styles/snackbar.css';
  * The app layers above the recipe list (the list itself is the root/bottom
  * layer and has no marker of its own). The create menu and the recipe overview
  * sheet are treated like screens here: the browser Back button closes them
- * first, then leaves the list.
+ * first, then leaves the list. 'shopping' is the bundled shopping-list selection
+ * (components/ShoppingListSelect) and 'pantry' the stock step that follows it
+ * (components/PantrySelect): two full screens of one flow — the flow can carry
+ * sheets and the editor above the selection page, so it is not simply a sibling
+ * of the list (see shoppingFlowRef).
  */
-type TopScreen = 'editor' | 'ai' | 'menu' | 'overview';
+type TopScreen = 'editor' | 'ai' | 'menu' | 'overview' | 'shopping' | 'pantry';
 
 /**
  * Which AI task the sheet runs while it is the visible 'ai' screen: create a new
  * recipe (Task A) or revise an existing one (Task B) — the latter carrying the
  * stored recipe the user opened it for.
  */
-type AiScreen = { mode: 'create' } | { mode: 'edit'; recipe: StoredRecipe };
+type AiScreen = { mode: 'create'; prompt?: string } | { mode: 'edit'; recipe: StoredRecipe };
 
 /**
  * Browser-history markers of the two entries a TopScreen is layered between.
@@ -179,15 +189,6 @@ function App() {
    *  the login button); shows a status line on the login panel meanwhile. */
   const [connecting, setConnecting] = useState(false);
   const [recipes, setRecipes] = useState<StoredRecipe[] | null>(null);
-  /**
-   * The tab of the recipe list the user picked, or null while they have not
-   * touched the tabs. App owns it (not the list) because the header's counter
-   * follows the view. Null keeps the default open: "Essensplan" once Keep is
-   * connected and "Sammlung" otherwise — a stored null keeps the app from
-   * jumping to an empty meal plan before the token is entered, and lets the view
-   * follow the connection the moment it becomes ready.
-   */
-  const [listTab, setListTab] = useState<RecipeTab | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Non-fatal warning when the Drive master data could not be loaded; the
    *  built-in seed keeps the app functional (see ingredientMasterData.ts). */
@@ -211,9 +212,18 @@ function App() {
    * and a saved Zutaten-Rezept of an AI-create continues that conversation
    * (see the handoff below).
    */
-  const editorOriginRef = useRef<'ai-create' | 'ai-edit' | 'list' | null>(null);
+  const editorOriginRef = useRef<'ai-create' | 'ai-edit' | 'list' | 'overview' | null>(null);
   /** The AI draft that opened the editor (null for a list/manual edit). */
   const pendingDraftRef = useRef<Recipe | null>(null);
+  /**
+   * True while the editor or the AI screen was started from an unrecognized
+   * meal-plan entry's "Eintrag ersetzen" menu. Such a flow must return to that
+   * entry's overview when it ends — the two create entries are the only flows
+   * whose destination is a sheet rather than the list, the embedded AI
+   * conversation or the bundled shopping flow. App clears the flag when it
+   * returns to the overview (or when another flow starts).
+   */
+  const overviewReturnRef = useRef(false);
   /**
    * A Zutaten-Rezept the user saved while the AI conversation is still running:
    * the chat takes it as the handoff signal (re-read the context, prefill the
@@ -244,6 +254,61 @@ function App() {
   const [aiOpen, setAiOpen] = useState(false);
   /** The task the open AI screen runs (create vs. edit of a stored recipe). */
   const [aiScreen, setAiScreen] = useState<AiScreen | null>(null);
+  /**
+   * The bundled shopping-list selection is open (the full screen behind
+   * "Einkaufsliste schreiben", components/ShoppingListSelect). Unlike the other
+   * screens it is *not* unmounted by the layers above it: the selection is what
+   * the user built up, so an overview sheet opened from a row, or the editor
+   * opened from that sheet, keeps this page mounted (hidden) and returns to it
+   * (see shoppingFlowRef and the render below).
+   */
+  const [shoppingOpen, setShoppingOpen] = useState(false);
+  /**
+   * True while the user is inside the bundled shopping-list flow: from opening
+   * the selection page until a layer returns to the home screen. Screen → screen
+   * navigation reuses one history entry (see setNav), so the flow is not
+   * readable from `navRef` alone: it is what tells a closing layer where to go
+   * and keeps the selection page mounted underneath every layer of the flow.
+   * A ref, because the popstate listener is registered once and would close over
+   * a stale state value.
+   */
+  const shoppingFlowRef = useRef(false);
+  /**
+   * The pantry step ("Vorräte auswählen", components/PantrySelect) is open: the
+   * second page of the bundled shopping flow. It is *not* kept mounted while
+   * another layer sits above it — none can be opened from it — so unlike the
+   * selection page it is simply mounted and unmounted.
+   */
+  const [pantryOpen, setPantryOpen] = useState(false);
+  /**
+   * The dishes the pantry step was opened for: the checked cards the selection
+   * page handed over. A snapshot on purpose — that page is what the user
+   * confirmed, and the sheet must not change under their fingers when Keep moves
+   * (an undo elsewhere re-resolves the plan).
+   */
+  const [pantryCards, setPantryCards] = useState<MealPlanCard[]>([]);
+  /**
+   * The meal plan the shopping list was last written for, or null. The Keep
+   * state object *is* the marker: every meal-plan write (and every fresh read)
+   * replaces `keep.state.mealplan` with a new object, while the shopping write
+   * leaves it untouched — so "the list still belongs to this plan" is an
+   * identity check, and any later plan change re-enables the button by itself
+   * (decided with the user).
+   *
+   * Session-only on purpose: Keep cannot tell which shopping list belongs to
+   * which plan, so after a reload the app does not pretend to know (it says
+   * nothing rather than claiming the list was written).
+   */
+  const [shoppingWrittenFor, setShoppingWrittenFor] = useState<KeepChecklist | null>(null);
+  /**
+   * The tab of the recipe list the user picked, or null while they have not
+   * touched the tabs. App owns it (not the list) because the header's counter
+   * follows the view. Null keeps the default open: "Essensplan" once Keep is
+   * connected and "Sammlung" otherwise — a stored null keeps the app from
+   * jumping to an empty meal plan before the token is entered, and lets the view
+   * follow the connection the moment it becomes ready.
+   */
+  const [listTab, setListTab] = useState<RecipeTab | null>(null);
   /**
    * The resolved meal plan (the cards of the "Essensplan" tab plus the recipe
    * titles that carry the "Eingeplant" badge in "Sammlung"), together with the
@@ -313,8 +378,10 @@ function App() {
   /**
    * The full-screen page that owns the window scroll right now, for the scroll
    * memory below. Only pages that replace the whole viewport get their own key:
-   * the sheets that overlay the list (overview, create menu) keep the list key,
-   * so opening them never scrolls the list behind them.
+   * the sheets that overlay such a page (overview, create menu) keep that page's
+   * key, so opening them never scrolls the page behind them. The selection page
+   * keeps its key while an overview or the editor is above it, so the flow
+   * returns to the rows exactly where they were left.
    */
   const visiblePageKey = editorOpen
     ? editorLevelKey(editorSubRecipes.length)
@@ -322,7 +389,11 @@ function App() {
       ? aiScreen?.mode === 'edit'
         ? 'ai-edit'
         : 'ai'
-      : 'list';
+      : pantryOpen
+        ? 'pantry'
+        : shoppingOpen
+          ? 'shopping'
+          : 'list';
   /** Remembers/restores the window scroll per page (see useScrollMemory). */
   const scrollMemory = useScrollMemory(visiblePageKey);
 
@@ -408,6 +479,12 @@ function App() {
       // The screen that is visible right now is still in the DOM: capture its
       // scroll offset before this commit replaces it (see useScrollMemory).
       scrollMemory.remember();
+      // Leaving the flow for the home screen ends it: `shoppingFlowRef` is the
+      // memory of where the layers above the selection page belong, and it must
+      // not survive the return to the list.
+      if (next === null) {
+        shoppingFlowRef.current = false;
+      }
       setEditorOpen(next === 'editor');
       // The AI screen (create or edit) stays mounted (hidden) while its own
       // draft is opened in the editor: transcript, AI context and Vorgaben
@@ -416,6 +493,16 @@ function App() {
       setAiOpen(next === 'ai' || (next === 'editor' && prev === 'ai'));
       setCreateMenuOpen(next === 'menu');
       setOverviewOpen(next === 'overview');
+      // The pantry step is the only layer above the selection page that is
+      // mounted fresh each time; leaving it (Back, the write) unmounts it, so
+      // the chosen stocks are gone and the next visit starts from the
+      // pre-filled Vorräte again.
+      setPantryOpen(next === 'pantry');
+      // The selection page stays mounted (hidden) while any layer of its flow is
+      // above it — the overview opened from a row, the editor opened from that
+      // sheet — so the checked dishes survive the detour. The flow flag is set
+      // by openShoppingSelect before the first setNav('shopping') call.
+      setShoppingOpen(next === 'shopping' || (shoppingFlowRef.current && next !== null));
       if (prev === null) {
         if (next === null) {
           return;
@@ -550,9 +637,49 @@ function App() {
         guardCurrentEntry();
         return;
       }
+      if (top === 'ai' && overviewReturnRef.current) {
+        // The AI-create screen was started from an unrecognized entry's menu:
+        // Back returns to that entry's overview, which the flow was opened from.
+        // The pop consumed the flow's single history entry, so the guard puts one
+        // back under the restored sheet.
+        overviewReturnRef.current = false;
+        navRef.current = 'overview';
+        setAiOpen(false);
+        setOverviewOpen(true);
+        guardCurrentEntry();
+        return;
+      }
+      // Back out of a layer of the bundled shopping-list flow returns to the
+      // selection page, which stayed mounted underneath it (see
+      // shoppingFlowRef): the editor or the AI screen opened from the sheet, or
+      // the sheet itself. The pop consumed the flow's single history entry, so
+      // the guard has to put one back. Back on the selection page itself falls
+      // through to the generic close below, which ends the flow.
+      if (top === 'ai' && shoppingFlowRef.current) {
+        navRef.current = 'shopping';
+        setAiOpen(false);
+        guardCurrentEntry();
+        return;
+      }
       if (top === 'overview' && overviewHandleRef.current?.notifyBack() === true) {
         // The overview's meal-plan overlay consumed the Back and closed; the
         // sheet stays open, so re-establish the entry the pop consumed.
+        guardCurrentEntry();
+        return;
+      }
+      if (top === 'pantry') {
+        // Back out of the pantry step returns to the selection page, which
+        // stayed mounted underneath it: the flow shares one history entry, so
+        // the pop this consumed has to be replaced by the guard.
+        navRef.current = 'shopping';
+        setPantryOpen(false);
+        guardCurrentEntry();
+        return;
+      }
+      if (top === 'overview' && shoppingFlowRef.current) {
+        // The sheet sits over the selection page: Back closes only the sheet.
+        navRef.current = 'shopping';
+        setOverviewOpen(false);
         guardCurrentEntry();
         return;
       }
@@ -574,16 +701,49 @@ function App() {
         guardCurrentEntry();
         return;
       }
+      if (top === 'editor' && overviewReturnRef.current) {
+        // The editor was started from an unrecognized entry's create menu: Back
+        // returns to that entry's overview, the sheet the flow was opened from.
+        editorOriginRef.current = null;
+        pendingDraftRef.current = null;
+        editorSubRecipesRef.current = [];
+        editorTargetRef.current = null;
+        overviewReturnRef.current = false;
+        navRef.current = 'overview';
+        setEditorOpen(false);
+        setEditorSubRecipes([]);
+        setOverviewOpen(true);
+        guardCurrentEntry();
+        return;
+      }
+      // The editor opened from the selection page's overview (or a new recipe
+      // started from an unrecognized entry there): Back returns to the selection
+      // page with its checked dishes instead of leaving the flow.
+      if (top === 'editor' && shoppingFlowRef.current) {
+        editorOriginRef.current = null;
+        pendingDraftRef.current = null;
+        editorSubRecipesRef.current = [];
+        editorTargetRef.current = null;
+        navRef.current = 'shopping';
+        setEditorOpen(false);
+        setEditorSubRecipes([]);
+        guardCurrentEntry();
+        return;
+      }
       editorOriginRef.current = null;
       pendingDraftRef.current = null;
       editorSubRecipesRef.current = [];
       editorTargetRef.current = null;
       navRef.current = null;
+      // The way out of the flow: the selection page is dropped (its checked
+      // dishes are not worth keeping across a return to the home screen).
+      shoppingFlowRef.current = false;
       setEditorOpen(false);
       setEditorSubRecipes([]);
       setAiOpen(false);
       setCreateMenuOpen(false);
       setOverviewOpen(false);
+      setShoppingOpen(false);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -717,11 +877,42 @@ function App() {
   }, [keep.state, recipes, token]);
 
   /**
+   * True while the current meal plan is the one the shopping list was written
+   * for: an identity check against `shoppingWrittenFor`, which any meal-plan
+   * change (a write, an undo, a fresh read) invalidates on its own — see the
+   * state's own comment.
+   */
+  const shoppingWritten =
+    shoppingWrittenFor !== null && shoppingWrittenFor === keep.state?.mealplan;
+
+  /**
    * The meal-plan resolution for the *current* Keep state, or null while none
    * exists (Keep off or loading, resolution still running, or it failed).
    */
   const mealPlanResolution =
     mealPlan !== null && mealPlan.source === keep.state ? mealPlan.resolution : null;
+
+  /**
+   * The target the overview sheet really renders. An unrecognized entry can
+   * become recognized while it is the open target: a recipe is created for it
+   * (the "Eintrag ersetzen" menu's two create entries), or a known title's file
+   * appears, and the live meal-plan resolution then holds a recipe card for the
+   * entry's exact text. The sheet must switch to the known recipe's style — its
+   * "Geplant" value, its badge and its travel action — so the stored target stays
+   * the opened snapshot and only an `unknown` target is upgraded here.
+   */
+  const activeOverviewTarget: RecipeOverviewTarget | null = useMemo(() => {
+    if (overviewTarget === null || overviewTarget.kind !== 'unknown') return overviewTarget;
+    const card = mealPlanResolution?.cards.find((entry) => entry.text === overviewTarget.text);
+    if (card === undefined || card.recipe === null) return overviewTarget;
+    return {
+      kind: 'recipe',
+      recipe: card.recipe,
+      source: 'mealplan',
+      onMealPlan: true,
+      planned: card.planned,
+    };
+  }, [overviewTarget, mealPlanResolution]);
 
   /**
    * The open overview's *live* plan state, derived from the current resolution,
@@ -735,18 +926,27 @@ function App() {
    * sheet falls back to the snapshot, which is why the target still carries one.
    */
   const overviewLivePlan =
-    overviewTarget?.kind === 'recipe' && mealPlanResolution !== null
+    activeOverviewTarget?.kind === 'recipe' && mealPlanResolution !== null
       ? {
-          onMealPlan: mealPlanResolution.plannedRecipeTitles.has(overviewTarget.recipe.title),
-          planned: mealPlanResolution.plannedAmounts.get(overviewTarget.recipe.title) ?? null,
+          onMealPlan: mealPlanResolution.plannedRecipeTitles.has(activeOverviewTarget.recipe.title),
+          planned: mealPlanResolution.plannedAmounts.get(activeOverviewTarget.recipe.title) ?? null,
         }
       : null;
 
   /**
    * True while the recipe list is the visible layer (no editor, AI screen,
-   * sheet or menu above it) — the precondition for the automatic attempt below.
+   * selection page, sheet or menu above it) — the precondition for the automatic
+   * attempt below.
    */
-  const listVisible = !editorOpen && !aiOpen && !createMenuOpen && !overviewOpen;
+  const listVisible = !editorOpen && !aiOpen && !createMenuOpen && !overviewOpen && !shoppingOpen;
+
+  /**
+   * True while the bundled selection page is the visible layer (no editor, AI
+   * screen or overview sheet above it). It is *not* the condition for mounting
+   * it: the page stays mounted while a layer of its flow sits above it, so the
+   * checked dishes survive the detour and the flow returns to them.
+   */
+  const shoppingVisible = shoppingOpen && !pantryOpen && !editorOpen && !aiOpen && !overviewOpen;
 
   /** Fires the automatic Keep attempt at most once per page session. */
   const keepAttemptedRef = useRef(false);
@@ -817,9 +1017,37 @@ function App() {
     [setNav],
   );
 
+  /**
+   * Opens the bundled shopping-list selection ("Einkaufsliste schreiben"). The
+   * flow flag is set first: `setNav` reads it to keep the page mounted under
+   * every layer that follows it (see shoppingFlowRef).
+   */
+  const openShoppingSelect = useCallback((): void => {
+    shoppingFlowRef.current = true;
+    setNav('shopping');
+  }, [setNav]);
+
+  /**
+   * Opens the pantry step for the dishes the selection page handed over
+   * ("Vorräte auswählen"). The page is a new instance every time it is opened
+   * (it unmounts when the flow leaves it), so its remembered scroll is dropped
+   * and it starts at the top — the same rule the editor levels follow.
+   */
+  const openPantry = useCallback(
+    (cards: readonly MealPlanCard[]): void => {
+      scrollMemory.forget('pantry');
+      setPantryCards([...cards]);
+      setNav('pantry');
+    },
+    [setNav, scrollMemory],
+  );
+
   /** Closes the overview sheet (backdrop, close button, browser Back). */
   const closeOverview = useCallback((): void => {
-    setNav(null);
+    // Over the selection page the sheet closes onto it — and its flow stays
+    // active, so the checked dishes are still there. Over the list it leaves for
+    // the list.
+    setNav(shoppingFlowRef.current ? 'shopping' : null);
   }, [setNav]);
 
   /** The Keep write actions (stable), pulled out so the callbacks below can depend on them. */
@@ -827,6 +1055,7 @@ function App() {
   const undoMealPlan = keep.undoMealPlan;
   const checkMealPlan = keep.checkMealPlan;
   const uncheckMealPlan = keep.uncheckMealPlan;
+  const writeShopping = keep.writeShopping;
   const shortenExportUrl = keep.shortenExportUrl;
 
   /**
@@ -887,7 +1116,8 @@ function App() {
    */
   const addToMealPlan = useCallback(
     async (planned: PlannedAmount): Promise<void> => {
-      const targetRecipe = overviewTarget?.kind === 'recipe' ? overviewTarget.recipe : null;
+      const targetRecipe =
+        activeOverviewTarget?.kind === 'recipe' ? activeOverviewTarget.recipe : null;
       if (targetRecipe === null) return;
       // The raw Keep items, not the resolved cards: the cards hide checked
       // entries, and a ticked-off line is still a duplicate in Keep.
@@ -922,7 +1152,7 @@ function App() {
       });
     },
     [
-      overviewTarget,
+      activeOverviewTarget,
       keep.state,
       planMeal,
       undoMealPlan,
@@ -955,7 +1185,8 @@ function App() {
    */
   const changeMealPlanAmount = useCallback(
     async (planned: PlannedAmount): Promise<void> => {
-      const targetRecipe = overviewTarget?.kind === 'recipe' ? overviewTarget.recipe : null;
+      const targetRecipe =
+        activeOverviewTarget?.kind === 'recipe' ? activeOverviewTarget.recipe : null;
       if (targetRecipe === null) return;
       // The raw Keep items, not the resolved cards: the cards hide checked
       // entries, and a ticked-off line is still a duplicate in Keep.
@@ -985,7 +1216,75 @@ function App() {
       });
     },
     [
-      overviewTarget,
+      activeOverviewTarget,
+      keep.state,
+      planMeal,
+      undoMealPlan,
+      closeOverview,
+      showSnackbar,
+      resolveMealPlanEntry,
+    ],
+  );
+
+  /**
+   * Replaces the open unrecognized meal-plan entry with a chosen recipe of the
+   * collection — the "Eintrag ersetzen" → "Bestehendes Rezept auswählen" flow.
+   *
+   * The overlay hands over the picked recipe and the size chosen in its own
+   * control; the Keep line is built here like every meal-plan write
+   * (`resolveMealPlanEntry`: the recipe's export link, shortened when the
+   * gateway can, or the long URL as before), and the entry it replaces is the
+   * one unrecognized line the overview was opened on — a 1:1 replacement
+   * (decided with the user): the chosen recipe's own entries elsewhere on the
+   * plan are deliberately left alone, so the notice and its undo are exact.
+   *
+   * On success the whole flow closes back to the list, where that line no longer
+   * renders as an unrecognized card but as the recipe's own card, and one
+   * snackbar confirms it with the way back (docs/ui_patterns.md). The notice
+   * names the entry that left the plan and the dish that took its place, and
+   * repeats that the shopping list is untouched.
+   *
+   * "Rückgängig" is the exact inverse: it removes the written line and puts the
+   * unrecognized entry back (`undoMealPlan`). Both texts are captured here,
+   * because only this callback knows what the write changed.
+   */
+  const replaceMealPlanEntry = useCallback(
+    async (recipe: StoredRecipe, planned: PlannedAmount): Promise<void> => {
+      if (activeOverviewTarget === null || activeOverviewTarget.kind !== 'unknown') return;
+      // The exact Keep line to overwrite, and its human form for the notice.
+      const replacedText = activeOverviewTarget.text;
+      const replacedLabel = activeOverviewTarget.displayText;
+      // The raw Keep items, so an existing short link at the chosen size is
+      // reused (`resolveMealPlanEntry`) exactly like the other writes.
+      const texts = (keep.state?.mealplan.items ?? []).map((item) => item.text);
+      const entryText = await resolveMealPlanEntry(recipe, planned, texts);
+      await planMeal(entryText, [replacedText]);
+      closeOverview();
+      // The label the meal plan now shows for the new dish ("Kürbissuppe
+      // (6 Portionen)"); the exact written line stays the undo's business.
+      const label = mealPlanEntryLabel(recipe.title, planned);
+      showSnackbar({
+        text: `„${replacedLabel}“ durch ${label} ersetzt. Die Einkaufsliste bleibt unverändert.`,
+        action: {
+          label: 'Rückgängig',
+          busyLabel: 'Wird rückgängig gemacht …',
+          icon: <UndoIcon className="button-icon" />,
+          run: async (): Promise<void> => {
+            try {
+              await undoMealPlan(entryText, [replacedText]);
+            } catch (err) {
+              const reason = err instanceof Error ? err.message : String(err);
+              showSnackbar({
+                tone: 'error',
+                text: `„${replacedLabel}“ konnte nicht wiederhergestellt werden. ${reason}`,
+              });
+            }
+          },
+        },
+      });
+    },
+    [
+      activeOverviewTarget,
       keep.state,
       planMeal,
       undoMealPlan,
@@ -1024,21 +1323,21 @@ function App() {
    */
   const removeFromMealPlan = useCallback((): void => {
     void (async (): Promise<void> => {
-      if (overviewTarget === null) return;
+      if (activeOverviewTarget === null) return;
       let entries: string[];
       let name: string;
-      if (overviewTarget.kind === 'recipe') {
+      if (activeOverviewTarget.kind === 'recipe') {
         // The raw Keep items, not the resolved cards: the cards hide checked
         // entries, and a ticked-off line is still a duplicate in Keep.
         const texts = (keep.state?.mealplan.items ?? []).map((item) => item.text);
-        entries = mealPlanEntriesForTitle(texts, overviewTarget.recipe.title);
-        name = overviewTarget.recipe.title;
+        entries = mealPlanEntriesForTitle(texts, activeOverviewTarget.recipe.title);
+        name = activeOverviewTarget.recipe.title;
       } else {
         // The unrecognized entry's complete text is the exact Keep line; its
         // display text (the line without the export URL) is what the sheet shows
         // as the title and what the notice names.
-        entries = [overviewTarget.text];
-        name = overviewTarget.displayText;
+        entries = [activeOverviewTarget.text];
+        name = activeOverviewTarget.displayText;
       }
       try {
         await checkMealPlan(entries);
@@ -1073,7 +1372,80 @@ function App() {
         },
       });
     })();
-  }, [overviewTarget, keep.state, checkMealPlan, uncheckMealPlan, closeOverview, showSnackbar]);
+  }, [
+    activeOverviewTarget,
+    keep.state,
+    checkMealPlan,
+    uncheckMealPlan,
+    closeOverview,
+    showSnackbar,
+  ]);
+
+  /**
+   * Performs the pantry step's write: the sheets' "Einkaufsliste schreiben"
+   * hands over the lines of its upper part (one per ingredient that is not
+   * covered, in the familiar display arrangement) and the number of dishes they
+   * were computed from.
+   *
+   * On success the whole flow closes back to the home screen and one snackbar
+   * reports it with the way back (docs/ui_patterns.md): "Rückgängig" removes
+   * exactly the lines this write added (`writeShopping([], lines)`) and clears
+   * the "written" marker again, so the button offers the flow once more. The
+   * meal plan is never touched by either direction — the second sentence of the
+   * meal-plan notices exists for the opposite doubt, so it is not repeated
+   * here.
+   *
+   * The meal plan's identity is captured *before* the write and kept as the
+   * "written for" marker: the shopping endpoint answers the shopping list only,
+   * so that object stays the current one and the button reads "Einkaufsliste
+   * geschrieben" — until any meal-plan change replaces it (see
+   * `shoppingWrittenFor`).
+   *
+   * A failure is thrown on to the sheet, which stays open and shows the reason
+   * next to its button, so the chosen Vorräte are not lost. `keepErrorMessage`
+   * turns the gateway's operator-facing codes into the app's German reading —
+   * including the `not_implemented` (501) the route answers with until the
+   * shopping write exists in the gateway.
+   */
+  const writeShoppingList = useCallback(
+    async (lines: readonly string[], recipes: number): Promise<void> => {
+      const writtenFor = keep.state?.mealplan ?? null;
+      try {
+        await writeShopping(lines, []);
+      } catch (err) {
+        throw new Error(keepErrorMessage(err));
+      }
+      setShoppingWrittenFor(writtenFor);
+      setPantryCards([]);
+      setNav(null);
+      const ingredients = lines.length;
+      showSnackbar({
+        text: `${ingredients} ${ingredients === 1 ? 'Zutat' : 'Zutaten'} für ${recipes} ${
+          recipes === 1 ? 'Rezept' : 'Rezepte'
+        } zur Einkaufsliste hinzugefügt.`,
+        action: {
+          label: 'Rückgängig',
+          busyLabel: 'Wird rückgängig gemacht …',
+          icon: <UndoIcon className="button-icon" />,
+          run: async (): Promise<void> => {
+            try {
+              await writeShopping([], lines);
+              // The list is back to what it was, so the plan has not been
+              // written for any more: the button offers the flow again.
+              setShoppingWrittenFor(null);
+            } catch (err) {
+              const reason = err instanceof Error ? err.message : String(err);
+              showSnackbar({
+                tone: 'error',
+                text: `Die Einkaufsliste konnte nicht zurückgesetzt werden. ${reason}`,
+              });
+            }
+          },
+        },
+      });
+    },
+    [keep.state, writeShopping, setNav, showSnackbar],
+  );
 
   /**
    * Shows the base recipe in the editor (`draft` prefills a brand-new recipe)
@@ -1090,6 +1462,9 @@ function App() {
   const openEditor = useCallback(
     (recipe: StoredRecipe | null): void => {
       editorOriginRef.current = 'list';
+      // A create flow started from an unrecognized entry ends here: the list is
+      // the destination of this one, so the overview return must not linger.
+      overviewReturnRef.current = false;
       pendingDraftRef.current = null;
       startEditorChain();
       showInEditor(recipe, null);
@@ -1153,6 +1528,9 @@ function App() {
 
   /** Opens the AI-create conversation screen (Task A). */
   const openAiCreate = useCallback((): void => {
+    // The list/FAB entry point, not the overview's create menu: the AI screen
+    // returns to the list, so no overview return may linger.
+    overviewReturnRef.current = false;
     setAiScreen({ mode: 'create' });
     setNav('ai');
   }, [setNav]);
@@ -1160,6 +1538,8 @@ function App() {
   /** Opens the AI-edit screen for a stored recipe (Task B). */
   const openAiEdit = useCallback(
     (recipe: StoredRecipe): void => {
+      // Task B is never started from the unrecognized entry's create menu.
+      overviewReturnRef.current = false;
       setAiScreen({ mode: 'edit', recipe });
       setNav('ai');
     },
@@ -1167,11 +1547,43 @@ function App() {
   );
 
   /**
+   * "Rezept manuell anlegen" of an unrecognized meal-plan entry: opens the editor
+   * on a new recipe whose title is the entry's *complete* Keep text (the exact
+   * line, not the shortened display form), and remembers that leaving the editor
+   * comes back to this overview. Saving a recipe whose title then matches the
+   * entry makes the overview render the recognized style by itself (see
+   * activeOverviewTarget).
+   */
+  const createRecipeFromEntry = useCallback((): void => {
+    if (overviewTarget === null || overviewTarget.kind !== 'unknown') return;
+    overviewReturnRef.current = true;
+    editorOriginRef.current = 'overview';
+    pendingDraftRef.current = null;
+    startEditorChain();
+    showInEditor(null, newRecipeDraftWithTitle(overviewTarget.text));
+    setNav('editor');
+  }, [overviewTarget, setNav, showInEditor, startEditorChain]);
+
+  /**
+   * "Rezept mit KI anlegen" of an unrecognized meal-plan entry: opens the
+   * AI-create screen with the entry's *complete* Keep text as the first request
+   * (the exact line, not the shortened display form), and remembers that closing
+   * the screen comes back to this overview.
+   */
+  const createRecipeWithAiFromEntry = useCallback((): void => {
+    if (overviewTarget === null || overviewTarget.kind !== 'unknown') return;
+    overviewReturnRef.current = true;
+    setAiScreen({ mode: 'create', prompt: overviewTarget.text });
+    setNav('ai');
+  }, [overviewTarget, setNav]);
+
+  /**
    * Leaves the editor one step: first back to the parent level of an open
    * sub-recipe chain (the level stays mounted, so nothing is lost), and only
-   * from the base level out of the editor (to the list, or back to the AI
-   * conversation of an AI draft). Every exit trigger — header button, Escape,
-   * browser Back — ends here, so they all follow the same order.
+   * from the base level out of the editor (to the selection page of the bundled
+   * shopping-list flow, to the list, or back to the AI conversation of an AI
+   * draft). Every exit trigger — header button, Escape, browser Back — ends
+   * here, so they all follow the same order.
    */
   const closeEditor = useCallback((): void => {
     const open = editorSubRecipesRef.current;
@@ -1180,13 +1592,42 @@ function App() {
       return;
     }
     const fromAi = editorOriginRef.current === 'ai-create' || editorOriginRef.current === 'ai-edit';
+    const toOverview = overviewReturnRef.current;
     editorOriginRef.current = null;
     pendingDraftRef.current = null;
     editorTargetRef.current = null;
-    // Leaving an AI draft without saving returns to its conversation (the
-    // sheet is still mounted); every other editor closes to the list.
-    setNav(fromAi ? 'ai' : null);
+    // Leaving an AI draft without saving returns to its conversation (the sheet
+    // is still mounted) and keeps the overview return armed for when that
+    // conversation is closed; an editor started from an unrecognized entry's
+    // create menu returns to that entry's overview; an editor opened inside the
+    // bundled shopping-list flow returns to the selection page (its checked
+    // dishes are still mounted); every other editor closes to the list.
+    if (fromAi) {
+      setNav('ai');
+      return;
+    }
+    if (toOverview) {
+      overviewReturnRef.current = false;
+      setNav('overview');
+      return;
+    }
+    setNav(shoppingFlowRef.current ? 'shopping' : null);
   }, [setNav, replaceSubRecipes]);
+
+  /**
+   * Closes the AI screen (create or edit) without a save. A create started from
+   * an unrecognized entry's menu returns to that entry's overview; otherwise the
+   * bundled shopping flow keeps the selection page as the destination and
+   * everything else returns to the list.
+   */
+  const closeAi = useCallback((): void => {
+    if (overviewReturnRef.current) {
+      overviewReturnRef.current = false;
+      setNav('overview');
+      return;
+    }
+    setNav(shoppingFlowRef.current ? 'shopping' : null);
+  }, [setNav]);
 
   /** After a save/delete: refresh the list and leave the editor. */
   const handleEditorSaved = useCallback(
@@ -1200,19 +1641,28 @@ function App() {
         return;
       }
       const origin = editorOriginRef.current;
+      const toOverview = overviewReturnRef.current;
       editorOriginRef.current = null;
       pendingDraftRef.current = null;
       editorTargetRef.current = null;
       // A saved Zutaten-Rezept continues the *create* conversation: the dish
       // using it is usually the next request, and the chat must list the new
-      // title. A saved dish and every AI *edit* are the end of the flow — back
-      // to the list like any other save (the list was refreshed above).
+      // title (the overview return stays armed until that conversation closes).
+      // A saved dish and every AI *edit* are the end of the flow — back to the
+      // entry's overview when the flow was started from there, to the selection
+      // page when the editor was opened inside the bundled shopping-list flow,
+      // to the list otherwise (the list was refreshed above).
       if (origin === 'ai-create' && saved !== null && saved.type === 'ingredient_recipe') {
         setAiHandoff({ title: saved.title, type: saved.type });
         setNav('ai');
-      } else {
-        setNav(null);
+        return;
       }
+      if (toOverview) {
+        overviewReturnRef.current = false;
+        setNav('overview');
+        return;
+      }
+      setNav(shoppingFlowRef.current ? 'shopping' : null);
     },
     [token, refreshRecipes, setNav, replaceSubRecipes],
   );
@@ -1291,12 +1741,17 @@ function App() {
             ref={aiCreateHandleRef}
             mode={aiScreen.mode}
             editTarget={aiScreen.mode === 'edit' ? aiScreen.recipe : undefined}
+            initialPrompt={aiScreen.mode === 'create' ? aiScreen.prompt : undefined}
             token={token ?? ''}
             visible={!editorOpen}
             recipes={recipes ?? []}
             handoff={aiHandoff}
             onHandoffConsumed={handleHandoffConsumed}
-            onClose={() => setNav(null)}
+            // Closing the AI screen returns to the unrecognized entry's overview
+            // when the create flow was started there, to the selection page while
+            // the bundled shopping-list flow is active (that page is still
+            // mounted), and to the list otherwise.
+            onClose={closeAi}
             onOpenDraft={(draft) =>
               aiScreen.mode === 'edit'
                 ? openEditorWithRevision(aiScreen.recipe, draft)
@@ -1304,6 +1759,38 @@ function App() {
             }
           />
         </div>
+      )}
+
+      {/* The bundled shopping-list selection ("Einkaufsliste schreiben"). It is
+          a full screen of its own, but it stays mounted (hidden) while a layer
+          of its flow sits above it — the overview sheet opened from a row, the
+          editor or the AI screen opened from that sheet — so the checked dishes
+          survive the detour and closing that layer returns here (see
+          shoppingFlowRef). The wrapper carries `hidden` (a plain div, like the
+          AI sheet and the editor levels), because the page's own `.app` display
+          would beat [hidden]. */}
+      {shoppingOpen && (
+        <div hidden={!shoppingVisible}>
+          <ShoppingListSelect
+            cards={mealPlanResolution?.cards ?? null}
+            onOpenCard={openMealPlanOverview}
+            onChoosePantry={openPantry}
+            onClose={() => setNav(null)}
+          />
+        </div>
+      )}
+
+      {/* The pantry step ("Vorräte auswählen") — the second page of the bundled
+          shopping flow, over the selection page it follows. Nothing opens above
+          it, so it needs no hidden wrapper: it is simply mounted while it is the
+          flow's visible page. */}
+      {pantryOpen && (
+        <PantrySelect
+          cards={pantryCards}
+          token={token ?? ''}
+          onBack={() => setNav('shopping')}
+          onWrite={writeShoppingList}
+        />
       )}
 
       {editorOpen ? (
@@ -1351,7 +1838,7 @@ function App() {
             </div>
           ))}
         </>
-      ) : aiOpen ? null : (
+      ) : aiOpen ? null : shoppingOpen || pantryOpen ? null : (
         <main className="app">
           <header className="app-header">
             <h1>Cookbook</h1>
@@ -1422,6 +1909,8 @@ function App() {
               keepError={keep.error}
               onConnectKeep={() => void keep.connect()}
               onRetryKeep={keep.retry}
+              onWriteShoppingList={openShoppingSelect}
+              shoppingWritten={shoppingWritten}
             />
           )}
 
@@ -1464,21 +1953,32 @@ function App() {
           renders as a sibling of the list branch and only while the list is the
           visible base. It renders one of the three card types from the target
           (known recipe, planned or not, or an unrecognized meal-plan entry);
-          "Mehr → Manuell bearbeiten" replaces the sheet with the editor. */}
-      {!editorOpen && !aiOpen && overviewOpen && overviewTarget !== null && token !== null && (
-        <RecipeOverview
-          ref={overviewHandleRef}
-          token={token}
-          target={overviewTarget}
-          onClose={closeOverview}
-          onEdit={openEditor}
-          onAiEdit={openAiEdit}
-          onAddToMealPlan={addToMealPlan}
-          onChangeAmount={changeMealPlanAmount}
-          onRemoveFromMealPlan={removeFromMealPlan}
-          livePlan={overviewLivePlan}
-        />
-      )}
+          "Mehr → Manuell bearbeiten" replaces the sheet with the editor. The
+          target is the live one (activeOverviewTarget): an unrecognized entry
+          whose recipe has just been created for it switches to the recognized
+          style while the sheet is open. */}
+      {!editorOpen &&
+        !aiOpen &&
+        overviewOpen &&
+        activeOverviewTarget !== null &&
+        token !== null && (
+          <RecipeOverview
+            ref={overviewHandleRef}
+            token={token}
+            recipes={recipes ?? []}
+            target={activeOverviewTarget}
+            onClose={closeOverview}
+            onEdit={openEditor}
+            onAiEdit={openAiEdit}
+            onCreateFromEntry={createRecipeFromEntry}
+            onCreateWithAiFromEntry={createRecipeWithAiFromEntry}
+            onAddToMealPlan={addToMealPlan}
+            onChangeAmount={changeMealPlanAmount}
+            onReplaceEntry={replaceMealPlanEntry}
+            onRemoveFromMealPlan={removeFromMealPlan}
+            livePlan={overviewLivePlan}
+          />
+        )}
 
       {/* The transient notice (docs/ui_patterns.md). It renders at the root and
           above every layer, because the action it reports has just closed those

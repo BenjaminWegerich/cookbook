@@ -102,19 +102,7 @@ import {
   TrashIcon,
   UploadIcon,
 } from './icons';
-
-/** The draft holds every field except the derived master ingredient list. */
-type EditorDraft = Omit<Recipe, 'ingredients'>;
-
-/** A fresh draft for a new recipe (all optional fields unset). */
-function newRecipeDraft(): EditorDraft {
-  return {
-    title: '',
-    type: 'finished_dish',
-    prep_time: '',
-    steps: [{ ingredients: [], text: '' }],
-  };
-}
+import { newRecipeDraft, type EditorDraft } from './recipeDrafts';
 
 /** Strips the derived master list from a loaded recipe (it lives in rows). */
 function toDraft(recipe: Recipe): EditorDraft {

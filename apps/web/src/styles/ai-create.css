@@ -90,27 +90,9 @@
 
 /* ---- Composer ------------------------------------------------------------- */
 
-/* Header stack: the Zurück button sits on its own line at the top left (the
-   editor's back placement), the screen title below it. Two whitespace sources
-   are removed here so the whole screen follows one 14 px rhythm:
-   - the global .app-header bottom margin (--space-7) would add ~24 px of air on
-     top of the screen's own grid gap;
-   - the h1's browser-default margin (~21 px on each side at the 32 px screen
-     title size) would add the same amount again above the title and below it.
-   The stack's own gap (--space-6) is what is left: a clear step between the
-   quiet Zurück button and the title, which is the deliberate break of the
-   pair. */
-.ai-screen .app-header {
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: var(--space-6);
-  margin-block-end: 0;
-}
-
-.ai-screen .app-header h1 {
-  margin: 0;
-}
+/* The header stack (Zurück on its own line, the title below it) is shared with
+   the bundled shopping-list selection and lives in styles/recipe-list.css as
+   .app-header-stacked — one definition, so the two screens cannot drift apart. */
 
 /* The composer follows the transcript directly. The former
    `margin-block-start: auto` pushed it to the window bottom, which opened a

@@ -230,3 +230,70 @@ export function scale(amount: number, deltaX: number): number {
   }
   return roundedBQ(pos(amount) + deltaX);
 }
+
+/**
+ * Guards the two neighbours below: both walk the ladder by index, which the
+ * decade rule extrapolates for any integer index, so only the *value* has to be
+ * a usable number (0, a negative, NaN and Infinity have no logarithm).
+ */
+function assertPositiveFinite(value: number, caller: string): void {
+  if (!(value > 0) || !Number.isFinite(value)) {
+    throw new Error(`${caller}: ${value} is not a positive finite number`);
+  }
+}
+
+/**
+ * The geometric rung index closest to `value`: x = 16 · log10(value). Rungs are
+ * ~10^(x/16) apart, so this is the starting point of the neighbour searches
+ * below; a hand-picked BQ value may deviate from its geometric position by up
+ * to about half a rung, hence the small correcting loop in each search.
+ */
+function nearestRungIndex(value: number): number {
+  return Math.round(STEPS_PER_DECADE * Math.log10(value));
+}
+
+/**
+ * The smallest ladder rung strictly above `value` (decades included, via the
+ * decade rule of §3).
+ *
+ * The quantity steppers walk the ladder rung by rung, but the value they start
+ * from can be off the ladder: the shopping list's pantry stepper begins on
+ * `min(need, reorder point)`, and a need summed over several dishes is not
+ * necessarily a rung. `scale` cannot step from such a value (it needs a rung
+ * and an integer step count), so this answers the neighbouring rungs of an
+ * arbitrary positive value — one tap from an off-ladder start lands on the
+ * ladder. Values outside the table are extrapolated by whole decades, exactly
+ * like `roundedBQ`.
+ *
+ * @param value a positive finite number (throws otherwise, like `pos`)
+ */
+export function rungAbove(value: number): number {
+  assertPositiveFinite(value, 'rungAbove');
+  let x = nearestRungIndex(value);
+  // The estimate is within a rung or two of the answer; the bound only makes
+  // sure a floating-point surprise can never spin here.
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const rung = roundedBQ(x);
+    if (rung > value) return rung;
+    x += 1;
+  }
+  throw new Error(`rungAbove: no ladder rung found above ${value}`);
+}
+
+/**
+ * The largest ladder rung strictly below `value` (decades included) — the
+ * counterpart of `rungAbove`, with the same off-ladder tolerance. For a value
+ * at or below the smallest table rung (0.1) the decade rule keeps answering
+ * smaller rungs (0.09, 0.08, …); a caller that holds a floor (the pantry
+ * stepper stops at 0) clamps the result itself.
+ */
+export function rungBelow(value: number): number {
+  assertPositiveFinite(value, 'rungBelow');
+  let x = nearestRungIndex(value);
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const rung = roundedBQ(x);
+    if (rung < value) return rung;
+    x -= 1;
+  }
+  throw new Error(`rungBelow: no ladder rung found below ${value}`);
+}

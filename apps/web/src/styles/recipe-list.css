@@ -41,6 +41,29 @@
   display: block;
 }
 
+/* Header stack (screens that open with a back button rather than a title bar:
+   the AI screen and the bundled shopping-list selection): the Zurück button
+   sits on its own line at the top left — the editor's back placement — and the
+   screen title below it. Two whitespace sources are removed so the screen keeps
+   its own vertical rhythm:
+   - the base header's bottom margin (--space-7) would add air on top of the
+     screen's grid gap;
+   - the h1's browser-default margin (~21 px on each side at the 32 px screen
+     title size) would add the same amount again above the title and below it.
+   The stack's own gap (--space-6) is what is left: a clear step between the
+   quiet Zurück button and the title, which is the deliberate break of the pair. */
+.app-header-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--space-6);
+  margin-block-end: 0;
+}
+
+.app-header-stacked h1 {
+  margin: 0;
+}
+
 /* Small quiet text buttons (editor headers: Zurück / Abbrechen / …). They lay
    their content out inline, so a symbol + label pair (photo "Auswählen",
    danger "Entfernen") centers on one line without extra markup. */
@@ -174,17 +197,43 @@
 
 /* Two value-picking tabs directly under the search field, inside the sticky
    bar: both views render the same card grid and only filter its content. The
-   row centers the content-width control — centering through a flex row rather
-   than auto margins plus intrinsic grid sizing, so every engine centers it the
-   same way. The two segments are equally wide: each button holds its visible
-   label and an invisible copy of the longest label in the same grid cell (see
+   two segments are equally wide: each button holds its visible label and an
+   invisible copy of the longest label in the same grid cell (see
    RecipeList.tsx), so a button is exactly as wide as the longest label. The
    active fill is the olive secondary accent, the same colour an active segment
-   uses in the editor. */
+   uses in the editor.
+   The row is left-aligned (it used to center the control) and carries the
+   bundled shopping-list entry beside the control, so the two read as one
+   toolbar: the tab control keeps its content width, and the button follows one
+   gap step later instead of being pushed to the far edge of a wide screen. On a
+   phone the two do not share a line — both labels are full words — so the row
+   wraps and the button continues on the next line, still left-aligned. */
 .recipe-tabs-row {
   display: flex;
-  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
   margin-block-start: var(--space-4);
+}
+
+/* "Einkaufsliste schreiben": the entry into the bundled shopping-list view of
+   the meal plan. Sized like a tab segment — same padding, text size, weight and
+   corner — so it reads as a sibling of the control it stands next to; filled
+   with the clay accent because it is an action, not a third view. `flex: none`
+   keeps the height it shares with the control: without it the row would shrink
+   the button (and rewrap its label) before wrapping the row. */
+.shopping-list-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-on-accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .recipe-tabs {

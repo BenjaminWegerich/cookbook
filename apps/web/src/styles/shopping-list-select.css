@@ -1,0 +1,136 @@
+/**
+ * Bundled shopping-list selection screen — component styles.
+ *
+ * The full-screen page behind "Einkaufsliste schreiben" (components/ShoppingListSelect.tsx):
+ * the meal plan as selectable rows, so every chosen dish reaches the shopping
+ * list in one write. All pixel values come from the design ladder
+ * (docs/CODING_CONVENTIONS.md); colors and sizes reference the tokens in
+ * styles/tokens.css.
+ */
+
+.shopping-select {
+  display: grid;
+  gap: var(--space-6);
+  /* Room for the last element's focus ring, like the editor's screen. */
+  padding-block-end: var(--space-10);
+}
+
+/* The explanation under the title: one quiet paragraph, as wide as the page.
+   Deliberately *not* capped to a reading measure: a cap narrower than the list
+   below it breaks the two sentences into three short lines on a desktop screen
+   while the page around them is wide (decided with the user). */
+.shopping-select-intro {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.shopping-select-empty {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+/* ---- The selectable meal-plan rows -------------------------------------- */
+
+/* One paper surface for the whole list with hairline dividers between the rows
+   (decided with the user): the page must read as a list of choices, not as the
+   home screen's card grid. `overflow: hidden` is what lets the rows' pressed
+   fill meet the surface's rounded corners instead of poking past them. */
+.shopping-select-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* One row: the checkbox cell and the text area that opens the overview. The
+   text column is a zero-minimum track, so a long unbreakable word (a URL in an
+   unrecognized entry, in practice) wraps inside the row instead of widening it
+   past the surface. */
+.shopping-select-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+/* Every row but the first carries the divider. */
+.shopping-select-item + .shopping-select-item {
+  border-block-start: 1px solid var(--color-line);
+}
+
+/* The checkbox cell: the form control plus its own padding, so the target is a
+   comfortable square rather than the 24 px box itself (the same box the
+   editor's .checkbox-field draws). */
+.shopping-select-check {
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+}
+
+.shopping-select-check input {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+/* "No recipe behind this entry": the box is disabled and must read as
+   unavailable rather than as an ordinary unchecked one. The native disabled
+   rendering already greys it; the extra muting is the app's one "cannot use
+   this" look (the same one every disabled button carries). */
+.shopping-select-check input:disabled {
+  opacity: var(--opacity-disabled);
+}
+
+/* The row body: the whole text area is one hitbox that opens the overview —
+   the checkbox beside it is a hitbox of its own and only toggles. Left padding
+   is zero so the pressed fill starts right after the checkbox cell and the row
+   reads as one line of text next to one box. */
+.shopping-select-open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-4) var(--space-4) 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  text-align: start;
+}
+
+/* The title: at most two lines, then an ellipsis — the same clamp the recipe
+   cards use, so a long entry cannot push its row beyond a readable height. */
+.shopping-select-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* The size the plan entry states, next to the title: muted and one step
+   smaller, so it reads as a property of the dish, not as a second name. */
+.shopping-select-size {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- Forward action ------------------------------------------------------ */
+
+/* "Vorräte auswählen": accent, content width, right-aligned at the end of the
+   reading direction under the list (decided with the user). */
+.shopping-select-actions {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+}

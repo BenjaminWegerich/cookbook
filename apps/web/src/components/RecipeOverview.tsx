@@ -36,8 +36,15 @@
  *    (decided with the user): this sheet marks a menu with the three-dot glyph,
  *    and "Eintrag ersetzen" names an outcome that cannot be executed without a
  *    choice, so it reads as opening a chooser the way a "Teilen" button does.
- *    "Jetzt kochen" and the "Mehr" menu do not exist here: there is nothing to
- *    cook or edit yet.
+ *    "Bestehendes Rezept auswählen" opens the replace overlay
+ *    (./ReplaceRecipeSheet), which searches the collection and writes the picked
+ *    recipe and size over this one entry. The other two entries open the known
+ *    create sites prefilled with the entry's complete text — the editor on a new
+ *    recipe ("Rezept manuell anlegen") or the AI-create screen as the first
+ *    request ("Rezept mit KI anlegen") — and App returns to this overview when
+ *    that site closes, so the sheet is where the user started and where a
+ *    just-created recipe now shows up in the recognized style. "Jetzt kochen" and
+ *    the "Mehr" menu do not exist here: there is nothing to cook or edit yet.
  *
  * The three variants are modelled as one `RecipeOverviewTarget` union: a
  * recognized card carries its recipe plus the meal-plan context, an
@@ -48,14 +55,19 @@
  * - modal bottom sheet over the list (not a full-screen view);
  * - large square 1:1 photo (recipe photos are stored square, nothing is cropped);
  * - times (Arbeitszeit / Gesamtzeit) are shown, but not the recipe's own
- *   servings/yield or type — the "Geplant" value is the *meal plan's* size, so
- *   it appears only when an entry actually states one;
+ *   servings/yield or type. The "Geplant" value is the *meal plan's* size: the
+ *   size the entry states, or — when it states none — the size the recipe is
+ *   written in, because that is the amount the entry's link opens the cooking
+ *   view at (core's `writtenPlannedAmount`, the same fallback the shopping-list
+ *   selection shows). A dish that is not on the plan shows no "Geplant" value
+ *   at all;
  * - one action row: "Jetzt kochen" (skillet) is the primary action, growing to
  *   fill the row so it is as wide as possible, next to "Einplanen"/"Umplanen"
  *   (calendar with plus / with pencil) and the "Mehr" button (vertical three
- *   dots), which stay only as wide as their labels need. "Jetzt kochen" and the
- *   three "Eintrag ersetzen" entries are placeholders for now: they report that
- *   the feature is not built yet instead of silently doing nothing.
+ *   dots), which stay only as wide as their labels need. "Jetzt kochen" is a
+ *   placeholder for now: it reports that the feature is not built yet instead of
+ *   silently doing nothing. The unrecognized entry's three "Eintrag ersetzen"
+ *   entries are built (replace overlay, prefilled editor, prefilled AI create).
  * - a recognized recipe's plan state is rendered from the *live* plan App
  *   derives (`livePlan`), not only from the snapshot the target was opened with.
  *   Every action here ends the whole flow (the two overlay writes and "Vom Plan
@@ -65,11 +77,12 @@
  *   the plan rather than a stale snapshot. The snapshot stays the fallback for
  *   the moment between a write and the re-resolved plan (and when Keep is off,
  *   where nothing is planned anyway).
- * - the meal-plan overlay is a layer of this sheet, not a screen of its own:
- *   Escape and the browser Back close it first and the sheet only after it
- *   (RecipeOverviewHandle), and a recipe is only offered once its file has been
- *   read, because the overlay needs the written size and the reference
- *   ingredients.
+ * - the two overlays (the meal-plan sheet and, for an unrecognized entry, the
+ *   replace sheet) are layers of this sheet, not screens of their own: Escape
+ *   and the browser Back close the open one first and the sheet only after it
+ *   (RecipeOverviewHandle). The meal-plan overlay is offered only once the
+ *   recipe's file has been read, because it needs the written size and the
+ *   reference ingredients.
  * - "Einplanen"/"Umplanen" is the meal-plan action: it puts the dish on the
  *   meal plan. Building the shopping list is deliberately not its job — that is
  *   a separate flow over several recipes at once (decided with the user), so
@@ -89,6 +102,7 @@ import type { Ref } from 'react';
 import {
   displayTimeText,
   formatPlannedAmount,
+  writtenPlannedAmount,
   type PlannedAmount,
   type Recipe,
 } from '@cookbook/core';
@@ -110,6 +124,7 @@ import {
   SwapHorizIcon,
 } from './icons';
 import MealPlanSheet from './MealPlanSheet';
+import ReplaceRecipeSheet from './ReplaceRecipeSheet';
 import RecipeThumb from './RecipeThumb';
 import TitleThumb from './TitleThumb';
 
@@ -140,7 +155,8 @@ export type RecipeOverviewTarget =
       /**
        * The same entry without its export URL, for the title and the avatar. A
        * Cookbook-written line is `<Titel>: <URL>`; showing it raw would put a
-       * long link on the sheet. The removal action keeps using `text`.
+       * long link on the sheet. The removal action and the two create actions
+       * keep using `text`, the complete line.
        */
       displayText: string;
     };
@@ -148,6 +164,11 @@ export type RecipeOverviewTarget =
 interface RecipeOverviewProps {
   /** Drive access token, needed to read the recipe and download its photo. */
   token: string;
+  /**
+   * Every recipe of the collection. The unrecognized variant's replace overlay
+   * searches it to offer an existing recipe; the other variants never read it.
+   */
+  recipes: StoredRecipe[];
   /** The card that was tapped (see RecipeOverviewTarget). */
   target: RecipeOverviewTarget;
   /** Closes the sheet (backdrop, close button, browser Back). */
@@ -156,6 +177,19 @@ interface RecipeOverviewProps {
   onEdit: (recipe: StoredRecipe) => void;
   /** Opens the AI-edit screen ("Mehr" → "Mit KI bearbeiten"). */
   onAiEdit: (recipe: StoredRecipe) => void;
+  /**
+   * "Rezept manuell anlegen" of an unrecognized entry: App opens the editor on a
+   * new recipe prefilled with the entry's complete Keep text and returns to this
+   * overview when the editor closes. Only the unrecognized variant offers it.
+   */
+  onCreateFromEntry: () => void;
+  /**
+   * "Rezept mit KI anlegen" of an unrecognized entry: App opens the AI-create
+   * screen with the entry's complete Keep text as the first request and returns
+   * to this overview when the screen closes. Only the unrecognized variant
+   * offers it.
+   */
+  onCreateWithAiFromEntry: () => void;
   /**
    * Performs the meal-plan write for the size chosen in the "Einplanen"
    * overlay (App owns the meal-plan state, so it also knows which entries to
@@ -170,6 +204,16 @@ interface RecipeOverviewProps {
    * planning — and rejects with the reason when it failed.
    */
   onChangeAmount: (planned: PlannedAmount) => Promise<void>;
+  /**
+   * Performs the replace write of the unrecognized variant: the entry is
+   * overwritten with the recipe and size chosen in the "Bestehendes Rezept
+   * auswählen" overlay. App owns the Keep state, the entry's exact text and the
+   * entry text it builds, so the write lives there. Resolves when the entry was
+   * replaced (App then closes the whole flow back to the list, like the other
+   * writes) and rejects with the reason when it failed, which keeps the overlay
+   * open.
+   */
+  onReplaceEntry: (recipe: StoredRecipe, planned: PlannedAmount) => Promise<void>;
   /**
    * Takes the open meal-plan entry off the plan: a recognized recipe's "Mehr" →
    * "Vom Plan entfernen", or the unrecognized entry's own danger button. App
@@ -194,13 +238,13 @@ interface RecipeOverviewProps {
 }
 
 /**
- * Browser-back consumer of the overview sheet (App's popstate handler). The
- * meal-plan overlay is a layer *inside* the sheet, so it has to consume the
- * Back before the sheet itself closes — the same contract the editor and the
- * AI sheet use.
+ * Browser-back consumer of the overview sheet (App's popstate handler). The two
+ * overlays (meal plan, replace) are layers *inside* the sheet, so one of them
+ * has to consume the Back before the sheet itself closes — the same contract the
+ * editor and the AI sheet use.
  */
 export interface RecipeOverviewHandle {
-  /** Closes the meal-plan overlay if it is open; true when it consumed the Back. */
+  /** Closes the open overlay if there is one; true when it consumed the Back. */
   notifyBack: () => boolean;
 }
 
@@ -215,12 +259,16 @@ type OverviewMenu = 'more' | 'replace';
  */
 function RecipeOverview({
   token,
+  recipes,
   target,
   onClose,
   onEdit,
   onAiEdit,
+  onCreateFromEntry,
+  onCreateWithAiFromEntry,
   onAddToMealPlan,
   onChangeAmount,
+  onReplaceEntry,
   onRemoveFromMealPlan,
   livePlan,
   ref,
@@ -236,6 +284,14 @@ function RecipeOverview({
    * sheet and closes back onto it (see RecipeOverviewHandle, MealPlanSheet).
    */
   const [planOpen, setPlanOpen] = useState(false);
+  /**
+   * The replace overlay of the unrecognized variant ("Eintrag ersetzen" →
+   * "Bestehendes Rezept auswählen"). It is the second layer of this sheet and,
+   * like the meal-plan overlay, closes back onto it (RecipeOverviewHandle,
+   * ReplaceRecipeSheet). The two are never open at the same time: each belongs
+   * to a different target variant.
+   */
+  const [replaceOpen, setReplaceOpen] = useState(false);
   /**
    * The open popover: "Mehr" for a recognized recipe or "Eintrag ersetzen" for
    * an unrecognized entry. Both variants exist exclusively, so one state and
@@ -286,26 +342,33 @@ function RecipeOverview({
 
   // Escape closes the topmost layer of the sheet through the shared exit
   // trigger (useLeaveGuard), the same one the editor, the AI screen and the
-  // create menu use: the meal-plan overlay first, the sheet itself after that.
-  // A backdrop tap and the browser Back button (App's history integration)
-  // close the same layers in the same order. No confirmation: the overview is
-  // read-only and the overlay holds nothing but a size choice.
+  // create menu use: the open overlay first, the sheet itself after that. (The
+  // two overlays belong to different target variants and never coexist, but
+  // both are checked so neither can be missed.) A backdrop tap and the browser
+  // Back button (App's history integration) close the same layers in the same
+  // order. No confirmation: the overview is read-only and the overlays hold
+  // nothing but a choice.
   useEscapeTrigger(() => {
     if (planOpen) {
       setPlanOpen(false);
+      return;
+    }
+    if (replaceOpen) {
+      setReplaceOpen(false);
       return;
     }
     onClose();
   });
 
   // Browser-back consumer (see RecipeOverviewHandle and App's popstate
-  // handler): the meal-plan overlay is the one layer inside this sheet, so it
-  // must be able to consume the Back before the sheet closes. The handle is
-  // refreshed on every render, so it always sees the current layer state.
+  // handler): the overlays are the layers inside this sheet, so they must be
+  // able to consume the Back before the sheet closes. The handle is refreshed
+  // on every render, so it always sees the current layer state.
   useImperativeHandle(ref, () => ({
     notifyBack: (): boolean => {
-      if (!planOpen) return false;
+      if (!planOpen && !replaceOpen) return false;
       setPlanOpen(false);
+      setReplaceOpen(false);
       return true;
     },
   }));
@@ -352,10 +415,33 @@ function RecipeOverview({
     setNotice(`„${label}“ folgt in einer späteren Version.`);
   };
 
-  /** A chosen menu entry: closes the menu and reports the placeholder action. */
-  const chooseMenuEntry = (label: string): void => {
+  /**
+   * "Rezept manuell anlegen": closes the menu and hands over to App, which opens
+   * the editor on a new recipe prefilled with the entry's complete Keep text.
+   */
+  const createManually = (): void => {
     setOpenMenu(null);
-    notBuiltYet(label);
+    onCreateFromEntry();
+  };
+
+  /**
+   * "Rezept mit KI anlegen": closes the menu and hands over to App, which opens
+   * the AI-create screen prefilled with the entry's complete Keep text.
+   */
+  const createWithAi = (): void => {
+    setOpenMenu(null);
+    onCreateWithAiFromEntry();
+  };
+
+  /**
+   * "Bestehendes Rezept auswählen": closes the menu and opens the replace
+   * overlay, which searches the collection and writes the picked recipe over
+   * the unrecognized entry. It is the flow this sheet's "Eintrag ersetzen" menu
+   * leads into; the other two entries (manual, AI) are still placeholders.
+   */
+  const openReplace = (): void => {
+    setOpenMenu(null);
+    setReplaceOpen(true);
   };
 
   /** "Manuell bearbeiten": closes the menu and hands over to the editor. */
@@ -392,8 +478,20 @@ function RecipeOverview({
     details?.total_time !== undefined && details.total_time !== ''
       ? displayTimeText(details.total_time)
       : null;
-  /** The meal-plan size as display text (recipe target only), or null. */
-  const plannedText = planned !== null ? formatPlannedAmount(planned) : null;
+  /**
+   * The size this dish is cooked at, as display text (recipe target only), or
+   * null. It is the plan's stated size when the entry states one; a planned
+   * entry *without* a size means the dish at its written size — that is what the
+   * entry's link opens — so the written size (core's `writtenPlannedAmount`) is
+   * named instead of showing nothing. A recipe that is not on the plan never
+   * shows a "Geplant" value: nothing is planned.
+   */
+  const plannedShown: PlannedAmount | null =
+    planned ??
+    (onMealPlan && details !== null && target.kind === 'recipe'
+      ? writtenPlannedAmount(details)
+      : null);
+  const plannedText = plannedShown !== null ? formatPlannedAmount(plannedShown) : null;
   /**
    * The "Eingeplant" badge is shown only when a planned recipe was opened from
    * "Sammlung": on the "Essensplan" tab the tab already carries that statement.
@@ -533,27 +631,15 @@ function RecipeOverview({
 
                 {openMenu === 'replace' && (
                   <div className="overview-menu" role="menu" aria-label="Eintrag ersetzen">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => chooseMenuEntry('Bestehendes Rezept auswählen')}
-                    >
+                    <button type="button" role="menuitem" onClick={openReplace}>
                       <MenuBookIcon />
                       <span>Bestehendes Rezept auswählen</span>
                     </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => chooseMenuEntry('Rezept manuell anlegen')}
-                    >
+                    <button type="button" role="menuitem" onClick={createManually}>
                       <PencilIcon />
                       <span>Rezept manuell anlegen</span>
                     </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => chooseMenuEntry('Rezept mit KI anlegen')}
-                    >
+                    <button type="button" role="menuitem" onClick={createWithAi}>
                       <SparkleIcon />
                       <span>Rezept mit KI anlegen</span>
                     </button>
@@ -685,6 +771,24 @@ function RecipeOverview({
           previous={planned}
           onClose={() => setPlanOpen(false)}
           onConfirm={onMealPlan ? onChangeAmount : onAddToMealPlan}
+        />
+      )}
+
+      {/* The replace overlay of the unrecognized variant: a further layer above
+          this sheet, opened by "Eintrag ersetzen" → "Bestehendes Rezept
+          auswählen". It searches the collection for a recipe and hands the
+          picked recipe and size to App, which builds the Keep line and performs
+          the 1:1 replacement of the entry. On success App closes the whole flow
+          back to the list (like the other writes), so only "Abbrechen" leads
+          back to the overview; a failure rejects and the overlay stays open with
+          the reason next to its button. */}
+      {replaceOpen && target.kind === 'unknown' && (
+        <ReplaceRecipeSheet
+          entryLabel={target.displayText}
+          recipes={recipes}
+          token={token}
+          onClose={() => setReplaceOpen(false)}
+          onConfirm={onReplaceEntry}
         />
       )}
     </>

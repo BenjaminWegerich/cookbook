@@ -294,6 +294,72 @@ export function renderAQS(ingredient: string, bq: number, bu: string): string {
   return renderSelectedAQ(ingredient, selected, bu, shownBq);
 }
 
+/**
+ * The additional unit an ingredient is **bought** in, or null when it has none
+ * (docs/additional_quantity_specifications.md §3.1) — the unit the shopping
+ * list names its amount in.
+ *
+ * The flag lives on the *unit*, not on the mapping, so the entry's mappings are
+ * searched in their priority order (1 = most preferred) and the first one whose
+ * unit is a shopping unit wins; a unit that is only a recipe measure (TL, EL)
+ * is skipped. `bu` is the family unit the quantity is expressed in: a mapping's
+ * factor is expressed in the ingredient's fixed base unit, so a quantity of
+ * another family (g for an ml ingredient) has no applicable shopping unit and
+ * the caller falls back to the base form (§4).
+ *
+ * @param entry the ingredient's master-data entry, or undefined when the name
+ *   is not registered (no shopping unit then — the base form)
+ * @param bu the family unit of the quantity that is being shopped for
+ */
+export function shoppingUnitFor(
+  entry: AuSelectableEntry | undefined,
+  bu: string,
+): { au: AdditionalUnit; factor: number } | null {
+  if (entry === undefined || entry.bu !== bu) {
+    return null;
+  }
+  for (const mapping of entry.entries) {
+    const au = AU_BY_NAME.get(mapping.au);
+    // Unreachable with generator-validated data (see selectAQForEntry).
+    if (au !== undefined && au.shoppingUnit) {
+      return { au, factor: mapping.factor };
+    }
+  }
+  return null;
+}
+
+/**
+ * Renders a **whole-number** count of one additional unit for the shopping list
+ * ("3 Blöcke Tofu (600 g)"): the unit's arrangement with an integer count in
+ * place of the ladder-rounded AQ of §6. The count is never rounded here — the
+ * shopping list rounds it *up* to whole packages, which is the caller's rule
+ * (`shoppingRow` in ../shoppingList).
+ *
+ * `amount` is the required base quantity the count is being bought for. Like an
+ * exact unit in a recipe line (§6.3), an exact shopping unit shows what the
+ * count actually brings home (count × factor, even when that is more than the
+ * recipe needs); an approximate one keeps the required amount, which stays the
+ * authoritative reading there ("3 Packungen Joghurt (1150 g)").
+ *
+ * @param ingredient the ingredient name for the arrangement's <IN>
+ * @param count the whole number of units to buy
+ * @param au the selected shopping unit
+ * @param factor the mapping's conversion factor (base unit per one unit)
+ * @param bu the family unit the amount is expressed in
+ * @param amount the required base quantity (see above)
+ */
+export function renderUnitCount(
+  ingredient: string,
+  count: number,
+  au: AdditionalUnit,
+  factor: number,
+  bu: string,
+  amount: number,
+): string {
+  const shownBq = au.exact ? count * factor : amount;
+  return renderSelectedAQ(ingredient, { aq: String(count), au, factor }, bu, shownBq);
+}
+
 /** The resolved create-form reorder point: its preview line and the value to store. */
 export interface ReorderPointResolution {
   /** The display line for the chosen stock level ("1 Becher Creme Fraiche (160 g)"). */
