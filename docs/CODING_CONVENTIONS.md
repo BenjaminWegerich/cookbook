@@ -50,14 +50,16 @@
   style. Single source: `apps/web/src/components/icons.tsx` (import from there, never inline
   an `<svg>`). Font characters (`+`, `−`, `×`) are never used in place of a symbol: wherever a
   symbol acts as an icon, it comes from that file.
-- **The app icon (favicon) is the one weight exception.** `apps/web/public/favicon.svg` draws
-  the Material Symbols Rounded "skillet" — the same glyph as `SkilletIcon` in
-  `apps/web/src/components/icons.tsx` (the "Jetzt kochen" button) — on the paper tile
-  (`#faf5ec`) in the clay accent (`#b85c38`). It is the one deliberate deviation from the
-  weight rule above: at favicon sizes the weight-400 steam curls collapse into a single blob,
-  so the icon uses Google's own weight-500 drawing of the same symbol
-  (`skillet_wght500_24px.svg`, same repository, same settings). The path data stays verbatim
-  and the deviation is recorded in the file's header comment. In-app UI icons keep weight 400.
+- **The app icon (favicon) is a brand mark, not a UI symbol.** `apps/web/public/favicon.svg`
+  draws the Material Symbols Rounded "menu_book_2" ("Menu Book 2", the notebook with cutlery on
+  its cover) on the paper tile (`#faf5ec`) in the clay accent (`#b85c38`). It is the one symbol
+  that lives outside `apps/web/src/components/icons.tsx`, because it carries the brand rather
+  than a control's meaning; that module stays the single source for UI symbols. The app icon
+  follows the rules above unchanged — same library, same Rounded style, same weight 400 (grade
+  0, optical size 24, unfilled) — so the weight rule has no exception any more: the previous
+  app icon (the skillet, weight 500) was the one that needed it. The source file, the verbatim
+  path data and the placement (the glyph's longer ink side scaled to 728 of the 960-unit tile,
+  centred) are documented in the favicon's own header comment.
 - **Surfaces are flat, filled and opaque.** Every surface — page, card, sticky bar,
   sheet — is one fully opaque colour from the token palette, painted over its whole
   footprint, edge to edge. Nothing shows through a surface: no translucent or gradient

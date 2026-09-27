@@ -11,8 +11,9 @@
  * style, 24 dp grid, weight 400, grade 0, optical size 24** — the same
  * library, style and weight for every icon. This is the successor of the older
  * "Material Icons" set: never mix in a glyph from that library or from any
- * other icon set, and never change the weight. The one documented weight
- * exception is the app icon (favicon, weight 500) — see
+ * other icon set, and never change the weight. The app icon (favicon) is the
+ * one symbol that does not live here — it is a brand mark, drawn as a file in
+ * apps/web/public/favicon.svg — but it follows these same rules; see
  * docs/CODING_CONVENTIONS.md. The paths use the family's native 960 x 960
  * coordinate system (viewBox `0 0 960 960`; the drawables' y values run
  * 0..960 top-down, so a negative y origin would place every glyph outside the

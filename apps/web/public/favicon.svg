@@ -1,23 +1,26 @@
 <!--
   Cookbook app icon (browser tab, bookmark, home screen).
 
-  Symbol: Material Symbols, Rounded style, "skillet" — the same symbol as
-  SkilletIcon in apps/web/src/components/icons.tsx (the "Jetzt kochen" button).
-  Source: google/material-design-icons,
-  symbols/web/skillet/materialsymbolsrounded/skillet_wght500_24px.svg
-  Settings: weight 500, grade 0, optical size 24, unfilled (fill 0).
-  The path data below is that file's `d` attribute, verbatim.
+  Symbol: Material Symbols, Rounded style, "menu_book_2" ("Menu Book 2") — the
+  notebook with cutlery on its cover. It is the app's brand mark and, unlike the
+  skillet it replaces, matches no in-app UI symbol: every glyph in
+  apps/web/src/components/icons.tsx stays a separate, weight-400 symbol.
 
-  The one documented deviation from the app's icon rule
-  (docs/CODING_CONVENTIONS.md, "One symbol library for every icon": every icon
-  is Material Symbols, Rounded, weight 400): at favicon sizes the weight-400
-  steam curls collapse into a single blob, so this file uses Google's own
-  weight-500 drawing of the same symbol instead.
+  Source: google/material-design-icons,
+  symbols/web/menu_book_2/materialsymbolsrounded/menu_book_2_24px.svg
+  Settings: weight 400 (the unprefixed file is the set's weight-400 drawing),
+  grade 0, optical size 24, unfilled (fill 0). The path data below is that
+  file's `d` attribute, verbatim. This file is the one symbol that does not live
+  in apps/web/src/components/icons.tsx, but it follows the same rule as every
+  in-app icon (docs/CODING_CONVENTIONS.md, "One symbol library for every icon"):
+  Material Symbols, Rounded, weight 400 — so the app icon is no longer the
+  weight exception the previous skillet icon had to be.
 
   Coordinates: the Material file uses viewBox "0 -960 960 960", i.e. y runs
   upwards from 0 to -960. The inner transform shifts the glyph by +960 on y
   into the 0..960 box used here; the outer transform centres its ink box
-  (71..928 x 111..809) in the tile with a 116-unit margin.
+  (120..799 x 80..879) in the tile, its longer side scaled to 728 units, so the
+  tile keeps a 116-unit margin above and below the glyph.
 
   Colours are the app's design tokens (apps/web/src/styles/tokens.css): the
   page background #faf5ec for the paper tile and the clay accent #b85c38 for
@@ -27,9 +30,9 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 960 960">
   <rect width="960" height="960" rx="208" fill="#faf5ec" />
-  <g transform="translate(55.69 89.24) scale(0.8495)">
+  <g transform="translate(61.4 43.2) scale(0.91)">
     <g transform="translate(0 960)">
-      <path d="M136.33-685.74q-24.09-30.52-35.23-58.16-11.14-27.64-12.38-59.69-.48-18.91 13.45-31.73 13.94-12.81 33.09-12.81 16.91 0 27.85 13.31 10.93 13.32 11.65 30.99.72 20.48 8.44 38.8 7.71 18.31 24.71 40.23 27.13 34.32 38.92 62.1 11.78 27.79 11.5 59.59-.29 18.91-14.48 31.73-14.2 12.81-33.35 12.81-16.15 0-26.33-13.31-10.17-13.32-11.13-30.23-.71-22.52-10.21-42.12-9.5-19.6-26.5-41.51Zm165.54 0q-24.09-30.52-35.61-58.16-11.52-27.64-12.76-59.69-.48-18.91 13.46-31.73 13.93-12.81 33.08-12.81 16.92 0 27.85 13.31 10.94 13.32 11.65 30.99.72 20.48 8.44 38.8 7.72 18.31 24.72 40.23 27.13 34.32 38.91 62.1 11.78 27.79 11.5 59.59-.28 18.91-14.48 31.73-14.2 12.81-33.35 12.81-16.15 0-26.32-13.31-10.18-13.32-11.13-30.23.04-22.52-9.46-42.12-9.5-19.6-26.5-41.51Zm167.17 0q-24.08-30.52-35.49-58.16-11.4-27.64-12.64-59.69-.48-18.91 13.34-31.73 13.82-12.81 32.97-12.81 16.91 0 27.85 13.31 10.93 13.32 11.65 30.99.72 20.48 8.43 38.8 7.72 18.31 24.72 40.23 27.13 34.32 38.91 62.1 11.79 27.79 11.5 59.59-.28 18.91-14.48 31.73-14.19 12.81-33.34 12.81-16.16 0-26.21-13.31-10.05-13.32-11.01-30.23.04-22.52-9.58-42.12-9.62-19.6-26.62-41.51ZM200-151.87q-53.35 0-90.74-37.39Q71.87-226.65 71.87-280v-153.07q0-19.15 13.17-32.32 13.18-13.18 32.33-13.18h522.2q6.67-37.1 30.94-65 24.27-27.89 59.62-40.08l136.96-45.89q18.15-5.72 35.18 2.47 17.03 8.2 22.75 26.35 5.72 18.15-2.74 35.07-8.45 16.91-26.61 22.63l-135.04 45.17q-14.63 4.96-23.56 17.61-8.94 12.65-8.94 28.52V-280q0 53.35-37.39 90.74-37.39 37.39-90.74 37.39H200Zm0-91h400q15.57 0 26.35-10.78 10.78-10.78 10.78-26.35v-107.56H162.87V-280q0 15.57 10.78 26.35 10.78 10.78 26.35 10.78Zm200-72.35Z" fill="#b85c38" />
+      <path d="M240-80q-33 0-56.5-23.5T160-160v-80q-17 0-28.5-11.5T120-280q0-17 11.5-28.5T160-320v-120q-17 0-28.5-11.5T120-480q0-17 11.5-28.5T160-520v-120q-17 0-28.5-11.5T120-680q0-17 11.5-28.5T160-720v-80q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v640q0 33-23.5 56.5T720-80H240Zm0-80h480v-640H240v80q17 0 28.5 11.5T280-680q0 17-11.5 28.5T240-640v120q17 0 28.5 11.5T280-480q0 17-11.5 28.5T240-440v120q17 0 28.5 11.5T280-280q0 17-11.5 28.5T240-240v80Zm140-280v130q0 13 8.5 21.5T410-280q13 0 21.5-8.5T440-310v-130q26-7 43-28.5t17-48.5v-143q0-8-6-14t-14-6q-8 0-14 6t-6 14v131h-30v-131q0-8-6-14t-14-6q-8 0-14 6t-6 14v131h-30v-131q0-8-6-14t-14-6q-8 0-14 6t-6 14v143q0 27 17 48.5t43 28.5Zm220 0v130q0 13 8.5 21.5T630-280q13 0 21.5-8.5T660-310v-347q0-11-7.5-17t-19.5-6q-13 0-28.5 7T575-652q-17 17-26 38.5t-9 46.5v87q0 17 11.5 28.5T580-440h20ZM240-160v-640 640Z" fill="#b85c38" />
     </g>
   </g>
 </svg>
