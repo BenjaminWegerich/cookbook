@@ -27,7 +27,7 @@ export function newRecipeDraft(): EditorDraft {
 /**
  * A fresh, valid new-recipe draft with a prefilled title. App uses it to open the
  * editor from an unrecognized meal-plan entry ("Eintrag ersetzen" → "Rezept
- * manuell anlegen"): the entry's complete Keep text becomes the starting title,
+ * manuell schreiben"): the entry's complete Keep text becomes the starting title,
  * and the derived master list stays empty because there are no ingredient rows
  * yet.
  */

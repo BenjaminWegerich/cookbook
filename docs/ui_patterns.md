@@ -314,7 +314,7 @@ top left. Never mind → „Abbrechen" next to the commit.*
 | Surface | Kind | Exit |
 | --- | --- | --- |
 | Recipe editor, incl. every sub-recipe level | place (scroll key `editor:<level>`) | „Zurück" |
-| „Rezept mit KI anlegen / bearbeiten" | place (scroll key `ai`) | „Zurück" |
+| „Rezept mit KI schreiben / bearbeiten" | place (scroll key `ai`) | „Zurück" |
 | „Gerichte vom Essensplan auswählen" | place (flow step) | „Zurück" |
 | „Vorräte auswählen" | place (flow step) | „Zurück" |
 | Recipe overview, create menu | browsing layer over the list | none — the scrim / close button leaves it, there is no pending decision |

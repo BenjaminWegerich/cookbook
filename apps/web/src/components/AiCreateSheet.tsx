@@ -190,7 +190,7 @@ interface AiCreateSheetProps {
   /**
    * Prefill of the create task's request field. App passes the complete Keep
    * text of an unrecognized meal-plan entry here ("Eintrag ersetzen" → "Rezept
-   * mit KI anlegen"), so the conversation starts from that dish. Ignored in
+   * mit KI schreiben"), so the conversation starts from that dish. Ignored in
    * `'edit'` mode, where the field is the change request.
    */
   initialPrompt?: string;
@@ -676,7 +676,7 @@ export default function AiCreateSheet({
         >
           {guard.armed ? 'Änderungen verwerfen?' : 'Zurück'}
         </button>
-        <h1>{isEdit ? 'Rezept mit KI bearbeiten' : 'Rezept mit KI anlegen'}</h1>
+        <h1>{isEdit ? 'Rezept mit KI bearbeiten' : 'Rezept mit KI schreiben'}</h1>
       </header>
 
       {showKeyField ? (
