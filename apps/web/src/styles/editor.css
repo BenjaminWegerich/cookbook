@@ -533,24 +533,41 @@
   font-size: var(--text-sm);
 }
 
+/* One paper surface for the whole list, with hairline dividers between the rows
+   (the same shape as the shopping-list selection page's list and the pantry
+   table, decided with the user): the master list and a step's own list must read
+   as *one* list, not as a stack of individual cards. The surface carries the
+   colour the rows used to carry: `--color-bg` inside the master-list card
+   (surface), overridden to `--color-surface` inside a step card (background, see
+   .step-card below), so the list keeps its contrast against the card it sits in
+   either way. `overflow: hidden` is what lets the first and last rows meet the
+   rounded corners instead of poking past them. */
 .ingredient-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: var(--space-2);
+  overflow: hidden;
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
 }
 
-/* Master list row: one compact line (name/display left, actions right). */
+/* Every row but the first carries the divider. The rule keys on the list items
+   rather than on the row class, because a step list also holds the validation
+   message of a row: that message is a row of the list too, so the dividers stay
+   even around it. */
+.ingredient-list > li + li {
+  border-block-start: 1px solid var(--color-line);
+}
+
+/* Master list row: one compact line (name/display left, actions right). No card
+   chrome of its own — the row is a segment of the list surface above. */
 .ingredient-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-bg);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
 }
 
 /* Reference toggle — master list only (decided with the user): outline star
@@ -881,17 +898,20 @@
 /* ---- Step rows (per-step ingredient list) -------------------------------- */
 
 /* A row of a step's own ingredient list. Same geometry as the master list row
-   (.ingredient-row) so both lists read the same way, but the step rows sit in a
-   card and keep the light surface that separates them from it. */
+   (.ingredient-row) so both lists read the same way. Like the master row it
+   carries no card chrome: the list around it is the one surface, and that
+   surface is the light one here — a step card sits on the page background, so
+   the list takes the opposite colour and stands out from the card. */
+.step-card .ingredient-list {
+  background: var(--color-surface);
+}
+
 .step-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
 }
 
 /* Ingredient tags ("NEU" / "REZEPT" / "REFERENZ"), one style for all: a small
@@ -987,8 +1007,10 @@
 /* Validation message directly under an ingredient row whose name is not in
    the master data (appears after a failed save; the row itself is already
    tagged "NEU" — the tag carries the warning, the row keeps its normal
-   outline). */
+   outline). It is a segment of the list surface itself, so it carries the rows'
+   horizontal padding and lines up with the text it belongs to. */
 .row-issue {
+  padding: var(--space-2) var(--space-4);
   color: var(--color-danger);
   font-size: var(--text-sm);
 }
