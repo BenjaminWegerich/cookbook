@@ -80,9 +80,9 @@ function RecipeThumb({ recipe, token }: RecipeThumbProps) {
   if (photoUrl !== null) {
     return (
       <span className="recipe-thumb" aria-hidden="true">
-        {/* `draggable={false}`: a native image drag would take the pointer away
-            from the home screen's horizontal swipe (useSwipePager), so a mouse
-            drag over a photo has to stay a scroll/pager gesture. */}
+        {/* `draggable={false}`: a native image drag would start the browser's
+            own drag ghost instead of scrolling the card grid, so a mouse drag
+            over a photo has to stay a scroll gesture. */}
         <img src={photoUrl} alt="" draggable={false} />
       </span>
     );

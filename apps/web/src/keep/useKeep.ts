@@ -95,8 +95,9 @@ export interface UseKeepResult {
    * no longer shows them. `entries` are the exact texts of the lines the caller recognized as
    * the recipe (it has the recipe's type and family unit, this hook does not).
    *
-   * Adopts the state the gateway reports back, so the card's "Eingeplant" badge disappears
-   * without a second read, and maps a failure exactly like `planMeal`.
+   * Adopts the state the gateway reports back, so the resolved plan (and with it the
+   * "Essensplan" section) follows without a second read, and maps a failure exactly
+   * like `planMeal`.
    */
   checkMealPlan: (entries: readonly string[]) => Promise<void>;
   /**
@@ -125,7 +126,7 @@ export interface UseKeepResult {
 /**
  * Shown when the gateway refused a sign-in that Google *did* issue - a wrong Google account in
  * the browser session, or a client id that no longer matches the bundle. A silent retry cannot
- * fix either, so the tab offers the account chooser again and says why.
+ * fix either, so the "Essensplan" section offers the account chooser again and says why.
  */
 const REFUSED_HINT =
   'Der Keep-Zugang wurde abgelehnt. Bitte melde dich mit deinem Cookbook-Google-Konto an.';
@@ -230,7 +231,7 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
         setState(null);
         if (isRefusedSignIn(err)) {
           // Google signed the user in and the gateway refused that sign-in. The *chooser* is
-          // the way out (pick the allowed account), so the tab stays on the connect offer -
+          // the way out (pick the allowed account), so the section stays on the connect offer -
           // with the reason showing above the button instead of a silent dead end.
           setStatus('needs-signin');
           setError(REFUSED_HINT);
@@ -239,7 +240,7 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
           setError(keepErrorMessage(err));
         } else {
           // The silent sign-in found no Google session or grant yet: the ordinary first-run
-          // state. The tab's own text explains it, so no error line is needed.
+          // state. The section's own text explains it, so no error line is needed.
           setStatus('needs-signin');
           setError(null);
         }
@@ -331,7 +332,9 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
       // No loaded state means Keep was never read, so the caller could not compute which
       // entries the write replaces. Refuse instead of adding a possible duplicate.
       if (state === null) {
-        throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
+        throw new Error(
+          'Google Keep ist nicht verbunden — verbinde dich im Abschnitt „Essensplan“.',
+        );
       }
       await runMealPlanWrite([entry], replace);
     },
@@ -357,7 +360,9 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
     async (entry: string, restore: readonly string[]): Promise<void> => {
       // Same guard as `planMeal`: without the loaded list there is nothing to restore onto.
       if (state === null) {
-        throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
+        throw new Error(
+          'Google Keep ist nicht verbunden — verbinde dich im Abschnitt „Essensplan“.',
+        );
       }
       await runMealPlanWrite(restore, [entry]);
     },
@@ -392,7 +397,9 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
       // No loaded state means Keep was never read, so the caller could not compute which
       // entries belong to the recipe. Refuse instead of ticking nothing.
       if (state === null) {
-        throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
+        throw new Error(
+          'Google Keep ist nicht verbunden — verbinde dich im Abschnitt „Essensplan“.',
+        );
       }
       await runMealPlanCheck(entries, []);
     },
@@ -403,7 +410,9 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
     async (entries: readonly string[]): Promise<void> => {
       // Same guard as `checkMealPlan`: without the loaded list there is nothing to tick back on.
       if (state === null) {
-        throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
+        throw new Error(
+          'Google Keep ist nicht verbunden — verbinde dich im Abschnitt „Essensplan“.',
+        );
       }
       await runMealPlanCheck([], entries);
     },
@@ -420,14 +429,14 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
       try {
         const updated = await withIdentityToken((token) => writeShoppingList(token, add, remove));
         // The endpoint answers the changed list; the meal plan is untouched, so the
-        // "Eingeplant" badges and the resolved cards stay exactly as they are.
+        // resolved cards of the "Essensplan" section stay exactly as they are.
         setState((current) => (current === null ? current : { ...current, shopping: updated }));
         setStatus('ready');
         setError(null);
       } catch (err) {
         // A 501 (`not_implemented`) is not a connection problem: the gateway
         // answers, the read works, only this one action does not exist there yet.
-        // The sheet reports it next to its button; the "Essensplan" tab must not
+        // The sheet reports it next to its button; the "Essensplan" section must not
         // fall into its error state for it.
         if (!(err instanceof KeepClientError && err.code === 'not_implemented')) {
           reportWriteFailure(err);
@@ -443,7 +452,9 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
       // No loaded state means Keep was never read — the write would add lines to a list the app
       // does not know, so refuse instead (same guard as the meal-plan writes).
       if (state === null) {
-        throw new Error('Google Keep ist nicht verbunden — verbinde dich im Tab „Essensplan“.');
+        throw new Error(
+          'Google Keep ist nicht verbunden — verbinde dich im Abschnitt „Essensplan“.',
+        );
       }
       await runShoppingWrite(add, remove);
     },

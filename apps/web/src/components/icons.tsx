@@ -100,10 +100,10 @@ export function CalendarEditIcon({ className }: IconProps) {
 }
 
 /**
- * Calendar with a checkmark — the "Eingeplant" badge of a recipe card (the
- * dish is on the meal plan). The positive counterpart of CalendarAddIcon: the
- * same calendar body, with the checkmark of "it is planned" instead of the plus
- * of "plan it".
+ * Calendar with a checkmark — the positive "it is planned" counterpart of
+ * CalendarAddIcon: the same calendar body, with the checkmark instead of the
+ * plus. Without a call site since the recipe overview dropped its "Eingeplant"
+ * badge (the "Geplant" value and "Umplanen" state the plan on their own).
  */
 export function EventAvailableIcon({ className }: IconProps) {
   return (
@@ -118,9 +118,8 @@ export function EventAvailableIcon({ className }: IconProps) {
 
 /**
  * Calendar with a cross — the "Vom Plan entfernen" action of an unrecognized
- * meal-plan entry. The negative counterpart of EventAvailableIcon: the same
- * calendar body, with the cross of "take it off the plan" instead of the
- * checkmark of "it is planned". The call site paints it in the danger colour,
+ * meal-plan entry: the calendar body with the cross of "take it off the plan".
+ * The call site paints it in the danger colour,
  * which is the destructive half of its meaning.
  */
 export function EventBusyIcon({ className }: IconProps) {

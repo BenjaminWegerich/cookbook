@@ -10,10 +10,10 @@
 > quantities, see [storage_format.md](storage_format.md) §4/§5). AI-assisted create/edit,
 > Gemini and sharing integrations follow in the upcoming roadmap tasks. The Google Keep
 > integration has started: its gateway (`apps/keep-gateway/`) reads both Keep lists over a
-> thin HTTP boundary, and the web app shows the meal plan as a second view of the recipe list
-> („Essensplan“ / „Sammlung“ tabs, entry recognition, „Eingeplant“ badge) and writes a planned
-> dish back, linking it at the recipe's HTML export behind the caller's Google sign-in,
-> degrading to "Keep off" when the gateway is unreachable. That export link is served by a
+> thin HTTP boundary, and the web app shows the meal plan as the first of the recipe list's two
+> captioned sections („Essensplan“ over „Restliche Sammlung“, entry recognition, the
+> „Unbekannt“ badge) and writes a planned dish back, linking it at the recipe's HTML export
+> behind the caller's Google sign-in, degrading to "Keep off" when the gateway is unreachable. That export link is served by a
 > small Apps Script web app (`apps/export-host/`), because a Drive viewer renders the stored
 > file without running its script; without a host the app falls back to Drive links.
 
@@ -174,10 +174,16 @@
 
 Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
 
-- **Two tabs below the search bar.** „Essensplan“ lists the non-checked Keep entries in Keep's
-  order, „Sammlung“ every recipe of the collection; both render the same card grid, and the
-  search field refines whichever tab is active. The view opens on „Essensplan“ once Keep is
-  ready and on „Sammlung“ otherwise.
+- **Two captioned sections, no tabs.** The list is one page: the search field on top, then
+  „Essensplan“ (the non-checked Keep entries in Keep's order) and below it „Restliche Sammlung“
+  (the recipes the plan does not use — a planned dish is read and changed in the section above,
+  never twice on one screen). Both render the same card grid and the one search field filters
+  both at once. Each caption carries its counter („Essensplan (5 Einträge, davon 2 unbekannt)“,
+  „Restliche Sammlung (8 Rezepte)“) in the editor's field-caption typography; the counter
+  disappears while a search runs, the caption stays and the body carries the placeholder
+  sentence, so a section that is empty only because of the search still says which section it
+  is. „Einkaufsliste schreiben“ sits in the „Essensplan“ caption row as a quiet text button: it
+  acts on the plan, and a filled button would compete with the floating action button.
 - **Recognition.** An entry is a recipe when its text — without a trailing export link and
   without an optional ` (6 Portionen)`, ` (500 g)` or ` (1,5 l)` suffix — is the exact,
   case-sensitive title of a recipe file, and a stated size fits the recipe: an integer ladder
@@ -185,8 +191,8 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   recipe, and one the recipe's export really bakes. The logic is framework-free and unit-tested
   in `packages/core/src/mealPlan.ts`. Only entries that state a size need a recipe file read, and
   the Drive content cache makes repeated entries free.
-- **Cards.** Recognized entries use the known card format; in „Sammlung“ a planned recipe
-  carries the inline „Eingeplant“ badge. Unrecognized entries render with the shared letter
+- **Cards.** Recognized entries use the known card format. Unrecognized entries render with the
+  shared letter
   avatar, the entry's text without the export link (title and stated size) and a danger
   „Unbekannt“ badge, and are tappable: the recipe overview is their destination,
   where the entry can be replaced by an existing recipe or by a new one (manual or AI) or
@@ -194,16 +200,18 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   whole card is.
 - **Recipe overview.** A card opens the overview sheet in one of three forms. A recipe that is
   not on the meal plan is unchanged. A planned recipe shows the entry's stated size first in
-  its caption/value row („Geplant 6 Portionen“ / „Geplant 1,5 l“), turns „Einplanen“ into
-  „Umplanen“ and carries the „Eingeplant“ badge only when it was opened from „Sammlung“ — on
-  the „Essensplan“ tab the tab itself already says it. An unrecognized entry opens the
+  its caption/value row („Geplant 6 Portionen“ / „Geplant 1,5 l“) and turns „Einplanen“ into
+  „Umplanen“; the hero carries no „Eingeplant“ badge, since the „Geplant“ value and „Umplanen“
+  already state the plan, and a planned recipe only ever appears in the „Essensplan“ section
+  („Restliche Sammlung“ leaves it out). An
+  unrecognized entry opens the
   replace/drop destination described above. „Einplanen“ writes the dish to the meal plan;
   „Umplanen“ opens the same overlay in a replan mode that pre-selects the plan's stated size
   and replaces the entry with „Menge ändern“. Every carry-out action ends the flow back at the
   list: a planned recipe's „Vom Plan entfernen“ (in its „Mehr“ menu) and an unrecognized
   entry's own „Vom Plan entfernen“ button both check the entry off. The sheet renders the
-  *live* plan App derives from the current resolution, so its „Geplant“ value, its „Eingeplant“
-  badge and its travel action follow the plan while it is open. „Jetzt kochen“ opens the
+  *live* plan App derives from the current resolution, so its „Geplant“ value and its travel
+  action follow the plan while it is open. „Jetzt kochen“ opens the
   recipe's HTML export in a new tab, at the size the plan states when the dish is planned and
   otherwise at the recipe's written default size; a missing export file is reported instead of
   opening a dead link. An unrecognized entry's „Eintrag ersetzen“ menu is built in all three
@@ -211,7 +219,7 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   „Bestehendes Rezept auswählen“ opens a second overlay of the sheet, which searches the
   collection, takes the size in the familiar control and overwrites the one unrecognized entry
   with the chosen recipe in the known format (a 1:1 replacement, undone by the notice's
-  „Rückgängig“); „Rezept manuell anlegen“ and „Rezept mit KI anlegen“ open the known create
+  „Rückgängig“); „Rezept manuell schreiben“ and „Rezept mit KI schreiben“ open the known create
   sites with the entry's complete Keep text prefilled (as the new recipe's title or the AI's
   first request) and return to the same overview when they close, so a just-created recipe
   whose title matches the entry shows up there in the recognized style.
@@ -256,9 +264,9 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   read before the write; a named line that Keep no longer carries fails the undo instead of
   claiming it is back to before.
 - **Sign-in.** Started automatically once the Google login is done, reopenable from the
-  „Essensplan“ tab; the token is held in memory only, like the AI API key (N6), and nothing has
-  to be looked up by hand any more. An expired token is renewed silently; only when Google
-  needs a gesture does the tab offer „Keep verbinden“. The gateway URL is the build-time
+  „Essensplan“ section; the token is held in memory only, like the AI API key (N6), and nothing
+  has to be looked up by hand any more. An expired token is renewed silently; only when Google
+  needs a gesture does the section offer „Keep verbinden“. The gateway URL is the build-time
   variable `VITE_KEEP_GATEWAY_URL`; without it the feature is off. The app asks Google for
   **two** credentials (the Drive token and this identity token) through the same GIS token
   flow, and that flow has exactly **one** popup window per page. Measured on 2026-09-25: a

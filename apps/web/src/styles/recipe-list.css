@@ -7,6 +7,10 @@
 
 /* ---- Screen header ------------------------------------------------------ */
 
+/* The screens that open with a back button and a title below it (the AI screen,
+   the bundled shopping-list selection, the pantry step) build on this base row;
+   the recipe list itself has no header any more — it opens with the search field
+   and its two section captions (see .recipe-section further down). */
 .app-header {
   display: flex;
   align-items: flex-start;
@@ -22,23 +26,6 @@
    AI screen resets the whole margin the same way. */
 .app-header h1 {
   margin-block: 0;
-}
-
-/* Status line in the header's top right corner: as a flex child it sits beside
-   the heading, so it carries no leading margin of its own. It holds one or two
-   lines (a count plus its "davon …" share), which are right-aligned so the
-   stack hugs the corner: the shorter line ends flush with the longer one instead
-   of leaving a ragged right edge. */
-.app-subtitle {
-  margin: 0;
-  text-align: right;
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
-}
-
-/* One counter line: the two lines stack, no line break markup needed. */
-.app-subtitle-line {
-  display: block;
 }
 
 /* Header stack (screens that open with a back button rather than a title bar:
@@ -193,137 +180,74 @@
   color: var(--color-ink-muted);
 }
 
-/* ---- View tabs (Essensplan / Sammlung) ---------------------------------- */
+/* ---- Captioned sections (Essensplan / Restliche Sammlung) --------------- */
 
-/* Two value-picking tabs directly under the search field, inside the sticky
-   bar: both views render the same card grid and only filter its content. The
-   two segments are equally wide: each button holds its visible label and an
-   invisible copy of the longest label in the same grid cell (see
-   RecipeList.tsx), so a button is exactly as wide as the longest label. The
-   active fill is the olive secondary accent, the same colour an active segment
-   uses in the editor.
-   The row is left-aligned (it used to center the control) and carries the
-   bundled shopping-list entry beside the control, so the two read as one
-   toolbar: the tab control keeps its content width, and the button follows one
-   gap step later instead of being pushed to the far edge of a wide screen. On a
-   phone the two do not share a line — both labels are full words — so the row
-   wraps and the button continues on the next line, still left-aligned. */
-.recipe-tabs-row {
+/* The home screen is two stacked sections of the same card grid, each opened by
+   its caption row. The vertical distance between them is one section step
+   (--space-7), the same distance the search bar keeps to the first caption. */
+.recipe-section + .recipe-section {
+  margin-block-start: var(--space-7);
+}
+
+/* The section's heading line: the caption, and hugging it the section's own
+   action ("Einkaufsliste schreiben" on "Essensplan") one gap step later — not
+   pushed to the far edge of a wide screen, where it would read as detached from
+   the caption it belongs to (the reasoning the list's old toolbar followed).
+   The row wraps on a narrow phone, so the button may continue on a second line,
+   still inside the section and never floating over it. The row owns the distance
+   to the cards below; the plain text states inside a section therefore reset
+   their own paragraph margin (see .recipe-section > .recipe-search-empty). */
+.recipe-section-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  margin-block-start: var(--space-4);
+  margin-block-end: var(--space-5);
+}
+
+/* Section caption. Same typography as the editor's field captions
+   (.field-label in editor.css): small, semibold, muted, all caps — so a section
+   heading on the list reads exactly like a field caption in the editor. */
+.recipe-section-caption {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  text-transform: uppercase;
+}
+
+/* The count in the caption: "(5 Einträge, davon 2 unbekannt)". Normal case,
+   normal weight, one en space after the caption word — the same exception the
+   editor's muted "(optional)" marker makes (.optional-mark): the caps are the
+   caption's own look, while a count and its words stay readable as written. */
+.recipe-section-counter {
+  margin-inline-start: 0.5em;
+  font-weight: 400;
+  text-transform: none;
+}
+
+/* The placeholder / loading sentence of a section. Both are plain paragraphs
+   directly under the caption row, whose own bottom margin already sets the
+   distance — the browser's default paragraph margin would add ~21 px on top of
+   it and make the gap jump between a filled and an empty section. */
+.recipe-section > .recipe-search-empty,
+.recipe-section > .loading-message {
+  margin-block: 0;
 }
 
 /* "Einkaufsliste schreiben": the entry into the bundled shopping-list view of
-   the meal plan. Sized like a tab segment — same padding, text size, weight and
-   corner — so it reads as a sibling of the control it stands next to; filled
-   with the clay accent because it is an action, not a third view. `flex: none`
-   keeps the height it shares with the control: without it the row would shrink
-   the button (and rewrap its label) before wrapping the row. */
+   the meal plan, sitting in the "Essensplan" caption row. It reuses the shared
+   .text-button shape (quiet, borderless, small) and takes only the clay accent
+   and the semibold weight: it is the section's one action, but a filled button
+   beside a 14 px caption would dominate the row and compete with the floating
+   action button, which stays the screen's one loud control. Its vertical padding
+   is one ladder step above .text-button's own, so the row keeps a comfortable
+   hit area; `flex: none` stops the label from rewrapping before the row does. */
 .shopping-list-button {
-  display: inline-flex;
   flex: none;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-accent);
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-on-accent);
-  font-size: var(--text-sm);
+  padding: var(--space-3) var(--space-2);
+  color: var(--color-accent);
   font-weight: 600;
-}
-
-.recipe-tabs {
-  display: inline-flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-}
-
-/* The label and the invisible sizer share one grid cell: the cell is as wide as
-   the wider of the two (the longest label), and the label centers in it. */
-.recipe-tab {
-  display: grid;
-  place-items: center;
-  padding: var(--space-3) var(--space-4);
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.recipe-tab > * {
-  grid-area: 1 / 1;
-}
-
-.recipe-tab-sizer {
-  visibility: hidden;
-}
-
-.recipe-tab-active {
-  background: var(--color-olive);
-  color: var(--color-on-accent);
-}
-
-/* ---- Swipeable tab panes (Essensplan / Sammlung) ------------------------ */
-
-/* The two tab bodies live side by side in one track. A horizontal drag on the
-   viewport moves the track and the release snaps onto the neighbouring tab (see
-   ../hooks/useSwipePager.ts). The viewport is full-bleed — the page gutters move
-   inside the panes — so a card sliding toward the screen edge is clipped by the
-   screen itself, and the cards' shadows stay inside the clipping box. Its height
-   is set from the active pane (inline style): the viewport clips at that height,
-   so the taller tab never reserves dead space below the shorter one. */
-.recipe-panes {
-  overflow: hidden;
-  /* The browser keeps vertical panning and pinch-zoom; the horizontal drag is
-     handed to the pager, which is what makes a swipe reliable without
-     disabling the page's own scrolling or the user's zoom. */
-  touch-action: pan-y pinch-zoom;
-  margin-inline: calc(-1 * var(--app-padding));
-}
-
-.recipe-panes-track {
-  display: flex;
-  /* Each pane keeps its own content height — the active pane is measured, and a
-     stretched sibling would report the tallest pane instead. */
-  align-items: flex-start;
-  will-change: transform;
-  /* The snap after a release, same 180 ms as the app's other entrances; while
-     the finger drives the track the transition is off. */
-  transition: transform 180ms ease-out;
-}
-
-.recipe-panes-dragging .recipe-panes-track {
-  transition: none;
-}
-
-/* A drag over card titles and badges must never start a text selection. */
-.recipe-panes-dragging {
-  user-select: none;
-}
-
-.recipe-pane {
-  flex: 0 0 100%;
-  min-width: 0;
-  padding-inline: var(--app-padding);
-  /* Room for the last card row's shadow: the viewport clips at the pane's
-     height, so the shadow has to fall inside it. */
-  padding-block-end: var(--space-5);
-}
-
-/* No snap animation for users who asked for less motion. */
-@media (prefers-reduced-motion: reduce) {
-  .recipe-panes-track {
-    transition: none;
-  }
 }
 
 /* ---- Recipe list -------------------------------------------------------- */
@@ -442,14 +366,7 @@
   color: currentColor;
 }
 
-/* "Eingeplant" (Sammlung tab): the dish is on the meal plan. Olive is the
-   app's secondary/positive accent — the same colour an active segmented option
-   uses, which is exactly what this state is. */
-.recipe-badge-planned {
-  background: var(--color-olive);
-}
-
-/* "Unbekannt" (Essensplan tab): the entry does not name a recipe of
+/* "Unbekannt" (Essensplan): the entry does not name a recipe of
    the collection, so nothing here can be scaled or cooked from. */
 .recipe-badge-unknown {
   background: var(--color-danger);

@@ -28,7 +28,7 @@
  *
  * Tapping the row body (never a word inside it) opens the familiar recipe
  * overview in the applicable style — App builds that target from the card, the
- * same way the "Essensplan" tab does. The checkbox is its own target and only
+ * same way a card of the "Essensplan" section does. The checkbox is its own target and only
  * toggles: the two adjacent targets are what a list of choices needs, unlike
  * the home screen's cards, where the whole card is one hitbox.
  *
@@ -58,7 +58,7 @@ interface ShoppingListSelectProps {
   cards: MealPlanCard[] | null;
   /**
    * Opens the familiar recipe overview for the tapped row. App builds the
-   * target from the card, exactly like the "Essensplan" tab does, so a
+   * target from the card, exactly like a card of the "Essensplan" section does, so a
    * recognized entry arrives with its stated size and "Umplanen" and an
    * unrecognized one as the destination for replacing or dropping it.
    */

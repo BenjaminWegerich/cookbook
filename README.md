@@ -42,8 +42,8 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
 
 - Automatic transfer of a recipe's ingredients to the shopping list.
 - Scaling happens first (quantity for x people).
-- Bundled writing from the "Essensplan" tab: the button "Einkaufsliste schreiben"
-  next to the tab switcher turns the meal plan into a selection view. All dishes
+- Bundled writing from the "Essensplan" section: the button "Einkaufsliste schreiben"
+  in that section's caption row turns the meal plan into a selection view. All dishes
   selected there are added to the shopping list in one write, so an ingredient
   shared by several recipes is rounded to whole packs once instead of per recipe.
   Two recipes that each need 300 g of tofu, bought in 200 g blocks, would add two

@@ -56,7 +56,8 @@ boundary and the read path are done and verified against the live account, a log
 watches for a rejected credential, and a €1 budget guardrail caps the project's spend. It owns
 its copy of the spike's authentication and failure-diagnosis code, so the deployed image stays
 self-contained. The read-only frontend, the meal-plan recipe overview and the meal-plan write
-are built (tabs, recognition, the Google sign-in, the overview's three card forms,
+are built (the two captioned sections, recognition, the Google sign-in, the overview's three
+card forms,
 „Zum Essensplan hinzufügen“, which links the entry at the recipe's cooking view through the
 deployed export host, „Umplanen“ with its size change, and „Vom Plan entfernen“, which ticks
 the entry off and can be undone). „Jetzt kochen“ opens the recipe's HTML export in a new tab,
@@ -113,10 +114,10 @@ frontend and the actual features.
    `gcloud logging read 'resource.labels.job_name="keep-gate2-probe"' --limit 200 --format='value(textPayload)' --freshness=7d`
 2. [x] **Frontend integration with graceful degradation** (N5): the app probes the gateway,
    signs in with Google automatically after the login (memory only, reopenable from the
-   „Essensplan“ tab) and keeps working unchanged when the gateway is missing or unreachable.
-   The meal-plan view is built and agreed with Ben: „Essensplan“ / „Sammlung“ tabs, recognition
-   of meal-plan entries (`packages/core/src/mealPlan.ts`) and the „Eingeplant“ /
-   „Unbekannt“ badges. The gateway URL is the build variable
+   „Essensplan“ section) and keeps working unchanged when the gateway is missing or unreachable.
+   The meal-plan view is built and agreed with Ben: the „Essensplan“ section above „Restliche
+   Sammlung“, recognition of meal-plan entries (`packages/core/src/mealPlan.ts`) and the
+   „Unbekannt“ badge. The gateway URL is the build variable
    `VITE_KEEP_GATEWAY_URL` (repository variable for the Pages build).
 3. [x] **Meal-plan recipe overview**: a recognized plan card opens the overview with the
    entry's planned size (servings/yield) shown first in its caption/value row, so the dish

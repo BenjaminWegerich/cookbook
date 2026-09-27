@@ -24,7 +24,7 @@ import AiCreateSheet, {
 } from './components/AiCreateSheet';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import { newRecipeDraftWithTitle } from './components/recipeDrafts';
-import RecipeList, { type RecipeTab } from './components/RecipeList';
+import RecipeList from './components/RecipeList';
 import PantrySelect from './components/PantrySelect';
 import RecipeOverview, {
   type RecipeOverviewHandle,
@@ -83,8 +83,8 @@ const LIST_MARKER = 'recipe-list';
 
 /**
  * The stable "no recipe is planned" set: used while Keep is off or its state is
- * not loaded yet, so the "Sammlung" tab never has to test for null and the prop
- * keeps its identity across renders.
+ * not loaded yet, so the "Restliche Sammlung" section never has to test for null
+ * and the prop keeps its identity across renders.
  */
 const NO_PLANNED_TITLES: ReadonlySet<string> = new Set();
 
@@ -233,7 +233,7 @@ function App() {
   /** The FAB create menu: two extended FABs (manually create vs. AI create). */
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   /**
-   * The recipe overview sheet (opened by tapping a card of either list tab).
+   * The recipe overview sheet (opened by tapping a card of either list section).
    * The target is one of the three card types RecipeOverview renders: a known
    * recipe with its meal-plan context, or an unrecognized meal-plan entry.
    */
@@ -301,21 +301,12 @@ function App() {
    */
   const [shoppingWrittenFor, setShoppingWrittenFor] = useState<KeepChecklist | null>(null);
   /**
-   * The tab of the recipe list the user picked, or null while they have not
-   * touched the tabs. App owns it (not the list) because the header's counter
-   * follows the view. Null keeps the default open: "Essensplan" once Keep is
-   * connected and "Sammlung" otherwise — a stored null keeps the app from
-   * jumping to an empty meal plan before the token is entered, and lets the view
-   * follow the connection the moment it becomes ready.
-   */
-  const [listTab, setListTab] = useState<RecipeTab | null>(null);
-  /**
-   * The resolved meal plan (the cards of the "Essensplan" tab plus the recipe
-   * titles that carry the "Eingeplant" badge in "Sammlung"), together with the
-   * Keep state it was computed for. Pairing the two makes a stale resolution
-   * recognizable during render — a fresh Keep state has a fresh identity — so
-   * nothing has to clear it from an effect. It lives in App, not in the list,
-   * because it needs the recipe list and the Drive token (see
+   * The resolved meal plan (the cards of the "Essensplan" section plus the
+   * recipe titles it uses, which the "Restliche Sammlung" section leaves out),
+   * together with the Keep state it was computed for. Pairing the two makes a
+   * stale resolution recognizable during render — a fresh Keep state has a
+   * fresh identity — so nothing has to clear it from an effect. It lives in App,
+   * not in the list, because it needs the recipe list and the Drive token (see
    * ./keep/mealPlanCards).
    */
   const [mealPlan, setMealPlan] = useState<{
@@ -324,8 +315,8 @@ function App() {
   } | null>(null);
   /**
    * Keep connection state — the optional add-on (N5). The app stays fully
-   * usable while it is off, unreachable or unauthenticated; the two list tabs
-   * simply show their connection state instead of meal-plan cards.
+   * usable while it is off, unreachable or unauthenticated; the "Essensplan"
+   * section then shows its connection state instead of meal-plan cards.
    *
    * `enabled` is the Drive login: the page load has exactly one gesture-less
    * OAuth popup to spend, and it goes to Drive, which gates the whole app (see
@@ -852,7 +843,7 @@ function App() {
   // recipe list (for the title match) and the Keep state. Only entries that
   // state a size need a recipe file read (see ./keep/mealPlanCards), and the
   // Drive content cache makes repeated entries of one recipe free. A failed
-  // resolution leaves the tab in its loading state instead of showing a card
+  // resolution leaves the section in its loading state instead of showing a card
   // set built from half the data.
   useEffect(() => {
     const keepState = keep.state;
@@ -897,7 +888,7 @@ function App() {
    * (the "Eintrag ersetzen" menu's two create entries), or a known title's file
    * appears, and the live meal-plan resolution then holds a recipe card for the
    * entry's exact text. The sheet must switch to the known recipe's style — its
-   * "Geplant" value, its badge and its travel action — so the stored target stays
+   * "Geplant" value and its travel action — so the stored target stays
    * the opened snapshot and only an `unknown` target is upgraded here.
    */
   const activeOverviewTarget: RecipeOverviewTarget | null = useMemo(() => {
@@ -907,7 +898,6 @@ function App() {
     return {
       kind: 'recipe',
       recipe: card.recipe,
-      source: 'mealplan',
       onMealPlan: true,
       planned: card.planned,
     };
@@ -941,11 +931,14 @@ function App() {
   const shoppingVisible = shoppingOpen && !pantryOpen && !editorOpen && !aiOpen && !overviewOpen;
 
   /**
-   * Opens the overview for a card of the "Sammlung" tab. The resolution already
-   * knows whether the recipe is planned and which size the plan states, so the
-   * sheet can show the "Eingeplant" badge (only here — on "Essensplan" the tab
-   * itself says it) and the "Geplant" value. With Keep off there is no
-   * resolution: the recipe then behaves exactly like an unplanned one.
+   * Opens the overview for a card of "Restliche Sammlung". The resolution
+   * already knows whether the recipe is planned and which size the plan states,
+   * so the sheet can show its "Geplant" value and its travel action. A recipe of
+   * that section is unplanned by construction (the section leaves the planned
+   * ones out), so the two values are normally false/null — they are read anyway,
+   * because the resolution is the truth about the plan and may have moved since
+   * the card was rendered. With Keep off there is no resolution: the recipe then
+   * behaves exactly like an unplanned one.
    */
   const openCollectionOverview = useCallback(
     (recipe: StoredRecipe): void => {
@@ -953,7 +946,6 @@ function App() {
       setOverviewTarget({
         kind: 'recipe',
         recipe,
-        source: 'collection',
         onMealPlan: resolution?.plannedRecipeTitles.has(recipe.title) ?? false,
         planned: resolution?.plannedAmounts.get(recipe.title) ?? null,
       });
@@ -963,7 +955,7 @@ function App() {
   );
 
   /**
-   * Opens the overview for a card of the "Essensplan" tab. A recognized card
+   * Opens the overview for a card of the "Essensplan" section. A recognized card
    * carries the entry's stated size and is planned by definition ("Umplanen");
    * an unrecognized one opens the destination for replacing or dropping the
    * entry, because there is no recipe behind it.
@@ -975,7 +967,6 @@ function App() {
           ? {
               kind: 'recipe',
               recipe: card.recipe,
-              source: 'mealplan',
               onMealPlan: true,
               planned: card.planned,
             }
@@ -1072,10 +1063,11 @@ function App() {
    * `mealPlanEntriesForTitle`) — so the dish ends up on the plan exactly once.
    * The app owns that rule; the gateway only executes it.
    *
-   * On success the whole flow closes back to the list, where the recipe card now
-   * carries the "Eingeplant" badge, and one snackbar confirms it with the way back
-   * (docs/ui_patterns.md). The active tab is deliberately untouched, so the app
-   * stays on "Sammlung" instead of jumping to the new "Essensplan" entry.
+   * On success the whole flow closes back to the list, where the dish is now a
+   * card of the "Essensplan" section (the same recipe has left "Restliche
+   * Sammlung"), and one snackbar confirms it with the way back
+   * (docs/ui_patterns.md). Nothing has to be switched: the one page shows both
+   * sections at once, and the moved card is where the confirmation says it is.
    *
    * "Rückgängig" is a full undo: it removes the line this write added and puts
    * back the exact lines it replaced (`undoMealPlan`). Both texts are captured
@@ -1516,7 +1508,7 @@ function App() {
   );
 
   /**
-   * "Rezept manuell anlegen" of an unrecognized meal-plan entry: opens the editor
+   * "Rezept manuell schreiben" of an unrecognized meal-plan entry: opens the editor
    * on a new recipe whose title is the entry's *complete* Keep text (the exact
    * line, not the shortened display form), and remembers that leaving the editor
    * comes back to this overview. Saving a recipe whose title then matches the
@@ -1534,7 +1526,7 @@ function App() {
   }, [overviewTarget, setNav, showInEditor, startEditorChain]);
 
   /**
-   * "Rezept mit KI anlegen" of an unrecognized meal-plan entry: opens the
+   * "Rezept mit KI schreiben" of an unrecognized meal-plan entry: opens the
    * AI-create screen with the entry's *complete* Keep text as the first request
    * (the exact line, not the shortened display form), and remembers that closing
    * the screen comes back to this overview.
@@ -1642,58 +1634,12 @@ function App() {
   }, []);
 
   /**
-   * The active tab of the recipe list. The list renders it, the header's
-   * counter below reads it. Null means the user has not picked one yet, so the
-   * default (decided with the user) is "Essensplan" once Keep is connected and
-   * "Sammlung" otherwise.
-   */
-  const activeListTab: RecipeTab = listTab ?? (keep.status === 'ready' ? 'mealplan' : 'collection');
-
-  /**
    * Titles recognized on the meal plan, or the stable empty set while Keep is
-   * off or its plan has not resolved. Named here because the header counter and
-   * the list both read it.
+   * off or its plan has not resolved. Named here because the list reads it
+   * twice: the "Essensplan" section renders the recognized cards as recipes, and
+   * "Restliche Sammlung" leaves exactly these titles out.
    */
   const plannedRecipeTitles = mealPlanResolution?.plannedRecipeTitles ?? NO_PLANNED_TITLES;
-
-  /**
-   * The header's status line(s), German, following the active tab:
-   *
-   * - "Sammlung": `x Rezepte,` and, below it, `davon y eingeplant` — y is how
-   *   many of the collection's recipes the meal plan uses (the "Eingeplant"
-   *   badge; a dish planned twice still counts once, as one of the x).
-   * - "Essensplan": `x Einträge auf dem Essensplan,` and, below it, `davon y
-   *   unbekannt` — y is how many of Keep's entries are not recognized as a
-   *   recipe (the "Unbekannt" badge; every entry counts, even a repeated one).
-   *
-   * The first line ends in a comma in both views: it carries the stack on to
-   * the "davon …" share below it.
-   *
-   * The list of lines is empty while the active view has nothing to count yet:
-   * on the collection that is the loading/empty case the body already states in
-   * place of the list, on the meal plan a resolution that is not there (Keep
-   * off, connecting, still loading or failed). The header then stays silent
-   * rather than claiming a zero it cannot know, and never repeats the body's
-   * text on the same screen.
-   */
-  const subtitleLines: string[] = (() => {
-    if (token === null) return ['Nicht verbunden'];
-    if (recipes === null || recipes.length === 0) return [];
-    if (activeListTab === 'mealplan') {
-      if (mealPlanResolution === null) return [];
-      const entries = mealPlanResolution.cards.length;
-      const unknown = mealPlanResolution.cards.filter((card) => card.recipe === null).length;
-      return [
-        `${entries} ${entries === 1 ? 'Eintrag' : 'Einträge'} auf dem Essensplan,`,
-        `davon ${unknown} unbekannt`,
-      ];
-    }
-    const planned = recipes.filter((recipe) => plannedRecipeTitles.has(recipe.title)).length;
-    return [
-      `${recipes.length} ${recipes.length === 1 ? 'Rezept' : 'Rezepte'},`,
-      `davon ${planned} eingeplant`,
-    ];
-  })();
 
   return (
     <>
@@ -1809,19 +1755,9 @@ function App() {
         </>
       ) : aiOpen ? null : shoppingOpen || pantryOpen ? null : (
         <main className="app">
-          <header className="app-header">
-            <h1>Cookbook</h1>
-            <p className="app-subtitle" role="status">
-              {subtitleLines.map((line, index) => (
-                // Each line is its own block, so the counter reads as a two-line
-                // stack in the header's top right corner (see .app-subtitle-line).
-                <span key={index} className="app-subtitle-line">
-                  {line}
-                </span>
-              ))}
-            </p>
-          </header>
-
+          {/* No screen header any more (decided with the user): the search field
+              alone opens the screen, and the two section captions below carry
+              what the title bar used to say — the heading and the counters. */}
           {token && masterDataWarning !== null && (
             <p className="master-data-warning" role="alert">
               Zutaten-Stammdaten konnten nicht geladen werden — es wird die eingebaute Liste
@@ -1831,7 +1767,10 @@ function App() {
 
           {!token ? (
             <section className="login-panel" aria-label="Anmeldung">
-              <h2>Dein digitales Kochbuch</h2>
+              {/* The page's only heading while nobody is signed in: the screen
+                  header with the h1 is gone (the signed-in list screen opens
+                  straight with the search field and its two section headings). */}
+              <h1>Dein digitales Kochbuch</h1>
               <p>Verbinde dein Google-Konto, um deine Rezepte in Google Drive zu verwalten.</p>
               <p className="login-note">
                 Deine Rezepte liegen als Markdown-Dateien in einem „Cookbook“-Ordner in deinem
@@ -1862,13 +1801,11 @@ function App() {
           ) : recipes.length === 0 ? (
             <section className="empty-state">
               <p>Noch keine Rezepte im Cookbook-Ordner.</p>
-              <p>Tippe auf das + unten rechts, um dein erstes Rezept anzulegen.</p>
+              <p>Tippe auf das + unten rechts, um dein erstes Rezept zu schreiben.</p>
             </section>
           ) : (
             <RecipeList
               recipes={recipes}
-              tab={activeListTab}
-              onTabChange={setListTab}
               token={token}
               onOpenRecipe={openCollectionOverview}
               onOpenPlanCard={openMealPlanOverview}
@@ -1903,14 +1840,14 @@ function App() {
                 aria-label="Menü schließen"
                 onClick={() => setNav(null)}
               />
-              <div className="fab-menu" role="group" aria-label="Neues Rezept anlegen">
+              <div className="fab-menu" role="group" aria-label="Neues Rezept schreiben">
                 <button type="button" className="fab-extended" onClick={() => openEditor(null)}>
                   <PencilIcon className="fab-extended-icon" />
-                  <span>Rezept manuell anlegen</span>
+                  <span>Rezept manuell schreiben</span>
                 </button>
                 <button type="button" className="fab-extended" onClick={openAiCreate}>
                   <SparkleIcon className="fab-extended-icon" />
-                  <span>Rezept mit KI anlegen</span>
+                  <span>Rezept mit KI schreiben</span>
                 </button>
               </div>
             </>

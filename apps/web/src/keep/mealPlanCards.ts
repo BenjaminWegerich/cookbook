@@ -1,6 +1,6 @@
 /**
- * Resolves the Keep meal plan into the cards of the "Essensplan" tab and the
- * "Eingeplant" titles of the "Sammlung" tab.
+ * Resolves the Keep meal plan into the cards of the "Essensplan" section and the
+ * titles of the planned recipes, which "Restliche Sammlung" leaves out.
  *
  * One non-checked Keep item becomes one card, in the order Keep shows it:
  *
@@ -23,9 +23,9 @@
  * dish stays recognized without its file (there is nothing to fit); it simply
  * carries no written size, so the shopping-list selection shows none for it.
  *
- * The returned `plannedRecipeTitles` is what puts the "Eingeplant" badge on a
- * card in the "Sammlung" tab; a recipe planned twice, or planned once and
- * referenced by an unrecognized entry as well, still appears exactly once
+ * The returned `plannedRecipeTitles` is what keeps a planned recipe out of the
+ * "Restliche Sammlung" section; a recipe planned twice, or planned once and
+ * referenced by an unrecognized entry as well, still counts exactly once
  * there. `plannedAmounts` carries each planned dish's stated size along, which
  * is what the recipe overview shows as its "Geplant" value.
  */
@@ -43,7 +43,7 @@ import {
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
 import type { KeepItem } from './keepClient';
 
-/** One card of the "Essensplan" tab. */
+/** One card of the "Essensplan" section. */
 export interface MealPlanCard {
   /** Stable React key: position in Keep's order plus the entry text. */
   key: string;
@@ -75,7 +75,7 @@ export interface MealPlanCard {
 export interface MealPlanResolution {
   /** One card per non-checked entry, in Keep's display order. */
   cards: MealPlanCard[];
-  /** Titles of recipes recognized on the meal plan ("Eingeplant" badge). */
+  /** Titles of recipes recognized on the meal plan (left out of "Restliche Sammlung"). */
   plannedRecipeTitles: ReadonlySet<string>;
   /**
    * The size each planned recipe states, keyed by recipe title — what the

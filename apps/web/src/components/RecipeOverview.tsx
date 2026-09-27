@@ -18,18 +18,18 @@
  *    "Menge ändern" (./MealPlanSheet). "Vom Plan entfernen" does not sit in the
  *    action row: it is the last entry of this variant's "Mehr" menu (decided
  *    with the user), painted in the danger colour, and it *checks* the Keep line
- *    rather than deleting it. The "Eingeplant" badge appears only when
- *    the card was opened from the "Sammlung" tab (target `source`
- *    `collection`): in "Essensplan" the tab itself already states that the dish
- *    is planned. The badge sits in the bottom-left corner *inside* the hero
- *    image, ringed in white so it stays readable on any photo (the same
- *    placement the recipe cards use).
+ *    rather than deleting it. The hero carries no "Eingeplant" badge: the
+ *    "Geplant" value and the "Umplanen" action already state that the dish is on
+ *    the plan, and the home screen shows a planned recipe only in its
+ *    "Essensplan" section. Only an unrecognized entry's hero carries a badge
+ *    (the danger "Unbekannt"), pinned to the bottom-left corner *inside* the
+ *    image and ringed in white so it stays readable on any letter avatar.
  * 3. **Unrecognized meal-plan entry** — no recipe behind it: the entry's
  *    complete text is the title, the shared letter avatar is the hero, and the
  *    danger "Unbekannt" badge marks it. It carries exactly one
  *    constructive action, "Eintrag ersetzen" (accent fill, growing), which
  *    opens a menu with "Bestehendes Rezept auswählen", "Rezept manuell
- *    anlegen" and "Rezept mit KI anlegen"; next to it "Vom Plan entfernen"
+ *    schreiben" and "Rezept mit KI schreiben"; next to it "Vom Plan entfernen"
  *    (outlined, danger colour) drops the line from the meal plan. The two sit
  *    on a wrapping row, because both labels are full phrases and do not share
  *    one phone line (decided with the user). The trigger carries no caret
@@ -40,8 +40,8 @@
  *    (./ReplaceRecipeSheet), which searches the collection and writes the picked
  *    recipe and size over this one entry. The other two entries open the known
  *    create sites prefilled with the entry's complete text — the editor on a new
- *    recipe ("Rezept manuell anlegen") or the AI-create screen as the first
- *    request ("Rezept mit KI anlegen") — and App returns to this overview when
+ *    recipe ("Rezept manuell schreiben") or the AI-create screen as the first
+ *    request ("Rezept mit KI schreiben") — and App returns to this overview when
  *    that site closes, so the sheet is where the user started and where a
  *    just-created recipe now shows up in the recognized style. "Jetzt kochen" and
  *    the "Mehr" menu do not exist here: there is nothing to cook or edit yet.
@@ -116,7 +116,6 @@ import {
   CalendarEditIcon,
   CloseIcon,
   ErrorIcon,
-  EventAvailableIcon,
   EventBusyIcon,
   MenuBookIcon,
   MoreVertIcon,
@@ -131,7 +130,7 @@ import RecipeThumb from './RecipeThumb';
 import TitleThumb from './TitleThumb';
 
 /**
- * What the overview sheet shows. A recognized card (from either list tab)
+ * What the overview sheet shows. A recognized card (from either list section)
  * carries its recipe and the meal-plan context the sheet renders; an
  * unrecognized meal-plan entry carries only its complete text, because there is
  * no recipe behind it.
@@ -140,11 +139,6 @@ export type RecipeOverviewTarget =
   | {
       kind: 'recipe';
       recipe: StoredRecipe;
-      /**
-       * The tab the card was opened from. The "Eingeplant" badge appears only
-       * for `collection` — on the "Essensplan" tab the tab itself says it.
-       */
-      source: 'collection' | 'mealplan';
       /** The recipe is on the meal plan: the travel action reads "Umplanen". */
       onMealPlan: boolean;
       /** The size the meal-plan entry states, when it states one. */
@@ -180,13 +174,13 @@ interface RecipeOverviewProps {
   /** Opens the AI-edit screen ("Mehr" → "Mit KI bearbeiten"). */
   onAiEdit: (recipe: StoredRecipe) => void;
   /**
-   * "Rezept manuell anlegen" of an unrecognized entry: App opens the editor on a
+   * "Rezept manuell schreiben" of an unrecognized entry: App opens the editor on a
    * new recipe prefilled with the entry's complete Keep text and returns to this
    * overview when the editor closes. Only the unrecognized variant offers it.
    */
   onCreateFromEntry: () => void;
   /**
-   * "Rezept mit KI anlegen" of an unrecognized entry: App opens the AI-create
+   * "Rezept mit KI schreiben" of an unrecognized entry: App opens the AI-create
    * screen with the entry's complete Keep text as the first request and returns
    * to this overview when the screen closes. Only the unrecognized variant
    * offers it.
@@ -451,7 +445,7 @@ function RecipeOverview({
   };
 
   /**
-   * "Rezept manuell anlegen": closes the menu and hands over to App, which opens
+   * "Rezept manuell schreiben": closes the menu and hands over to App, which opens
    * the editor on a new recipe prefilled with the entry's complete Keep text.
    */
   const createManually = (): void => {
@@ -460,7 +454,7 @@ function RecipeOverview({
   };
 
   /**
-   * "Rezept mit KI anlegen": closes the menu and hands over to App, which opens
+   * "Rezept mit KI schreiben": closes the menu and hands over to App, which opens
    * the AI-create screen prefilled with the entry's complete Keep text.
    */
   const createWithAi = (): void => {
@@ -495,7 +489,7 @@ function RecipeOverview({
    * "Vom Plan entfernen": closes the menu (when the button sits in one) and
    * hands the write to App, which owns the Keep action and the undo notice. App
    * closes the whole flow on success, so the user lands back on the list — the
-   * card there has lost its "Eingeplant" badge, or is gone from "Essensplan".
+   * card has left "Restliche Sammlung" and stands in "Essensplan" now.
    */
   const removeFromPlan = (): void => {
     setOpenMenu(null);
@@ -527,13 +521,6 @@ function RecipeOverview({
       ? writtenPlannedAmount(details)
       : null);
   const plannedText = plannedShown !== null ? formatPlannedAmount(plannedShown) : null;
-  /**
-   * The "Eingeplant" badge is shown only when a planned recipe was opened from
-   * "Sammlung": on the "Essensplan" tab the tab already carries that statement.
-   * Like the size above it follows the live plan, so taking the dish off the
-   * plan removes the badge while this sheet is still open.
-   */
-  const showPlannedBadge = target.kind === 'recipe' && target.source === 'collection' && onMealPlan;
 
   return (
     <>
@@ -557,29 +544,23 @@ function RecipeOverview({
         {/* List entry data: renders before the file read finishes. The wrapper
             carries the hero size; the square thumb fills it (see the row-sizing
             note in recipe-overview.css). An unrecognized entry has no photo, so
-            it gets the same letter avatar the list card shows. The plan status
-            badge sits in the bottom-left corner *inside* the image, ringed in
-            white so it stays readable on any photo: the positive "Eingeplant"
-            badge for a planned collection recipe, the danger "Unbekannt" badge
-            for an unrecognized entry. */}
+            it gets the same letter avatar the list card shows, carrying the
+            danger "Unbekannt" badge in the image's bottom-left corner. A
+            recognized recipe carries no badge: that it is on the plan is already
+            stated by its "Geplant" value and its "Umplanen" action, and the home
+            screen only ever shows a planned recipe in the "Essensplan" section
+            ("Restliche Sammlung" leaves the planned ones out). */}
         <div className="overview-hero">
           {target.kind === 'unknown' ? (
-            <TitleThumb title={target.displayText} />
+            <>
+              <TitleThumb title={target.displayText} />
+              <span className="recipe-badge recipe-badge-unknown recipe-badge-on-media">
+                <ErrorIcon className="recipe-badge-icon" />
+                <span>Unbekannt</span>
+              </span>
+            </>
           ) : (
             <RecipeThumb recipe={target.recipe} token={token} />
-          )}
-          {target.kind === 'unknown' ? (
-            <span className="recipe-badge recipe-badge-unknown recipe-badge-on-media">
-              <ErrorIcon className="recipe-badge-icon" />
-              <span>Unbekannt</span>
-            </span>
-          ) : (
-            showPlannedBadge && (
-              <span className="recipe-badge recipe-badge-planned recipe-badge-on-media">
-                <EventAvailableIcon className="recipe-badge-icon" />
-                <span>Eingeplant</span>
-              </span>
-            )
           )}
         </div>
 
@@ -672,11 +653,11 @@ function RecipeOverview({
                     </button>
                     <button type="button" role="menuitem" onClick={createManually}>
                       <PencilIcon />
-                      <span>Rezept manuell anlegen</span>
+                      <span>Rezept manuell schreiben</span>
                     </button>
                     <button type="button" role="menuitem" onClick={createWithAi}>
                       <SparkleIcon />
-                      <span>Rezept mit KI anlegen</span>
+                      <span>Rezept mit KI schreiben</span>
                     </button>
                   </div>
                 )}

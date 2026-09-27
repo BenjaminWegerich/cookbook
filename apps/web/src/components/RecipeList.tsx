@@ -1,55 +1,30 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
 import type { StoredRecipe } from '../drive/recipeStorage';
-import { useSwipePager } from '../hooks/useSwipePager';
 import type { MealPlanCard } from '../keep/mealPlanCards';
 import type { KeepStatus } from '../keep/useKeep';
-import {
-  CheckCircleIcon,
-  CloseIcon,
-  ErrorIcon,
-  EventAvailableIcon,
-  ListPlusIcon,
-  SearchIcon,
-} from './icons';
+import { CheckCircleIcon, CloseIcon, ErrorIcon, ListPlusIcon, SearchIcon } from './icons';
 import RecipeThumb from './RecipeThumb';
 import TitleThumb from './TitleThumb';
 
 /**
- * The two views of the list, as tab ids (UI labels are German). App owns the
- * active tab (see the `tab` prop): the header's counter follows the view.
+ * The search field's placeholder and accessible name. One field serves the whole
+ * screen: it filters both sections at once, so the wording names both contents —
+ * the recipes of the collection and the dish entries of the meal plan (an
+ * unrecognized entry is a dish, not a recipe).
  */
-export type RecipeTab = 'mealplan' | 'collection';
+const SEARCH_LABEL = 'Rezept oder Gericht suchen';
 
-/** The two tabs in display order (labels are the German UI strings). */
-const TABS: { id: RecipeTab; label: string }[] = [
-  { id: 'mealplan', label: 'Essensplan' },
-  { id: 'collection', label: 'Sammlung' },
-];
-
-/**
- * The longest tab label. Each segment carries an invisible copy of it, so both
- * segments are equally wide without a hard-coded pixel width: the control stays
- * content-driven and only ever needs the buttons' own padding around the text.
- */
-const LONGEST_TAB_LABEL = TABS.reduce<string>(
-  (longest, entry) => (entry.label.length > longest.length ? entry.label : longest),
-  '',
-);
+/** DOM ids of the two section captions (the headings' `aria-labelledby` targets). */
+const MEALPLAN_CAPTION_ID = 'recipe-section-mealplan';
+const COLLECTION_CAPTION_ID = 'recipe-section-collection';
 
 interface RecipeListProps {
+  /** Every recipe of the Drive collection (the "Restliche Sammlung" source). */
   recipes: StoredRecipe[];
-  /**
-   * The active tab. App owns it (not the list) because the header's counter
-   * follows the view: "Sammlung" counts recipes and their planned share,
-   * "Essensplan" counts the Keep entries and their unknown share.
-   */
-  tab: RecipeTab;
-  /** Called when the user picks a tab (tap) or swipes onto the neighbouring one. */
-  onTabChange: (tab: RecipeTab) => void;
   /** Drive access token, forwarded to the card media areas for photo downloads. */
   token: string;
-  /** Called when the user taps a recipe card (opens the recipe overview). */
+  /** Called when the user taps a card of the "Restliche Sammlung" section. */
   onOpenRecipe: (recipe: StoredRecipe) => void;
   /**
    * Called when the user taps an "Essensplan" card. A recognized card hands over
@@ -63,7 +38,11 @@ interface RecipeListProps {
    * still being resolved (see ../keep/mealPlanCards).
    */
   mealPlanCards: MealPlanCard[] | null;
-  /** Recipe titles recognized on the meal plan ("Eingeplant" badge). */
+  /**
+   * Recipe titles recognized on the meal plan. A planned recipe is the plan
+   * section's business, so it is left out of "Restliche Sammlung" — the same
+   * recipe never appears twice on one screen.
+   */
   plannedRecipeTitles: ReadonlySet<string>;
   /** Where the Keep connection stands (decides the "Essensplan" states). */
   keepStatus: KeepStatus;
@@ -75,8 +54,8 @@ interface RecipeListProps {
   onRetryKeep: () => void;
   /**
    * Opens the bundled shopping-list selection for the meal plan (the
-   * "Einkaufsliste schreiben" button next to the tab control). App owns that
-   * screen, because only App holds the Keep state and the overview targets.
+   * "Einkaufsliste schreiben" button in the "Essensplan" caption row). App owns
+   * that screen, because only App holds the Keep state and the overview targets.
    */
   onWriteShoppingList: () => void;
   /**
@@ -89,8 +68,10 @@ interface RecipeListProps {
 }
 
 /**
- * Home-screen list (adaptive card grid, phone-first layout that scales to
- * desktop widths) with a sticky search field and two tabs underneath:
+ * Home screen: one sticky search field, below it the two captioned sections of
+ * the collection, each rendered as the same adaptive card grid (two columns on a
+ * phone, more on wider screens) and both filtered by the one search field
+ * (decided with the user):
  *
  * - **Essensplan** shows the non-checked entries of the Google Keep meal plan,
  *   one card per entry, in Keep's order. An entry recognized as a recipe (its
@@ -100,37 +81,46 @@ interface RecipeListProps {
  *   a danger-colored "Unbekannt" badge. Tapping either card opens
  *   the overview: the recognized one with its stated size and "Umplanen", the
  *   unrecognized one as the destination for replacing or dropping the entry.
- * - **Sammlung** shows every recipe of the collection, whether it is on the
- *   meal plan or not; a planned recipe carries the inline "Eingeplant" badge.
+ * - **Restliche Sammlung** shows the recipes that are *not* on the meal plan.
+ *   The planned ones are already in the section above, so repeating them here
+ *   would put the same card on one screen twice; the plan section is where a
+ *   planned dish is read, changed and cooked from. With Keep off every recipe is
+ *   "restlich", which is exactly what the section then shows.
  *
- * Next to the tab control sits **"Einkaufsliste schreiben"**, the entry into the
- * bundled shopping-list selection (decided with the user): there the recipes of
- * the meal plan are selected, and one write adds all of their ingredients at
- * once. Bundling is the point, not only the saved clicks — two recipes that each
- * need 300 g tofu round to two 200 g blocks on their own, but to three blocks
- * when they are written together (./ShoppingListSelect). The button stays
- * visible on both tabs (decided with the user); the screen it opens is a mode of
- * "Essensplan", so it only appears while the meal plan is connected and actually
- * carries entries.
+ * Each section carries its counter in its caption ("Essensplan (5 Einträge,
+ * davon 2 unbekannt)", "Restliche Sammlung (8 Rezepte)"). The captions copy the
+ * editor's field-caption typography (.field-label: small, semibold, muted, all
+ * caps), with the counter itself in normal case — the same exception the muted
+ * "(optional)" marker uses. The counter disappears while a search runs (it
+ * counts the section, not the result), the caption stays: it is the section's
+ * heading, and a section that is empty only because of the search still has to
+ * say which section it is. The body then carries the placeholder sentence.
+ *
+ * In the "Essensplan" caption row sits **"Einkaufsliste schreiben"** (decided
+ * with the user), the entry into the bundled shopping-list selection: there the
+ * recipes of the meal plan are selected, and one write adds all of their
+ * ingredients at once. Bundling is the point, not only the saved clicks — two
+ * recipes that each need 300 g tofu round to two 200 g blocks on their own, but
+ * to three blocks when they are written together (./ShoppingListSelect). The
+ * button belongs to the plan, so it lives in the plan's caption row rather than
+ * in a toolbar of its own; it is deliberately a quiet text button (clay, with
+ * the plus symbol): a filled button would dominate a 14 px caption and compete
+ * with the floating action button, which stays the screen's one loud control.
+ * The screen it opens is a mode of the meal plan, so the button only appears
+ * while the plan is connected and actually carries entries.
  *
  * Once that flow has written the list, the button reads **"Einkaufsliste
  * geschrieben"**, carries the check instead of the plus and is unavailable — for
  * as long as the meal plan is the one that was written (App tracks that in
  * memory, see the `shoppingWritten` prop).
  *
- * The search filters whichever tab is active (title for recipes, complete
- * entry text for meal-plan cards), so the tabs act as an additional refinement,
- * never as a replacement for the search. The two tab bodies also sit side by
- * side in a swipeable pager: a horizontal swipe on the card area follows the
- * finger and snaps onto the neighbouring tab, the phone-native counterpart of
- * tapping a tab (../hooks/useSwipePager). The whole card is the hitbox — the
- * badges are plain content inside it, never a target of their own. UI language
- * is German (see docs/CODING_CONVENTIONS.md).
+ * Search filters the cards of both sections (recipe title, complete meal-plan
+ * entry text), never the captions. The whole card is the hitbox — the badges are
+ * plain content inside it, never a target of their own. UI language is German
+ * (see docs/CODING_CONVENTIONS.md).
  */
 function RecipeList({
   recipes,
-  tab,
-  onTabChange,
   token,
   onOpenRecipe,
   onOpenPlanCard,
@@ -145,27 +135,6 @@ function RecipeList({
 }: RecipeListProps) {
   const [query, setQuery] = useState('');
 
-  /**
-   * The pager behind the two tab bodies: a horizontal swipe on the card area
-   * commits the neighbouring pane exactly like tapping its tab, so the picked
-   * tab stays authoritative over the Keep-driven default (see
-   * ../hooks/useSwipePager). The search field and the tab control sit outside
-   * the swipe area and are never dragged.
-   */
-  const {
-    viewportRef,
-    viewportStyle,
-    trackRef,
-    trackStyle,
-    paneRefs,
-    handlers: pagerHandlers,
-    dragging: pagerDragging,
-  } = useSwipePager({
-    index: TABS.findIndex((entry) => entry.id === tab),
-    count: TABS.length,
-    onIndexChange: (next) => onTabChange(TABS[next].id),
-  });
-
   // Normalized once so the per-render filters below only repeat the cheap
   // includes comparisons, not the normalization. Empty query and thus an empty
   // trim collapse to the same "show everything" state, so a query of only
@@ -173,9 +142,22 @@ function RecipeList({
   const trimmedQuery = query.trim();
   const needle = trimmedQuery.toLowerCase();
 
+  /**
+   * The recipes of "Restliche Sammlung": the collection without the titles the
+   * meal plan already shows. Kept separate from the search filter below so the
+   * section's counter always counts the section and never the search result.
+   */
+  const remainingRecipes = useMemo(
+    () => recipes.filter((recipe) => !plannedRecipeTitles.has(recipe.title)),
+    [recipes, plannedRecipeTitles],
+  );
+
   const visibleRecipes = useMemo(
-    () => (needle === '' ? recipes : recipes.filter((r) => r.title.toLowerCase().includes(needle))),
-    [recipes, needle],
+    () =>
+      needle === ''
+        ? remainingRecipes
+        : remainingRecipes.filter((recipe) => recipe.title.toLowerCase().includes(needle)),
+    [remainingRecipes, needle],
   );
 
   // A meal-plan card is searched by its human text, not only by the matched
@@ -189,8 +171,6 @@ function RecipeList({
     [mealPlanCards, needle],
   );
 
-  const searchPlaceholder = tab === 'mealplan' ? 'Essensplan durchsuchen' : 'Rezept suchen';
-
   /**
    * Whether the bundled shopping-list view can be entered at all: it selects
    * from the meal plan, so an unconnected or empty plan offers nothing to
@@ -200,7 +180,35 @@ function RecipeList({
   const canWriteShoppingList =
     keepStatus === 'ready' && mealPlanCards !== null && mealPlanCards.length > 0;
 
-  /** The "Essensplan" tab body: connection states, then the entry cards. */
+  /**
+   * Whether the collection's counter can be stated at all. While Keep is
+   * connected but the plan is still resolving, "restlich" is not known yet: the
+   * count would first claim the whole collection and then drop by every planned
+   * recipe the moment the plan arrives. The caption then stays bare, the same
+   * honesty the header's status line used to keep.
+   */
+  const collectionCountable = !(keepStatus === 'ready' && mealPlanCards === null);
+
+  /**
+   * The counter of the "Essensplan" caption: `x Einträge, davon y unbekannt` —
+   * y is how many of Keep's entries are not recognized as a recipe (the
+   * "Unbekannt" badge; every entry counts, even a repeated one). Null while the
+   * plan is not resolved (Keep off, connecting, still loading or failed): the
+   * app must not claim a zero it cannot know.
+   */
+  const planCounter =
+    mealPlanCards === null
+      ? null
+      : `(${mealPlanCards.length} ${mealPlanCards.length === 1 ? 'Eintrag' : 'Einträge'}, davon ${
+          mealPlanCards.filter((card) => card.recipe === null).length
+        } unbekannt)`;
+
+  /** The counter of the "Restliche Sammlung" caption: `x Rezepte`. */
+  const collectionCounter = collectionCountable
+    ? `(${remainingRecipes.length} ${remainingRecipes.length === 1 ? 'Rezept' : 'Rezepte'})`
+    : null;
+
+  /** The "Essensplan" section body: connection states, then the entry cards. */
   function renderMealPlan(): ReactNode {
     if (keepStatus !== 'ready') {
       // A gateway that is missing from the build can never be connected from
@@ -255,6 +263,8 @@ function RecipeList({
       );
     }
     if (visiblePlanCards.length === 0) {
+      // The caption above still names the section, so the placeholder only has
+      // to say why nothing is listed here.
       return (
         <p className="recipe-search-empty" role="status">
           {trimmedQuery === ''
@@ -269,10 +279,9 @@ function RecipeList({
         {visiblePlanCards.map((card) => {
           const recipe = card.recipe;
           if (recipe !== null) {
-            // Recognized: the known card format, without the "Eingeplant"
-            // badge (it would repeat on every card of this tab). The overview
-            // receives the whole card, so it can show the entry's stated size
-            // and turn its travel action into "Umplanen".
+            // Recognized: the known card format. The overview receives the whole
+            // card, so it can show the entry's stated size and turn its travel
+            // action into "Umplanen".
             return (
               <li key={card.key}>
                 <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
@@ -311,14 +320,22 @@ function RecipeList({
     );
   }
 
-  /** The "Sammlung" tab body: every recipe, planned ones badged. */
+  /**
+   * The "Restliche Sammlung" section body: the collection's unplanned recipes.
+   * No "Eingeplant" badge is needed here — the plan section above is the whole
+   * set of planned dishes, and a recipe of this section is unplanned by
+   * construction.
+   */
   function renderCollection(): ReactNode {
     if (visibleRecipes.length === 0) {
       return (
         <p className="recipe-search-empty" role="status">
-          {trimmedQuery === ''
-            ? 'Keine Rezepte im Cookbook-Ordner.'
-            : `Kein Rezept für „${trimmedQuery}“ gefunden.`}
+          {trimmedQuery !== ''
+            ? `Kein Rezept für „${trimmedQuery}“ gefunden.`
+            : remainingRecipes.length === 0
+              ? // Every recipe of the collection stands on the meal plan.
+                'Alle Rezepte stehen auf dem Essensplan.'
+              : 'Keine Rezepte im Cookbook-Ordner.'}
         </p>
       );
     }
@@ -329,12 +346,6 @@ function RecipeList({
             <button type="button" className="recipe-card" onClick={() => onOpenRecipe(recipe)}>
               <span className="recipe-media">
                 <RecipeThumb recipe={recipe} token={token} />
-                {plannedRecipeTitles.has(recipe.title) && (
-                  <span className="recipe-badge recipe-badge-planned recipe-badge-on-media">
-                    <EventAvailableIcon className="recipe-badge-icon" />
-                    <span>Eingeplant</span>
-                  </span>
-                )}
               </span>
               <span className="recipe-card-title">
                 <span className="recipe-card-title-text">{recipe.title}</span>
@@ -354,10 +365,10 @@ function RecipeList({
           <input
             type="search"
             className="recipe-search-input"
-            placeholder={searchPlaceholder}
+            placeholder={SEARCH_LABEL}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label={searchPlaceholder}
+            aria-label={SEARCH_LABEL}
           />
           {/* The clear button is an overlay inside the field, not a second grid
               column: the field keeps the full content width (the same width as
@@ -373,43 +384,36 @@ function RecipeList({
             </button>
           )}
         </div>
+      </div>
 
-        {/* Two value-picking tabs (role group + aria-pressed, the same pattern
-            the editor's segmented controls use): both views show the same card
-            grid, they only filter what it contains. The row is left-aligned and
-            holds the bundled-list entry next to the control; the invisible
-            sizer inside each button makes both segments exactly as wide as the
-            longest label. */}
-        <div className="recipe-tabs-row">
-          <div className="recipe-tabs" role="group" aria-label="Ansicht">
-            {TABS.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                className={tab === entry.id ? 'recipe-tab recipe-tab-active' : 'recipe-tab'}
-                aria-pressed={tab === entry.id}
-                onClick={() => onTabChange(entry.id)}
-              >
-                <span>{entry.label}</span>
-                <span className="recipe-tab-sizer" aria-hidden="true">
-                  {LONGEST_TAB_LABEL}
-                </span>
-              </button>
-            ))}
-          </div>
+      {/* "Essensplan": the plan entries, with the bundled shopping-list entry in
+          the caption row. The row is the section's heading line: caption left,
+          the plan's one action right. It wraps on a narrow phone, so the button
+          may continue on a second line — still aligned to the section, never
+          floating over it. */}
+      <section className="recipe-section" aria-labelledby={MEALPLAN_CAPTION_ID}>
+        <div className="recipe-section-header">
+          <h2 className="recipe-section-caption" id={MEALPLAN_CAPTION_ID}>
+            Essensplan
+            {/* No counter while a search runs: it counts the plan, not the
+                result, and a number that ignores the query would contradict the
+                cards below it. */}
+            {needle === '' && planCounter !== null && (
+              <span className="recipe-section-counter">{planCounter}</span>
+            )}
+          </h2>
 
-          {/* The entry into the bundled shopping-list view. It sits beside the
-              control and stays visible on both tabs, since the view it opens is
-              a mode of "Essensplan". It only exists while the plan is connected
-              and carries entries — there is nothing to select from otherwise.
-              After the flow wrote the list, the same place reports that state:
-              the symbol becomes a check, the label says so and the button is
-              unavailable (a second write would duplicate the lines, and Keep
-              itself cannot tell the app whether the list matches the plan). */}
+          {/* The entry into the bundled shopping-list view. It only exists while
+              the plan is connected and carries entries — there is nothing to
+              select from otherwise. After the flow wrote the list, the same
+              place reports that state: the symbol becomes a check, the label
+              says so and the button is unavailable (a second write would
+              duplicate the lines, and Keep itself cannot tell the app whether
+              the list matches the plan). */}
           {canWriteShoppingList && (
             <button
               type="button"
-              className="shopping-list-button"
+              className="text-button shopping-list-button"
               onClick={onWriteShoppingList}
               disabled={shoppingWritten}
             >
@@ -424,33 +428,21 @@ function RecipeList({
             </button>
           )}
         </div>
-      </div>
+        {renderMealPlan()}
+      </section>
 
-      {/* The two tab bodies side by side in one track: a horizontal drag on the
-          viewport moves the track and the release snaps onto the neighbour tab
-          (../hooks/useSwipePager). Both bodies are rendered, since the drag has
-          to reveal the next one; the off-screen pane is `inert`, so it can
-          neither be focused nor reached by assistive tech. The pane order is
-          TABS, the same order the tab control uses. */}
-      <div
-        className={pagerDragging ? 'recipe-panes recipe-panes-dragging' : 'recipe-panes'}
-        ref={viewportRef}
-        style={viewportStyle}
-        {...pagerHandlers}
-      >
-        <div className="recipe-panes-track" ref={trackRef} style={trackStyle}>
-          {TABS.map((entry, paneIndex) => (
-            <div
-              key={entry.id}
-              className="recipe-pane"
-              ref={paneRefs[paneIndex]}
-              inert={tab !== entry.id}
-            >
-              {entry.id === 'mealplan' ? renderMealPlan() : renderCollection()}
-            </div>
-          ))}
+      {/* "Restliche Sammlung": everything the meal plan does not use. */}
+      <section className="recipe-section" aria-labelledby={COLLECTION_CAPTION_ID}>
+        <div className="recipe-section-header">
+          <h2 className="recipe-section-caption" id={COLLECTION_CAPTION_ID}>
+            Restliche Sammlung
+            {needle === '' && collectionCounter !== null && (
+              <span className="recipe-section-counter">{collectionCounter}</span>
+            )}
+          </h2>
         </div>
-      </div>
+        {renderCollection()}
+      </section>
     </>
   );
 }
