@@ -8,11 +8,15 @@ import RecipeThumb from './RecipeThumb';
 import TitleThumb from './TitleThumb';
 
 /**
- * The search field's placeholder and accessible name. One field serves the whole
- * screen: it filters both sections at once, so the wording names both contents —
- * the recipes of the collection and the dish entries of the meal plan (an
- * unrecognized entry is a dish, not a recipe).
+ * The search field's placeholder (decided with the user: one short word) and its
+ * accessible name. One field serves the whole screen: it filters both sections at
+ * once, so the accessible name names both contents — the recipes of the
+ * collection and the dish entries of the meal plan (an unrecognized entry is a
+ * dish, not a recipe). The placeholder stays deliberately shorter than that: it
+ * is a visual hint in a narrow field, while the accessible name is read out in
+ * full.
  */
+const SEARCH_PLACEHOLDER = 'Suchen';
 const SEARCH_LABEL = 'Rezept oder Gericht suchen';
 
 /** DOM ids of the two section captions (the headings' `aria-labelledby` targets). */
@@ -90,8 +94,9 @@ interface RecipeListProps {
  * Each section carries its counter in its caption ("Essensplan (5 Einträge,
  * davon 2 unbekannt)", "Restliche Sammlung (8 Rezepte)"). The captions copy the
  * editor's field-caption typography (.field-label: small, semibold, muted, all
- * caps), with the counter itself in normal case — the same exception the muted
- * "(optional)" marker uses. The counter disappears while a search runs (it
+ * caps), with the counter itself set exactly like the editor's quiet
+ * "(optional)" marker: normal case, italic, slightly translucent, one en space
+ * after the caption word. The counter disappears while a search runs (it
  * counts the section, not the result), the caption stays: it is the section's
  * heading, and a section that is empty only because of the search still has to
  * say which section it is. The body then carries the placeholder sentence.
@@ -103,11 +108,12 @@ interface RecipeListProps {
  * recipes that each need 300 g tofu round to two 200 g blocks on their own, but
  * to three blocks when they are written together (./ShoppingListSelect). The
  * button belongs to the plan, so it lives in the plan's caption row rather than
- * in a toolbar of its own; it is deliberately a quiet text button (clay, with
- * the plus symbol): a filled button would dominate a 14 px caption and compete
- * with the floating action button, which stays the screen's one loud control.
- * The screen it opens is a mode of the meal plan, so the button only appears
- * while the plan is connected and actually carries entries.
+ * in a toolbar of its own; it is a soft accent chip (clay text on a light clay
+ * tint, one clay hairline, pill shape, plus symbol) — decided with the user,
+ * who wanted the entry clearly more prominent than the bare text button it used
+ * to be, while the filled floating action button stays the screen's one loud
+ * control. The screen it opens is a mode of the meal plan, so the button only
+ * appears while the plan is connected and actually carries entries.
  *
  * Once that flow has written the list, the button reads **"Einkaufsliste
  * geschrieben"**, carries the check instead of the plus and is unavailable — for
@@ -365,7 +371,7 @@ function RecipeList({
           <input
             type="search"
             className="recipe-search-input"
-            placeholder={SEARCH_LABEL}
+            placeholder={SEARCH_PLACEHOLDER}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             aria-label={SEARCH_LABEL}

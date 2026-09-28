@@ -189,19 +189,25 @@
   margin-block-start: var(--space-7);
 }
 
-/* The section's heading line: the caption, and hugging it the section's own
-   action ("Einkaufsliste schreiben" on "Essensplan") one gap step later — not
-   pushed to the far edge of a wide screen, where it would read as detached from
-   the caption it belongs to (the reasoning the list's old toolbar followed).
-   The row wraps on a narrow phone, so the button may continue on a second line,
-   still inside the section and never floating over it. The row owns the distance
-   to the cards below; the plain text states inside a section therefore reset
-   their own paragraph margin (see .recipe-section > .recipe-search-empty). */
+/* The section's heading line: the caption, and beside it the section's own
+   action ("Einkaufsliste schreiben" on "Essensplan") — not pushed to the far
+   edge of a wide screen, where it would read as detached from the caption it
+   belongs to (the reasoning the list's old toolbar followed). The row wraps on a
+   narrow phone, so the button may continue on a second line, still inside the
+   section and never floating over it. The row owns the distance to the cards
+   below; the plain text states inside a section therefore reset their own
+   paragraph margin (see .recipe-section > .recipe-search-empty). */
 .recipe-section-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
+  /* The button's distance from the caption is one step wider than the row's own
+     wrap gap (decided with the user): the chip reads as its own control beside
+     the caption, not as part of the heading word. Set as column-gap only, so a
+     wrapped second line still starts at the section's left edge instead of
+     carrying an indent. */
+  column-gap: var(--space-5);
   margin-block-end: var(--space-5);
 }
 
@@ -216,13 +222,16 @@
   text-transform: uppercase;
 }
 
-/* The count in the caption: "(5 Einträge, davon 2 unbekannt)". Normal case,
-   normal weight, one en space after the caption word — the same exception the
-   editor's muted "(optional)" marker makes (.optional-mark): the caps are the
-   caption's own look, while a count and its words stay readable as written. */
+/* The count in the caption: "(5 Einträge, davon 2 unbekannt)". Normal case, one
+   en space after the caption word, italic and slightly translucent — character
+   for character the editor's "(optional)" marker (.optional-mark in editor.css,
+   decided with the user): the caps are the caption's own look, while the count
+   in brackets reads as a quiet aside in normal case. */
 .recipe-section-counter {
   margin-inline-start: 0.5em;
+  font-style: italic;
   font-weight: 400;
+  opacity: 0.85;
   text-transform: none;
 }
 
@@ -236,16 +245,23 @@
 }
 
 /* "Einkaufsliste schreiben": the entry into the bundled shopping-list view of
-   the meal plan, sitting in the "Essensplan" caption row. It reuses the shared
-   .text-button shape (quiet, borderless, small) and takes only the clay accent
-   and the semibold weight: it is the section's one action, but a filled button
-   beside a 14 px caption would dominate the row and compete with the floating
-   action button, which stays the screen's one loud control. Its vertical padding
-   is one ladder step above .text-button's own, so the row keeps a comfortable
-   hit area; `flex: none` stops the label from rewrapping before the row does. */
+   the meal plan, sitting in the "Essensplan" caption row. It keeps the shared
+   .text-button geometry (inline flex, icon + label, 14 px) but is dressed as a
+   soft accent chip (decided with the user: the entry had to become more
+   prominent than a bare text button): clay text on a light clay tint, one
+   clay hairline and the pill radius the editor's chips already use. Prominent
+   enough to be read as the section's button at a glance, yet quieter than the
+   filled floating action button, which stays the screen's one loud control; the
+   tint is an opaque mix of two palette tokens, like the discard bar's. The
+   horizontal padding is one ladder step wider than a chip's, because the symbol
+   and a two-word label sit in it; `flex: none` stops the label from rewrapping
+   before the caption row itself does. */
 .shopping-list-button {
   flex: none;
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  border: 1px solid var(--color-accent);
+  border-radius: 100px; /* pill — structural exception, as on .chip */
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
   color: var(--color-accent);
   font-weight: 600;
 }
