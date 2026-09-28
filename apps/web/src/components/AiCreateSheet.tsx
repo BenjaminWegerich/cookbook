@@ -65,6 +65,7 @@ import type { StoredRecipe } from '../drive/recipeStorage';
 import { listRecipes, readRecipe } from '../drive/recipeStorage';
 import { loadPersonalRules } from '../drive/personalRules';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
+import LeaveConfirmBar from './LeaveConfirmBar';
 import QuantityPicker from './QuantityPicker';
 import { EyeIcon } from './icons';
 
@@ -162,8 +163,8 @@ function FieldHint() {
  * Imperative handle for the exit-trigger integration (owned by App), mirroring
  * the recipe editor: the sheet is asked whether it consumes a browser Back (or
  * a swipe-back, which arrives as one) before the app closes the AI-create
- * screen. Consumed means the "Änderungen verwerfen?" step was armed. Escape is
- * handled by the sheet itself and shares the same guard.
+ * screen. Consumed means the discard question was armed. Escape is handled by
+ * the sheet itself and shares the same guard.
  */
 export interface AiCreateSheetHandle {
   /** True when the back was handled inside the sheet; false when the sheet may
@@ -627,8 +628,9 @@ export default function AiCreateSheet({
    * Fingerprint of the started work (content and shape, not just presence): the
    * shared exit guard binds the armed discard confirmation to it, so any later
    * change — typing, a new message, a new or cleared draft — invalidates the
-   * arm during render ("Behalten") instead of surviving it. This keeps the
-   * button label honest when the work is gone again (see useLeaveGuard).
+   * arm during render instead of surviving it. The armed question (the
+   * LeaveConfirmBar under the title) therefore disappears exactly when the work
+   * it threatened is gone (see useLeaveGuard).
    */
   const guard = useLeaveGuard({
     workSignature: `${description}\u0000${source}\u0000${messages.length}\u0000${draft !== null}`,
@@ -654,10 +656,10 @@ export default function AiCreateSheet({
 
   /**
    * Browser-back consumer (see AiCreateSheetHandle and App): started work arms
-   * the "Änderungen verwerfen?" step through the shared guard (the same
-   * two-step confirmation as the header button and Escape), so neither the
-   * browser / device Back button nor the swipe-back gesture silently drops the
-   * conversation.
+   * the discard question through the shared guard (the same two-step
+   * confirmation as the header button and Escape, rendered by LeaveConfirmBar
+   * between the button and the title), so neither the browser / device Back
+   * button nor the swipe-back gesture silently drops the conversation.
    */
   useImperativeHandle(ref, () => ({
     notifyBack: (): boolean => requestLeave('browser-back'),
@@ -668,14 +670,25 @@ export default function AiCreateSheet({
       <header className="app-header app-header-stacked">
         {/* Back button on its own line at the top left (editor placement), the
             screen title below it — the stack itself is .app-header-stacked
-            (styles/recipe-list.css), shared with the shopping-list selection. */}
+            (styles/recipe-list.css), shared with the shopping-list selection.
+            While the guard is armed, the discard question (LeaveConfirmBar)
+            takes the line between the two: directly under the button that asked,
+            and still above the title, so the sticky stack carries it. */}
         <button
           type="button"
-          className={guard.armed ? 'text-button danger-text' : 'text-button'}
+          className="text-button"
           onClick={() => void requestLeave('button')}
+          disabled={guard.armed}
         >
-          {guard.armed ? 'Änderungen verwerfen?' : 'Zurück'}
+          Zurück
         </button>
+        {guard.armed && (
+          <LeaveConfirmBar
+            question="Änderungen am Entwurf verwerfen?"
+            onKeep={guard.reset}
+            onDiscard={executeLeave}
+          />
+        )}
         <h1>{isEdit ? 'Rezept mit KI bearbeiten' : 'Rezept mit KI schreiben'}</h1>
       </header>
 

@@ -87,6 +87,7 @@ import IngredientSheet, {
   type IngredientSheetMode,
   type SheetResult,
 } from './IngredientSheet';
+import LeaveConfirmBar from './LeaveConfirmBar';
 import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientSheet';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityPicker from './QuantityPicker';
@@ -201,10 +202,9 @@ const SERVING_OPTIONS = integerLadderValues(1, 30);
 /**
  * Imperative handle for the exit-trigger integration (owned by App): the editor
  * is asked whether it consumes a browser Back (or a swipe-back, which arrives
- * as one) before the app closes the editor screen. Consumed means a layer
- * inside the editor was closed (topmost overlay first, or the "Änderungen
- * verwerfen?" step was armed). Escape is handled by the editor itself and
- * follows the same order.
+ * as one) before the app closes the editor screen. Consumed means a layer inside
+ * the editor was closed (topmost overlay first, or the discard question was
+ * armed). Escape is handled by the editor itself and follows the same order.
  */
 export interface RecipeEditorHandle {
   /** True when the back was handled inside the editor; false when the editor
@@ -679,13 +679,14 @@ function RecipeEditor({
   }, [draft]);
 
   /**
-   * Shared exit guard (useLeaveGuard): owns the "Änderungen verwerfen?" step
-   * for *every* way out of the editor — the header's Zurück button, Escape, the
+   * Shared exit guard (useLeaveGuard): owns the armed discard question for
+   * *every* way out of the editor — the header's Zurück button, Escape, the
    * browser Back button and the sub-recipe jump. The signature is the draft
    * content plus the queued photo change, so any edit disarms a standing
    * confirmation. Reset whenever a modal opens or closes: dismissing the
    * ingredient sheet is "keep working", and must not leave a stale discard arm
-   * behind.
+   * behind. The question itself renders as LeaveConfirmBar inside the sticky
+   * header (see the render below).
    */
   const guard = useLeaveGuard({
     workSignature: `${draft === null ? '' : JSON.stringify(normalizeRecipe(draft))}\u0000${photoChange === null ? '' : photoChange.kind}`,
@@ -1006,9 +1007,9 @@ function RecipeEditor({
    * Remove tap on a step (two-step confirm like the photo removal): a content-
    * bearing step (prose or rows) first swaps the remove symbol for a red
    * "Wirklich entfernen?" button; the second tap on it performs the removal. Any other
-   * change (arrows, editing, adding) cancels the armed state = "Behalten"
-   * (see the draft-change effect above). A truly empty step has nothing to
-   * lose and is removed immediately.
+   * change (arrows, editing, adding) cancels the armed state — the question
+   * goes away again (see the draft-change effect above). A truly empty step has
+   * nothing to lose and is removed immediately.
    */
   const toggleRemoveStep = (stepIndex: number): void => {
     if (draft === null) return;
@@ -1137,10 +1138,10 @@ function RecipeEditor({
   }, [guard]);
 
   /**
-   * Opens the ingredient sheet. Opening disarms a standing "Änderungen
-   * verwerfen?" confirmation: the user is working inside the editor again, so
-   * the next exit must ask fresh instead of discarding (this is the leak the
-   * shared guard closes — the confirmation used to survive a sheet).
+   * Opens the ingredient sheet. Opening disarms a standing discard question:
+   * the user is working inside the editor again, so the next exit must ask fresh
+   * instead of discarding (this is the leak the shared guard closes — the
+   * confirmation used to survive a sheet).
    */
   const openSheet = useCallback(
     (next: SheetState): void => {
@@ -1387,22 +1388,46 @@ function RecipeEditor({
     <main className="app">
       <section className="editor" aria-label="Rezept-Editor">
         <div className="editor-header">
-          <button
-            type="button"
-            className={guard.armed ? 'text-button danger-text' : 'text-button'}
-            onClick={() => void requestLeave('button')}
-          >
-            {guard.armed ? 'Änderungen verwerfen?' : 'Zurück'}
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => void handleSave()}
-            disabled={saving}
-            aria-busy={saving}
-          >
-            {saving ? 'Speichert …' : 'Speichern'}
-          </button>
+          {/* Two rows in one sticky box: the action row („Zurück" · „Speichern")
+              and, while the guard is armed, the discard question on one line
+              below it (LeaveConfirmBar) — so the question is on screen whatever
+              the scroll position, and „Speichern" keeps its corner. On a wide
+              screen the question aligns under „Zurück" and the two answers under
+              „Speichern", which is what makes the line read as part of the
+              header rather than as an overlay.
+
+              The action row's two labels never change. „Zurück" is navigation
+              and is the one trigger that must not answer the question, so it is
+              disabled while the bar offers the two real answers: Back, swipe and
+              the button all reach the same armed state, and only „Abbrechen" /
+              „Verwerfen" resolve it. Disabling is allowed here because the cause
+              (the two answers) is visible right below the button. */}
+          <div className="editor-actions">
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => void requestLeave('button')}
+              disabled={guard.armed}
+            >
+              Zurück
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => void handleSave()}
+              disabled={saving}
+              aria-busy={saving}
+            >
+              {saving ? 'Speichert …' : 'Speichern'}
+            </button>
+          </div>
+          {guard.armed && (
+            <LeaveConfirmBar
+              question="Änderungen am Rezept verwerfen?"
+              onKeep={guard.reset}
+              onDiscard={executeLeave}
+            />
+          )}
         </div>
 
         {(hasValidationIssues || globalIssues.length > 0) && (

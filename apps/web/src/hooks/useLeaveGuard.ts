@@ -1,25 +1,37 @@
 /**
  * Shared exit guard for screens with unsaved work (RecipeEditor, AiCreateSheet).
  *
- * Why this exists (decided with the user): the app has five ways to leave a
- * screen — the header's „Zurück" button, a backdrop tap, Escape, the browser /
- * device Back button, and the swipe-back gesture (which arrives as a browser
- * Back). Before this hook each trigger carried its own copy of the dirty check
- * and its own armed-confirmation state, which allowed the "Änderungen
- * verwerfen?" step to stay armed while the user did something else in between
- * (e.g. closed an ingredient sheet) — the next trigger then discarded the
- * changes without asking. The guard owns that state once, for every trigger.
+ * Why this exists (decided with the user): the app has several ways to leave a
+ * screen — the header's „Zurück" button, Escape, the browser / device Back
+ * button, and the swipe-back gesture (which arrives as a browser Back). Before
+ * this hook each trigger carried its own copy of the dirty check and its own
+ * armed-confirmation state, which allowed the discard question to stay armed
+ * while the user did something else in between (e.g. closed an ingredient
+ * sheet) — the next trigger then discarded the changes without asking. The guard
+ * owns that state once, for every trigger.
  *
  * Two rules are encoded here:
  * 1. An armed confirmation belongs to the exact work state it was armed for
  *    (`workSignature`). The moment that signature changes — typing, a new
- *    message, a cleared draft — the arm is gone and the button reads „Zurück"
- *    again. This is deliberately *not* an effect: the label must be honest in
- *    the same render that shows the changed work.
+ *    message, a cleared draft — the arm is gone and the armed question
+ *    (LeaveConfirmBar) disappears again. This is deliberately *not* an effect:
+ *    the arm must be honest in the same render that shows the changed work.
  * 2. A modal's own fields are transient. Dismissing a modal (backdrop tap,
  *    Escape, its cancel button) means "keep working", so the screen below must
  *    clear its armed confirmation via `reset()` when it opens or closes a
  *    modal instead of letting the arm outlive the state it referred to.
+ *
+ * The armed question itself is rendered by `LeaveConfirmBar`, inside the
+ * screen's sticky header. Keeping it out of the „Zurück" button is what makes it
+ * visible on every trigger: the button only ever guaranteed that the *button*
+ * was on screen, while the question it had turned into could be scrolled away.
+ *
+ * The hook also guards the one exit that is *not* a navigation inside the app:
+ * a reload (F5), closing the tab or window, or a real navigation away. Those
+ * unload the document — no history entry and no popstate are involved — so the
+ * app's own guard cannot reach them. The browser's own `beforeunload` dialog is
+ * the only tool for them; it is also the only confirmation the app does not
+ * style, because the browser owns its wording.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -28,9 +40,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Which trigger asked to leave. All of them must run through
- * `LeaveGuard.request`; the distinction is documentation of the call site (and
- * a hook for future per-trigger rules, e.g. a body lock that only applies to
- * the browser Back path).
+ * `LeaveGuard.request`; the distinction documents the call site, so a future
+ * per-trigger rule has one place to read it from.
  */
 export type LeaveReason = 'button' | 'backdrop' | 'escape' | 'browser-back';
 
@@ -38,10 +49,10 @@ export interface LeaveGuard {
   /** True while the two-step exit confirmation is armed for the current work. */
   armed: boolean;
   /**
-   * Asks to leave the screen. First call arms the confirmation and returns true
-   * (the caller stays and only swaps the label); the confirmed second call runs
-   * `onLeave` and returns false. Without unsaved work it runs `onLeave`
-   * immediately.
+   * Asks to leave the screen. The first call arms the confirmation and returns
+   * true (the caller stays; LeaveConfirmBar now offers „Abbrechen" / „Verwerfen");
+   * the confirmed second call runs `onLeave` and returns false. Without unsaved
+   * work it runs `onLeave` immediately.
    */
   request: (reason: LeaveReason, onLeave: () => void) => boolean;
   /** Disarms the confirmation (a modal was opened or dismissed). */
@@ -75,13 +86,25 @@ export function useLeaveGuard({ workSignature, needsConfirm }: LeaveGuardOptions
     setArmedSignature(null);
   }, []);
 
+  /**
+   * True once the user confirmed leaving through the app's own question. The
+   * `beforeunload` listener below reads it, because that confirmation and the
+   * browser's dialog would otherwise answer the same decision twice: our
+   * "Verwerfen" would be followed by the browser asking again.
+   */
+  const leavingRef = useRef(false);
+
   const request = useCallback(
     (reason: LeaveReason, onLeave: () => void): boolean => {
-      // `reason` is part of the contract of every exit trigger; today all of
-      // them share the same two-step behaviour (see LeaveReason).
+      // `reason` documents the call site; every trigger shares this two-step
+      // behaviour (the armed question is answered by LeaveConfirmBar).
       void reason;
       if (!needsConfirm || armed) {
         setArmedSignature(null);
+        // Leaving for real (no work to lose, or the question just confirmed):
+        // disarm the reload dialog below, even if this unmount's effect cleanup
+        // has not run yet when the browser fires it.
+        leavingRef.current = true;
         onLeave();
         return false;
       }
@@ -90,6 +113,26 @@ export function useLeaveGuard({ workSignature, needsConfirm }: LeaveGuardOptions
     },
     [armed, needsConfirm, workSignature],
   );
+
+  // Reload / close / navigation away while work would be lost. Registered only
+  // while that is true, as recommended (a standing listener would also keep the
+  // page out of Firefox's bfcache), and removed again with the work or the
+  // screen, so the browser's dialog never outlives the unsaved state it warns
+  // about. The dialog itself is generic browser text; only its wording is out of
+  // the app's hands, not its timing.
+  useEffect(() => {
+    if (!needsConfirm) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+      // The app's own answer already happened — let the unload pass.
+      if (leavingRef.current) return;
+      // Chrome and Firefox show the dialog for preventDefault; `returnValue` is
+      // the legacy spelling kept for older Safari, which asks without it.
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [needsConfirm]);
 
   return { armed, request, reset };
 }

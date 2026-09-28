@@ -342,13 +342,17 @@ reason a place may show „Abbrechen" at all.
   labels the copy rules allow ([CODING_CONVENTIONS.md](CODING_CONVENTIONS.md),
   button labels). It reads „Zurück" on every place, and it is the same string as
   the browser Back / swipe-back behaviour it mirrors.
-- **While the leave guard is armed** it becomes the question itself —
-  „Änderungen verwerfen?" in danger text (`RecipeEditor`, `AiCreateSheet`) —
-  because a place can hold a draft that would be lost. A sheet's „Abbrechen" never
-  changes its label and never asks: a sheet's fields are transient by rule (same
-  document, exit guard).
-- Both strings are reused verbatim. A synonym („Zurück zur Liste", „Verwerfen",
-  „Schließen") is a new pattern and needs a decision.
+- **While the leave guard is armed, the question appears as its own line in the header**
+  (`LeaveConfirmBar`, inside the sticky header) — „Änderungen am Rezept
+  verwerfen?" / „Änderungen am Entwurf verwerfen?" in danger text, answered by
+  „Abbrechen" (quiet: keep working) and „Verwerfen" (filled danger: leave) — because a
+  place can hold a draft that would be lost. „Zurück" keeps its label in every state: it
+  is navigation, and a navigation label must never turn into a write decision. While the
+  question stands, „Zurück" is disabled, so exactly one control can discard.
+  A sheet's „Abbrechen" never changes its label and never asks: a sheet's fields are
+  transient by rule (same document, exit guard).
+- Both strings are reused verbatim. A synonym („Zurück zur Liste", „Schließen") is a new
+  pattern and needs a decision.
 
 ### 2.4 Geometry, and why the positions are not interchangeable
 
@@ -359,13 +363,24 @@ reason a place may show „Abbrechen" at all.
 | Siblings | none | the primary button of the pending decision |
 | When the write runs | stays usable; unsaved work is asked about, not blocked | disabled with the primary action |
 | Other triggers doing the same | browser / device Back, Escape, swipe-back | browser / device Back, Escape, scrim tap |
+| While armed | keeps its label and is disabled; the question line sits directly below it | unchanged (a sheet never arms) |
+
+The armed question of a place is one line of three columns
+(`.leave-confirm`, `styles/editor.css`): the sentence, then the two answers in the
+app's no | yes order. Its first column starts at the same x as the „Zurück" label
+(a positive start margin equal to the button's own padding moves it onto the same x), and the two answers sit
+under the primary button of the row above — the line reads as the second row of
+the header, not as a dialog over it. On the AI screen the line goes between the
+button and the title.
 
 The top left is where "one level up" lives: a button there must never mean "discard
 this form", or navigation and a write decision become indistinguishable. The bottom
 row is where the decision about the pending change lives: cancel and commit are the
 two answers to one question, so they share a row in the order no | yes. On a place,
 navigation and commit are therefore deliberately separated (top left vs. bottom
-right); in a sheet there is no navigation, so both answers sit together.
+right); in a sheet there is no navigation, so both answers sit together. When the
+armed question joins a header, it follows the same separation: it takes the line
+between the navigation row and the title, never a place beside „Zurück" itself.
 
 ### 2.5 A flow step that writes is still a place
 
@@ -382,7 +397,9 @@ reported next to the button instead of in a snackbar).
    the trigger set at once.
 2. **Place:** page header with `.app-header-stacked` + „Zurück", routed through
    `useLeaveGuard` and App's navigation (`setNav` + `notifyBack`); nothing in the
-   action row that means "cancel".
+   action row that means "cancel". The stack sticks (it opens with a button), and a
+   place with unsaved work renders its armed question as `LeaveConfirmBar` inside that
+   sticky header — so the question is on screen whatever the scroll position.
 3. **Change:** `.sheet-actions` with „Abbrechen" + primary; no back button in a
    header.
 4. **Never both on one level.** A „Zurück" inside a sheet, or an „Abbrechen" that

@@ -19,13 +19,67 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  /* Two rows: the action row and (while armed) the question bar below it. A grid
+     with a single implicit column is what keeps „Speichern" in the top right
+     corner when the bar appears — as a flex row the bar would become a third
+     item between the two buttons and push „Speichern" into the middle. */
+  display: grid;
   gap: var(--space-3);
   margin-inline: calc(-1 * var(--app-padding));
   padding: var(--space-4) var(--app-padding);
   background: var(--color-bg);
+}
+
+/* The action row itself: „Zurück" left, the primary action right. */
+.editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* ---- Armed discard confirmation (shared: LeaveConfirmBar) --------------- */
+
+/* The armed discard answer, rendered inside the sticky header (editor: below the
+   action row; AI screen: between the back button and the title), so the question
+   is on screen from any scroll position. The component (LeaveConfirmBar) carries
+   the reasoning; here is only the look.
+
+   One row, three columns: the question, then its two answers in the app's
+   no | yes order. The row has no surface of its own — no tint, no hairline — so
+   it reads as a line of the header itself, and the decision is carried by the
+   labels and the danger fill of „Verwerfen" alone. The answer columns are
+   content-sized, so they start right after the question instead of floating to
+   the far right. */
+.leave-confirm {
+  /* The AI header stacks its children as a column and left-aligns them, which
+     would shrink the bar to its content width; stretching makes it span the
+     header on every screen. */
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  /* The header's own padding carries the vertical rhythm; this only adds the
+     small step that keeps the row from touching the line above it. */
+  padding-block: var(--space-1);
+}
+
+/* The question is a caption, never a button (docs/CODING_CONVENTIONS.md: a
+   confirmation label stays a question containing the verb). Danger ink marks
+   what is at stake; the sentence stays inside one short line on a phone. */
+.leave-confirm-label {
+  /* Aligns the sentence's first letter with the „Zurück" text above it: „Zurück"
+     sits inside a .text-button whose padding (--space-2) pushes its text 6 px in
+     from the header edge, while this paragraph has no box of its own and starts
+     at the edge. A positive start margin equal to that padding nudges the
+     sentence right onto the same x — once, in the shared rule, so both headers
+     line up. */
+  margin: 0;
+  margin-inline-start: var(--space-2);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 /* ---- Cards -------------------------------------------------------------- */

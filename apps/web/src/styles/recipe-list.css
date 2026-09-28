@@ -29,22 +29,37 @@
 }
 
 /* Header stack (screens that open with a back button rather than a title bar:
-   the AI screen and the bundled shopping-list selection): the Zurück button
-   sits on its own line at the top left — the editor's back placement — and the
-   screen title below it. Two whitespace sources are removed so the screen keeps
-   its own vertical rhythm:
+   the AI screen, the bundled shopping-list selection, the pantry step): the
+   Zurück button sits on its own line at the top left — the editor's back
+   placement — and the screen title below it. Two whitespace sources are removed
+   so the screen keeps its own vertical rhythm:
    - the base header's bottom margin (--space-7) would add air on top of the
      screen's grid gap;
    - the h1's browser-default margin (~21 px on each side at the 32 px screen
      title size) would add the same amount again above the title and below it.
    The stack's own gap (--space-6) is what is left: a clear step between the
-   quiet Zurück button and the title, which is the deliberate break of the pair. */
+   quiet Zurück button and the title, which is the deliberate break of the pair.
+   The stack sticks because it opens with a back button: the same rule as the
+   editor's header ("a header that carries a button sticks"), so the one
+   always-reachable control never scrolls away. The recipe list keeps a
+   scrolling title — it carries no button, and a second sticky bar above the
+   sticky search field would only eat viewport. Full-bleed (negative inline
+   margin + the app padding as its own) is the shared treatment of every sticky
+   bar: it covers the screen gutters, so content scrolling up cannot peek around
+   the bar's edge (docs/CODING_CONVENTIONS.md, "Surfaces are flat, filled and
+   opaque"). */
 .app-header-stacked {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
   gap: var(--space-6);
   margin-block-end: 0;
+  margin-inline: calc(-1 * var(--app-padding));
+  padding-inline: var(--app-padding);
+  background: var(--color-bg);
 }
 
 .app-header-stacked h1 {
@@ -410,6 +425,26 @@
   font-weight: 600;
   background: var(--avatar-0); /* fallback until the inline variant applies */
   color: var(--avatar-0-fg);
+}
+
+/* Media area of an unrecognized meal-plan card: not a placeholder photo but the
+   "unbekannt" symbol (HelpIcon's question mark) on the danger colour, decided
+   with the user — the question mark reads as "not known yet" where the error
+   glyph read as a failure. It replaces the letter avatar with its overlaid
+   "Unbekannt" badge: one element, one message, and the card needs no badge of
+   its own. */
+.recipe-thumb-unknown {
+  background: var(--color-danger);
+  color: var(--color-on-accent);
+}
+
+/* The symbol on that area, at the letter avatar's size (42 px, a ladder value),
+   so the media area keeps its proportions whatever it carries. */
+.recipe-thumb-unknown-icon {
+  display: block;
+  width: var(--avatar-letter-size);
+  height: var(--avatar-letter-size);
+  color: currentColor;
 }
 
 .recipe-thumb img {

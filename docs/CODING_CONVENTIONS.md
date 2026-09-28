@@ -160,18 +160,27 @@
   again starts at the top. Sheets that overlay the list (recipe overview, create menu) keep
   the list's key — they never move the list scroll behind them.
 - **The exit guard is shared by every exit trigger (`useLeaveGuard`):** a screen with unsaved
-  work asks its "Änderungen verwerfen?" confirmation through this one hook — never with its own
-  dirty check — so all five triggers behave identically: the header's „Zurück" button, a
-  backdrop tap, Escape, the browser / device Back button, and the swipe-back gesture (which
-  arrives as a browser Back). Two rules keep the confirmation honest, and both live in the hook
-  rather than at the call sites:
+  work asks its confirmation through this one hook — never with its own dirty check — so every
+  trigger behaves identically: the header's „Zurück" button, Escape, the browser / device Back
+  button, and the swipe-back gesture (which arrives as a browser Back). The rules that keep the
+  confirmation honest all live in the hook rather than at the call sites:
   - An armed confirmation belongs to the exact work state it was armed for (the
-    `workSignature`); any later change invalidates it during render, so the label never claims
-    changes will be discarded after they are gone.
+    `workSignature`); any later change invalidates it during render, so the question never
+    claims changes will be discarded after they are gone.
   - Closing a modal is "keep working": the screen clears the arm (`reset()`) when it opens or
     closes a transient layer, so a standing confirmation can never be spent by an unrelated
     trigger. Modal form fields are themselves transient — dismissing a modal discards them
     without asking; the screen's committed draft is the unit that gets a confirmation.
+  - The armed question is rendered by `LeaveConfirmBar` inside the screen's **sticky** header
+    (`position: sticky` on `.app-header-stacked` and `.editor-header`), so it is on screen
+    whatever the scroll position; it never depends on the element that triggered it being
+    visible. The header's „Zurück" keeps its label and is disabled while the question stands
+    (the cause is right below it), so exactly one control discards.
+  - The hook also guards the exits that are *not* navigation: a reload (F5), closing the tab or
+    window, or a real navigation away. It registers a `beforeunload` listener only while work
+    would be lost and removes it again — a permanently attached listener would keep the page out
+    of Firefox's bfcache. That dialog carries the browser's own wording; the app's answer
+    („Verwerfen") has already been given by then, so the dialog must not ask a second time.
   Escape is the keyboard equivalent of the browser Back button: a screen-level Escape trigger
   is registered only while the screen is the visible one (a hidden-but-mounted sheet, e.g. the
   AI screen under the editor, passes `enabled: false`).

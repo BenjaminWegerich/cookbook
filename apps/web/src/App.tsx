@@ -565,9 +565,10 @@ function App() {
   // one screen entry above it, so a pop onto the guard closes the current
   // screen. A screen with internal layers can consume the pop itself: both the
   // editor and the AI-create sheet route it through their shared exit guard
-  // (useLeaveGuard) — topmost overlay first, then the "Änderungen verwerfen?"
-  // step. The device's swipe-back gesture arrives as the same popstate, so it
-  // gets the identical guard.
+  // (useLeaveGuard) — topmost overlay first, then the armed discard question
+  // (LeaveConfirmBar), which the sticky header keeps on screen. The device's
+  // swipe-back gesture arrives as the same popstate, so it gets the identical
+  // guard.
   //
   // The guard entry is what makes the gesture safe on Android: a swipe-back that
   // pops the app's last entry does not reach this listener at all — Chrome for
