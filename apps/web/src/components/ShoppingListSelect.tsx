@@ -46,7 +46,7 @@ import type { ReactNode } from 'react';
 import { formatPlannedAmount } from '@cookbook/core';
 
 import type { MealPlanCard } from '../keep/mealPlanCards';
-import { ErrorIcon } from './icons';
+import { HelpIcon } from './icons';
 
 interface ShoppingListSelectProps {
   /**
@@ -182,7 +182,7 @@ function ShoppingListSelect({
                 )}
                 {recipe === null && (
                   <span className="recipe-badge recipe-badge-unknown">
-                    <ErrorIcon className="recipe-badge-icon" />
+                    <HelpIcon className="recipe-badge-icon" />
                     <span>Unbekannt</span>
                   </span>
                 )}

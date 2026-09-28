@@ -56,6 +56,16 @@
  * matches a recipe title unless a recipe actually carries that name. That is
  * what keeps "Kürbissuppe (6 Teller)" from being recognized as "Kürbissuppe".
  *
+ * A title candidate may still end in a *free-text note* — a parenthetical that
+ * is neither a size nor part of a recipe's name, e.g. "Tiramisu (klassisch)".
+ * `splitTitleNote` peels that trailing group off for display, so the app can
+ * show "Tiramisu" as the title and "(klassisch)" as a note of its own. The
+ * decomposition is deliberately a separate step: `parseMealPlanText` keeps the
+ * note inside `title`, because a recipe file may carry the parenthetical in its
+ * name ("Tiramisu (klassisch)" is a valid recipe title) and the recognition
+ * must keep matching it. Only an entry that matches no recipe at all is
+ * displayed through `splitTitleNote`.
+ *
  * Framework-free and deterministic (docs/ARCHITECTURE.md): the web app and the
  * later shopping-list flow both consume it, and it is covered by unit tests.
  */
@@ -70,7 +80,11 @@ import type { RecipeType, Unit } from './recipe/types.js';
 export interface ParsedMealPlanText {
   /** The entry text as it arrived (trimmed). */
   text: string;
-  /** Recipe-title candidate: the text without its link and its size. */
+  /**
+   * Recipe-title candidate: the text without its link and its size. It still
+   * carries a trailing free-text note ("Tiramisu (klassisch)") so a recipe of
+   * that name is found; `splitTitleNote` separates the two for display.
+   */
   title: string;
   /** The parsed size, or null when the text states none. */
   planned: PlannedAmount | null;
@@ -88,6 +102,20 @@ export interface ParsedMealPlanText {
  */
 const YIELD_SUFFIX =
   /^(?<title>.*?)[\s\u00a0\u202f]+\((?<amount>\d+(?:[.,]\d+)?)[\s\u00a0\u202f]+(?<unit>\p{L}+)\)$/u;
+
+/**
+ * The trailing free-text note of a title candidate: whitespace (space or the
+ * narrow no-break space) + `(` + any text without parentheses + `)` at the very
+ * end. The title part is lazy, so the *last* parenthetical wins; the title part
+ * must keep at least one character, so a text that is nothing but a
+ * parenthetical is not split. Nested parentheses are not a note (they would
+ * need their own rule and do not occur in practice).
+ *
+ * This is a display rule only (see `splitTitleNote`): it runs *after* the entry
+ * failed to match a recipe, so a recipe whose name carries the parenthetical
+ * ("Tiramisu (klassisch)") still matches the untouched title candidate.
+ */
+const TITLE_NOTE = /^(?<title>.+?)[\s\u00a0\u202f]+(?<note>\([^()]*\))$/u;
 
 /**
  * The host of a short link as the app writes it: without its scheme, because
@@ -201,6 +229,31 @@ export function parseMealPlanText(text: string): ParsedMealPlanText {
 
   const suffix = parseYieldSuffix(trimmed);
   return { text: trimmed, title: suffix.title, planned: suffix.planned, link: null };
+}
+
+/**
+ * Splits a title candidate into the title proper and its trailing free-text
+ * note — the "something else in parentheses" an unrecognized meal-plan entry
+ * may carry ("Tiramisu (klassisch)" → title "Tiramisu", note "(klassisch)").
+ *
+ * The note keeps its parentheses, because the app shows it in exactly the
+ * written form as a line of its own under the title (decided with the user). A
+ * text without a trailing parenthetical, and a text that is nothing but one,
+ * comes back unchanged with `note: null`.
+ *
+ * The caller applies this only after the entry failed to match a recipe
+ * (`parseMealPlanText` keeps the note inside `title`, so recognition is
+ * unaffected). Everything else — a size suffix, a size in a link, a recipe
+ * whose own title carries the parenthetical — is already resolved by the
+ * parser and must not be peeled off here.
+ */
+export function splitTitleNote(title: string): { title: string; note: string | null } {
+  const trimmed = title.trim();
+  const match = TITLE_NOTE.exec(trimmed);
+  if (match === null || match.groups === undefined) {
+    return { title: trimmed, note: null };
+  }
+  return { title: match.groups.title!.trim(), note: match.groups.note! };
 }
 
 /**

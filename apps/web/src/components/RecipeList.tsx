@@ -3,9 +3,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import type { StoredRecipe } from '../drive/recipeStorage';
 import type { MealPlanCard } from '../keep/mealPlanCards';
 import type { KeepStatus } from '../keep/useKeep';
-import { CheckCircleIcon, CloseIcon, ErrorIcon, ListPlusIcon, SearchIcon } from './icons';
+import { CheckCircleIcon, CloseIcon, HelpIcon, ListPlusIcon, SearchIcon } from './icons';
 import RecipeThumb from './RecipeThumb';
-import TitleThumb from './TitleThumb';
 
 /**
  * The search field's placeholder (decided with the user: one short word) and its
@@ -80,9 +79,10 @@ interface RecipeListProps {
  * - **Essensplan** shows the non-checked entries of the Google Keep meal plan,
  *   one card per entry, in Keep's order. An entry recognized as a recipe (its
  *   text is a recipe title, plus an optional fitting size suffix) renders in
- *   the known card format; every other entry renders as a card with a
- *   placeholder image derived from its text, its complete text as the title and
- *   a danger-colored "Unbekannt" badge. Tapping either card opens
+ *   the known card format; every other entry renders as a card whose media area
+ *   is the danger "unbekannt" symbol instead of a photo, with the entry's title
+ *   as its title (the export link, a stated size and a free-text note are left
+ *   out — the overview behind the card shows them). Tapping either card opens
  *   the overview: the recognized one with its stated size and "Umplanen", the
  *   unrecognized one as the destination for replacing or dropping the entry.
  * - **Restliche Sammlung** shows the recipes that are *not* on the meal plan.
@@ -197,8 +197,9 @@ function RecipeList({
 
   /**
    * The counter of the "Essensplan" caption: `x Einträge, davon y unbekannt` —
-   * y is how many of Keep's entries are not recognized as a recipe (the
-   * "Unbekannt" badge; every entry counts, even a repeated one). Null while the
+   * y is how many of Keep's entries are not recognized as a recipe (the cards
+   * with the danger "unbekannt" symbol; every entry counts, even a repeated
+   * one). Null while the
    * plan is not resolved (Keep off, connecting, still loading or failed): the
    * app must not claim a zero it cannot know.
    */
@@ -301,22 +302,25 @@ function RecipeList({
               </li>
             );
           }
-          // Unrecognized: the same card look, but the overview behind it is the
-          // destination that lets the entry be replaced by or turned into a
-          // recipe (or dropped from the plan). The card shows the entry's human
-          // form — a Cookbook line's export URL would otherwise fill the title.
+          // Unrecognized: no recipe stands behind the entry, so the card's media
+          // area is not a photo or a letter avatar but the danger "unbekannt"
+          // symbol — the question mark of HelpIcon, decided with the user, who
+          // wanted it to read as "not known yet" instead of as an error — which
+          // is why the card carries no badge any more. The title is the entry
+          // without its export URL, its stated size and its free-text note —
+          // exactly the shape a known recipe's card has — and the overview
+          // behind the card shows those recognized parts (size, note, link)
+          // plus the "Unbekannt" badge.
           return (
             <li key={card.key}>
               <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
                 <span className="recipe-media">
-                  <TitleThumb title={card.displayText} />
-                  <span className="recipe-badge recipe-badge-unknown recipe-badge-on-media">
-                    <ErrorIcon className="recipe-badge-icon" />
-                    <span>Unbekannt</span>
+                  <span className="recipe-thumb recipe-thumb-unknown">
+                    <HelpIcon className="recipe-thumb-unknown-icon" />
                   </span>
                 </span>
                 <span className="recipe-card-title">
-                  <span className="recipe-card-title-text">{card.displayText}</span>
+                  <span className="recipe-card-title-text">{card.title}</span>
                 </span>
               </button>
             </li>

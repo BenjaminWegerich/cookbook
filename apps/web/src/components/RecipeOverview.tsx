@@ -21,12 +21,18 @@
  *    rather than deleting it. The hero carries no "Eingeplant" badge: the
  *    "Geplant" value and the "Umplanen" action already state that the dish is on
  *    the plan, and the home screen shows a planned recipe only in its
- *    "Essensplan" section. Only an unrecognized entry's hero carries a badge
- *    (the danger "Unbekannt"), pinned to the bottom-left corner *inside* the
- *    image and ringed in white so it stays readable on any letter avatar.
- * 3. **Unrecognized meal-plan entry** — no recipe behind it: the entry's
- *    complete text is the title, the shared letter avatar is the hero, and the
- *    danger "Unbekannt" badge marks it. It carries exactly one
+ *    "Essensplan" section.
+ * 3. **Unrecognized meal-plan entry** — no recipe behind it, so it carries **no
+ *    hero image at all** (decided with the user; the list card's danger symbol
+ *    is enough, and this sheet is about the entry's text and its actions). Its
+ *    body shows the title without the export link, the stated size and a
+ *    trailing free-text note, then the parts the parser recognized: the danger
+ *    "Unbekannt" badge (HelpIcon before the label) as the first item of the
+ *    caption/value row, the free-text note as a line of its own under the title
+ *    (in its written parentheses), the stated size as the "Geplant"
+ *    caption/value item exactly like a known planned
+ *    recipe, and the entry's link as the domain behind a "Link" caption right
+ *    after it. It carries exactly one
  *    constructive action, "Eintrag ersetzen" (accent fill, growing), which
  *    opens a menu with "Bestehendes Rezept auswählen", "Rezept manuell
  *    schreiben" and "Rezept mit KI schreiben"; next to it "Vom Plan entfernen"
@@ -48,7 +54,8 @@
  *
  * The three variants are modelled as one `RecipeOverviewTarget` union: a
  * recognized card carries its recipe plus the meal-plan context, an
- * unrecognized entry carries only its text. App builds the target, because
+ * unrecognized entry carries its text and the parts the parser recognized
+ * (title, note, stated size, link). App builds the target, because
  * only App holds the recipe list, the Drive token and the resolved meal plan.
  *
  * Further decisions that hold for every variant:
@@ -60,7 +67,8 @@
  *   written in, because that is the amount the entry's link opens the cooking
  *   view at (core's `writtenPlannedAmount`, the same fallback the shopping-list
  *   selection shows). A dish that is not on the plan shows no "Geplant" value
- *   at all;
+ *   at all, and an unrecognized entry shows the size it states (it has no
+ *   written size to fall back to);
  * - one action row: "Jetzt kochen" (skillet) is the primary action, growing to
  *   fill the row so it is as wide as possible, next to "Einplanen"/"Umplanen"
  *   (calendar with plus / with pencil) and the "Mehr" button (vertical three
@@ -115,8 +123,8 @@ import {
   CalendarAddIcon,
   CalendarEditIcon,
   CloseIcon,
-  ErrorIcon,
   EventBusyIcon,
+  HelpIcon,
   MenuBookIcon,
   MoreVertIcon,
   PencilIcon,
@@ -127,13 +135,29 @@ import {
 import MealPlanSheet from './MealPlanSheet';
 import ReplaceRecipeSheet from './ReplaceRecipeSheet';
 import RecipeThumb from './RecipeThumb';
-import TitleThumb from './TitleThumb';
+
+/**
+ * The domain an entry's link points at, as the unrecognized variant's "Link"
+ * value shows it ("tinyurl.com", "chefkoch.de"). The host is taken from the URL
+ * and a leading "www." is dropped, because it is decoration and not part of the
+ * domain name. A link the browser cannot parse (it never should — the parser
+ * only accepts http(s) URLs) falls back to the whole link, so the row is never
+ * empty.
+ */
+function displayLinkDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '');
+  } catch {
+    return url;
+  }
+}
 
 /**
  * What the overview sheet shows. A recognized card (from either list section)
  * carries its recipe and the meal-plan context the sheet renders; an
- * unrecognized meal-plan entry carries only its complete text, because there is
- * no recipe behind it.
+ * unrecognized meal-plan entry carries its text plus the parts the parser
+ * recognized in it (title, note, stated size, link), because there is no recipe
+ * behind it.
  */
 export type RecipeOverviewTarget =
   | {
@@ -149,12 +173,37 @@ export type RecipeOverviewTarget =
       /** The unrecognized entry's complete text — the exact Keep line. */
       text: string;
       /**
-       * The same entry without its export URL, for the title and the avatar. A
-       * Cookbook-written line is `<Titel>: <URL>`; showing it raw would put a
-       * long link on the sheet. The removal action and the two create actions
-       * keep using `text`, the complete line.
+       * The same entry without its export URL, for the notices and the
+       * replace overlay's label. A Cookbook-written line is `<Titel>: <URL>`;
+       * showing it raw would put a long link on the sheet. The removal action
+       * and the two create actions keep using `text`, the complete line.
        */
       displayText: string;
+      /**
+       * The title the sheet shows: the entry without link, stated size and
+       * trailing free-text note (keep/mealPlanCards' `MealPlanCard.title`).
+       */
+      title: string;
+      /**
+       * The entry's trailing free-text note with its parentheses
+       * ("(klassisch)"), or null. It is shown as a line of its own under the
+       * title, because it is a remark about the dish and not part of its name.
+       */
+      note: string | null;
+      /**
+       * The size the entry states, or null. An unrecognized entry is still a
+       * planned dish, so its stated size is shown as the "Geplant" value
+       * exactly like a known planned recipe's (decided with the user). It
+       * cannot be scaled — no recipe stands behind the entry — so "Umplanen"
+       * does not exist here.
+       */
+      planned: PlannedAmount | null;
+      /**
+       * The link the entry carries (an export link, a hand-written one), or
+       * null. The title never shows it; the sheet names its domain after
+       * "Geplant" (decided with the user) and opens the target in a new tab.
+       */
+      link: string | null;
     };
 
 interface RecipeOverviewProps {
@@ -496,8 +545,14 @@ function RecipeOverview({
     onRemoveFromMealPlan();
   };
 
-  const title =
-    target.kind === 'unknown' ? target.displayText : (details?.title ?? target.recipe.title);
+  const title = target.kind === 'unknown' ? target.title : (details?.title ?? target.recipe.title);
+  /**
+   * The unrecognized entry's trailing free-text note in its written parentheses
+   * ("(klassisch)"), or null. It is shown as a line of its own under the title
+   * (decided with the user): it is a remark about the dish, not part of its
+   * name, so the title stays clean.
+   */
+  const note = target.kind === 'unknown' ? target.note : null;
   const description = details?.description;
   // Times use the core display helper, so number and unit are joined with the
   // narrow no-break space like everywhere else (docs/CODING_CONVENTIONS.md).
@@ -508,25 +563,48 @@ function RecipeOverview({
       ? displayTimeText(details.total_time)
       : null;
   /**
-   * The size this dish is cooked at, as display text (recipe target only), or
-   * null. It is the plan's stated size when the entry states one; a planned
-   * entry *without* a size means the dish at its written size — that is what the
-   * entry's link opens — so the written size (core's `writtenPlannedAmount`) is
-   * named instead of showing nothing. A recipe that is not on the plan never
-   * shows a "Geplant" value: nothing is planned.
+   * The size this dish is cooked at, as display text, or null.
+   *
+   * A recognized recipe: the plan's stated size when the entry states one;
+   * otherwise — while the dish is on the plan — the recipe's written size (core's
+   * `writtenPlannedAmount`), because that is what a size-less entry's link opens.
+   * An unrecognized entry shows the size it states and nothing else: there is no
+   * recipe file to fall back to, and no "Umplanen" action either. A recipe that
+   * is not on the plan shows no "Geplant" value at all — nothing is planned.
    */
   const plannedShown: PlannedAmount | null =
-    planned ??
-    (onMealPlan && details !== null && target.kind === 'recipe'
-      ? writtenPlannedAmount(details)
-      : null);
+    target.kind === 'unknown'
+      ? target.planned
+      : (planned ?? (onMealPlan && details !== null ? writtenPlannedAmount(details) : null));
   const plannedText = plannedShown !== null ? formatPlannedAmount(plannedShown) : null;
+  /**
+   * The unrecognized entry's link, and the domain the "Link" value shows for it,
+   * or null. Only this variant names a link: a recipe card's link is the meal
+   * plan's business (the "Jetzt kochen" action), while an unrecognized entry has
+   * nothing to cook, so the line's own link is the one fact about it that can be
+   * followed.
+   */
+  const linkHref = target.kind === 'unknown' ? target.link : null;
+  const linkDomain = linkHref !== null ? displayLinkDomain(linkHref) : null;
+  /**
+   * Whether the caption/value row has anything to show. An unrecognized entry
+   * always has its "Unbekannt" badge in that row (decided with the user: the
+   * sheet names the state itself instead of leaving it to its differing
+   * actions), so the row exists even for a bare "Kürbissuppe" line; a
+   * recognized recipe's row exists when it has a plan size or a time.
+   */
+  const hasMeta =
+    target.kind === 'unknown' || prepTime !== null || totalTime !== null || plannedText !== null;
 
   return (
     <>
       <div className="sheet-backdrop" onClick={onClose} role="presentation" />
       <div
-        className="sheet overview-sheet"
+        className={
+          target.kind === 'unknown'
+            ? 'sheet overview-sheet is-unrecognized'
+            : 'sheet overview-sheet'
+        }
         role="dialog"
         aria-modal="true"
         aria-labelledby="overview-title"
@@ -541,68 +619,107 @@ function RecipeOverview({
           <CloseIcon />
         </button>
 
-        {/* List entry data: renders before the file read finishes. The wrapper
-            carries the hero size; the square thumb fills it (see the row-sizing
-            note in recipe-overview.css). An unrecognized entry has no photo, so
-            it gets the same letter avatar the list card shows, carrying the
-            danger "Unbekannt" badge in the image's bottom-left corner. A
-            recognized recipe carries no badge: that it is on the plan is already
+        {/* Hero: only a recognized recipe has an image. An unrecognized entry
+            deliberately shows none (decided with the user) — the list card's
+            danger "unbekannt" symbol already marks it, and its own badge sits in
+            the caption/value row below instead of on an image. The body then
+            starts at the top and
+            reserves the close button's line above itself (see
+            .overview-sheet.is-unrecognized in recipe-overview.css). A recognized
+            recipe's hero carries no badge: that it is on the plan is already
             stated by its "Geplant" value and its "Umplanen" action, and the home
             screen only ever shows a planned recipe in the "Essensplan" section
             ("Restliche Sammlung" leaves the planned ones out). */}
-        <div className="overview-hero">
-          {target.kind === 'unknown' ? (
-            <>
-              <TitleThumb title={target.displayText} />
-              <span className="recipe-badge recipe-badge-unknown recipe-badge-on-media">
-                <ErrorIcon className="recipe-badge-icon" />
-                <span>Unbekannt</span>
-              </span>
-            </>
-          ) : (
+        {target.kind === 'recipe' && (
+          <div className="overview-hero">
             <RecipeThumb recipe={target.recipe} token={token} />
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="overview-body">
           <h2 className="overview-title" id="overview-title">
             {title}
           </h2>
 
+          {/* The unrecognized entry's free-text note, in its written
+              parentheses and in the description's typography (decided with the
+              user): it is a remark about the dish, so it reads under the title,
+              not inside it. Exactly one of the two lines exists — a recipe has
+              a description, an unrecognized entry has a note. */}
+          {note !== null && <p className="overview-description">{note}</p>}
+
           {target.kind === 'recipe' && description !== undefined && description !== '' && (
             <p className="overview-description">{description}</p>
           )}
 
-          {/* Caption/value row under the description. "Geplant" leads (decided
-              with the user): when a dish is on the plan, the size to cook is
-              what this opening is about, and the plan fact should be read
-              before the recipe's own timing. Arbeitszeit and Gesamtzeit follow
-              as the recipe's lookup values after the description introduced the
-              dish. The shared row gives the plan size the app's established
-              caption/value look with no new visual language. */}
-          {target.kind === 'recipe' &&
-            (prepTime !== null || totalTime !== null || plannedText !== null) && (
-              <dl className="overview-meta">
-                {plannedText !== null && (
-                  <div className="overview-meta-item">
-                    <dt>Geplant</dt>
-                    <dd>{plannedText}</dd>
-                  </div>
-                )}
-                {prepTime !== null && (
-                  <div className="overview-meta-item">
-                    <dt>Arbeitszeit</dt>
-                    <dd>{prepTime}</dd>
-                  </div>
-                )}
-                {totalTime !== null && (
-                  <div className="overview-meta-item">
-                    <dt>Gesamtzeit</dt>
-                    <dd>{totalTime}</dd>
-                  </div>
-                )}
-              </dl>
-            )}
+          {/* Caption/value row under the description. For a recognized recipe
+              "Geplant" leads (decided with the user): when a dish is on the
+              plan, the size to cook is what this opening is about, and the plan
+              fact should be read before the recipe's own timing. Arbeitszeit and
+              Gesamtzeit follow as the recipe's lookup values after the
+              description introduced the dish. An unrecognized entry leads the
+              same row with its "Unbekannt" badge and then names the two facts
+              its line carries: the size it states ("Geplant", exactly like a
+              known planned recipe) and, right after it, the domain of its link
+              behind the caption "Link". The shared row gives all of them the
+              app's established caption/value look with no new visual language. */}
+          {hasMeta && (
+            <dl className="overview-meta">
+              {/* The unrecognized entry's state marker leads the row (decided
+                  with the user): "Geplant" and "Link" name facts of the line,
+                  while the badge says what kind of line this is, so it is read
+                  first. Its own wrapper class, not the caption/value item's: a
+                  badge has no value text to sit on, so the wrapper centres it
+                  in the row's line box (see .overview-meta-badge). It is a div
+                  child of the dl like the caption/value items — a badge is a
+                  state, not a caption with a value — and the row's flex layout
+                  keeps it on that same line. */}
+              {target.kind === 'unknown' && (
+                <div className="overview-meta-badge">
+                  <span className="recipe-badge recipe-badge-unknown">
+                    <HelpIcon className="recipe-badge-icon" />
+                    <span>Unbekannt</span>
+                  </span>
+                </div>
+              )}
+              {plannedText !== null && (
+                <div className="overview-meta-item">
+                  <dt>Geplant</dt>
+                  <dd>{plannedText}</dd>
+                </div>
+              )}
+              {linkHref !== null && linkDomain !== null && (
+                <div className="overview-meta-item">
+                  <dt>Link</dt>
+                  <dd>
+                    {/* A new tab, like "Jetzt kochen": the Drive access token is
+                        memory-only, so navigating this tab away would demand a
+                        fresh Google sign-in on return. */}
+                    <a
+                      className="overview-link"
+                      href={linkHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {linkDomain}
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {prepTime !== null && (
+                <div className="overview-meta-item">
+                  <dt>Arbeitszeit</dt>
+                  <dd>{prepTime}</dd>
+                </div>
+              )}
+              {totalTime !== null && (
+                <div className="overview-meta-item">
+                  <dt>Gesamtzeit</dt>
+                  <dd>{totalTime}</dd>
+                </div>
+              )}
+            </dl>
+          )}
 
           {target.kind === 'recipe' && details === null && loadError === null && (
             <p className="overview-loading" role="status">

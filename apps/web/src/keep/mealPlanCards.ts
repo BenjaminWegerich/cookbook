@@ -9,8 +9,13 @@
  *   recipe (see `parseMealPlanText` / `plannedAmountFitsRecipe` in
  *   @cookbook/core). The card shows the known recipe format (photo, title).
  * - **Unrecognized** — everything else, including a known title whose suffix
- *   does not fit. The card shows a placeholder image derived from the text and
- *   the entry's complete text as its title.
+ *   does not fit. The card shows the danger "unbekannt" symbol in place of a
+ *   photo (no recipe stands behind the entry) and the entry's title without
+ *   its stated size and without a trailing free-text note. The parts the
+ *   parser recognized are not lost: the stated size, the note and the link
+ *   travel on the card and are shown by the recipe overview (the size as its
+ *   "Geplant" value like a known planned recipe, the note as a line under the
+ *   title, the link as the domain after "Geplant" — all decided with the user).
  *
  * Every recognized entry reads its recipe file once (cached per title, and the
  * file's raw text is cached by the Drive layer, so repeated entries of the same
@@ -34,6 +39,7 @@ import {
   mealPlanEntryLabel,
   parseMealPlanText,
   plannedAmountFitsRecipe,
+  splitTitleNote,
   writtenPlannedAmount,
   type MealPlanRecipeInfo,
   type PlannedAmount,
@@ -52,14 +58,41 @@ export interface MealPlanCard {
   /**
    * The entry in human form without its export URL — "Kürbissuppe (6
    * Portionen)", or the whole text when it states no parsable size. This is what
-   * an unrecognized card shows and what the search matches; the raw `text` would
-   * put a long URL on the card.
+   * an unrecognized card's search matches and what the notices and the
+   * shopping-list selection name; the raw `text` would put a long URL there.
    */
   displayText: string;
+  /**
+   * The title a card shows: the parser's title candidate without a trailing
+   * free-text note (core's `splitTitleNote`), so an unrecognized
+   * "Tiramisu (klassisch)" stands on the card as "Tiramisu". A recognized
+   * card's title is its recipe title instead (the two are equal by
+   * construction, because recognition matched the parser's title candidate).
+   */
+  title: string;
+  /**
+   * The entry's trailing free-text note with its parentheses ("(klassisch)"),
+   * or null. It is not part of the title; the overview shows it as a line of
+   * its own under the title.
+   */
+  note: string | null;
   /** The recognized recipe (photo + title), or null when unrecognized. */
   recipe: StoredRecipe | null;
-  /** The size the entry states, when it fits the recognized recipe. */
+  /**
+   * The size the entry states, or null when it states none. For a recognized
+   * card it has passed the fit check (`plannedAmountFitsRecipe`); an
+   * unrecognized card carries whatever the text states, so its overview can
+   * show the size as its "Geplant" value exactly like a known planned recipe
+   * (decided with the user).
+   */
   planned: PlannedAmount | null;
+  /**
+   * The export (or hand-written) link the entry carries, or null. The title
+   * never shows it (that is what `displayText` and `title` are for); an
+   * unrecognized entry's overview names its domain after "Geplant" (decided
+   * with the user).
+   */
+  link: string | null;
   /**
    * The size the recipe is *written* in (core's `writtenPlannedAmount`), or null
    * for an unrecognized card. It is the fallback for a recognized entry that
@@ -170,12 +203,25 @@ export async function resolveMealPlan(
       }
     }
 
+    // The title a card shows is the parser's candidate without a trailing
+    // free-text note (display-only: the recognition above ran on the untouched
+    // candidate, so a recipe whose name carries the parenthetical still
+    // matched). A recognized card renders its recipe title instead.
+    const displayTitle = splitTitleNote(parsed.title);
+
     cards.push({
       key: `${index}:${text}`,
       text,
       displayText: mealPlanEntryLabel(parsed.title, parsed.planned),
+      title: displayTitle.title,
+      note: displayTitle.note,
       recipe: recognized ? recipe : null,
-      planned: recognized ? parsed.planned : null,
+      // The stated size travels on every card: a recognized one has passed the
+      // fit check above, an unrecognized one shows it as its "Geplant" value
+      // (it cannot be scaled — there is no recipe behind the entry — so it is a
+      // display fact there, decided with the user).
+      planned: parsed.planned,
+      link: parsed.link,
       writtenPlanned: recognized && file !== null ? writtenPlannedAmount(file) : null,
     });
   }

@@ -51,17 +51,27 @@
 }
 
 /* Hero: the size (56 % of the content width — a preferred number like the
-   ladder) lives on this plain wrapper, centered. The wrapper deliberately has
+   ladder) lives on this plain wrapper, centered. Only a recognized recipe has
+   one; an unrecognized entry's sheet starts with its body (see
+   `.overview-sheet.is-unrecognized` below). The wrapper deliberately has
    no aspect ratio of its own: a grid item that carries the aspect ratio *and*
    a percentage width does not reserve its row height, so the image overflowed
    its row and painted over the details. Here the wrapper is an ordinary block
    item whose height is set by its in-flow child (the square thumb), which sizes
-   the row reliably. It is also the positioning context of the plan status badge
-   that lies on the image (`.recipe-badge-on-media`, see recipe-list.css). */
+   the row reliably. */
 .overview-hero {
   position: relative;
   width: 56%;
   margin-inline: auto;
+}
+
+/* The unrecognized entry's sheet carries no hero, so its body is the first
+   in-flow element and would start under the absolutely positioned close button
+   (top right, `--space-6` inset + `--space-9` square). That band is reserved
+   above the body, so the title starts exactly at the button's lower edge and a
+   long title can never run beneath it. */
+.overview-sheet.is-unrecognized .overview-body {
+  padding-block-start: var(--space-9);
 }
 
 /* Square photo / letter avatar, rounded like the recipe cards. */
@@ -105,6 +115,16 @@
   gap: var(--space-2);
 }
 
+/* The unrecognized entry's "Unbekannt" badge leads the same row, but it is not a
+   caption/value pair: it has no value text whose baseline it could share, so
+   baseline alignment anchored the badge's shorter box by its own baseline and
+   left it visibly high next to the 18 px values. This wrapper instead centres
+   the badge in the row's line box, which puts its label on the values' line. */
+.overview-meta-badge {
+  display: flex;
+  align-items: center;
+}
+
 .overview-meta dt {
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
@@ -119,6 +139,18 @@
 
 .overview-description {
   margin: 0;
+}
+
+/* The "Link" value of an unrecognized meal-plan entry: the domain the entry's
+   link points at, as the one real anchor in the app (nothing else links out of
+   a sheet). It carries the accent colour and an underline, so it is readable as
+   a link at a glance — the browser's default link colours are cold and outside
+   the warm palette (docs/CODING_CONVENTIONS.md). The weight comes from
+   `.overview-meta dd` like every other value in the row. */
+.overview-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px; /* ladder value */
 }
 
 .overview-loading {

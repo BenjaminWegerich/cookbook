@@ -27,6 +27,7 @@ import {
   mealPlanEntryTextWithShortLink,
   parseMealPlanText,
   plannedAmountFitsRecipe,
+  splitTitleNote,
   type MealPlanRecipeInfo,
 } from './mealPlan.js';
 import type { PlannedAmount } from './planLink.js';
@@ -253,6 +254,52 @@ describe('parseMealPlanText — link shape', () => {
       title: text,
       planned: null,
       link: null,
+    });
+  });
+});
+
+describe('splitTitleNote', () => {
+  it('peels a trailing free-text note off the title, keeping its parentheses', () => {
+    expect(splitTitleNote('Tiramisu (klassisch)')).toEqual({
+      title: 'Tiramisu',
+      note: '(klassisch)',
+    });
+  });
+
+  it('takes the last parenthetical, leaving an inner note in the title', () => {
+    // "Kürbissuppe (mit Sahne) (6 Teller)": the last group is the note, because
+    // a group before it may well be part of the dish's name.
+    expect(splitTitleNote('Kürbissuppe (mit Sahne) (6 Teller)')).toEqual({
+      title: 'Kürbissuppe (mit Sahne)',
+      note: '(6 Teller)',
+    });
+  });
+
+  it('leaves a title without a trailing parenthetical untouched', () => {
+    expect(splitTitleNote('Kürbissuppe')).toEqual({ title: 'Kürbissuppe', note: null });
+    expect(splitTitleNote('Ragù (mit Pilzen) mit Brot')).toEqual({
+      title: 'Ragù (mit Pilzen) mit Brot',
+      note: null,
+    });
+  });
+
+  it('does not split a text that is nothing but a parenthetical', () => {
+    expect(splitTitleNote('(klassisch)')).toEqual({ title: '(klassisch)', note: null });
+  });
+
+  it('does not split nested parentheses', () => {
+    // A nested group has no rule of its own and does not occur in practice; it
+    // stays in the title rather than being cut in half.
+    expect(splitTitleNote('Kürbissuppe (mit (viel) Sahne)')).toEqual({
+      title: 'Kürbissuppe (mit (viel) Sahne)',
+      note: null,
+    });
+  });
+
+  it('trims the title it is handed', () => {
+    expect(splitTitleNote('  Tiramisu (klassisch)  ')).toEqual({
+      title: 'Tiramisu',
+      note: '(klassisch)',
     });
   });
 });

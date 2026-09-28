@@ -354,9 +354,10 @@
 /* Card badges: small all-caps state markers, one look for every instance (the
    editor's ingredient tags use the same recipe). A badge is plain content
    inside its card or row and never a hitbox of its own — the whole card is the
-   single tap target. On the cards and in the overview the badge lies on the
-   media area (bottom-left, `.recipe-badge-on-media` below); in the
-   shopping-list selection it stays inline after the entry's text
+   single tap target. An unrecognized meal-plan card carries no badge: its media
+   area *is* the danger symbol (`.recipe-thumb-unknown` below). The badge itself
+   leads the recipe overview's caption/value row and sits inline after an
+   entry's text in the shopping-list selection
    (styles/shopping-list-select.css). */
 .recipe-badge {
   display: inline-flex;
@@ -382,29 +383,16 @@
   color: currentColor;
 }
 
-/* "Unbekannt" (Essensplan): the entry does not name a recipe of
+/* "Unbekannt" (meal plan): the entry does not name a recipe of
    the collection, so nothing here can be scaled or cooked from. */
 .recipe-badge-unknown {
   background: var(--color-danger);
 }
 
-/* A badge that lies *on* the media area (card photo / letter avatar, overview
-   hero): pinned to the bottom-left corner of the image at one ladder step from
-   its edges. The white ring around the fill (the paper surface colour) keeps
-   the badge readable on any photo; the shopping-list selection deliberately
-   does not use this class — there the badge stays after the entry's text. */
-.recipe-badge-on-media {
-  position: absolute;
-  inset-block-end: var(--space-3);
-  inset-inline-start: var(--space-3);
-  border: 2px solid var(--color-surface);
-}
-
-/* Wrapper that puts a card's media area and its overlaid badge into one
-   positioning context. Plain block, so the square thumb keeps filling the card
-   width exactly as it did as a direct child. */
+/* Wrapper that groups a card's media area (the photo / avatar / symbol) as one
+   grid slot above the title. Plain block, so the square thumb keeps filling the
+   card width exactly as it would as a direct child. */
 .recipe-media {
-  position: relative;
   display: block;
 }
 

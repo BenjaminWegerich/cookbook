@@ -12,7 +12,8 @@
 > integration has started: its gateway (`apps/keep-gateway/`) reads both Keep lists over a
 > thin HTTP boundary, and the web app shows the meal plan as the first of the recipe list's two
 > captioned sections („Essensplan“ over „Restliche Sammlung“, entry recognition, the
-> „Unbekannt“ badge) and writes a planned dish back, linking it at the recipe's HTML export
+> danger „unbekannt“ symbol that is an unrecognized card's media area) and writes a planned
+> dish back, linking it at the recipe's HTML export
 > behind the caller's Google sign-in, degrading to "Keep off" when the gateway is unreachable. That export link is served by a
 > small Apps Script web app (`apps/export-host/`), because a Drive viewer renders the stored
 > file without running its script; without a host the app falls back to Drive links.
@@ -190,22 +191,28 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   value 1–30 on a finished dish, a ladder value in the recipe's own family unit on an ingredient
   recipe, and one the recipe's export really bakes. The logic is framework-free and unit-tested
   in `packages/core/src/mealPlan.ts`. Only entries that state a size need a recipe file read, and
-  the Drive content cache makes repeated entries free.
-- **Cards.** Recognized entries use the known card format. Unrecognized entries render with the
-  shared letter
-  avatar, the entry's text without the export link (title and stated size) and a danger
-  „Unbekannt“ badge, and are tappable: the recipe overview is their destination,
-  where the entry can be replaced by an existing recipe or by a new one (manual or AI) or
-  dropped from the plan with „Vom Plan entfernen“. A badge is never a hitbox of its own — the
-  whole card is.
+  the Drive content cache makes repeated entries free. A trailing parenthetical that is not a
+  size stays in the title candidate, so a recipe whose name carries it is still found; for an
+  entry that matches no recipe, `splitTitleNote` separates it as a free-text note.
+- **Cards.** Recognized entries use the known card format. An unrecognized entry renders with
+  the danger „unbekannt“ symbol as its whole media area (no photo, no badge; the glyph is the
+  question mark of `HelpIcon`, so the state reads as "not known yet" and not as a failure) and
+  its title without export link, stated size and free-text note — the shape a known card has —
+  and is tappable: the recipe overview is its destination, where the entry can be replaced by
+  an existing recipe or by a new one (manual or AI) or dropped from the plan with „Vom Plan
+  entfernen“.
 - **Recipe overview.** A card opens the overview sheet in one of three forms. A recipe that is
   not on the meal plan is unchanged. A planned recipe shows the entry's stated size first in
   its caption/value row („Geplant 6 Portionen“ / „Geplant 1,5 l“) and turns „Einplanen“ into
   „Umplanen“; the hero carries no „Eingeplant“ badge, since the „Geplant“ value and „Umplanen“
   already state the plan, and a planned recipe only ever appears in the „Essensplan“ section
-  („Restliche Sammlung“ leaves it out). An
-  unrecognized entry opens the
-  replace/drop destination described above. „Einplanen“ writes the dish to the meal plan;
+  („Restliche Sammlung“ leaves it out). An unrecognized entry has no hero at all; its
+  caption/value row leads with the danger „Unbekannt“ badge and then shows the parts its line
+  carries: the parsed title, the free-text note as a line of its own under the
+  title (in its written parentheses, in the description's typography), the stated size as the
+  „Geplant“ caption/value item exactly like a known planned recipe, and the link's domain
+  behind a „Link“ caption right after it, opened in a new tab. It then offers the replace/drop
+  destination described above. „Einplanen“ writes the dish to the meal plan;
   „Umplanen“ opens the same overlay in a replan mode that pre-selects the plan's stated size
   and replaces the entry with „Menge ändern“. Every carry-out action ends the flow back at the
   list: a planned recipe's „Vom Plan entfernen“ (in its „Mehr“ menu) and an unrecognized

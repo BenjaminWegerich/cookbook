@@ -958,7 +958,8 @@ function App() {
    * Opens the overview for a card of the "Essensplan" section. A recognized card
    * carries the entry's stated size and is planned by definition ("Umplanen");
    * an unrecognized one opens the destination for replacing or dropping the
-   * entry, because there is no recipe behind it.
+   * entry, because there is no recipe behind it — its stated size, free-text
+   * note and link travel along so the sheet can still show what the line says.
    */
   const openMealPlanOverview = useCallback(
     (card: MealPlanCard): void => {
@@ -970,7 +971,21 @@ function App() {
               onMealPlan: true,
               planned: card.planned,
             }
-          : { kind: 'unknown', text: card.text, displayText: card.displayText },
+          : {
+              kind: 'unknown',
+              // The entry's complete Keep line (the removal and the two create
+              // actions use it verbatim), its human form for the notices, and
+              // the parts the parser recognized — the title without them, the
+              // size to show as "Geplant", the free-text note to show under the
+              // title and the link to name by its domain (see
+              // RecipeOverviewTarget and keep/mealPlanCards).
+              text: card.text,
+              displayText: card.displayText,
+              title: card.title,
+              note: card.note,
+              planned: card.planned,
+              link: card.link,
+            },
       );
       setNav('overview');
     },

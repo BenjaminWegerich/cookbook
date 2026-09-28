@@ -346,14 +346,37 @@ export function SearchIcon({ className }: IconProps) {
 
 /**
  * Circle with an exclamation mark — a problem the user should notice, used by
- * the "Unbekannt" badge: the meal-plan entry does not name a recipe
- * of the collection (or its stated size does not fit).
+ * the `error` tone of the snackbar (components/Snackbar.tsx): an action could
+ * not be completed. The meal-plan "Unbekannt" badge deliberately does not use
+ * it any more (the entry is a gap to fill, not a failure) — see HelpIcon.
  */
 export function ErrorIcon({ className }: IconProps) {
   return (
     <svg className={className} {...ICON_PROPS}>
       <path
         d="M480,680Q497,680 508.5,668.5Q520,657 520,640Q520,623 508.5,611.5Q497,600 480,600Q463,600 451.5,611.5Q440,623 440,640Q440,657 451.5,668.5Q463,680 480,680ZM480,520Q497,520 508.5,508.5Q520,497 520,480L520,320Q520,303 508.5,291.5Q497,280 480,280Q463,280 451.5,291.5Q440,303 440,320L440,480Q440,497 451.5,508.5Q463,520 480,520ZM480,880Q397,880 324,848.5Q251,817 197,763Q143,709 111.5,636Q80,563 80,480Q80,397 111.5,324Q143,251 197,197Q251,143 324,111.5Q397,80 480,80Q563,80 636,111.5Q709,143 763,197Q817,251 848.5,324Q880,397 880,480Q880,563 848.5,636Q817,709 763,763Q709,817 636,848.5Q563,880 480,880ZM480,800Q614,800 707,707Q800,614 800,480Q800,346 707,253Q614,160 480,160Q346,160 253,253Q160,346 160,480Q160,614 253,707Q346,800 480,800ZM480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Circle with a question mark — the "Unbekannt" badge of an unrecognized
+ * meal-plan entry. Decided with the user: the entry names no recipe of the
+ * collection, so the badge must read as "not known yet" rather than as a
+ * failure. It is the error glyph's own sibling — the same ring, the same
+ * weight, only the mark inside differs — so the badge keeps its established
+ * silhouette and the two can never be confused (one is a problem to notice,
+ * the other a gap to fill). The set marks this glyph as auto-mirrored for RTL;
+ * the app's UI is German and LTR only, so the path is used exactly as drawn
+ * (same note as MenuBookIcon).
+ */
+export function HelpIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M478,720Q499,720 513.5,705.5Q528,691 528,670Q528,649 513.5,634.5Q499,620 478,620Q457,620 442.5,634.5Q428,649 428,670Q428,691 442.5,705.5Q457,720 478,720ZM480,880Q397,880 324,848.5Q251,817 197,763Q143,709 111.5,636Q80,563 80,480Q80,397 111.5,324Q143,251 197,197Q251,143 324,111.5Q397,80 480,80Q563,80 636,111.5Q709,143 763,197Q817,251 848.5,324Q880,397 880,480Q880,563 848.5,636Q817,709 763,763Q709,817 636,848.5Q563,880 480,880ZM480,800Q614,800 707,707Q800,614 800,480Q800,346 707,253Q614,160 480,160Q346,160 253,253Q160,346 160,480Q160,614 253,707Q346,800 480,800ZM480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480Q480,480 480,480ZM484,308Q509,308 527.5,324Q546,340 546,364Q546,386 532.5,403Q519,420 502,435Q479,455 461.5,479Q444,503 444,533Q444,547 454.5,556.5Q465,566 479,566Q494,566 504.5,556Q515,546 518,531Q522,510 536,493.5Q550,477 566,462Q589,440 605.5,414Q622,388 622,356Q622,305 580.5,272.5Q539,240 484,240Q446,240 411.5,256Q377,272 359,305Q352,317 354.5,330.5Q357,344 368,351Q382,359 397,356Q412,353 422,339Q433,324 449.5,316Q466,308 484,308Z"
         fill="currentColor"
       />
     </svg>
