@@ -281,6 +281,23 @@ export function rungAbove(value: number): number {
 }
 
 /**
+ * The smallest ladder rung **at or above** `value` (decades included) — the
+ * inclusive counterpart of `rungAbove`, for a caller that wants a range to
+ * start on a rung: the pantry sheet's fine-grained stock pool begins one tenth
+ * of the need up, and that bound is an arbitrary quantity, not a rung
+ * (`stockPool` in ../shoppingList). A value that is a rung is returned as it is.
+ *
+ * @param value a positive finite number (throws otherwise, like `pos`)
+ */
+export function rungAtOrAbove(value: number): number {
+  const above = rungAbove(value);
+  // The rung just below the next one above `value` is either `value` itself
+  // (when `value` is a rung) or the answer by construction.
+  const below = rungBelow(above);
+  return below >= value ? below : above;
+}
+
+/**
  * The largest ladder rung strictly below `value` (decades included) — the
  * counterpart of `rungAbove`, with the same off-ladder tolerance. For a value
  * at or below the smallest table rung (0.1) the decade rule keeps answering

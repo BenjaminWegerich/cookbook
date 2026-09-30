@@ -2,3 +2,5 @@ Additional Unit;Arrangement;Number Scheme;Unit Exact;Shopping Unit
 Becher;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes;yes
 EL;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;no;no
 TL;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;no;no
+Packung;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;yes;yes
+Stück;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;no;yes

@@ -4,18 +4,15 @@
  *
  * It is the second half of the bundled shopping write. The previous page chose
  * *which dishes* are shopped for; this one decides *what is already at home*,
- * per ingredient: every row shows what all the selected dishes need together,
- * a stepper for the stock ("Vorrat"), and the amount that is therefore left to
- * buy ("Einkaufen"). Only that difference reaches the shopping list.
- *
- * The rows come from `../keep/shoppingBundle` (one read per selected recipe),
- * the arithmetic from `@cookbook/core` (`shoppingRow`, `steppedStock`):
+ * per ingredient. The rows come from `../keep/shoppingBundle` (one read per
+ * selected recipe), the arithmetic from `@cookbook/core` (`shoppingRow`,
+ * `stockPrefill`):
  *
  * - the Vorrat starts on `min(need, reorder point)` — the reorder point is the
  *   amount the master data says is on the shelf after a shopping trip;
- * - "Einkaufen" is the need minus the Vorrat, rounded **up** to whole shopping
- *   units (or to whole grams/millilitres without one), so the list never buys
- *   less than the dishes need;
+ * - the amount going on the list is the need minus the Vorrat, rounded **up** to
+ *   whole shopping units (or to whole grams/millilitres without one), so the list
+ *   never buys less than the dishes need;
  * - the rows are filed once, when the page opens: the ingredients the pre-filled
  *   Vorrat already covers go below the ones that still need a purchase. That
  *   filing is a snapshot — a stepper updates its row's amounts in place instead
@@ -23,6 +20,36 @@
  *   live split) — while the amounts and the write always follow the *current*
  *   Vorrat: a row the user fills up shows a dash and is not written, wherever it
  *   stands.
+ *
+ * **One ingredient is three lines, each introduced by the symbol for what it
+ * says** (decided with the user; the sheet's intro paragraph names the symbols):
+ *
+ * 1. the *skillet*: what the selected dishes need together ("2 Becher Joghurt
+ *    (600 g)", core's `needText`);
+ * 2. the *shelves*: the stock picker, as described below;
+ * 3. the *shopping list*: the line that will be written to Keep, word for word,
+ *    including the ingredient name ("1 Packung Mehl (1 kg)") — decided with the
+ *    user, so the row shows the exact wording the list will carry — or a dash
+ *    when nothing is to buy. It is plain text like the other two lines, not a
+ *    boxed field (decided with the user).
+ *
+ * **The picker offers only the stock values that change the result** (decided
+ * with the user; computed by core's `stockPool`, so the shapes below are core's
+ * decision and this page only renders them):
+ *
+ * - a need within six exact shopping units becomes one **chip per result**
+ *   ("0 g", "200 g", "1,2 kg") — the most common case, "everything is at home",
+ *   is a single tap on the last chip. A chip's amount means "at least this much
+ *   is in the pantry" (the intro says so), which is why no chip carries a
+ *   comparison sign;
+ * - a larger need in exact packs becomes a **stepper that walks whole packs**
+ *   (its value box opens a keyboard, and the chip beside it names the amount
+ *   from which nothing is bought: "1,2 kg");
+ * - without a shopping unit the stepper walks the **ladder** from a tenth of the
+ *   need up, with the same shortcut chip;
+ * - an **approximate** shopping unit ("Stück") adds its count beside the stepper
+ *   ("2 Stück"), because grams on the shelf and pieces in a recipe are two
+ *   readings of one stock.
  *
  * "Einkaufsliste schreiben" writes one line per row that currently has something
  * to buy, exactly as displayed, through App (which owns the Keep write, the
@@ -35,10 +62,21 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { shoppingRow, stockPrefill, type ShoppingRow } from '@cookbook/core';
+import {
+  needText,
+  shoppingRow,
+  stockCountText,
+  stockPool,
+  stockPrefill,
+  type ShoppingNeed,
+  type ShoppingRow,
+  type StockPool,
+} from '@cookbook/core';
 
 import { resolveShoppingBundle, type ShoppingBundle } from '../keep/shoppingBundle';
 import type { MealPlanCard } from '../keep/mealPlanCards';
+import { ListPlusIcon, ShelvesIcon, SkilletIcon } from './icons';
+import StockChips from './StockChips';
 import StockStepper from './StockStepper';
 
 interface PantrySelectProps {
@@ -63,6 +101,16 @@ interface PantrySelectProps {
 /** One row's identity: the ingredient name plus the unit it is needed in. */
 function rowKey(ingredient: string, baseUnit: string): string {
   return `${ingredient}\u0000${baseUnit}`;
+}
+
+/**
+ * One rendered row: what the ingredient needs, the amount its current stock
+ * leaves to buy, and the stock values the picker offers for it.
+ */
+interface PantryEntry {
+  readonly need: ShoppingNeed;
+  readonly row: ShoppingRow;
+  readonly pool: StockPool;
 }
 
 /**
@@ -122,10 +170,18 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
           ...bundle.needs.filter((need) => stockPrefill(need) >= need.needed),
         ];
 
-  /** The rows with the amounts of the *current* Vorrat (see above). */
-  const rows: ShoppingRow[] = orderedNeeds.map((need) => {
+  /**
+   * The rows with the amounts of the *current* Vorrat (see above), each with the
+   * stock pool its picker offers. Built from the needs rather than from the rows,
+   * because the pool needs the need the row was derived from.
+   */
+  const entries: PantryEntry[] = orderedNeeds.map((need) => {
     const chosen = stocks.get(rowKey(need.ingredient, need.baseUnit));
-    return shoppingRow(need, chosen === undefined ? stockPrefill(need) : chosen);
+    return {
+      need,
+      row: shoppingRow(need, chosen === undefined ? stockPrefill(need) : chosen),
+      pool: stockPool(need),
+    };
   });
 
   /**
@@ -133,7 +189,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
    * list's own order. A row can join or leave this set while its stepper is used
    * without changing its place in the list.
    */
-  const toBuy = rows.filter((row) => !row.covered);
+  const toBuy = entries.map((entry) => entry.row).filter((row) => !row.covered);
 
   /** Remembers one stepper's new stock. */
   function setStock(row: ShoppingRow, next: number): void {
@@ -163,32 +219,60 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
     }
   }
 
-  /** One ingredient row: name, Vorrat stepper, and the amount left to buy. */
-  function renderRow(row: ShoppingRow): ReactNode {
+  /** One ingredient row: its need, its stock picker and the line it puts on the
+   *  shopping list, each on a line of its own with the symbol for what the line
+   *  says (see the file header). */
+  function renderRow(entry: PantryEntry): ReactNode {
+    const { need, row, pool } = entry;
     return (
       <div className="pantry-row" key={rowKey(row.ingredient, row.baseUnit)}>
-        {/* The name and the amount sit in cells of their own: the wide layout
-            stretches every cell over the row's height, so their content is
-            centered inside the cell (see styles/pantry-select.css). */}
-        <span className="pantry-name-cell">
-          <span className="pantry-name">{row.ingredient}</span>
-        </span>
-        <StockStepper
-          value={row.stock}
-          needed={row.needed}
-          baseUnit={row.baseUnit}
-          onChange={(next) => setStock(row, next)}
-          label={`Vorrat für ${row.ingredient}`}
-        />
-        {/* A covered row has nothing to buy: the dash says so where the amount
-            would stand. It is a read-only field, not an input — the value is
-            derived, never typed (the "Vorschau" look of the create-ingredient
-            sheet). */}
-        <span className="pantry-buy-cell">
-          <span className={row.covered ? 'pantry-buy pantry-buy-empty' : 'pantry-buy'}>
-            {row.covered ? '—' : row.text}
+        {/* What the selected dishes need together, in the ingredient's familiar
+            arrangement. The symbol introduces the line; `title` spells it out for
+            a hover and for assistive tech, which sees the symbol as decorative. */}
+        <div className="pantry-line">
+          <SkilletIcon className="pantry-symbol" />
+          <span className="pantry-line-text" title="Bedarf">
+            {needText(need)}
           </span>
-        </span>
+        </div>
+        {/* What is at home: the pool's stock values, as chips (few possible
+            results) or as the stepper with its count field and the "enough"
+            chip. The picker names the ingredient itself (aria-label), so the
+            symbol stays decorative. */}
+        <div className="pantry-line">
+          <ShelvesIcon className="pantry-symbol" />
+          {pool.kind === 'chips' ? (
+            <StockChips
+              values={pool.values}
+              value={row.stock}
+              baseUnit={row.baseUnit}
+              onChange={(next) => setStock(row, next)}
+              label={`Vorrat für ${row.ingredient}`}
+            />
+          ) : (
+            <StockStepper
+              values={pool.values}
+              value={row.stock}
+              baseUnit={row.baseUnit}
+              countText={pool.showsUnitCount ? stockCountText(need, row.stock) : null}
+              onChange={(next) => setStock(row, next)}
+              label={`Vorrat für ${row.ingredient}`}
+            />
+          )}
+        </div>
+        {/* The line this row writes to Keep, word for word — the same string the
+            write sends (`ShoppingRow.text`), so the sheet can never show a
+            different wording than the list gets. A covered row has nothing to
+            buy, so it shows a dash. */}
+        <div className="pantry-line">
+          <ListPlusIcon className="pantry-symbol" />
+          <span
+            className={row.covered ? 'pantry-line-text pantry-line-text-empty' : 'pantry-line-text'}
+            title="Einkaufsliste"
+          >
+            {row.text ?? '—'}
+          </span>
+        </div>
       </div>
     );
   }
@@ -209,7 +293,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
         </p>
       );
     }
-    if (rows.length === 0) {
+    if (entries.length === 0) {
       return (
         <p className="pantry-empty" role="status">
           Die ausgewählten Gerichte haben keine Zutaten.
@@ -218,16 +302,12 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
     }
     return (
       <div className="pantry-table" role="group" aria-label="Zutaten und Vorräte">
-        <div className="pantry-head" aria-hidden="true">
-          <span className="pantry-head-name">Zutat</span>
-          <span className="pantry-head-stock">Vorrat</span>
-          <span className="pantry-head-buy">Einkaufen</span>
-        </div>
-        {/* One list: the two parts the rows were filed into at the start (the
-            ones to buy first) are not separated by a rule — the "Einkaufen"
-            column already says which row currently needs something (decided with
-            the user). */}
-        {rows.map(renderRow)}
+        {/* No header row any more (decided with the user): the two lines of a
+            row name everything they show, and a caption row only cost height on
+            a phone. One list — the two parts the rows were filed into at the
+            start (the ones to buy first) are not separated by a rule — the "Auf
+            die Liste" field already says which row currently needs something. */}
+        {entries.map(renderRow)}
       </div>
     );
   }
@@ -245,9 +325,15 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
         <h1>Vorräte auswählen</h1>
       </header>
 
+      {/* The instruction under the title: it names the three symbols of a row (a
+          row itself carries no captions), says where the stock is set, and gives
+          the one reading the chip amounts cannot show by themselves. */}
       <p className="pantry-select-intro">
-        Je Zutat die vorhandene Menge auswählen – nur die Differenz zur benötigten Menge wird auf
-        die Einkaufsliste gesetzt.
+        Je Zutat drei Zeilen: <SkilletIcon className="pantry-intro-icon" /> Bedarf,{' '}
+        <ShelvesIcon className="pantry-intro-icon" /> Vorrat,{' '}
+        <ListPlusIcon className="pantry-intro-icon" /> Einkaufsliste – die unterste Zeile steht
+        genau so auf der Liste. Den Vorrat stellst du in der mittleren Zeile ein: die Chips heißen
+        „so viel habe ich <strong>mindestens</strong> im Vorrat“.
       </p>
 
       {renderList()}
@@ -257,7 +343,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
           same arrangement the previous page's forward button uses. It only
           exists while there is something to buy: with every ingredient covered,
           the write would add nothing (and the gateway refuses an empty write). */}
-      {rows.length > 0 && (
+      {entries.length > 0 && (
         <div className="pantry-actions">
           <button
             type="button"

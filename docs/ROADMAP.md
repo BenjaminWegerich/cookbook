@@ -100,6 +100,13 @@ not where it is used.
       itself.
 - [ ] Sort the shopping list by category/aisle (needs the shopping-route master data,
       storage_format.md §10), applied server-side via `List.sort_items`.
+- [ ] Give the additional units a plural form: a unit's name is used as it stands, so a count
+      above one reads „2 Packung Mehl (2 kg)“ instead of „2 Packungen Mehl (2 kg)“. Needs a
+      plural column in `docs/additional_units.csv` (compiled by the generator), the substitution
+      in core's arrangement renderer, and an update of §3 of
+      `additional_quantity_specifications.md`. Counting units that are invariant (Becher,
+      Stück) would leave the cell empty. Decided with the user to defer this until after the
+      stock picker work.
 
 ### Next steps, in order
 

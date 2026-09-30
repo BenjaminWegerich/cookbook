@@ -9,6 +9,7 @@ import {
   roundToRung,
   roundedBQ,
   rungAbove,
+  rungAtOrAbove,
   rungBelow,
   scale,
 } from './ladder.js';
@@ -246,5 +247,22 @@ describe('rungAbove / rungBelow', () => {
       expect(() => rungAbove(value)).toThrow();
       expect(() => rungBelow(value)).toThrow();
     }
+  });
+});
+
+describe('rungAtOrAbove', () => {
+  it('returns a ladder value itself', () => {
+    expect(rungAtOrAbove(1000)).toBe(1000);
+    expect(rungAtOrAbove(0.1)).toBe(0.1);
+    expect(rungAtOrAbove(1)).toBe(1);
+  });
+
+  it('rounds up between two rungs (the pantry pool’s lower bound)', () => {
+    // A tenth of a summed need is an arbitrary quantity: 85 g starts the pool
+    // on 90 g, 1150 g on 1200 g.
+    expect(rungAtOrAbove(85)).toBe(90);
+    expect(rungAtOrAbove(1150)).toBe(1200);
+    expect(rungAtOrAbove(0.5)).toBe(0.5);
+    expect(rungAtOrAbove(0.45)).toBe(0.5);
   });
 });

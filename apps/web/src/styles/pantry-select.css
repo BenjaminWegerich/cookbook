@@ -1,23 +1,27 @@
 /**
  * Pantry sheet styles — the "Vorräte auswählen" page (components/PantrySelect)
- * with its compact stock stepper (components/StockStepper).
+ * with its stock picker (components/StockChips and components/StockStepper).
  *
- * The list has three columns under one header row: the ingredient name, the
- * Vorrat stepper and the amount that is left to buy. Two layouts share one
- * markup (decided with the user):
+ * **One ingredient is three lines, each introduced by the symbol for what it
+ * says** (decided with the user; the sheet's intro paragraph names the symbols):
  *
- * - **from 30 rem upwards**, the table itself is the grid and the header/row
- *   elements are `display: contents`, so every cell is an item of *one* grid:
- *   the columns can then be sized to their content (`max-content`) and still
- *   line up across all rows — a per-row grid would size itself to each row's own
- *   text and let the columns jitter. `width: fit-content` makes the surface only
- *   as wide as its content requires, so it stays a compact table on a desktop
- *   screen instead of stretching three columns across the window;
- * - **below 30 rem** (any phone held upright), the header and each row are their
- *   own two-area grid: the "Einkaufen" field moves under the stepper while the
- *   name keeps the left column, and the columns share the available width, so
- *   nothing is squeezed into an unreadable sliver. The surface fills the page
- *   here, as every other list of the app does.
+ * 1. the *skillet*: what the selected dishes need together, in the ingredient's
+ *    familiar arrangement ("2 Becher Joghurt (600 g)");
+ * 2. the *shelves*: the stock picker — one chip per possible result, or the
+ *    stepper with the chip that names the amount from which nothing is bought
+ *    (and, for an approximate shopping unit, the stock's count in that unit);
+ * 3. the *shopping list*: the line the row writes to Keep, word for word,
+ *    including the ingredient name ("1 Packung Mehl (1 kg)"), or a dash when
+ *    nothing is to buy. Written like the other two lines (decided with the user):
+ *    plain text, one weight, no box.
+ *
+ * The previous three-column table (name / Vorrat / Einkaufen with a caption row)
+ * is gone: the symbols carry the captions now, so nothing has to be squeezed into
+ * a narrow column, and the layout is the same on every screen (no breakpoint).
+ *
+ * The chips reuse the app's global chip look (".chip" / ".chip-active" in
+ * styles/editor.css), so a selected stock and a selected quantity read alike;
+ * only the "nothing to buy" chip gets a look of its own.
  *
  * All pixel values come from the design ladder (docs/CODING_CONVENTIONS.md);
  * colors and sizes reference the tokens in styles/tokens.css.
@@ -33,11 +37,26 @@
 /* The instruction under the title: one quiet paragraph, as wide as the page
    (the same shape as the selection page's intro). Deliberately *not* capped to a
    reading measure — the cap would break the sentence into short lines on a
-   desktop screen while the list around it is wide (decided with the user). */
+   desktop screen while the list around it is wide (decided with the user). It
+   carries the three row symbols inline: the list itself has no captions, so this
+   paragraph is where the symbols get their names (decided with the user). */
 .pantry-select-intro {
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+}
+
+/* A row symbol inside the intro paragraph: the same 14 px as a tag icon
+   (--space-5), sat on the text's optical centre. An inline-block's baseline is
+   its bottom edge, which would leave the box sitting on the baseline; pulling it
+   down by the ladder's 3 px centres it on the lower-case body of the text. The
+   glyph itself follows the paragraph's colour (`currentColor`), like every icon.
+   The line's own symbols use --icon-size (24 px) — see `.pantry-symbol`. */
+.pantry-intro-icon {
+  display: inline-block;
+  vertical-align: -3px;
+  width: var(--space-5);
+  height: var(--space-5);
 }
 
 .pantry-empty,
@@ -63,206 +82,194 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* The two-area layout of a phone: name on the left, the stepper and the
-   "Einkaufen" field stacked in the right column. */
-.pantry-head,
+/* One ingredient: its three lines stacked. The row's inset is the tap-room around
+   the stepper — a finger lands on the buttons, not on the surface edge. */
 .pantry-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-  grid-template-areas:
-    'name stock'
-    'name buy';
-  column-gap: var(--space-4);
-  row-gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-4) var(--space-5);
-}
-
-.pantry-head {
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-block-end: 1px solid var(--color-line);
-}
-
-.pantry-head-name {
-  grid-area: name;
-}
-
-.pantry-head-stock {
-  grid-area: stock;
-}
-
-.pantry-head-buy {
-  grid-area: buy;
+  gap: var(--space-4);
+  padding: var(--space-5);
 }
 
 .pantry-row + .pantry-row {
   border-block-start: 1px solid var(--color-line);
 }
 
-/* The cell wrappers exist for the shared grid of the wide layout (see below):
-   there the name and the amount are stretched over the row's height and their
-   content is centered inside them. On a phone they are simply the two cells
-   that carry the name and the field. */
-.pantry-name-cell,
-.pantry-buy-cell {
-  display: grid;
+/* One of the row's three lines: its symbol, then what the line says. The symbol
+   column is the same on every line, so all three contents start at one x and the
+   symbols read as a column. The symbol is centred against its line's content
+   (decided with the user): beside the middle of a 42 px stepper button, not
+   floating above it. A line whose content wraps (chips, a long amount) keeps the
+   symbol beside the middle of the whole block. */
+.pantry-line {
+  display: flex;
   align-items: center;
+  gap: var(--space-4);
+}
+
+/* A line's symbol: a label, not content — quiet, and always the same size, so the
+   three lines align. Decorative for assistive tech (`aria-hidden` in
+   components/icons.tsx): the line's text carries the meaning, `title` names it,
+   the sheet's intro names the symbol, and the stock line's picker names the
+   ingredient itself. */
+.pantry-symbol {
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  color: var(--color-ink-muted);
+}
+
+/* The text of a symbol line: the need on the first line and the written shopping
+   line on the last one read the same (decided with the user — the list line is
+   plain text like the need, not a boxed field). It wraps like body text instead
+   of being clamped: the amount and the name belong together, and cutting either
+   off would hide what the line says. */
+.pantry-line-text {
   min-width: 0;
-}
-
-.pantry-name-cell {
-  grid-area: name;
-}
-
-.pantry-buy-cell {
-  grid-area: buy;
-}
-
-/* The ingredient name: it may wrap onto a second line, but not push the row
-   taller and taller — a long name (a sub-recipe title) is clamped like the
-   selection page's row titles. */
-.pantry-name {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  min-width: 0;
-  overflow: hidden;
   overflow-wrap: anywhere;
   font-size: var(--text-md);
   font-weight: 600;
-  line-height: 1.3;
 }
 
-/* ---- The "Einkaufen" field ---------------------------------------------- */
+/* Nothing to buy: the dash is a statement, not a value, so it reads muted. */
+.pantry-line-text-empty {
+  color: var(--color-ink-muted);
+}
 
-/* The familiar preview look of the create-ingredient sheet: a read-only,
-   recessed field showing the line that will be written to Keep. It fills its
-   column and wraps its line instead of widening the column. */
-.pantry-buy {
+/* ---- The stock picker (the row's second line) --------------------------- */
+
+/* The chip picker: one chip per stock value that changes the bought amount
+   (components/StockChips). Same chip styling and wrapping as the editor's
+   quantity chips (".quantity-chips" in styles/editor.css), so a row with few
+   results is answered with a single tap. */
+.stock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The stock line's picker: the −/value/+ control, the stock's count in its
+   shopping unit (".stock-count", only for an approximate unit) and the chip that
+   names the amount from which nothing is bought (components/StockStepper). It
+   wraps as a whole, so on a narrow phone the chip moves below the stepper instead
+   of squeezing it. The gap is one step tighter than inside the stepper
+   (--space-6), because the companions belong to the control without being part
+   of it. */
+.stock-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+/* The compact −/value/+ control on the row's stock line, in the app's usual
+   stepper shape (".quantity-row" in styles/editor.css): the buttons keep their
+   42 px circle, the value a fixed box between them, and the whole control is
+   only as wide as that — it does not stretch its two buttons to the screen
+   edges. The fixed value box is what keeps the "+" where it is while the
+   number's text grows ("800 g" → "1,15 kg" → "2 kg"); the same effect the
+   editor's stepper gets from the same box (".quantity-value"). */
+.stock-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  /* The app's usual stepper spacing — `.quantity-row` in styles/editor.css
+     keeps --space-6 between a button and the value. A phone row has room for it
+     now that the stepper has a line of its own (decided with the user). */
+  gap: var(--space-6);
+  /* Content-sized: `fit-content` is a sizing keyword, not a pixel value (the
+     ladder governs the numbers in between). */
+  width: fit-content;
+}
+
+/* The same value type size and box as every other stepper of the app
+   (".quantity-value" in styles/editor.css: --text-lg, 74 px): the stock and the
+   editor's quantity are the same kind of number, so they read the same
+   (decided with the user). 74 px is a ladder value and holds the longest form
+   the quantity format produces ("1,15 kg").
+
+   It is a button: tapping it opens the keyboard for a typed stock (decided with
+   the user), so it drops the button chrome and only reacts to a tap with the
+   app's shared press wash (".step-button" keeps its circle look). `cursor: text`
+   says what the tap does on a desktop screen. */
+.stock-stepper-value {
+  width: 74px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: center;
+  font-family: inherit;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: text;
+}
+
+/* The open value box: as wide as the closed one, so the "+" never moves while
+   typing. The typed number is read in the family base unit (decided with the
+   user), which the small unit label beside it names — the closed box keeps the
+   familiar kg / l reading. */
+.stock-stepper-edit {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 74px;
+}
+
+.stock-stepper-input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: center;
+  font-family: inherit;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+/* The unit of a typed number: a label, not the value — quiet and one step
+   smaller, like the caption of the create-ingredient sheet's preview field. */
+.stock-stepper-unit {
+  flex: none;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* The stock's count in its shopping unit ("2 Stück") for an approximate unit:
+   a recessed field like the create-ingredient sheet's preview (the same
+   read-only look), but muted — it reads the *stock* on the shelf, not the
+   purchase. */
+.stock-count {
   padding: var(--space-3) var(--space-4);
   background: var(--color-bg);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-/* Nothing to buy: the dash is a statement, not a value, so it reads muted. */
-.pantry-buy-empty {
   color: var(--color-ink-muted);
-}
-
-/* ---- The stock stepper --------------------------------------------------- */
-
-/* The compact −/value/+ control of a table cell: the buttons carry the shared
-   pressed look, the value sits between them and never wraps. The gap is the
-   phone-sized one; the wide layout below has room for the app's usual spacing. */
-.stock-stepper {
-  grid-area: stock;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--space-2);
-}
-
-/* The value is a *flexible, centered* box, not a text-sized one: it takes
-   whatever the two buttons leave, so the "+" stays exactly where it is while the
-   number's text grows ("800 g" → "1,15 kg" → "2 kg"). That is the same effect
-   the app's other steppers get from a fixed value width (see .quantity-value in
-   styles/editor.css); here the cell already fixes the total width, so filling it
-   is enough — and it keeps the buttons aligned across rows as a bonus. */
-.stock-stepper-value {
-  flex: 1;
-  min-width: 0;
-  text-align: center;
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   font-weight: 600;
   white-space: nowrap;
 }
 
-/* ---- The wide layout: one grid for the whole table ----------------------- */
+/* The "nothing to buy" chip: the chip picker's last chip and the stepper's
+   shortcut both name the amount from which nothing is bought and carry the check
+   symbol plus the olive covered / success accent — the one tap that answers the
+   most common case, visible at a glance among the clay-accented value chips.
+   Once it is the selected stock it takes the app's usual selected chip look
+   (".chip-active"), which is also the row's "nothing to buy" marker. */
+.chip-covered {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-color: var(--color-olive);
+  color: var(--color-olive);
+}
 
-/* The three columns sit on one line, each as wide as its content requires.
-   The header and the rows dissolve into the table's grid (`display: contents`),
-   which is what lets `max-content` tracks align across rows; the row's own
-   padding, hairline and background move onto the cells for that (a
-   `display: contents` element paints nothing). The hairline of a row is the top
-   border of its cells — they all start at the row's top edge, so the three
-   borders form one continuous line. */
-@media (min-width: 30rem) {
-  .pantry-table {
-    display: grid;
-    grid-template-columns: max-content max-content max-content;
-    /* As wide as the content needs, never wider than the viewport: the tracks
-       shrink (and their text wraps) when the space runs out. */
-    width: fit-content;
-    max-width: 100%;
-  }
-
-  .pantry-head,
-  .pantry-row {
-    display: contents;
-  }
-
-  .pantry-head-name,
-  .pantry-head-stock,
-  .pantry-head-buy,
-  .pantry-name-cell,
-  .stock-stepper,
-  .pantry-buy-cell {
-    grid-area: auto;
-    padding-block: var(--space-4);
-    border-block-start: 1px solid var(--color-line);
-  }
-
-  /* The header's own cells sit under the surface's top border; the line below
-     them belongs to the first row (its cells' top border). */
-  .pantry-head-name,
-  .pantry-head-stock,
-  .pantry-head-buy {
-    border-block-start: none;
-  }
-
-  /* The cell insets that the row padding provided on a phone: the first cell of
-     a row carries the left inset, the last one the right inset, and the space
-     between two columns is the padding of the cell to their left. */
-  .pantry-head-name,
-  .pantry-name-cell {
-    padding-inline: var(--space-5) var(--space-4);
-  }
-
-  .pantry-head-stock,
-  .stock-stepper {
-    padding-inline-end: var(--space-4);
-  }
-
-  /* The app's usual stepper spacing: `.quantity-row` in styles/editor.css keeps
-     --space-6 between a button and the value. A phone row has no room for it,
-     this layout does (decided with the user). */
-  .stock-stepper {
-    gap: var(--space-6);
-  }
-
-  /* A fixed value box here instead of the flexible one: this column is sized by
-     its content (`max-content`), so a value box that grows with its text would
-     widen the column — and with it every row of the table — while a stepper is
-     being pressed ("999 g" → "1 kg" → "1,15 kg"). 56 px (a ladder value) holds
-     the longest form the quantity format produces ("1,15 kg"); the text is
-     centered in it, exactly like the fixed value of the app's other steppers. A
-     phone keeps the flexible box, because there the column's width is already
-     fixed by the layout (decided with the user). */
-  .stock-stepper-value {
-    flex: none;
-    width: 56px;
-  }
-
-  .pantry-head-buy,
-  .pantry-buy-cell {
-    padding-inline-end: var(--space-5);
-  }
+.chip-covered.chip-active {
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 /* ---- Forward action ------------------------------------------------------ */

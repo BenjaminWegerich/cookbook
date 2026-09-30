@@ -295,6 +295,74 @@ export function renderAQS(ingredient: string, bq: number, bu: string): string {
 }
 
 /**
+ * The tolerance of the exact-unit check below: 1/3 · 300 g is 99.999… in binary
+ * floating point, which is the same amount as 100 g.
+ */
+const AMOUNT_EPSILON = 1e-6;
+
+/**
+ * Renders a quantity that is **not a stored recipe quantity** in the
+ * ingredient's familiar arrangement: what a set of dishes needs together (a sum,
+ * see ../shoppingList) or a stock on the shelf — the whole line, including the
+ * ingredient name ("2 Becher Joghurt (600 g)", "1,15 kg Mehl", "60 g
+ * Trockenhefe").
+ *
+ * Two tolerances separate it from renderAQS, and both follow from what the line
+ * is for — *naming an amount that exists*, not displaying a stored recipe value:
+ *
+ * - the quantity need not be a standard number (a need is a sum over dishes; a
+ *   stock comes from the reorder point or from a keyboard), so nothing throws
+ *   and the additional quantity is only ever *displayed* as the nearest ladder
+ *   fraction (§6.1);
+ * - an **exact** unit applies only when its count really brings that amount home.
+ *   For a recipe row it is the point of an exact unit that the count restates the
+ *   amount (§6.3: 350 g of yoghurt shows as "1 Becher Joghurt (400 g)"), but a
+ *   line that names a requirement must not be restated as something else: 350 g
+ *   needed is not 400 g needed, so the mapping is skipped and the search
+ *   continues — down to the base form ("350 g Joghurt"). An approximate unit
+ *   always applies: it keeps the queried amount as the authoritative reading
+ *   ("6 Stück Karotten (500 g)").
+ *
+ * An empty name (the create form's preview before a name is typed) has no
+ * mappings to look up, so the base amount stands alone ("600 g").
+ *
+ * @param ingredient the ingredient name for the arrangement's <IN>
+ * @param bq the quantity to name, in `bu` (need not be a ladder value)
+ * @param bu the base unit family (g / ml) — or any other unit of a stored file
+ */
+export function renderQuantityText(ingredient: string, bq: number, bu: string): string {
+  const amount = formatBQ(bq, bu);
+  // The base form carries the name after the amount; without one it is the amount
+  // alone (an empty arrangement name would leave a dangling space).
+  const base = ingredient === '' ? amount : `${amount} ${ingredient}`;
+  const entry = mappingsFor(ingredient);
+  // Unknown ingredient, foreign family unit or a quantity without an AQ floor
+  // (0 g, a negative): the base form is the whole answer.
+  if (entry === undefined || entry.bu !== bu || !(bq > 0) || !Number.isFinite(bq)) {
+    return base;
+  }
+  for (const mapping of entry.entries) {
+    const au = AU_BY_NAME.get(mapping.au);
+    const value = roundToAQValue(bq / mapping.factor);
+    // Unreachable unit (generator-validated data) or a raw value outside the AQ
+    // range: this mapping cannot be displayed.
+    if (au === undefined || value === null) {
+      continue;
+    }
+    const aq = aqNotation(value);
+    const allowed = NUMBER_SCHEMES[au.numberScheme] ?? EMPTY_SCHEME;
+    if (!allowed.includes(aq)) {
+      continue;
+    }
+    if (au.exact && Math.abs(value * mapping.factor - bq) > AMOUNT_EPSILON) {
+      continue;
+    }
+    return renderSelectedAQ(ingredient, { aq, au, factor: mapping.factor }, bu, bq);
+  }
+  return base;
+}
+
+/**
  * The additional unit an ingredient is **bought** in, or null when it has none
  * (docs/additional_quantity_specifications.md §3.1) — the unit the shopping
  * list names its amount in.

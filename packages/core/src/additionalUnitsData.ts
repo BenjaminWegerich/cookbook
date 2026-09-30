@@ -62,6 +62,20 @@ export const ADDITIONAL_UNITS: readonly AdditionalUnit[] = [
     exact: false,
     shoppingUnit: false,
   },
+  {
+    name: 'Packung',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Stück',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: false,
+    shoppingUnit: true,
+  },
 ];
 
 /** Number schemes: allowed AQ values per scheme, in ladder AQ order. */
@@ -116,8 +130,9 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 1000,
     entries: [
-      { au: 'Becher', factor: 150, priority: 1 },
-      { au: 'EL', factor: 10, priority: 2 },
+      { au: 'Packung', factor: 1000, priority: 1 },
+      { au: 'Becher', factor: 150, priority: 2 },
+      { au: 'EL', factor: 10, priority: 3 },
     ],
   },
   Butter: {
@@ -168,5 +183,10 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     entries: [],
+  },
+  Karotten: {
+    bu: 'g',
+    reorderPoint: 0,
+    entries: [{ au: 'Stück', factor: 80, priority: 1 }],
   },
 };

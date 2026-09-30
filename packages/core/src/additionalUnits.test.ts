@@ -11,6 +11,7 @@ import {
   selectAQ,
   selectAQForEntry,
   renderAQS,
+  renderQuantityText,
   masterIngredientNames,
 } from './additionalUnits.js';
 import { LADDER_RUNGS } from './ladderData.js';
@@ -24,8 +25,14 @@ describe('generated additional-unit master data', () => {
     expect(masterIngredientNames()).toContain('Joghurt');
   });
 
-  it('defines the three units with the shared arrangement', () => {
-    expect(ADDITIONAL_UNITS.map((unit) => unit.name)).toEqual(['Becher', 'EL', 'TL']);
+  it('defines the units of the master data with the shared arrangement', () => {
+    expect(ADDITIONAL_UNITS.map((unit) => unit.name)).toEqual([
+      'Becher',
+      'EL',
+      'TL',
+      'Packung',
+      'Stück',
+    ]);
     for (const unit of ADDITIONAL_UNITS) {
       // <NNBSP> stays a placeholder in the data; the renderer substitutes U+202F.
       expect(unit.arrangement).toBe('<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)');
@@ -37,24 +44,32 @@ describe('generated additional-unit master data', () => {
     expect(byName.get('Becher')).toBe('halves_and_integers_up_to_30');
     expect(byName.get('EL')).toBe('integers_up_to_10');
     expect(byName.get('TL')).toBe('integers_up_to_10');
+    // Counting units: half a pack or half a carrot is not a recipe quantity.
+    expect(byName.get('Packung')).toBe('integers_up_to_10');
+    expect(byName.get('Stück')).toBe('integers_up_to_10');
   });
 
-  it('marks Becher as exact and the spoons as approximate (Unit Exact)', () => {
-    // Becher is a fixed measure (a 400 g cup of yogurt); a spoon is heaped or
-    // level depending on the ingredient, so its factor is an average and the
-    // stored weight stays the authoritative reading (§6.3).
+  it('marks fixed measures as exact and average ones as approximate (Unit Exact)', () => {
+    // Becher and Packung are fixed measures (a 400 g cup of yogurt, a 1000 g
+    // pack of flour); a spoon is heaped or level and a carrot varies in weight,
+    // so their factor is an average and the stored weight stays the
+    // authoritative reading (§6.3).
     const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.exact]));
     expect(byName.get('Becher')).toBe(true);
+    expect(byName.get('Packung')).toBe(true);
     expect(byName.get('EL')).toBe(false);
     expect(byName.get('TL')).toBe(false);
+    expect(byName.get('Stück')).toBe(false);
   });
 
-  it('marks Becher as a shopping unit and the spoons as recipe measures (Shopping Unit)', () => {
+  it('marks the purchase units as shopping units and the spoons as recipe measures', () => {
     // Shopping Unit (docs/additional_quantity_specifications.md §3.1): true when
-    // ingredients are bought in this unit. A Becher names a purchase; a spoon is
-    // only a recipe measure.
+    // ingredients are bought in this unit. A Becher, a Packung and a Stück name
+    // a purchase; a spoon is only a recipe measure.
     const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.shoppingUnit]));
     expect(byName.get('Becher')).toBe(true);
+    expect(byName.get('Packung')).toBe(true);
+    expect(byName.get('Stück')).toBe(true);
     expect(byName.get('EL')).toBe(false);
     expect(byName.get('TL')).toBe(false);
   });
@@ -284,12 +299,39 @@ describe('renderAQS exact units (§6.3)', () => {
   });
 });
 
-describe('selectAQForEntry (draft mappings)', () => {
-  it('selects from an explicit entry instead of the registry', () => {
-    const entry = { bu: 'g', entries: [{ au: 'Becher', factor: 400, priority: 1 }] };
-    expect(selectAQForEntry(entry, 400, 'g')?.au.name).toBe('Becher');
-    expect(selectAQForEntry(entry, 400, 'ml')).toBeNull();
-    expect(selectAQForEntry(undefined, 400, 'g')).toBeNull();
+describe('renderQuantityText (a quantity that is not a stored recipe value)', () => {
+  it('names a quantity that is not a ladder value at all', () => {
+    // A need is a sum over dishes: 1150 g of flour, and no whole pack (1000 g)
+    // brings that amount home — so the amount itself stands, in kg from 1000 up.
+    expect(renderQuantityText('Mehl', 1150, 'g')).toBe(`1,15${NNBSP}kg Mehl`);
+    expect(renderQuantityText('Trockenhefe', 60, 'g')).toBe(`60${NNBSP}g Trockenhefe`);
+  });
+
+  it('uses an exact unit only when its count brings exactly that amount home', () => {
+    // 600 g is 1 ½ Becher zu 400 g — the count restates the amount.
+    expect(renderQuantityText('Joghurt', 600, 'g')).toBe(
+      `1${NNBSP}½${NNBSP}Becher Joghurt (600${NNBSP}g)`,
+    );
+    // 350 g is not "1 Becher (400 g)": a named amount must not become another.
+    expect(renderQuantityText('Joghurt', 350, 'g')).toBe(`350${NNBSP}g Joghurt`);
+  });
+
+  it('always uses an approximate unit, which keeps the queried amount', () => {
+    // A piece of carrot is about 80 g, so 500 g is six pieces — the amount the
+    // dishes need stays the authoritative reading (§6.3).
+    expect(renderQuantityText('Karotten', 500, 'g')).toBe(`6${NNBSP}Stück Karotten (500${NNBSP}g)`);
+  });
+
+  it('falls back to the base form for an unknown ingredient or another family unit', () => {
+    expect(renderQuantityText('Zucchini', 300, 'g')).toBe(`300${NNBSP}g Zucchini`);
+    expect(renderQuantityText('Mehl', 500, 'ml')).toBe(`500${NNBSP}ml Mehl`);
+    expect(renderQuantityText('Joghurt', 0, 'g')).toBe(`0${NNBSP}g Joghurt`);
+  });
+
+  it('has no arrangement to look up without a name (the create form preview)', () => {
+    // An empty name is not an ingredient of the master data, so only the base
+    // amount is left — without the dangling space an empty <IN> would leave.
+    expect(renderQuantityText('', 600, 'g')).toBe(`600${NNBSP}g`);
   });
 });
 
