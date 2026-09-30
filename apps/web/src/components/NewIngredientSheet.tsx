@@ -543,6 +543,17 @@ function NewIngredientSheet({
           />
         </div>
 
+        {/* The line the reorder number will produce: it sits directly under
+            „Vorrat“, whose value it shows as the ingredient line, in the same
+            small caption style as the „Bereich“ line inside „Einkauf“ below
+            (decided with the user). */}
+        <div className="field">
+          <p className="field-hint">Vorschau</p>
+          <p className="aqs-preview" aria-live="polite">
+            {reorder.preview}
+          </p>
+        </div>
+
         {/* Where the ingredient is bought (docs/storage_format.md §10): level 1
             the store („Markt“ in the UI, one tap on a chip), level 2 the section
             („Bereich“ in the UI) as a search field with that store's sections
@@ -616,15 +627,6 @@ function NewIngredientSheet({
               )}
             </>
           )}
-        </div>
-
-        {/* The line the reorder number will produce, in the same small caption
-            style as the „Bereich“ line above (decided with the user). */}
-        <div className="field">
-          <p className="field-hint">Vorschau</p>
-          <p className="aqs-preview" aria-live="polite">
-            {reorder.preview}
-          </p>
         </div>
 
         {(shownLocalError ?? error) !== null && (
