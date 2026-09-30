@@ -62,9 +62,13 @@
   --space-10: 56px;
 
   /* ---- Radius ----------------------------------------------------------- */
+  /* All three are ladder values. lg moved from 14 px to 18 px (decided with
+     the user): the container corner reads softer, and 18 px is the ladder step
+     that keeps a home-screen card's corner clearly rounder than its 10 px
+     media tile below it. */
   --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-lg: 18px;
 
   /* ---- Elevation (warm, low-contrast shadows) --------------------------- */
   --shadow-sm: 0 3px 8px rgba(43, 36, 29, 0.06);
