@@ -1,0 +1,743 @@
+# Design — Web App UI/UX
+
+## 1. Purpose and authority
+
+**What this document is.** The single source of truth for how the Cookbook web app looks
+and behaves: the visual system (colour, type, geometry, motion), the components built from
+it, the cross-screen interaction patterns, the UI copy rules, the accessibility
+requirements and the screen inventory. Where this document and any other document disagree
+about the interface, this one wins.
+
+**What it is not.** It does not describe the software's structure
+([ARCHITECTURE.md](ARCHITECTURE.md)), the canonical recipe data
+([storage_format.md](storage_format.md)) or how code and documentation are written
+([CODING_CONVENTIONS.md](CODING_CONVENTIONS.md)). Those documents point here for anything
+a user sees or touches, and do not restate it.
+
+**How it binds.** This is a specification, not a description: the code follows the
+document, not the other way round. A screen that deviates is either a bug in the screen or
+a decision that was never written down — in both cases the document changes first (see
+§11) and the code second. Every value it names lives as a CSS custom property in
+`apps/web/src/styles/tokens.css`: this document owns the rules and their meaning, the
+token file owns the numbers, and no component introduces a value that is not rooted here.
+
+**How it is written.** Written for machine readers as much as for people: one rule per
+sentence, short and unconditional, no restatement of another section.
+
+**How it is read.** Sections 4 and 5 define the vocabulary (foundations first, then the
+components built from them); section 6 defines the behaviour that spans several
+components; sections 7 to 9 define language, accessibility and the screens as the user
+meets them; section 10 maps every rule to the file that implements it. A rule marked
+*decided with the user* was settled in discussion and is not renegotiated by an
+implementation detail.
+
+## 2. Scope
+
+**Surfaces.** The web app in full, plus the exported cooking view (`.html`). A rule that
+applies to both is written here once.
+
+**Devices.** Smartphones in portrait and laptops/desktops. One responsive layout serves
+both: no separate desktop design, no tablet layout, no smart-display layout for the web
+app.
+
+## 3. Design principles
+
+*Applies to: both surfaces. Rule tags: `[Both]`, `[App]` (web app), `[Export]` (cooking
+view).*
+
+1. **[Export] The kitchen decides.** The user has one wet hand, one thumb and a dish in
+   progress: large targets, few decisions, no precision required.
+2. **[Both] The content is the interface.** Photos, titles and quantities carry the screen;
+   chrome stays quiet and gets out of the way.
+3. **[Both] Readability first.** Text is legible at arm's length, with generous size and
+   spacing.
+4. **[App] Warm and flat.** Warm kitchen colours only, no cold hues; every surface is one
+   flat, fully opaque colour — no translucency, no blur.
+5. **[Both] One pattern per job.** The same action looks the same, reads the same and sits
+   in the same place on every screen; a second variant needs a decision in this document
+   first.
+6. **[Both] Nothing stays hidden.** Every state is visible: what can be done, what is
+   running, what just happened, and what it means for the user's data.
+
+When two principles collide, the earlier one wins.
+
+## 4. Foundations
+
+### 4.1 Color
+
+*Applies to: web app.*
+
+**Warm only.** Every colour is warm and edible: paper, ink, clay, olive, ochre, walnut. No
+cold hue and no blue enters the interface.
+
+**One source.** Every colour is a CSS custom property in `apps/web/src/styles/tokens.css`;
+components reference tokens, never a raw value.
+
+| Token | Value | Role |
+| --- | --- | --- |
+| `--color-bg` | `#faf5ec` | page background |
+| `--color-surface` | `#fffcf6` | cards, panels, sticky bars |
+| `--color-ink` | `#2b241d` | primary text |
+| `--color-ink-muted` | `#6e6255` | secondary text, captions, meta |
+| `--color-line` | `#e6dbc8` | hairlines, dividers, borders |
+| `--color-accent` | `#b85c38` | clay: primary action, active state, selection |
+| `--color-olive` | `#6b7a4a` | herb: secondary accent — selected and secondary states, media grounds, success tone |
+| `--color-danger` | `#a63b2c` | destructive actions and errors |
+| `--color-on-accent` | `#fffcf6` | text on accent surfaces |
+| `--avatar-0` … `--avatar-3` | `#b85c38`, `#6b7a4a`, `#c08a3e`, `#8a6d4f` | deterministic letter-avatar grounds (§5.8), each with a `-fg` partner for its letter |
+
+**Rules**
+
+- A new colour is a new token in this table, never a literal in a component.
+- Accent is the primary signal: primary action, active state, selection. As text it is
+  reserved for links and text buttons.
+- Olive is the second accent, used widely for selected and secondary states; it is not
+  reserved for success.
+- Colour never carries a meaning alone: success is olive **plus** the check symbol, an error
+  is danger plus its symbol or an explicit sentence.
+- Every accent surface takes `--color-on-accent` as its text colour.
+- Letter-avatar colours are derived from the recipe title, not chosen per render (§5.8).
+
+*Cooking view: not written yet.*
+
+### 4.2 Typography
+
+*Applies to: web app.*
+
+**One typeface.** Source Sans 3 Variable, self-hosted and bundled at build time through
+`@fontsource`: no runtime font fetch, no server. Token: `--font-sans`.
+
+**Four sizes, each with a fixed line height** — every value a ladder step (§4.3):
+
+| Token | Size | Line height | Role |
+| --- | --- | --- | --- |
+| `--text-xl` | 32px | 42px | screen title (`h1`) |
+| `--text-lg` | 24px | 32px | card and section titles (`h2`) |
+| `--text-md` | 18px | 24px | body text, the base size (`h3` and everything unmarked) |
+| `--text-sm` | 14px | 18px | captions, meta, transient notices |
+
+**Rules**
+
+- Body text is 18px on 24px. There is no 16px in the ladder and no smaller body size.
+- Titles and emphasis are weight 600, body text is weight 400. No other weight.
+- Size and line height are one pair: a text style never takes one without the other.
+- A size is chosen by the text's role, never by how much room is left.
+
+*Cooking view: not written yet.*
+
+### 4.3 Geometry: pixel ladder and spacing
+
+*Applies to: web app.*
+
+**Every pixel value comes from one two-tier ladder.** Spacing, font size, line height,
+radius, size and shadow offsets all use these values; no other pixel value exists in the
+interface.
+
+**Preferred steps** — the default:
+
+`1 · 2 · 3 · 4 · 6 · 8 · 10 · 14 · 18 · 24 · 32 · 42 · 56 · 74 · 100`
+
+**Second-priority steps** — fallbacks only:
+
+`5 · 7 · 9 · 12 · 16 · 20 · 28 · 36 · 48 · 64 · 86`
+
+**Rules**
+
+- Reach for a preferred step first.
+- Use a second-priority step only after the preferred step directly below and the one
+  directly above have been tried and judged too small and too large respectively.
+- A `100%` radius (circles, e.g. the floating action button) is a shape, not a distance —
+  the one structural exception.
+- An icon may use a second-priority step, or a value outside the ladder, when its library
+  supports that optical size (§4.5).
+- An image's aspect ratio and pixel size are not ladder values; they come from the common
+  photographic set (§5.8).
+
+**Spacing tokens** name the steps used for gaps, padding and margins:
+
+| Token | Value | | Token | Value |
+| --- | --- | --- | --- | --- |
+| `--space-1` | 4px | | `--space-6` | 18px |
+| `--space-2` | 6px | | `--space-7` | 24px |
+| `--space-3` | 8px | | `--space-8` | 32px |
+| `--space-4` | 10px | | `--space-9` | 42px |
+| `--space-5` | 14px | | `--space-10` | 56px |
+
+- Any gap, padding or margin is a `--space-*` token, never a literal.
+- Use the smallest step that separates two things clearly; related items sit closer than
+  unrelated ones.
+- A heading takes more space above than below.
+- Screen gutters are `--app-padding` (18px), the same on every screen.
+- Inline icons are `--icon-size` (24px), the floating action button `--fab-size` (56px).
+- A second-priority step gets a `--space-*` token only when a repeated need appears, not in
+  advance.
+
+*Cooking view: not written yet.*
+
+### 4.4 Shape, elevation and surfaces
+
+*Applies to: web app.*
+
+**Surfaces are flat, filled and opaque.** Every surface — page, card, sticky bar, sheet — is
+one opaque colour from the palette (§4.1), painted over its whole footprint, edge to edge.
+
+**Radius has three steps plus the circle:**
+
+| Token | Value | Role |
+| --- | --- | --- |
+| `--radius-sm` | 6px | small elements: chips, badges, tags |
+| `--radius-md` | 10px | controls: buttons, inputs, list rows, card media tiles |
+| `--radius-lg` | 18px | containers: cards, sheets, panels |
+| `100%` or `100px` | — | circles and pills: the floating action button, pill buttons |
+
+**Elevation has two steps, both warm and low-contrast:**
+
+| Token | Value | Role |
+| --- | --- | --- |
+| `--shadow-sm` | `0 3px 10px rgba(43, 36, 29, 0.06)` | raised surfaces: cards, panels |
+| `--shadow-md` | `0 6px 18px rgba(43, 36, 29, 0.08)` | layers over content: sheets, the notice, a sticky bar |
+
+**Rules**
+
+- Nothing shows through a surface: no translucent fill, no gradient, no blur.
+- Translucency is reserved for the layers that are meant to lie over content: the press
+  wash (§5.1), the modal scrims and the shadows.
+- A shadow is the palette's ink at low opacity, never black.
+- Elevation expresses layering, not decoration: a surface is either flat or raised, and the
+  two steps are never mixed on one element.
+- A sticky bar covers the screen gutters too (negative inline margin plus `--app-padding`)
+  and masks the gap above itself, so scrolling content never peeks around its edges.
+- Nested rounded corners are concentric: an inner surface's radius is the outer radius minus
+  the distance between them. Where no two tokens satisfy that, the padding moves off the
+  ladder — never the radius.
+
+*Cooking view: not written yet.*
+
+### 4.5 Iconography
+
+*Applies to: web app.*
+
+**One library: Material Symbols (Rounded), weight 400, grade 0.** Every symbol is the same
+style and weight; a state is never shown by another weight or another style. The optical
+size is chosen per rendered size.
+
+**One source.** `apps/web/src/components/icons.tsx` holds the paths verbatim from
+`google/material-design-icons` →
+`symbols/android/<name>/materialsymbolsrounded/<name>_<size>px.xml` and renders them on the
+family's native `0 0 960 960` grid with `fill="currentColor"`. Components import from that
+file and never inline an `<svg>`.
+
+**The app icon is a brand mark, not a control.** `apps/web/public/favicon.svg` draws the
+same library's „Menu Book 2" in the clay accent on the paper tile; it lives outside
+`icons.tsx` because it carries the brand rather than a meaning.
+
+**Sizes** are ladder values, chosen by where the symbol sits, and each carries the optical
+size drawn for it:
+
+| Size | Token | Drawable | Where |
+| --- | --- | --- | --- |
+| 24px | `--icon-size` | `<name>_24px.xml` | standalone symbols, list rows |
+| 18px | `--icon-md` | `<name>_20px.xml` | inside a button, next to its label |
+| 14px | `--icon-sm` | `<name>_20px.xml` | inside a chip, tag or badge |
+
+**Rules**
+
+- A symbol ships the drawable of every size it is rendered at: 14 and 18px share the 20px
+  drawing, 24px uses the 24px drawing.
+- A state difference is colour, or the same symbol's own filled pair (`star` / `star_fill1`);
+  every other symbol is unfilled.
+- A symbol is always decorative (`aria-hidden`): it sits next to a visible label, or its
+  button carries an `aria-label`.
+- Font characters (`+`, `−`, `×`) are never used in place of a symbol.
+- A symbol larger than 24px uses the family's matching optical size (40 or 48) even when that
+  value is not a ladder step (§4.3).
+- Optical size corrects legibility, never weight: a drawing that reads too light or too heavy
+  at its size is replaced by the drawing for that size, not by another weight.
+
+*Cooking view: not written yet.*
+
+### 4.6 Motion
+
+*Applies to: web app.*
+
+**Motion is feedback, not decoration.** Movement shows where something came from or that a
+state changed; nothing moves to entertain.
+
+**Two durations, one easing curve:**
+
+| Token | Value | Where |
+| --- | --- | --- |
+| `--motion-fast` | 120ms | fading a press highlight out after release |
+| `--motion-base` | 180ms | entrances and state changes: the create menu rising, the notice sliding in, the FAB's plus turning into an × |
+| easing | `ease-out` | every animation |
+
+**Rules**
+
+- Feedback appears with the finger: a press never waits for a transition (§5.1); only its
+  fade-out is animated, and it stays within `--motion-fast`.
+- Entrances are short and directional — a small rise or a fade. Nothing bounces, springs or
+  overshoots.
+- Every animation is disabled under `prefers-reduced-motion: reduce`, which leaves the start
+  or the end state visible.
+- No animation delays the user: a screen is usable the moment it appears.
+
+*Cooking view: not written yet.*
+
+### 4.7 Layout and responsiveness
+
+*Applies to: web app.*
+
+**One layout, no separate desktop design.** The app is phone-first and fluid; a wide viewport
+gets more columns and the same components, never a second arrangement.
+
+**Breakpoints are content-driven and expressed in rem**, so they follow the user's font size.
+A ladder number is used where one fits; the ladder does not own breakpoints. There are two:
+
+| Breakpoint | Roughly | Effect |
+| --- | --- | --- |
+| base | phone portrait | the recipe list is a two-column grid |
+| `42rem` | 672px | the recipe list becomes three columns |
+| `74rem` | 1184px | the recipe list becomes four columns |
+
+**The page** uses the full width with `--app-padding` (18px) gutters, the same on every
+screen. Floating elements add the safe-area inset at the bottom
+(`env(safe-area-inset-bottom)`).
+
+**Sheets** are capped at `42rem` and centred, so a wide viewport never stretches a photo, a
+reading row or a form field (§5.6).
+
+**Rules**
+
+- Layout is fluid: no fixed page width, and no horizontal scrolling at any viewport.
+- A breakpoint is a rem value placed where the content stops working, never a fixed device
+  width; a component that only works at another width is a component problem first.
+- A grid or flex child that holds text carries `min-width: 0`, so one unbreakable word cannot
+  widen its container.
+- Sticky bars span the full width including the gutters (§4.4); floating elements clear the
+  FAB by its own gap (§5.10).
+
+*Cooking view: not written yet.*
+
+## 5. Components
+
+### 5.1 Buttons and action rows
+
+*Applies to: web app.*
+
+**Four button variants, each with one job:**
+
+| Variant | Look | Used for |
+| --- | --- | --- |
+| Primary | accent fill, `--color-on-accent` label | the one forward action of a screen or sheet („Speichern") |
+| Danger | danger fill, `--color-on-accent` label | a destructive action („Rezept löschen", „Entfernen") |
+| Outlined | surface fill, hairline border, ink label | secondary actions in a row („Einplanen", „Mehr") |
+| Text | no fill, no border, muted label | navigation („Zurück") and quiet answers („Abbrechen", „Rückgängig") |
+
+**Geometry.** Action buttons: `--radius-md`, padding `--space-3` / `--space-6`, label
+`--text-md` weight 600, `--space-2` gap to an 18px symbol (`--icon-md`). Text buttons:
+`--radius-sm`, padding `--space-2`, label `--text-sm`. Icon-only buttons keep the geometry of
+their variant and carry an `aria-label`.
+
+**States**
+
+- **Pressed:** one shared translucent ink wash over the whole click area, defined once in
+  `index.css`. No component defines its own `:active` rule. Feedback is immediate; a fade-out
+  on release stays within `--motion-fast`.
+- **Unavailable:** `opacity: var(--opacity-disabled)`, no press feedback, cursor default. This
+  look is allowed only while the cause is visible next to the button.
+- **Busy:** the unavailable look plus an ellipsis label („Speichert …") and `aria-busy="true"`.
+  The ellipsis means running, never not allowed.
+
+**Action rows.** A sheet ends in one bottom row: answers right-aligned in the order no | yes,
+the primary last. A danger button leaves that order and sits at the left end of the row. A
+page has no cancel in its row — its navigation exit is „Zurück" at the top left (§6.1).
+
+**Rules**
+
+- One primary action per decision; a row never shows two accent-filled buttons.
+- Every action button is at least 42px tall, so a change of leading can never shrink a target
+  below thumb reach.
+- A chip is not a button variant: it stays compact and takes its own hit area (§5.2).
+- Never disable a button for a reason that is not visible next to it; run the check on press
+  and show the problem instead (§5.3).
+- Labels follow §7: sentence case, a verb in the infinitive, the same action worded the same
+  everywhere.
+
+*Cooking view: not written yet.*
+
+### 5.2 Chips and segmented controls
+
+*Applies to: web app.*
+
+**A chip is one value in a wrapping row.** Look: pill (`100px` radius), `--color-bg` fill,
+hairline border, `--text-sm` label. A row of chips wraps and never scrolls sideways.
+
+| State | Look | Meaning |
+| --- | --- | --- |
+| default | background fill, hairline border, ink label | an available value |
+| selected | accent fill, accent border, `--color-on-accent` label | the chosen value |
+| olive outline + check symbol | olive border and label | the special answer („Nichts zu kaufen") |
+| dashed, muted, close symbol | dashed hairline, muted label, 14px symbol | clears an optional value |
+
+**A segmented control is one exclusive mode.** Track: `--color-bg` fill, hairline border,
+`--radius-md`, `--space-1` padding and gap. Option: `--radius-sm`, `--text-sm`, muted label;
+the active option is an olive fill with an `--color-on-accent` label. Used for two or three
+exclusive modes (Typ, Einheit, KI-Modus), never for a longer list.
+
+**Chip or segmented?**
+
+- A chip is a *value* the user picks, in a row of alternatives that may wrap.
+- A segmented control is a *mode* the screen is in, drawn as one connected track.
+
+**Rules**
+
+- A chosen value is clay; an active mode is olive. The two never swap.
+- A chip's visible pill is compact (about 32px); its hit area is at least 42px, and the row's
+  gap is wide enough that two hit areas never overlap.
+- A chip's label is a value or a short noun, never a sentence; a sentence is a button (§5.1).
+- A selection takes effect immediately; a chip or segment never needs a confirm step.
+- The group carries a German `aria-label` (`role="group"`, or `role="radiogroup"` where the
+  choice really is one of a set) (§8).
+
+*Cooking view: not written yet.*
+
+### 5.3 Form fields, labels and validation
+
+*Applies to: web app.*
+
+**A field is a caption above its control.** The caption is `--text-sm`, weight 600, muted, and
+displayed in ALL CAPS by CSS (`text-transform`); the markup and every string keep normal
+German case („Titel"), so a screen reader announces the plain word.
+
+**An optional field is marked, a required one is not.** The marker is ` (optional)`, italic,
+lowercase, muted, appended to the caption and separated from it by one En space
+(`margin-inline-start: 0.5em`, 7px at the caption size — a second-priority ladder step). No
+asterisks, no „Pflichtfeld".
+
+**Controls.** Text inputs and text areas: `--color-bg` fill, hairline border, `--radius-md`,
+`--text-md` text, padding `--space-3` / `--space-4`. A focused text field shows a solid 2px
+accent outline, so the caret's position is always visible — not only for keyboard users. A
+text area grows with its content: no scrollbar, no resize grip; an empty one starts at 42px,
+a description at 74px.
+
+**A caption may be followed by one quiet hint line** (`--text-sm`, muted) that explains the
+field; a hint never repeats the caption.
+
+**Validation feedback comes in two places:**
+
+| Place | Look | When |
+| --- | --- | --- |
+| Banner | surface fill, danger border, danger text, a bulleted list, `role="alert"` | at the top of the form after a failed save |
+| Field error | `--text-sm` danger text under the field, `role="alert"` | next to the exact field |
+
+**Rules**
+
+- A save attempt runs every check, shows the banner and moves focus and scroll to the first
+  problem; the primary button stays enabled so it can explain itself (§5.1).
+- Every message is German, names the problem and says what to do; it never only says that
+  something is wrong.
+- A field's error text is bound to the field through `aria-describedby`, and the field is
+  marked `aria-invalid` (§8).
+- An error is never colour-only: the words carry the message, the danger colour supports it.
+
+*Cooking view: not written yet.*
+
+### 5.4 Cards and list items
+
+*Applies to: web app.*
+
+**A card is one surface and one tap target.** Surface fill, hairline border, `--radius-lg`,
+`--shadow-sm`. Everything drawn on the card — a badge, a caption, a value — is content, never
+a second hitbox: the whole card is the button.
+
+**A recipe card is media above title, inset by one mat.** The card carries `--space-3` (8px)
+of padding on all four sides, so the square media area sits inside the border instead of
+bleeding into it. The title below starts on the same left edge (its own inline padding is 0),
+so media and title read as one column inside one frame.
+
+**Nested corners are concentric (§4.4).** The card's mat and its media tile are one such pair:
+`--radius-lg` (18px) − `--space-3` (8px) = `--radius-md` (10px).
+
+**A list is rows inside one card, not a card per row.** Rows share the container's surface and
+are separated by a hairline divider (the first row carries none). A row's text column is
+`minmax(0, 1fr)` with `overflow-wrap: anywhere`, so a long unbreakable word wraps instead of
+widening the sheet.
+
+**Sections on the home screen** are captioned groups of the same card grid: the caption uses
+the field-caption typography (`--text-sm`, weight 600, muted, ALL CAPS by CSS), an optional
+action may sit beside it in the same row, and `--space-7` separates two sections.
+
+**Rules**
+
+- A card or row is tappable as a whole; a control inside it (a badge's ×, a checkbox) is the
+  only thing that may carry its own target.
+- A card title clamps to two lines and is cut with an ellipsis; it is never pushed to a third
+  line or set in a smaller size to fit.
+- A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
+  muted) beneath it.
+- An empty list is a muted German sentence, never a blank area.
+- Rows are separated by a hairline, never by a shadow or a gap in the surface.
+- Cards in one row are equal height; the media row keeps its square height, so every title
+  starts on the same line.
+
+*Cooking view: not written yet.*
+
+### 5.5 Headers, titles and sticky bars
+
+*Applies to: web app.*
+
+**A screen with a title opens with it** in `--text-xl` (32px) weight 600, with every default
+heading margin reset; the header's own margin sets the distance to what follows. The recipe
+list has no title: it opens with the search field and its two section captions (§5.4).
+
+**A header that carries a button sticks; one that carries none scrolls.** The editor, the AI
+screen, the shopping steps and the recipe selection carry „Zurück", so their header stays at
+the top of the viewport (`z-index: 10`).
+
+**A sticky bar is full-bleed.** It paints edge to edge (negative inline margin plus
+`--app-padding` as its own padding) and masks the gap it leaves above itself, so content
+scrolling up can never peek around its left or right edge (§4.4). It sits on the page
+background or on the surface colour, never on a translucent fill.
+
+**Two header shapes:**
+
+| Shape | Structure | Used by |
+| --- | --- | --- |
+| bar | one row: one button on each side, no title | the editor |
+| stack | „Zurück" on its own line, the title below it (`--space-6` apart) | the AI screen, the shopping steps, the pantry step |
+
+**Sheets** open with a head block — the title plus one optional explanatory line. A browsing
+sheet (the recipe overview, the create menu) is left through its scrim or Escape; a sheet that
+is a *change* ends in the bottom action row (§5.1, §6.1).
+
+**Rules**
+
+- A screen has at most one title, and it is the `h1`; cards and sections use captions or `h2`
+  (§5.4).
+- A sticky bar carries at most one row of controls plus the armed confirmation line (§6.1);
+  anything more belongs in the scrolling content.
+- A button in a header stays reachable at every scroll position — that is what makes the
+  header stick.
+- A sheet's head is not a sticky bar: the sheet scrolls as a whole (§5.6).
+
+*Cooking view: not written yet.*
+
+### 5.6 Sheets, overlays and scrims
+
+*Applies to: web app.*
+
+**A sheet is a bottom sheet.** It is anchored to the bottom edge, spans the width, rounds its
+two top corners (`--radius-lg`), sits on the surface colour and casts `--shadow-md`. It grows
+with its content up to 85% of the viewport height and then scrolls inside itself.
+
+**It is modal, and the scrim says so.** The backdrop is a flat `rgba(43, 36, 29, 0.4)` ink
+wash over the screen behind. Tapping the scrim, pressing Escape or using browser Back leaves
+the sheet. A sheet's fields are transient: dismissing it discards them without asking (§6.2).
+
+**Every sheet is a content sheet:** capped at `42rem` and centred. On a phone the cap is wider
+than the viewport, so the sheet stays edge to edge; on a wide screen it never stretches a
+photo, a reading row or a form field (§4.7).
+
+**Layers are fixed, and each step is a decision:**
+
+| z-index | Layer |
+| --- | --- |
+| 10 | a sticky header |
+| 20 | the first scrim |
+| 30 | the first sheet, the FAB and its create menu |
+| 40 / 41 | a second scrim and the sheet that opens over the first one (meal-plan overlay, „Eintrag ersetzen") |
+| 50 | the transient notice (§5.9) |
+
+**Rules**
+
+- A sheet always opens over content that stays where it is; it never becomes a page — §6.1
+  decides whether a screen is a place or a change.
+- A second sheet opens only as a sub-decision of the first, and takes the 40/41 pair.
+- A sheet's head carries the title plus one optional line; its answers are one bottom row
+  (§5.1).
+- A sheet's content scrolls inside the sheet and never sideways.
+- Below the last control the sheet adds the safe-area inset, so its actions clear the phone's
+  gesture bar.
+
+*Cooking view: not written yet.*
+
+### 5.7 Badges and tags
+
+*Applies to: web app.*
+
+**A badge is a small all-caps state marker that leads with a symbol.** Look: `--radius-sm`,
+`--text-sm` weight 600, `--color-on-accent` label, one 14px symbol (`--icon-sm`) before the
+text, and a fill that carries meaning. Labels are written in normal German case in the source
+(„Neu"); the caps are a CSS effect.
+
+| Badge | Symbol | Fill | Meaning |
+| --- | --- | --- | --- |
+| „Neu" | new releases | danger | the ingredient is not in the master data yet |
+| „Rezept" | link | accent | the ingredient has a recipe of its own; the badge itself opens it |
+| „Referenz" | outline star | olive | mirrors the star toggle; its × clears the role |
+| „Unbekannt" | help | danger | a meal-plan line the app cannot recognise |
+
+**Rules**
+
+- A badge always leads with a symbol; it is never plain coloured text.
+- The symbol follows the badge's meaning, not its colour (§4.1).
+- A badge is content first, but it may be the control itself: „Rezept" opens the sub-recipe,
+  and „Referenz" carries a × that clears the role. Where a badge is a control, only the badge
+  (or its ×) is the target — never the whole row around it.
+- A control inside a badge gets its own hit area, extended beyond the glyph when the symbol is
+  small.
+- A badge's label is a short noun or a state word, never a sentence.
+- A state that persists is a badge; a state that just happened is a notice (§5.9).
+- A badge's wording matches the action that caused it and the action that undoes it.
+
+*Cooking view: not written yet.*
+
+### 5.8 Media: photo, thumbnail and letter avatar
+
+*Applies to: web app.*
+
+**A recipe's media area is landscape, cropped to 4:3.** It fills its container's width and is
+cropped to that ratio (`object-fit: cover`); it takes `--radius-md` (§5.4). One format serves
+the card, the overview hero and the editor preview.
+
+**An image is not a ladder value.** Aspect ratios and image pixel sizes come from the common
+photographic set (4:3, 3:2, 16:9; 120×90, 160×120, …), not from the UI ladder (§4.3): the
+ladder governs the box an image sits in, not the image itself.
+
+**Without a photo, a letter avatar.** The app derives a warm ground from the recipe's title:
+the title hashed onto one of four palette pairs (`--avatar-0` … `--avatar-3`, each with its
+`-fg` partner), carrying the title's first letter at `--avatar-letter-size` (42px) weight 600,
+centred on the landscape area. The same title always gets the same colour; the choice is never
+random and never per render.
+
+**An unrecognised meal-plan line gets the danger media area** with the help symbol instead of a
+letter avatar — that card then needs no badge of its own (§5.7).
+
+**Sizes.** Card media: the full card width, 4:3. Overview hero: the full sheet content width,
+4:3. Editor preview: 120 × 90px (4:3).
+
+**Rules**
+
+- A photo inside a card is decorative for assistive tech (`alt=""`): the title beside it
+  carries the name. A photo standing alone as a field preview gets a German `alt`.
+- Photos are cropped to 4:3, never letterboxed or stretched.
+- The avatar colour comes from the title, so it is stable across screens and reloads.
+- Nothing is drawn over the media except a badge (§5.7).
+- A missing photo is a letter avatar, never an empty grey box or a broken-image glyph.
+
+*Cooking view: not written yet.*
+
+### 5.9 Snackbar and transient notices
+
+*Applies to: web app.*
+
+**A notice reports the outcome of a finished action.** It is a small opaque card that slides in
+at the bottom of the screen, states what happened in one German sentence and offers one action
+only where there is a real way back („Rückgängig"). It is the app's confirmation layer for work
+that is done and whose screen has closed. It is rendered once at the app root, so any screen can
+report an outcome.
+
+**Look.** A card on `--color-surface` with a hairline border, `--radius-lg`, `--shadow-md`; a
+leading tone symbol, the message in `--text-sm`, then the optional action. No scrim, no
+translucency, no close button, no countdown.
+
+| Tone | Symbol | Colour | Live region | Used for |
+| --- | --- | --- | --- | --- |
+| success (default) | check circle | olive | `role="status"` | the action finished as asked |
+| error | error | danger | `role="alert"` | the action failed and the user must notice now |
+
+**Placement.** Fixed above the content, inset by `--app-padding`, bottom offset
+`--space-7 + --fab-size + --space-5 + safe-area-inset-bottom`, `max-width: 42rem` centred,
+`z-index: 50` — above every sheet. The FAB stays reachable.
+
+**Behaviour**
+
+- One at a time, in order: a FIFO queue, the head of the queue is on screen; notices never stack.
+- Auto-dismiss after 6 s; every notice gets a fresh, full countdown.
+- A pointer over the card or focus inside it pauses the countdown; leaving restarts a full 6 s.
+- The action runs as a promise: the host is busy, the button is disabled, shows its ellipsis
+  label with `aria-busy="true"`, and the countdown is suspended.
+- A rejected action reports itself as an error notice; the success notice then closes.
+- No manual dismissal: no close button, no swipe-away, no Escape. Escape belongs to the sheets.
+
+**Copy**
+
+- One complete German sentence about the past („… zum Essensplan hinzugefügt."), never a label
+  like „Erfolgreich!".
+- The first part names the object the way the user meets it elsewhere — the meal-plan entry
+  text, never a URL.
+- A second sentence only when it answers a real question („Die Einkaufsliste bleibt
+  unverändert.").
+- The action carries the app's established wording for that way back („Rückgängig", busy label
+  „Wird rückgängig gemacht …").
+
+**When not to use it**
+
+- Field validation — the problem belongs next to the field (§5.3).
+- A decision that blocks the flow — that is a sheet with two buttons (§6.4).
+- A permanent state — that is a badge, a caption or a tab (§5.7).
+
+**Accessibility.** The card is a live region, and a new message remounts it (React `key`), so a
+screen reader announces it even while the previous one is still up. Focus is never moved or
+trapped; the action is reachable with Tab, and focus pauses the countdown.
+
+*Cooking view: not written yet.*
+
+### 5.10 Floating action button and create menu
+
+*Applies to: web app.*
+
+**At most one floating action button per screen.** It is a `--fab-size` (56px) circle in the
+clay accent with `--color-on-accent` and `--shadow-md`, fixed `--space-6` from the right edge
+and `--space-7` above the safe-area inset. On the recipe list it is the entry point to creating
+a recipe.
+
+**The plus becomes an × while the menu is open.** The symbol rotates 45° over `--motion-base`;
+the button itself neither moves nor changes colour.
+
+**The menu is extended pills above it:** `--fab-size` tall, `--space-6` inline padding, pill
+radius, clay fill, `--text-md` weight 600, one 24px symbol before the label, `--space-3`
+between the pills. They rise into place over `--motion-base`.
+
+| Pill | Symbol | Opens |
+| --- | --- | --- |
+| „Rezept manuell schreiben" | pencil | the empty editor |
+| „Rezept mit KI schreiben" | sparkle | the AI create screen |
+
+**The scrim covers the whole screen** in `rgba(43, 36, 29, 0.4)` and is the menu's way out
+besides the ×: tapping it closes the menu. It is the one element excluded from the shared press
+wash (§5.1) — a scrim must not visibly react to the tap that dismisses it.
+
+**Rules**
+
+- The FAB is the screen's only accent-filled circle and never sits beside a second floating
+  control.
+- The button sits above its scrim, so tapping it again closes the menu.
+- A notice clears the FAB by the same gap the menu uses above it (§5.9).
+- The menu holds two or three destinations, each a full action phrase; a longer list belongs in
+  the content.
+- The menu closes on a scrim tap, on Escape and on choosing a destination.
+
+*Cooking view: not written yet.*
+
+## 6. Patterns and flows
+
+### 6.1 Leaving a screen: place vs. change
+
+### 6.2 Browser Back, Escape and the exit guard
+
+### 6.3 Loading, empty and error states
+
+### 6.4 Destructive actions and confirmations
+
+### 6.5 Undo semantics
+
+## 7. Language and formatting
+
+## 8. Accessibility
+
+## 9. Screen inventory
+
+## 10. Implementation map
+
+## 11. Changing the design
