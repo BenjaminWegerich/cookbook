@@ -13,13 +13,13 @@
  * (decided with the user).
  *
  * The „Einkauf“ field (docs/storage_format.md §10) asks where the ingredient is
- * bought: level 1 (the store) is picked with one tap on a chip, level 2 (the
- * section) from a search field with the chosen store's sections listed below it
- * (decided with the user). Both values are mandatory — a section belongs to
- * exactly one store, and a stop that the route does not contain would fail the
- * next master-data load — unless the route holds no stops at all: then there is
- * nothing to choose, the sheet says so and the ingredient is created without a
- * shopping stop (decided with the user).
+ * bought: level 1 (the store, „Markt“ in the UI) is picked with one tap on a
+ * chip, level 2 (the section, „Bereich“ in the UI) from a search field with the
+ * chosen store's sections listed below it (decided with the user). Both values
+ * are mandatory — a section belongs to exactly one store, and a stop that the
+ * route does not contain would fail the next master-data load — unless the route
+ * holds no stops at all: then there is nothing to choose, the sheet says so and
+ * the ingredient is created without a shopping stop (decided with the user).
  *
  * The reorder point is picked with the same QuantityPicker as a recipe quantity
  * (suggested chips + stepper) and previewed as the ingredient line it will
@@ -172,6 +172,10 @@ function currentSaveErrorMessage(name: string, rows: MappingRow[]): string | nul
  * a section with the wrong store. The one exception is a route without a single
  * stop: nothing can be picked then, so the ingredient is saved without a
  * shopping stop (decided with the user).
+ *
+ * The messages name level 1 „Markt“ and level 2 „Bereich“, the UI's words for
+ * them; the data model and the CSV columns keep the English names `Store` and
+ * `Section` (decided with the user).
  */
 function validateShoppingStop(
   stores: readonly string[],
@@ -183,14 +187,14 @@ function validateShoppingStop(
     return null;
   }
   if (store === null) {
-    return 'Bitte einen Store auswählen.';
+    return 'Bitte einen Markt auswählen.';
   }
   const section = sectionQuery.trim();
   if (section === '') {
-    return `Bitte eine Section für „${store}“ auswählen.`;
+    return `Bitte einen Bereich für „${store}“ auswählen.`;
   }
   if (!sections.includes(section)) {
-    return `„${section}“ steht nicht im Einkaufsweg für „${store}“ — bitte eine der angebotenen Sections wählen.`;
+    return `„${section}“ steht nicht im Einkaufsweg für „${store}“ — bitte einen der angebotenen Bereiche wählen.`;
   }
   return null;
 }
@@ -540,10 +544,11 @@ function NewIngredientSheet({
         </div>
 
         {/* Where the ingredient is bought (docs/storage_format.md §10): level 1
-            the store (one tap on a chip), level 2 the section (a search field
-            with that store's sections listed below, decided with the user). A
-            route without a single stop cannot be picked from: the sheet says so
-            and saves the ingredient without a shopping stop. */}
+            the store („Markt“ in the UI, one tap on a chip), level 2 the section
+            („Bereich“ in the UI) as a search field with that store's sections
+            listed below (decided with the user). A route without a single stop
+            cannot be picked from: the sheet says so and saves the ingredient
+            without a shopping stop. */}
         <div className="field">
           <span className="field-label">Einkauf</span>
 
@@ -554,7 +559,7 @@ function NewIngredientSheet({
             </p>
           ) : (
             <>
-              <div className="store-chips" role="group" aria-label="Store">
+              <div className="store-chips" role="group" aria-label="Markt">
                 {stores.map((candidate) => (
                   <button
                     key={candidate}
@@ -572,7 +577,7 @@ function NewIngredientSheet({
                   option to offer, and a section belongs to exactly one store. */}
               {store !== null && (
                 <>
-                  <p className="field-hint">Section</p>
+                  <p className="field-hint">Bereich</p>
                   <input
                     type="text"
                     value={sectionQuery}
@@ -580,7 +585,7 @@ function NewIngredientSheet({
                       setSectionQuery(event.target.value);
                       markEdited();
                     }}
-                    aria-label={`Section in ${store}`}
+                    aria-label={`Bereich in ${store}`}
                     placeholder="Suchen oder wählen"
                   />
                   {sectionSuggestions.length > 0 && (
@@ -604,7 +609,7 @@ function NewIngredientSheet({
                     !sections.includes(section) &&
                     sectionSuggestions.length === 0 && (
                       <p className="field-hint" role="status">
-                        {`Keine Section „${section}“ in „${store}“.`}
+                        {`Keinen Bereich „${section}“ in „${store}“ gefunden.`}
                       </p>
                     )}
                 </>
@@ -613,8 +618,10 @@ function NewIngredientSheet({
           )}
         </div>
 
+        {/* The line the reorder number will produce, in the same small caption
+            style as the „Bereich“ line above (decided with the user). */}
         <div className="field">
-          <span className="field-label">Vorschau</span>
+          <p className="field-hint">Vorschau</p>
           <p className="aqs-preview" aria-live="polite">
             {reorder.preview}
           </p>
