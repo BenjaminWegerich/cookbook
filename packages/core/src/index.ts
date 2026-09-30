@@ -10,6 +10,9 @@
  *   master data in docs/*.csv, compiled by scripts/generate-additional-data.mjs)
  * - the AQ ladder — the standard numbers for additional quantities and for
  *   unitless inline counts — implemented (src/aqLadder.ts)
+ * - ingredient and shopping-route master data parsing — implemented
+ *   (docs/storage_format.md §9/§10, src/ingredientCsv.ts +
+ *   src/shoppingRouteCsv.ts)
  * - recipe format parsing and validation — implemented
  *   (docs/storage_format.md, src/recipe/parse.ts + src/recipe/validate.ts)
  */
@@ -33,6 +36,7 @@ export * from './recipe/types.js';
 export * from './recipe/validate.js';
 export * from './recipe/yieldViews.js';
 export * from './shoppingList.js';
+export * from './shoppingRouteCsv.js';
 
 /** Version of the core module, kept in sync with packages/core/package.json. */
 export const VERSION = '0.1.0';

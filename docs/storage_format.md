@@ -273,8 +273,10 @@ formats as the repo seeds (`docs/ingredients.csv` + `docs/ingredient_unit_mappin
     Joghurt;Becher;400;1
 
 The ingredient list is the authoritative source of ingredient names, their fixed base
-unit and their reorder point — one row per ingredient, so ingredient-level fields (e.g. a
-category) can be added as further columns later.
+unit and their reorder point — one row per ingredient, so further ingredient-level fields
+can be added as columns later. Where an item is bought is deliberately not such a column:
+it is the separate shopping-route pair of §10, whose name set also covers items that are
+not ingredients at all.
 
 The reorder point is the base-unit (g/ml) quantity that is definitely on stock directly
 after a shopping trip, independent of the meal plan. It is a mandatory cell and need not
@@ -309,7 +311,52 @@ every ingredient through them. Dot decimals; the parser tolerates German commas 
 spreadsheet edits. The files are user data like the recipes themselves — the repo CSVs
 are only the seed.
 
-## 10. Relationship to Other Documents
+## 10. Shopping Route and Item Assignment
+
+The order in which shopping-list items are bought — and therefore the order in which they
+appear in the Google Keep „Einkaufsliste“ — comes from two master-data files in the recipe
+folder. A **stop** is the pair `(Store, Section)`: level 1 is the store, level 2 the section
+inside it.
+
+    einkaufsweg.csv           (the route; the row order IS the route)
+    Store;Section
+    Lidl;Obst und Gemüse
+    Lidl;Molkerei
+    REWE;Obst und Gemüse
+    REWE;TK-Obst
+    dm;Drogerie
+
+    einkaufs-zuordnung.csv    (the assignment; row order irrelevant)
+    Item;Store;Section
+    Karotten;Lidl;Obst und Gemüse
+    Joghurt;Lidl;Molkerei
+    TK-Blaubeeren;REWE;TK-Obst
+    Klopapier;dm;Drogerie
+
+The route's row order is the only ordering in this data: it is the order the shops are
+visited and the sections are walked. There is no separate store order, and a section belongs
+to exactly one store; the same section name may exist in several stores, the pair is the key.
+
+The assignment maps an item name to exactly one stop. Its name set is a **superset of the
+ingredient list**: it carries recipe ingredients and items that are not ingredients at all
+(„Klopapier“, „Seife“, „Blumen“), which have no base unit and no reorder point and therefore
+cannot live in zutaten.csv. Items are matched by exact, case-sensitive name, as recipe titles
+and ingredient names are. An item without a row here is not an error — it simply has no place
+in the route; where such an item ends up is the sort's decision, not this file's.
+
+Validation: a stop is unique in the route and both cells are non-empty; an item name is
+unique in the assignment; every `(Store, Section)` an assignment names must exist in the
+route — a typo fails loudly at load, like a mapping for an unknown ingredient. The route
+parses into an ordered list, the assignment into a name→stop lookup. Both files follow §9's
+common CSV rules (one header row, semicolons, CRLF and one trailing empty cell tolerated,
+leading BOM stripped) and are user data like the ingredient files: the repo CSVs
+(docs/shopping_route.csv + docs/shopping_items.csv) are the seed, the Drive files are
+authoritative once they exist.
+
+Deliberately not in this data: how a Keep line is matched to an item name, where unassigned
+items are placed, and Keep's sort ids.
+
+## 11. Relationship to Other Documents
 
 - [recipe_structure.md](recipe_structure.md) — logical model this encoding implements.
 - [quantity_scaling.md](quantity_scaling.md) — why quantities/servings/yields must be

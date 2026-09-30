@@ -74,8 +74,14 @@
   seed used on first run. New ingredients are created from the recipe editor („Neue Zutat
   anlegen“), which collects name, base unit, reorder point and AU mappings, appends to both
   files and re-registers them. The split keeps ingredient-level fields (name, base unit,
-  reorder point, later e.g. category) in one row per ingredient, separate from the AU
-  mappings.
+  reorder point) in one row per ingredient, separate from the AU mappings.
+- Where an item is bought is a third, separate master data pair in the same Drive folder —
+  `einkaufsweg.csv` (the route: store + section per row, in walking order) and
+  `einkaufs-zuordnung.csv` (item → stop), in the canonical formats of
+  docs/shopping_route.csv + docs/shopping_items.csv (see
+  [storage_format.md](storage_format.md) §10). Its name set is a **superset of the ingredient
+  list**, so items that are not recipe ingredients at all („Klopapier“, „Seife“, „Blumen“)
+  have their place there too.
 
 ### HTML share export
 
@@ -122,7 +128,8 @@
   `/healthz`, which Google's frontend answers itself before a `run.app` request reaches the
   container — and `GET /keep/state` reads the meal plan and the shopping list. Three of the four
   write actions are built (the plan write, ticking a dish off, the shopping list); the aisle sort
-  answers `501` until the ingredient-category step exists. A log-based alert
+  answers `501` until that step is built on the shopping-route master data (storage_format.md
+  §10). A log-based alert
   watches for a rejected credential, and a €1 budget guardrail detaches billing if the project
   ever spends it (both in `deploy/cloud-run/`). The boundary fails closed (no gateway token ⇒
   every Keep route refuses) and the browser origin allowlist is explicit. The Keep code lives
@@ -168,8 +175,9 @@
   away from the real one. A master token grants full account access, so it is kept out of the
   frontend entirely — a static public bundle cannot keep a secret, and no browser can obtain a
   master token in the first place.
-- Sorting is applied server-side (`List.sort_items`) from the ingredient category master
-  data, never in the client.
+- Sorting is applied server-side (`List.sort_items`), never in the client: the core derives
+  the target order from the shopping-route master data (docs/storage_format.md §10) and the
+  gateway only applies it.
 
 #### Frontend integration (meal plan)
 

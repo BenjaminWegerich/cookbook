@@ -21,7 +21,7 @@
  *   The exactness of a unit is NOT part of this file — it is a property of the
  *   unit itself (docs/additional_units.csv, `Unit Exact`).
  *
- * Common format rules (both files):
+ * Common format rules (both files; the row protocol itself lives in csv.ts):
  * - one header row; CRLF and one optional trailing empty cell per row
  *   (spreadsheet exports) are tolerated;
  * - dot decimals (canonical); German comma decimals are tolerated on parse
@@ -46,6 +46,7 @@ import {
   type IngredientEntry,
   type IngredientMapping,
 } from './additionalUnitsData.js';
+import { parseCsvRows } from './csv.js';
 import type { IngredientMappings } from './ingredientRegistry.js';
 
 /** One ingredient-list row: the fixed base unit plus the ingredient's reorder point. */
@@ -124,57 +125,6 @@ function formatReorderPointCell(value: number): string {
 }
 
 /**
- * Splits the text into rows; tolerates CRLF and blank lines and a leading
- * UTF-8 BOM (spreadsheet exports). Throws on an empty file.
- *
- * The first row is the header and must equal one of `acceptedHeaders`; the
- * matched header's cell count is the expected cell count of every following
- * row. Supporting an older format that lacks a trailing column therefore means
- * passing its header here, too — the row validation follows the matched header,
- * so such files keep parsing until they are written back in the current format.
- */
-function parseRows(
-  text: string,
-  acceptedHeaders: readonly string[],
-): { header: string[]; rows: string[][] } {
-  const rows = text
-    .replace(/^\uFEFF/, '')
-    .split(/\r?\n/)
-    .filter((line) => line.trim() !== '')
-    .map((line) => line.split(';').map((cell) => cell.trim()));
-  if (rows.length === 0) {
-    throw new Error('Datei ist leer.');
-  }
-  const header = rows[0]!;
-  // A single trailing empty cell on the header (a line ending in ';', common
-  // in spreadsheet exports) is dropped before the header text is matched; the
-  // per-row loop below drops it for every other row.
-  if (header.length > 1 && header[header.length - 1] === '') {
-    header.pop();
-  }
-  const actualHeader = header.join(';');
-  const matchedHeader = acceptedHeaders.find((candidate) => candidate === actualHeader);
-  if (matchedHeader === undefined) {
-    throw new Error(`unerwartete Kopfzeile "${actualHeader}".`);
-  }
-  const columnCount = matchedHeader.split(';').length;
-  for (const cells of rows) {
-    // Drop exactly one trailing empty cell produced by spreadsheet exports
-    // (e.g. a row or the header ending in ';'); a meaningful empty cell inside
-    // stays.
-    if (cells.length === columnCount + 1 && cells[cells.length - 1] === '') {
-      cells.pop();
-    }
-    if (cells.length !== columnCount) {
-      throw new Error(
-        `unerwartete Spaltenzahl in Zeile "${cells.join(';')}" (erwartet ${columnCount}).`,
-      );
-    }
-  }
-  return { header, rows: rows.slice(1) };
-}
-
-/**
  * Parses the ingredient list CSV (`Ingredient;Base Unit;Reorder Point`) into
  * name → base unit + reorder point. Throws on malformed input (empty or
  * duplicate names, unknown base unit, missing or invalid reorder point); the
@@ -185,7 +135,7 @@ function parseRows(
  * serialization writes the full three-column format.
  */
 export function parseIngredientListCsv(text: string): IngredientList {
-  const { rows } = parseRows(text, [LIST_HEADER, LEGACY_LIST_HEADER]);
+  const { rows } = parseCsvRows(text, [LIST_HEADER, LEGACY_LIST_HEADER]);
   const result: Record<string, IngredientListEntry> = {};
   for (const row of rows) {
     const [ingredient, bu, reorderCell] = row;
@@ -230,7 +180,7 @@ export function serializeIngredientListCsv(list: IngredientList): string {
  * ingredient list (mergeIngredientMasterData).
  */
 export function parseIngredientMappingsCsv(text: string): IngredientMappingsByIngredient {
-  const { rows } = parseRows(text, [MAPPINGS_HEADER]);
+  const { rows } = parseCsvRows(text, [MAPPINGS_HEADER]);
   const byIngredient = new Map<string, IngredientMapping[]>();
   for (const row of rows) {
     const [ingredient, au, factorCell, priorityCell] = row;

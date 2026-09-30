@@ -98,8 +98,8 @@ not where it is used.
       difference to its yield so its own ingredients join the list
       (recipe_structure.md "The link means…"). Today a sub-recipe contributes one line for
       itself.
-- [ ] Sort the shopping list by category/aisle (needs ingredient category master data),
-      applied server-side via `List.sort_items`.
+- [ ] Sort the shopping list by category/aisle (needs the shopping-route master data,
+      storage_format.md §10), applied server-side via `List.sort_items`.
 
 ### Next steps, in order
 
@@ -130,8 +130,12 @@ frontend and the actual features.
    `ReplaceRecipeSheet` replaces the entry 1:1 with a chosen recipe and size (undo notice), and
    the two create entries open the editor or the AI screen prefilled with the entry's complete
    text and return to the entry's overview.
-4. **Ingredient category master data** — a prerequisite for aisle sorting: each ingredient
-   needs a category. Extend `docs/ingredients.csv` (and the Drive `zutaten.csv`) with it.
+4. **Shopping route master data** — a prerequisite for aisle sorting: a route file
+   (`einkaufsweg.csv`, `Store;Section`, walking order) plus an assignment file
+   (`einkaufs-zuordnung.csv`, `Item;Store;Section`, covering ingredients and non-ingredients).
+   Format in [storage_format.md](storage_format.md) §10. The data structure is built (seed
+   CSVs + codecs in `packages/core/src/shoppingRouteCsv.ts`); the serializers, the runtime
+   registry and the sort itself are still open.
 5. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
    (the size is a query parameter on the export host), replacing the entries recognized as the
@@ -140,7 +144,7 @@ frontend and the actual features.
    `POST /keep/mealplan/check` and can be undone; changing the size reuses the meal-plan write),
    and so is the shopping list ([x] — „Einkaufsliste schreiben“ writes the chosen recipes'
    ingredients via `POST /keep/shopping`, with the pantry step and an undo).
-   Still open: the linked Zutaten-Rezepte in that list, and sorting by category.
+   Still open: the linked Zutaten-Rezepte in that list, and the aisle sort (§10).
 6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
    query may-be-in-stock), which builds on the same gateway.
 
