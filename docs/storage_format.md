@@ -353,6 +353,12 @@ leading BOM stripped) and are user data like the ingredient files: the repo CSVs
 (docs/shopping_route.csv + docs/shopping_items.csv) are the seed, the Drive files are
 authoritative once they exist.
 
+The files are created on the first shopping assignment the user enters (the „Einkauf“ field of
+„Neue Zutat anlegen“), seeded with the built-in repo data, and are authoritative once they
+exist. That field picks the store as chips and the section from a searchable list of that
+store's sections, so a section can never be paired with the wrong store; an item that already
+has a row is overwritten — the name is the key, and the file holds exactly one stop per item.
+
 Deliberately not in this data: how a Keep line is matched to an item name, where unassigned
 items are placed, and Keep's sort ids.
 

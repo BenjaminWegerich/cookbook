@@ -64,6 +64,7 @@ import {
   type Ingredient,
   type Recipe,
   type Step,
+  type ShoppingStop,
   type TextArtifact,
   type ValidationIssue,
 } from '@cookbook/core';
@@ -79,6 +80,7 @@ import {
   type StoredRecipe,
 } from '../drive/recipeStorage';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
+import { appendShoppingAssignment } from '../drive/shoppingRouteMasterData';
 import { loadRecipePhoto } from '../drive/recipePhoto';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
 import AutoGrowTextarea from './AutoGrowTextarea';
@@ -1101,16 +1103,31 @@ function RecipeEditor({
    * sheet closes and the ingredient sheet re-opens (restore target) — with
    * the saved name and the quantity the user had typed, where they confirm
    * the actual recipe addition (decided with the user).
+   *
+   * The shopping stop is written first: the assignment file's name set is a
+   * superset of the ingredient list by design (docs/storage_format.md §10), so a
+   * row without an ingredient is valid master data and a retry overwrites it,
+   * while an ingredient without its row would be exactly the state the two
+   * mandatory fields in the create sheet exist to prevent. A failed assignment
+   * write therefore stops the flow before anything is created (the error names
+   * the cause, and the name is still free for a retry).
+   *
+   * `stop` is null while the shopping route holds no stops at all — decided with
+   * the user: the ingredient is then created without a shopping stop.
    */
   const handleCreateIngredient = async (
     name: string,
     bu: string,
     reorderPoint: number,
     entries: NewIngredientEntry[],
+    stop: ShoppingStop | null,
   ): Promise<void> => {
     setCreateSaving(true);
     setCreateError(null);
     try {
+      if (stop !== null) {
+        await appendShoppingAssignment(token, name, stop);
+      }
       await appendIngredientMasterData(token, name, bu, reorderPoint, entries);
       setCreateSheet(null);
       if (sheetContext !== null) {
@@ -2082,8 +2099,8 @@ function RecipeEditor({
           initialName={createSheet.name}
           saving={createSaving}
           error={createError}
-          onSave={(name, bu, reorderPoint, entries) =>
-            void handleCreateIngredient(name, bu, reorderPoint, entries)
+          onSave={(name, bu, reorderPoint, entries, stop) =>
+            void handleCreateIngredient(name, bu, reorderPoint, entries, stop)
           }
           onEdited={() => setCreateError(null)}
           onClose={handleCreateClose}

@@ -226,6 +226,17 @@
   gap: var(--space-2);
 }
 
+/* Store chips of the new-ingredient sheet's „Einkauf“ field: one chip per store
+   of the shopping route, wrapping like a quantity chip row. It keeps a class of
+   its own (instead of reusing .quantity-chips) because the row is a single-select
+   group of names, not a strip of amounts — the chips themselves are the shared
+   .chip / .chip-active look. */
+.store-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .chip {
   padding: var(--space-2) var(--space-4);
   background: var(--color-bg);

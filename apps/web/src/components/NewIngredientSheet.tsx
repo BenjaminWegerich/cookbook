@@ -3,13 +3,23 @@
  *
  * Opened from the ingredient sheet ("Neue Zutat anlegen") when the typed name
  * is neither in the master data nor an ingredient recipe. It collects the
- * master-data fields (name, base unit g/ml, the reorder point, and an optional
- * factor + priority per known additional unit — Becher / EL / TL; the mappings
- * are all optional: an ingredient without additional units is valid) and hands
- * them to the parent, which persists them to the Drive master data
- * (ingredientMasterData.ts). After saving, the ingredient sheet re-appears with
- * the name now valid; the recipe addition is confirmed there separately
+ * master-data fields (name, base unit g/ml, the reorder point, the shopping
+ * stop, and an optional factor + priority per known additional unit — Becher /
+ * EL / TL; the mappings are all optional: an ingredient without additional
+ * units is valid) and hands them to the parent, which persists them to the
+ * Drive master data (ingredientMasterData.ts +
+ * shoppingRouteMasterData.ts). After saving, the ingredient sheet re-appears
+ * with the name now valid; the recipe addition is confirmed there separately
  * (decided with the user).
+ *
+ * The „Einkauf“ field (docs/storage_format.md §10) asks where the ingredient is
+ * bought: level 1 (the store) is picked with one tap on a chip, level 2 (the
+ * section) from a search field with the chosen store's sections listed below it
+ * (decided with the user). Both values are mandatory — a section belongs to
+ * exactly one store, and a stop that the route does not contain would fail the
+ * next master-data load — unless the route holds no stops at all: then there is
+ * nothing to choose, the sheet says so and the ingredient is created without a
+ * shopping stop (decided with the user).
  *
  * The reorder point is picked with the same QuantityPicker as a recipe quantity
  * (suggested chips + stepper) and previewed as the ingredient line it will
@@ -37,6 +47,9 @@ import {
   masterIngredientNames,
   mappingsFor,
   resolveReorderPoint,
+  shoppingSections,
+  shoppingStores,
+  type ShoppingStop,
 } from '@cookbook/core';
 
 import QuantityPicker from './QuantityPicker';
@@ -57,8 +70,15 @@ interface NewIngredientSheetProps {
   /** Drive error of the last save attempt (German, from the storage layer). */
   error: string | null;
   /** Called with the master data to create; `reorderPoint` is the resolved
-   *  value (already snapped to an exact unit's amount). */
-  onSave: (name: string, bu: string, reorderPoint: number, entries: NewIngredientEntry[]) => void;
+   *  value (already snapped to an exact unit's amount) and `stop` is the chosen
+   *  shopping stop, or null while the route holds no stops at all. */
+  onSave: (
+    name: string,
+    bu: string,
+    reorderPoint: number,
+    entries: NewIngredientEntry[],
+    stop: ShoppingStop | null,
+  ) => void;
   /** Called when the user edits any form field — the parent forgets the
    *  stale Drive error of the last attempt (its cause may be gone now). */
   onEdited: () => void;
@@ -144,6 +164,38 @@ function currentSaveErrorMessage(name: string, rows: MappingRow[]): string | nul
 }
 
 /**
+ * Validates the „Einkauf“ field against the route the app currently holds.
+ * Returns a German error message, or null when the form can be saved.
+ *
+ * Both values are mandatory because the assignment file must name a stop of the
+ * route (docs/storage_format.md §10) — a free-typed section could silently pair
+ * a section with the wrong store. The one exception is a route without a single
+ * stop: nothing can be picked then, so the ingredient is saved without a
+ * shopping stop (decided with the user).
+ */
+function validateShoppingStop(
+  stores: readonly string[],
+  store: string | null,
+  sections: readonly string[],
+  sectionQuery: string,
+): string | null {
+  if (stores.length === 0) {
+    return null;
+  }
+  if (store === null) {
+    return 'Bitte einen Store auswählen.';
+  }
+  const section = sectionQuery.trim();
+  if (section === '') {
+    return `Bitte eine Section für „${store}“ auswählen.`;
+  }
+  if (!sections.includes(section)) {
+    return `„${section}“ steht nicht im Einkaufsweg für „${store}“ — bitte eine der angebotenen Sections wählen.`;
+  }
+  return null;
+}
+
+/**
  * The bottom sheet with the master-data form (see file header). Renders on
  * top of the ingredient sheet; the backdrop closes it (back to the sheet).
  */
@@ -165,6 +217,14 @@ function NewIngredientSheet({
   const [priorities, setPriorities] = useState<Record<string, string>>({});
   /** The copy-source autocomplete text ("" = nothing typed); applying resets it. */
   const [copyQuery, setCopyQuery] = useState('');
+  /** The chosen store — level 1 of the shopping route; null = nothing picked. */
+  const [store, setStore] = useState<string | null>(null);
+  /**
+   * The section input text — level 2 of the shopping route. It is the picked
+   * section only while it names one of the chosen store's sections exactly
+   * (see validateShoppingStop); the field is a search field, not a free-text one.
+   */
+  const [sectionQuery, setSectionQuery] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
   const trimmedName = name.trim();
@@ -244,17 +304,68 @@ function NewIngredientSheet({
   const reorder = resolveReorderPoint(trimmedName, draftEntry, reorderPoint, bu);
 
   /**
+   * The shopping route as the app currently holds it (core registry, read every
+   * render like the ingredient list above): the store chips and — once a store
+   * is picked — the section options of exactly that store.
+   */
+  const stores = shoppingStores();
+  const sections = store === null ? [] : shoppingSections(store);
+  const section = sectionQuery.trim();
+
+  /**
+   * The stop to hand to the parent: the picked pair, or null while the route
+   * holds no stops at all (nothing can be picked then, and the ingredient is
+   * created without a shopping stop — decided with the user).
+   */
+  const chosenStop: ShoppingStop | null =
+    store !== null && sections.includes(section) ? { store, section } : null;
+
+  /** The message the „Einkauf“ field would report for the current state. */
+  const shoppingError = validateShoppingStop(stores, store, sections, sectionQuery);
+
+  /**
+   * The options listed under the section field: every section of the chosen
+   * store while nothing is typed, so the options are visible without typing
+   * (decided with the user — a search field with the list below it, not a
+   * collapsed dropdown); the matching ones while a part is typed; none once the
+   * text names a section exactly — the list is then empty because the pick
+   * moved into the field, not because nothing was found.
+   */
+  const sectionSuggestions = sections.includes(section)
+    ? []
+    : sections.filter((candidate) => candidate.toLowerCase().includes(section.toLowerCase()));
+
+  /**
    * The message of the last failed save attempt, shown only while the current
    * form would still produce exactly that message. Deriving it every render
    * (instead of clearing it on input events) makes the error disappear the
    * moment its cause is resolved — typing a still-invalid value keeps it, a
-   * different problem is only announced by the next save attempt.
+   * different problem is only announced by the next save attempt. The order is
+   * the form's order: name, mapping rows, then the „Einkauf“ field.
    */
-  const saveErrorNow = currentSaveErrorMessage(trimmedName, mappingRows);
+  const saveErrorNow = currentSaveErrorMessage(trimmedName, mappingRows) ?? shoppingError;
   const shownLocalError = localError !== null && localError === saveErrorNow ? localError : null;
 
   /** Reports a form edit to the parent (drops the stale Drive error). */
   const markEdited = (): void => onEdited();
+
+  /**
+   * Picks a store. A section belongs to exactly one store, so a section picked
+   * for the previous store is cleared — it would otherwise read as a valid
+   * choice while naming a section the new store does not have.
+   */
+  const chooseStore = (next: string): void => {
+    setStore(next);
+    setSectionQuery('');
+    markEdited();
+  };
+
+  /** Adopts a section option into the search field (same tap-to-apply as the
+   *  suggestion lists of the ingredient sheet). */
+  const adoptSection = (next: string): void => {
+    setSectionQuery(next);
+    markEdited();
+  };
 
   /** Copies the mappings of `source` into the form (AU rows are overwritten). */
   const applyCopy = (source: string): void => {
@@ -299,13 +410,12 @@ function NewIngredientSheet({
    * and disappears the moment its cause is fixed.
    */
   const handleSave = (): void => {
-    const saveError = currentSaveErrorMessage(trimmedName, mappingRows);
-    if (saveError !== null) {
-      setLocalError(saveError);
+    if (saveErrorNow !== null) {
+      setLocalError(saveErrorNow);
       return;
     }
     setLocalError(null);
-    onSave(trimmedName, bu, reorder.storedValue, entries);
+    onSave(trimmedName, bu, reorder.storedValue, entries, chosenStop);
   };
 
   return (
@@ -427,6 +537,80 @@ function NewIngredientSheet({
             allowZero
             allowInfinite
           />
+        </div>
+
+        {/* Where the ingredient is bought (docs/storage_format.md §10): level 1
+            the store (one tap on a chip), level 2 the section (a search field
+            with that store's sections listed below, decided with the user). A
+            route without a single stop cannot be picked from: the sheet says so
+            and saves the ingredient without a shopping stop. */}
+        <div className="field">
+          <span className="field-label">Einkauf</span>
+
+          {stores.length === 0 ? (
+            <p className="field-hint">
+              Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — die Zutat wird ohne Einkaufsort
+              gespeichert.
+            </p>
+          ) : (
+            <>
+              <div className="store-chips" role="group" aria-label="Store">
+                {stores.map((candidate) => (
+                  <button
+                    key={candidate}
+                    type="button"
+                    className={store === candidate ? 'chip chip-active' : 'chip'}
+                    aria-pressed={store === candidate}
+                    onClick={() => chooseStore(candidate)}
+                  >
+                    {candidate}
+                  </button>
+                ))}
+              </div>
+
+              {/* The section field follows the store: without a store there is no
+                  option to offer, and a section belongs to exactly one store. */}
+              {store !== null && (
+                <>
+                  <p className="field-hint">Section</p>
+                  <input
+                    type="text"
+                    value={sectionQuery}
+                    onChange={(event) => {
+                      setSectionQuery(event.target.value);
+                      markEdited();
+                    }}
+                    aria-label={`Section in ${store}`}
+                    placeholder="Suchen oder wählen"
+                  />
+                  {sectionSuggestions.length > 0 && (
+                    <ul className="suggestions">
+                      {sectionSuggestions.map((candidate) => (
+                        <li key={candidate}>
+                          <button type="button" onClick={() => adoptSection(candidate)}>
+                            {candidate}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {/* Nothing matches the typed text: a quiet report instead of a
+                      blank area, so the field never looks broken. Suppressed
+                      while the field names a section exactly — the list is empty
+                      because the pick moved into the field, not because nothing
+                      was found (same wording pattern as the recipe search). */}
+                  {section !== '' &&
+                    !sections.includes(section) &&
+                    sectionSuggestions.length === 0 && (
+                      <p className="field-hint" role="status">
+                        {`Keine Section „${section}“ in „${store}“.`}
+                      </p>
+                    )}
+                </>
+              )}
+            </>
+          )}
         </div>
 
         <div className="field">

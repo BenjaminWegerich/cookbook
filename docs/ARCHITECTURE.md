@@ -51,6 +51,12 @@
   `packages/core/src/aqLadder.ts`, derived from the generated ladder data. It
   backs the §6.1 rounding, the fraction typography and the scaling of unitless
   counts.
+- Shopping-route master data (see [storage_format.md](storage_format.md) §10): the two CSV
+  codecs and their serializers (`packages/core/src/shoppingRouteCsv.ts`), the runtime registry
+  holding the current route and item assignment plus the store/section lists the ingredient
+  sheet's pickers are built from (`packages/core/src/shoppingRouteRegistry.ts`), and the
+  compiled seed (`packages/core/src/shoppingRouteData.ts`, generated from
+  `docs/shopping_route.csv` + `docs/shopping_items.csv` via `npm run generate:shopping-route`).
 - Recipe format parsing and validation
   (see [storage_format.md](storage_format.md)).
 - No React, no DOM — a plain TypeScript module, unit-tested with Vitest.
@@ -81,7 +87,11 @@
   docs/shopping_route.csv + docs/shopping_items.csv (see
   [storage_format.md](storage_format.md) §10). Its name set is a **superset of the ingredient
   list**, so items that are not recipe ingredients at all („Klopapier“, „Seife“, „Blumen“)
-  have their place there too.
+  have their place there too. The create sheet („Neue Zutat anlegen“) asks for the stop in an
+  „Einkauf“ field while it collects the other master-data fields — the store as chips, the
+  section as a searchable list of that store's sections — and writes the assignment before the
+  ingredient row: a row without an ingredient is valid (the name set is a superset), an
+  ingredient without its row is not.
 
 ### HTML share export
 

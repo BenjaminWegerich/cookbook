@@ -133,9 +133,12 @@ frontend and the actual features.
 4. **Shopping route master data** — a prerequisite for aisle sorting: a route file
    (`einkaufsweg.csv`, `Store;Section`, walking order) plus an assignment file
    (`einkaufs-zuordnung.csv`, `Item;Store;Section`, covering ingredients and non-ingredients).
-   Format in [storage_format.md](storage_format.md) §10. The data structure is built (seed
-   CSVs + codecs in `packages/core/src/shoppingRouteCsv.ts`); the serializers, the runtime
-   registry and the sort itself are still open.
+   Format in [storage_format.md](storage_format.md) §10. The data is built and editable: the
+   seed CSVs, the codecs and serializers in `packages/core/src/shoppingRouteCsv.ts`, the
+   runtime registry (`shoppingRouteRegistry.ts`) and the Drive pair
+   (`apps/web/src/drive/shoppingRouteMasterData.ts`); the create sheet asks for the stop in the
+   new „Einkauf“ field (store chips + section search). Still open: the aisle sort itself and an
+   entry point for items that are not ingredients.
 5. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
    (the size is a query parameter on the export host), replacing the entries recognized as the

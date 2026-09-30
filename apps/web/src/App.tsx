@@ -35,6 +35,7 @@ import Snackbar from './components/Snackbar';
 import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
+import { loadShoppingRouteMasterData } from './drive/shoppingRouteMasterData';
 import { listRecipes, recipeExportUrl, type StoredRecipe } from './drive/recipeStorage';
 import { useEscapeTrigger } from './hooks/useLeaveGuard';
 import { useScrollMemory } from './hooks/useScrollMemory';
@@ -546,7 +547,11 @@ function App() {
         if (isDriveAuthError(err)) return; // re-auth hook handles it
         setError(err instanceof Error ? err.message : String(err));
       });
-    void loadIngredientMasterData(token)
+    // Both master-data pairs (ingredients and the shopping route) load in
+    // parallel: they are independent, and each write path guards itself against
+    // a load that finishes after it (see the drive modules). One warning covers
+    // the pair: whichever load fails, the built-in data stays active.
+    void Promise.all([loadIngredientMasterData(token), loadShoppingRouteMasterData(token)])
       .then(() => {
         if (!cancelled) setMasterDataWarning(null);
       })
@@ -1776,8 +1781,7 @@ function App() {
               what the title bar used to say — the heading and the counters. */}
           {token && masterDataWarning !== null && (
             <p className="master-data-warning" role="alert">
-              Zutaten-Stammdaten konnten nicht geladen werden — es wird die eingebaute Liste
-              verwendet. ({masterDataWarning})
+              {`Stammdaten konnten nicht geladen werden — es werden die eingebauten Daten verwendet. (${masterDataWarning})`}
             </p>
           )}
 
