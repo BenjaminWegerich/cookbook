@@ -24,7 +24,7 @@
  * **One ingredient is three lines, each introduced by the symbol for what it
  * says** (decided with the user; the sheet's intro paragraph names the symbols):
  *
- * 1. the *skillet*: what the selected dishes need together ("2 Becher Joghurt
+ * 1. the *recipe book*: what the selected dishes need together ("2 Becher Joghurt
  *    (600 g)", core's `needText`);
  * 2. the *shelves*: the stock picker, as described below;
  * 3. the *shopping list*: the line that will be written to Keep, word for word,
@@ -75,7 +75,7 @@ import {
 
 import { resolveShoppingBundle, type ShoppingBundle } from '../keep/shoppingBundle';
 import type { MealPlanCard } from '../keep/mealPlanCards';
-import { ListPlusIcon, ShelvesIcon, SkilletIcon } from './icons';
+import { ListPlusIcon, MenuBookIcon, ShelvesIcon } from './icons';
 import StockChips from './StockChips';
 import StockStepper from './StockStepper';
 
@@ -230,7 +230,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
             arrangement. The symbol introduces the line; `title` spells it out for
             a hover and for assistive tech, which sees the symbol as decorative. */}
         <div className="pantry-line">
-          <SkilletIcon className="pantry-symbol" />
+          <MenuBookIcon className="pantry-symbol" />
           <span className="pantry-line-text" title="Bedarf">
             {needText(need)}
           </span>
@@ -329,7 +329,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
           row itself carries no captions), says where the stock is set, and gives
           the one reading the chip amounts cannot show by themselves. */}
       <p className="pantry-select-intro">
-        Je Zutat drei Zeilen: <SkilletIcon className="pantry-intro-icon" /> Bedarf,{' '}
+        Je Zutat drei Zeilen: <MenuBookIcon className="pantry-intro-icon" /> Bedarf,{' '}
         <ShelvesIcon className="pantry-intro-icon" /> Vorrat,{' '}
         <ListPlusIcon className="pantry-intro-icon" /> Einkaufsliste – die unterste Zeile steht
         genau so auf der Liste. Den Vorrat stellst du in der mittleren Zeile ein: die Chips heißen
