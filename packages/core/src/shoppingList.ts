@@ -346,50 +346,12 @@ export function shoppingRow(need: ShoppingNeed, stock: number): ShoppingRow {
 }
 
 /**
- * The largest number of whole shopping units a need may round up to and still be
- * shown as one chip per possible result (decided with the user). Beyond it the
- * chip row would be longer than the screen, so the sheet falls back to the
- * stepper — one pack per tap, next to the chip that names the need ("1,2 kg").
+ * The largest number of whole shopping units a need may round up to and still
+ * get one slider stop per possible result (decided with the user). Beyond it the
+ * row would carry more stops than a phone slider can separate cleanly, so the
+ * picker falls back to whole packs — or, without an exact unit, to the ladder.
  */
-const CHIP_MAX_UNITS = 6;
-
-/**
- * The stock values the pantry sheet offers for one row, and how it shows them
- * (decided with the user). The sheet's job is to keep the *result* right without
- * making the user tap a stepper twenty times, so it offers exactly the stock
- * values at which the bought amount changes:
- *
- * - **`chips`** — an ingredient bought in an **exact** shopping unit (§3.1)
- *   whose need rounds up to at most `CHIP_MAX_UNITS` units. With 1200 g of flour
- *   needed and a 1000 g pack, only two stock values change anything: below 200 g
- *   two packs are bought, from 200 g up exactly one, and from the need itself
- *   nothing. 300 g, 500 g or 1000 g on the shelf are all the same case, so the
- *   pool is `0, need − (n−1)·factor, …, need − factor, need` — one chip each.
- * - **`stepper`** — everything else, offered as a pool the − / + buttons walk
- *   one entry per tap (see `steppedPool`): one **pack** per tap when the exact
- *   unit's need exceeds `CHIP_MAX_UNITS` units, one **ladder rung** per tap
- *   otherwise — i.e. without a shopping unit, or with an **approximate** one
- *   ("Stück"), which also gets the extra count field (`stockCountText`).
- *
- * In both cases the pool runs from 0 to the need: the last value covers the need
- * completely, and no value can make the bought amount negative. Within one chip
- * bucket the stored stock value is irrelevant — nothing is written back to the
- * master data, only the shopping list is written — so a chip may stand for a
- * whole range.
- */
-export interface StockPool {
-  /** How the sheet offers the pool: as one chip per value, or as a stepper. */
-  readonly kind: 'chips' | 'stepper';
-  /** The selectable stock values (family base unit), ascending, 0 … need. */
-  readonly values: readonly number[];
-  /**
-   * True when the sheet shows the stock's translation into its shopping unit
-   * ("2 Stück") beside the stepper — an approximate shopping unit, whose factor
-   * is an average, so grams on the shelf and pieces in the recipe are two
-   * readings of the same stock (§6.3).
-   */
-  readonly showsUnitCount: boolean;
-}
+const MAX_RESULT_UNITS = 6;
 
 /**
  * The ladder rungs within `[from, to]`, ascending (empty when the range holds
@@ -407,35 +369,58 @@ function rungRange(from: number, to: number): number[] {
 }
 
 /**
- * The stock pool of one row (see `StockPool`). Reads the runtime registry, so
- * the user's own master data decides whether an ingredient is bought in packs,
- * chip by chip, or by the gram.
+ * The stock values a row's slider snaps to (decided with the user), ascending
+ * from 0 to the need. The sheet's job is to keep the *result* right without
+ * making the user hunt for an amount the app can work out itself, so the pool
+ * holds exactly the stock values at which the bought amount changes — every one
+ * of them becomes a stop of the discrete slider (components/StockSlider):
+ *
+ * - an ingredient bought in an **exact** shopping unit (§3.1) whose need rounds
+ *   up to at most `MAX_RESULT_UNITS` units gets **one stop per possible result**.
+ *   With 1200 g of flour needed and a 1000 g pack, only two stock values change
+ *   anything: below 200 g two packs are bought, from 200 g up exactly one, and
+ *   from the need itself nothing. 300 g, 500 g or 1000 g on the shelf are all
+ *   the same case, so the stops are `0, need − (n−1)·factor, …, need − factor,
+ *   need` — one per result, however unevenly the amounts are spaced;
+ * - a larger need in exact packs gets the **whole packs** up to the need
+ *   (`0, factor, 2·factor, …, need`);
+ * - everything else — no shopping unit, or an **approximate** one ("Stück") —
+ *   gets the **ladder rungs** within one tenth of the need, plus 0 and the need
+ *   itself.
+ *
+ * The last value always covers the need completely, so no stock can make the
+ * bought amount negative. Within one bucket the stored stock value is
+ * irrelevant — nothing is written back to the master data, only the shopping
+ * list is written — so a stop may stand for a whole range.
+ *
+ * Reads the runtime registry, so the user's own master data decides which of
+ * the three shapes a row gets.
  */
-export function stockPool(need: ShoppingNeed): StockPool {
+export function stockPool(need: ShoppingNeed): readonly number[] {
   const needed = roundThousandths(need.needed);
   if (!(needed > 0)) {
     // A row without a need cannot buy anything; a one-value pool keeps its
-    // control inert instead of inventing a ladder below zero.
-    return { kind: 'stepper', values: [0], showsUnitCount: false };
+    // slider inert instead of inventing a ladder below zero.
+    return [0];
   }
   const target = shoppingUnitFor(mappingsFor(need.ingredient), need.baseUnit);
   if (target !== null && target.au.exact) {
     const count = Math.ceil(roundThousandths(needed / target.factor));
-    if (count <= CHIP_MAX_UNITS) {
+    if (count <= MAX_RESULT_UNITS) {
       const values = [0];
       // Ascending: the more units are missing, the lower the stock boundary.
       for (let missingUnits = count - 1; missingUnits >= 1; missingUnits -= 1) {
         values.push(roundThousandths(needed - missingUnits * target.factor));
       }
       values.push(needed);
-      return { kind: 'chips', values, showsUnitCount: false };
+      return values;
     }
     const values = [0];
     for (let units = 1; units < count; units += 1) {
       values.push(roundThousandths(units * target.factor));
     }
     values.push(needed);
-    return { kind: 'stepper', values, showsUnitCount: false };
+    return values;
   }
   // Fine-grained: 0, the ladder rungs within one tenth of the need, and the need
   // itself (which need not be a rung — a need is a sum over dishes).
@@ -443,34 +428,7 @@ export function stockPool(need: ShoppingNeed): StockPool {
   if (values[values.length - 1] !== needed) {
     values.push(needed);
   }
-  // `target` is approximate here: an exact one returned above.
-  return { kind: 'stepper', values, showsUnitCount: target !== null };
-}
-
-/**
- * One stepper tap on a stock pool: the next pool value above (`1`) or below
- * (`-1`), or null when the pool's bound blocks that direction.
- *
- * `value` need not be a pool member: the sheet starts a row on
- * `min(need, reorder point)`, which is neither a rung nor a whole pack, and the
- * user may type any number. The step therefore answers the *neighbouring* pool
- * values, so the first tap lands on the pool and no value can be stepped past.
- */
-export function steppedPool(
-  values: readonly number[],
-  value: number,
-  direction: 1 | -1,
-): number | null {
-  if (direction === 1) {
-    return values.find((candidate) => candidate > value) ?? null;
-  }
-  for (let index = values.length - 1; index >= 0; index -= 1) {
-    const candidate = values[index];
-    if (candidate !== undefined && candidate < value) {
-      return candidate;
-    }
-  }
-  return null;
+  return values;
 }
 
 /**
@@ -516,23 +474,45 @@ export function needText(need: ShoppingNeed): string {
 }
 
 /**
- * The stock translated into the ingredient's shopping unit ("2 Stück") — the
- * pantry sheet's count field for an **approximate** shopping unit, whose
- * stepper moves in grams while the shelf is counted in pieces. Null when the
- * ingredient has no shopping unit (nothing to translate).
+ * The shopping unit of one row's ingredient, with its factor (family base unit
+ * per one unit), or null when the master data gives the ingredient none
+ * (§3.1). The pantry sheet shows the stock's whole count in this unit beside the
+ * slider, and reads a count typed into that field in it.
+ */
+export function shoppingUnitOf(need: ShoppingNeed): { au: AdditionalUnit; factor: number } | null {
+  return shoppingUnitFor(mappingsFor(need.ingredient), need.baseUnit);
+}
+
+/**
+ * The stock translated into the ingredient's shopping unit ("2 Stück", "1
+ * Packung") — the pantry sheet's field beside the slider, which can also be
+ * tapped to type a count. Null when there is nothing to count: either the
+ * ingredient has no shopping unit, or its unit is **exact** (§3.1) and the
+ * stock is not a whole number of it. The sheet prints a dash then, because
+ * "0,2 Packung" would name a shelf that cannot exist.
  *
- * The count is the nearest value of the unit's number scheme (§6.1), rendered in
- * the §8 glyph typography ("1 ½ Stück") — a whole number for the integer schemes
- * of the master data. The stock is not required to be a ladder value: it comes
- * from the reorder point (which need not be a rung) or from a typed number.
+ * An **approximate** unit's factor is an average (§6.3): grams on the shelf and
+ * pieces in a recipe are two readings of one stock, so its count is the nearest
+ * value of the unit's number scheme (§6.1), rendered in the §8 glyph typography
+ * ("1 ½ Stück"). The stock is not required to be a ladder value: it comes from
+ * the reorder point (which need not be a rung) or from a typed number.
  */
 export function stockCountText(need: ShoppingNeed, stock: number): string | null {
-  const target = shoppingUnitFor(mappingsFor(need.ingredient), need.baseUnit);
+  const target = shoppingUnitOf(need);
   if (target === null) {
     return null;
   }
   const raw = Math.max(0, roundThousandths(stock)) / target.factor;
-  const count = nearestCount(target.au, raw);
+  let count: number;
+  if (target.au.exact) {
+    const whole = roundThousandths(raw);
+    if (!Number.isInteger(whole)) {
+      return null;
+    }
+    count = whole;
+  } else {
+    count = nearestCount(target.au, raw);
+  }
   const notation = isAQValue(count) ? formatAQValue(count) : formatDecimal(count);
   return `${notation}${NNBSP}${target.au.name}`;
 }

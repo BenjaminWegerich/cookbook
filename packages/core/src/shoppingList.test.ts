@@ -9,9 +9,9 @@
  * - the pantry: the Vorrat starts on `min(need, reorder point)`;
  * - rounding *up* to whole shopping units, or to whole family units without
  *   one — never below the need, and not necessarily a ladder rung;
- * - the stock pool a row offers (one chip per result, one pack per tap, or one
- *   ladder rung per tap), how one tap walks through it, and the stock's
- *   translation into its shopping unit ("2 Stück").
+ * - the stock values a row's slider snaps to (one stop per result, whole packs,
+ *   or ladder rungs) and the stock's translation into its shopping unit
+ *   ("2 Stück").
  *
  * Quantity text joins number and unit with the narrow no-break space
  * (`NNBSP`, docs/CODING_CONVENTIONS.md), so the expected lines are built with
@@ -29,7 +29,7 @@ import {
   scaledIngredientsForPlan,
   shoppingNeeds,
   shoppingRow,
-  steppedPool,
+  shoppingUnitOf,
   stockCountText,
   stockPool,
   stockPrefill,
@@ -305,110 +305,89 @@ describe('the amount of a shopping row (amountText)', () => {
 });
 
 describe('stockPool', () => {
-  it('offers one chip per result within six exact shopping units', () => {
+  it('offers one stop per result within six exact shopping units', () => {
     // The user's example: 1200 g of flour in 1000 g packs. Below 200 g on the
     // shelf two packs are bought, from 200 g up exactly one, from the need
     // itself nothing — 300 g, 500 g and 1000 g are all the same case, so only
     // these three stock values are offered.
-    const pool = stockPool(need({ ingredient: 'Mehl', needed: 1200 }));
-    expect(pool.kind).toBe('chips');
-    expect(pool.values).toEqual([0, 200, 1200]);
-    expect(pool.showsUnitCount).toBe(false);
+    expect(stockPool(need({ ingredient: 'Mehl', needed: 1200 }))).toEqual([0, 200, 1200]);
   });
 
-  it('chips the boundaries of every result, up to seven chips', () => {
+  it('offers one stop per result, up to seven stops', () => {
     // 600 g of yoghurt in 400 g Becher: below 200 g two Becher, from 200 g one,
     // from 600 g none.
-    expect(stockPool(need({ ingredient: 'Joghurt', needed: 600 })).values).toEqual([0, 200, 600]);
-    // Six units is the limit: 2400 g in 400 g Becher = 6 → seven chips.
-    expect(stockPool(need({ ingredient: 'Joghurt', needed: 2400 }))).toEqual({
-      kind: 'chips',
-      values: [0, 400, 800, 1200, 1600, 2000, 2400],
-      showsUnitCount: false,
-    });
+    expect(stockPool(need({ ingredient: 'Joghurt', needed: 600 }))).toEqual([0, 200, 600]);
+    // Six units is the limit: 2400 g in 400 g Becher = 6 → seven stops.
+    expect(stockPool(need({ ingredient: 'Joghurt', needed: 2400 }))).toEqual([
+      0, 400, 800, 1200, 1600, 2000, 2400,
+    ]);
   });
 
-  it('switches to one pack per tap beyond six units', () => {
-    // 2800 g in 400 g Becher = 7 packs: the pool walks whole packs and ends on
+  it('switches to whole packs beyond six units', () => {
+    // 2800 g in 400 g Becher = 7 packs: the stops walk whole packs and end on
     // the need itself, which covers it completely.
-    expect(stockPool(need({ ingredient: 'Joghurt', needed: 2800 }))).toEqual({
-      kind: 'stepper',
-      values: [0, 400, 800, 1200, 1600, 2000, 2400, 2800],
-      showsUnitCount: false,
-    });
-    // A need between two packs: the last pool value is the need (nothing to buy),
-    // the one below it the largest whole pack count that still leaves a purchase.
-    expect(stockPool(need({ ingredient: 'Mehl', needed: 7500 })).values).toEqual([
+    expect(stockPool(need({ ingredient: 'Joghurt', needed: 2800 }))).toEqual([
+      0, 400, 800, 1200, 1600, 2000, 2400, 2800,
+    ]);
+    // A need between two packs: the last stop is the need (nothing to buy), the
+    // one below it the largest whole pack count that still leaves a purchase.
+    expect(stockPool(need({ ingredient: 'Mehl', needed: 7500 }))).toEqual([
       0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 7500,
     ]);
   });
 
   it('walks the ladder within one tenth of the need without a shopping unit', () => {
-    // Butter has only EL and TL (recipe measures, not shopping units): the pool
-    // is 0, the ladder rungs from 85 g (a tenth of the need) up, and the need.
-    const pool = stockPool(need({ ingredient: 'Butter', needed: 850 }));
-    expect(pool.kind).toBe('stepper');
-    expect(pool.values).toEqual([
+    // Butter has only EL and TL (recipe measures, not shopping units): the stops
+    // are 0, the ladder rungs from 85 g (a tenth of the need) up, and the need.
+    expect(stockPool(need({ ingredient: 'Butter', needed: 850 }))).toEqual([
       0, 90, 100, 120, 150, 180, 200, 220, 250, 280, 300, 350, 400, 500, 600, 700, 800, 850,
     ]);
-    expect(pool.showsUnitCount).toBe(false);
   });
 
   it('does not repeat a need that is itself a ladder rung', () => {
-    expect(stockPool(need({ ingredient: 'Butter', needed: 800 })).values).toEqual([
+    expect(stockPool(need({ ingredient: 'Butter', needed: 800 }))).toEqual([
       0, 80, 90, 100, 120, 150, 180, 200, 220, 250, 280, 300, 350, 400, 500, 600, 700, 800,
     ]);
   });
 
-  it('adds the count field for an approximate shopping unit', () => {
-    // Carrots: the stepper moves in grams, but the shelf is counted in pieces.
-    const pool = stockPool(need({ ingredient: 'Karotten', needed: 500 }));
-    expect(pool.kind).toBe('stepper');
-    expect(pool.showsUnitCount).toBe(true);
-    expect(pool.values[0]).toBe(0);
-    expect(pool.values[pool.values.length - 1]).toBe(500);
+  it('walks grams for an approximate shopping unit', () => {
+    // Carrots: the slider moves in grams, but the shelf is counted in pieces.
+    const values = stockPool(need({ ingredient: 'Karotten', needed: 500 }));
+    expect(values[0]).toBe(0);
+    expect(values[values.length - 1]).toBe(500);
   });
 
   it('falls back to the ladder for an ingredient without master data', () => {
-    const pool = stockPool(need({ ingredient: 'Tofu', needed: 400 }));
-    expect(pool).toEqual({
-      kind: 'stepper',
-      values: [0, 40, 50, 60, 70, 80, 90, 100, 120, 150, 180, 200, 220, 250, 280, 300, 350, 400],
-      showsUnitCount: false,
-    });
+    expect(stockPool(need({ ingredient: 'Tofu', needed: 400 }))).toEqual([
+      0, 40, 50, 60, 70, 80, 90, 100, 120, 150, 180, 200, 220, 250, 280, 300, 350, 400,
+    ]);
   });
 
   it('keeps the family unit of an ml ingredient', () => {
-    // 1000 ml of milk in 250 ml Becher = 4 → five chips.
-    expect(stockPool(need({ ingredient: 'Milch', needed: 1000, baseUnit: 'ml' }))).toEqual({
-      kind: 'chips',
-      values: [0, 250, 500, 750, 1000],
-      showsUnitCount: false,
-    });
+    // 1000 ml of milk in 250 ml Becher = 4 → five stops.
+    expect(stockPool(need({ ingredient: 'Milch', needed: 1000, baseUnit: 'ml' }))).toEqual([
+      0, 250, 500, 750, 1000,
+    ]);
+  });
+
+  it('keeps an inert one-value pool for a row without a need', () => {
+    expect(stockPool(need({ ingredient: 'Mehl', needed: 0 }))).toEqual([0]);
   });
 });
 
-describe('steppedPool', () => {
-  /** The user's flour example: below 200 g, from 200 g, from the need itself. */
-  const flour = [0, 200, 1200];
-
-  it('walks the pool one entry per tap', () => {
-    expect(steppedPool(flour, 0, 1)).toBe(200);
-    expect(steppedPool(flour, 200, 1)).toBe(1200);
-    expect(steppedPool(flour, 1200, -1)).toBe(200);
-    expect(steppedPool(flour, 200, -1)).toBe(0);
+describe('shoppingUnitOf', () => {
+  it('answers the shopping unit and its factor', () => {
+    // Flour is bought in 1000 g packs, carrots in pieces of about 80 g.
+    expect(shoppingUnitOf(need({ ingredient: 'Mehl', needed: 1200 }))).toMatchObject({
+      au: { name: 'Packung' },
+      factor: 1000,
+    });
+    expect(shoppingUnitOf(need({ ingredient: 'Karotten', needed: 500 }))?.au.name).toBe('Stück');
   });
 
-  it('lands on the pool from a value in between', () => {
-    // The pre-fill is min(need, reorder point) — 1000 g on the shelf lies inside
-    // the "from 200 g" bucket, so the first tap steps to its neighbours.
-    expect(steppedPool(flour, 1000, 1)).toBe(1200);
-    expect(steppedPool(flour, 1000, -1)).toBe(200);
-  });
-
-  it('blocks at the pool bounds', () => {
-    expect(steppedPool(flour, 1200, 1)).toBeNull();
-    expect(steppedPool(flour, 0, -1)).toBeNull();
+  it('is null without a shopping unit', () => {
+    // Butter has only EL and TL — recipe measures, no shopping unit of its own.
+    expect(shoppingUnitOf(need({ ingredient: 'Butter', needed: 500 }))).toBeNull();
   });
 });
 
@@ -443,6 +422,14 @@ describe('stockCountText', () => {
     expect(stockCountText(need({ ingredient: 'Karotten', needed: 800 }), 2000)).toBe(
       `25${NB}Stück`,
     );
+  });
+
+  it('names only whole packs of an exact shopping unit', () => {
+    // Flour is bought in 1000 g packs: two packs read as two packs, but 200 g is
+    // no whole pack and would name a shelf that cannot exist.
+    expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 2000)).toBe(`2${NB}Packung`);
+    expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 0)).toBe(`0${NB}Packung`);
+    expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 200)).toBeNull();
   });
 
   it('is null without a shopping unit', () => {

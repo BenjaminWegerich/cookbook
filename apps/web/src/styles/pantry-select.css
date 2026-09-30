@@ -1,15 +1,16 @@
 /**
  * Pantry sheet styles — the "Vorräte auswählen" page (components/PantrySelect)
- * with its stock picker (components/StockChips and components/StockStepper).
+ * with its stock picker (components/StockSlider).
  *
  * **One ingredient is three lines, each introduced by the symbol for what it
  * says** (decided with the user; the sheet's intro paragraph names the symbols):
  *
  * 1. the *recipe book*: what the selected dishes need together, in the ingredient's
  *    familiar arrangement ("2 Becher Joghurt (600 g)");
- * 2. the *shelves*: the stock picker — one chip per possible result, or the
- *    stepper with the chip that names the amount from which nothing is bought
- *    (and, for an approximate shopping unit, the stock's count in that unit);
+ * 2. the *shelves*: the stock picker — a discrete slider over the stock values at
+ *    which the bought amount changes, with two tappable value fields above it (the
+ *    chosen amount in the family base unit and, where the ingredient has one, its
+ *    whole count in the shopping unit);
  * 3. the *shopping list*: the line the row writes to Keep, word for word,
  *    including the ingredient name ("1 Packung Mehl (1 kg)"), or a dash when
  *    nothing is to buy. Written like the other two lines (decided with the user):
@@ -18,10 +19,9 @@
  * The previous three-column table (name / Vorrat / Einkaufen with a caption row)
  * is gone: the symbols carry the captions now, so nothing has to be squeezed into
  * a narrow column, and the layout is the same on every screen (no breakpoint).
- *
- * The chips reuse the app's global chip look (".chip" / ".chip-active" in
- * styles/editor.css), so a selected stock and a selected quantity read alike;
- * only the "nothing to buy" chip gets a look of its own.
+ * The chip row and the −/ + stepper are gone as well: one control shape answers
+ * every row now, and the stops' **even** spacing is what makes a small step as
+ * easy to hit as a large one.
  *
  * All pixel values come from the design ladder (docs/CODING_CONVENTIONS.md);
  * colors and sizes reference the tokens in styles/tokens.css.
@@ -83,7 +83,7 @@
 }
 
 /* One ingredient: its three lines stacked. The row's inset is the tap-room around
-   the stepper — a finger lands on the buttons, not on the surface edge. */
+   the slider — a finger lands on the control, not on the surface edge. */
 .pantry-row {
   display: grid;
   gap: var(--space-4);
@@ -97,9 +97,9 @@
 /* One of the row's three lines: its symbol, then what the line says. The symbol
    column is the same on every line, so all three contents start at one x and the
    symbols read as a column. The symbol is centred against its line's content
-   (decided with the user): beside the middle of a 42 px stepper button, not
-   floating above it. A line whose content wraps (chips, a long amount) keeps the
-   symbol beside the middle of the whole block. */
+   (decided with the user): beside the middle of the stock picker's block — the
+   two value fields over the slider — not floating above it. A line whose content
+   wraps (a long amount) keeps the symbol beside the middle of the whole block. */
 .pantry-line {
   display: flex;
   align-items: center;
@@ -137,139 +137,179 @@
 
 /* ---- The stock picker (the row's second line) --------------------------- */
 
-/* The chip picker: one chip per stock value that changes the bought amount
-   (components/StockChips). Same chip styling and wrapping as the editor's
-   quantity chips (".quantity-chips" in styles/editor.css), so a row with few
-   results is answered with a single tap. */
-.stock-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+/* One row's stock picker (components/StockSlider): the two tappable value fields
+   above the slider. It grows into the width the row's symbol column leaves, so
+   the track spans the row; `min-width: 0` lets a narrow phone shrink it instead
+   of pushing the row wider. */
+.stock-slider {
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
-/* The stock line's picker: the −/value/+ control, the stock's count in its
-   shopping unit (".stock-count", only for an approximate unit) and the chip that
-   names the amount from which nothing is bought (components/StockStepper). It
-   wraps as a whole, so on a narrow phone the chip moves below the stepper instead
-   of squeezing it. The gap is one step tighter than inside the stepper
-   (--space-6), because the companions belong to the control without being part
-   of it. */
-.stock-picker {
+/* The chosen stock in both readings, side by side: the family base unit first,
+   the shopping unit's whole count second (only where the ingredient has one). */
+.stock-values {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-3);
 }
 
-/* The compact −/value/+ control on the row's stock line, in the app's usual
-   stepper shape (".quantity-row" in styles/editor.css): the buttons keep their
-   42 px circle, the value a fixed box between them, and the whole control is
-   only as wide as that — it does not stretch its two buttons to the screen
-   edges. The fixed value box is what keeps the "+" where it is while the
-   number's text grows ("800 g" → "1,15 kg" → "2 kg"); the same effect the
-   editor's stepper gets from the same box (".quantity-value"). */
-.stock-stepper {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  /* The app's usual stepper spacing — `.quantity-row` in styles/editor.css
-     keeps --space-6 between a button and the value. A phone row has room for it
-     now that the stepper has a line of its own (decided with the user). */
-  gap: var(--space-6);
-  /* Content-sized: `fit-content` is a sizing keyword, not a pixel value (the
-     ladder governs the numbers in between). */
-  width: fit-content;
-}
-
-/* The same value type size and box as every other stepper of the app
-   (".quantity-value" in styles/editor.css: --text-lg, 74 px): the stock and the
-   editor's quantity are the same kind of number, so they read the same
-   (decided with the user). 74 px is a ladder value and holds the longest form
-   the quantity format produces ("1,15 kg").
-
-   It is a button: tapping it opens the keyboard for a typed stock (decided with
-   the user), so it drops the button chrome and only reacts to a tap with the
-   app's shared press wash (".step-button" keeps its circle look). `cursor: text`
-   says what the tap does on a desktop screen. */
-.stock-stepper-value {
-  width: 74px;
-  padding: 0;
-  background: none;
-  border: none;
-  color: inherit;
-  text-align: center;
+/* One reading, closed: a button, because a tap opens the keyboard for a typed
+   amount (decided with the user). It wears the recessed field look of the app's
+   inputs, so it reads as something to fill in rather than as a label — and drops
+   the global button chrome. 74 px is the ladder's value-box width and holds the
+   longest amount the quantity format produces ("1,15 kg"). `cursor: text` says
+   what a tap does on a desktop screen. */
+.stock-value {
+  min-width: 74px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
   font-family: inherit;
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   font-weight: 600;
+  text-align: start;
   white-space: nowrap;
   cursor: text;
 }
 
-/* The open value box: as wide as the closed one, so the "+" never moves while
-   typing. The typed number is read in the family base unit (decided with the
-   user), which the small unit label beside it names — the closed box keeps the
-   familiar kg / l reading. */
-.stock-stepper-edit {
+/* One reading, open: the same box in the accent outline while it holds the
+   keyboard, with the number left of its unit. */
+.stock-value-edit {
   display: inline-flex;
   align-items: baseline;
-  justify-content: center;
   gap: var(--space-1);
-  width: 74px;
+  min-width: 74px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
 }
 
-.stock-stepper-input {
+.stock-value-input {
   flex: 1 1 0;
+  width: 74px;
   min-width: 0;
   padding: 0;
   background: none;
   border: none;
   color: inherit;
-  text-align: center;
   font-family: inherit;
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
-/* The unit of a typed number: a label, not the value — quiet and one step
-   smaller, like the caption of the create-ingredient sheet's preview field. */
-.stock-stepper-unit {
+/* The unit an open field is typed in ("g" / "Stück"): a label, not the value —
+   quiet and one step smaller. */
+.stock-value-unit {
   flex: none;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
 }
 
-/* The stock's count in its shopping unit ("2 Stück") for an approximate unit:
-   a recessed field like the create-ingredient sheet's preview (the same
-   read-only look), but muted — it reads the *stock* on the shelf, not the
-   purchase. */
-.stock-count {
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-bg);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  color: var(--color-ink-muted);
-  font-size: var(--text-md);
-  font-weight: 600;
-  white-space: nowrap;
+/* The track and its stop marks. The thumb size lives here as one variable: the
+   native thumb, the tick row's inset and the rail all derive from it, so the
+   marks stay under the thumb however the platform draws it. */
+.stock-track {
+  --stock-thumb: 24px;
+  position: relative;
 }
 
-/* The "nothing to buy" chip: the chip picker's last chip and the stepper's
-   shortcut both name the amount from which nothing is bought and carry the check
-   symbol plus the olive covered / success accent — the one tap that answers the
-   most common case, visible at a glance among the clay-accented value chips.
-   Once it is the selected stock it takes the app's usual selected chip look
-   (".chip-active"), which is also the row's "nothing to buy" marker. */
-.chip-covered {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  border-color: var(--color-olive);
-  color: var(--color-olive);
+/* The discrete slider — the real control, so dragging, the arrow keys and
+   assistive tech all work on it. `appearance: none` strips the platform look so
+   the rail and thumb can wear the app's palette; the ladder's 42 px height gives
+   the thumb room without moving the rail's centre. It paints above the tick
+   layer, whose marks stay visible through its transparent background. */
+.stock-range {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 42px;
+  margin: 0;
+  background: transparent;
 }
 
-.chip-covered.chip-active {
-  border-color: var(--color-accent);
-  color: var(--color-on-accent);
+/* The rail: one line-coloured hairline, the 100% radius the ladder allows for
+   circles. */
+.stock-range::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--color-line);
+  border-radius: 100%;
+}
+
+.stock-range::-moz-range-track {
+  height: 4px;
+  background: var(--color-line);
+  border-radius: 100%;
+}
+
+/* The thumb: the accent circle the app uses for a chosen value. It turns olive
+   once the stock covers the need — the same "nothing to buy" signal the old
+   chip carried (".stock-range-covered"). */
+.stock-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--stock-thumb);
+  height: var(--stock-thumb);
+  /* Centres the thumb on the 4 px rail: (4 − 24) / 2. */
+  margin-block-start: -10px;
+  background: var(--color-accent);
+  border: none;
+  border-radius: 100%;
+}
+
+.stock-range::-moz-range-thumb {
+  width: var(--stock-thumb);
+  height: var(--stock-thumb);
+  background: var(--color-accent);
+  border: none;
+  border-radius: 100%;
+}
+
+.stock-range-covered::-webkit-slider-thumb {
+  background: var(--color-olive);
+}
+
+.stock-range-covered::-moz-range-thumb {
+  background: var(--color-olive);
+}
+
+/* A pool with a single stop has nothing to choose: the quieted slider says so
+   (the value fields stay readable). */
+.stock-range:disabled {
+  opacity: var(--opacity-disabled);
+}
+
+/* The stop marks: one per stock value, at **even** distances (the whole point of
+   the picker — the amounts behind them are not evenly spaced). The row is inset
+   by half a thumb, so a mark sits under the thumb's centre at each end, and it is
+   not interactive: the slider above it is. */
+.stock-ticks {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: space-between;
+  padding-inline: calc(var(--stock-thumb) / 2);
+  pointer-events: none;
+}
+
+/* One mark: a short stroke of muted ink, taller than the rail so it reads as a
+   notch rather than as the rail itself. */
+.stock-tick {
+  width: 2px;
+  height: 10px;
+  background: var(--color-ink-muted);
+  border-radius: 100%;
 }
 
 /* ---- Forward action ------------------------------------------------------ */
