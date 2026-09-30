@@ -12,9 +12,12 @@ import { describe, expect, it } from 'vitest';
 import {
   parseShoppingAssignmentsCsv,
   parseShoppingRouteCsv,
+  serializeShoppingAssignmentsCsv,
+  serializeShoppingRouteCsv,
   type ShoppingAssignments,
   type ShoppingRoute,
 } from './shoppingRouteCsv.js';
+import { SEED_SHOPPING_ASSIGNMENTS, SEED_SHOPPING_ROUTE } from './shoppingRouteData.js';
 
 /** Repository `docs/` folder, resolved from this file's location. */
 const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../docs');
@@ -100,6 +103,31 @@ describe('parseShoppingRouteCsv', () => {
   });
 });
 
+describe('serializeShoppingRouteCsv', () => {
+  it('writes the canonical format in route order', () => {
+    expect(serializeShoppingRouteCsv(ROUTE)).toBe(`${ROUTE_TEXT}\n`);
+  });
+
+  it('round-trips: parse(serialize(route)) is the route', () => {
+    expect(parseShoppingRouteCsv(serializeShoppingRouteCsv(ROUTE))).toEqual(ROUTE);
+  });
+
+  it('keeps the order of the stops it is given', () => {
+    const reversed = [...ROUTE].reverse();
+    expect(serializeShoppingRouteCsv(reversed).split('\n').slice(1, 3)).toEqual([
+      'dm;Drogerie',
+      'REWE;TK-Obst',
+    ]);
+  });
+
+  it('fails loudly instead of emitting text the parser would reject', () => {
+    // The format has no quoting (csv.ts): a semicolon inside a cell cannot be
+    // read back, so the round-trip check in the serializer must throw.
+    const broken: ShoppingRoute = [{ store: 'Lidl', section: 'Obst;Gemüse' }];
+    expect(() => serializeShoppingRouteCsv(broken)).toThrow(/Spaltenzahl/);
+  });
+});
+
 describe('parseShoppingAssignmentsCsv', () => {
   it('parses the canonical format into a name → stop lookup', () => {
     expect(parseShoppingAssignmentsCsv(ASSIGNMENTS_TEXT, ROUTE)).toEqual(ASSIGNMENTS);
@@ -179,6 +207,32 @@ describe('parseShoppingAssignmentsCsv', () => {
   });
 });
 
+describe('serializeShoppingAssignmentsCsv', () => {
+  it('writes the canonical format with the stop of every item', () => {
+    expect(serializeShoppingAssignmentsCsv(ASSIGNMENTS, ROUTE)).toBe(`${ASSIGNMENTS_TEXT}\n`);
+  });
+
+  it('round-trips: parse(serialize(assignments)) is the assignments', () => {
+    const text = serializeShoppingAssignmentsCsv(ASSIGNMENTS, ROUTE);
+    expect(parseShoppingAssignmentsCsv(text, ROUTE)).toEqual(ASSIGNMENTS);
+  });
+
+  it('keeps the record order it is given instead of sorting', () => {
+    // A hand-sorted spreadsheet must survive a write unchanged: the assignment
+    // file's row order carries no meaning, so the serializer never imposes one.
+    const reversed: ShoppingAssignments = Object.fromEntries(Object.entries(ASSIGNMENTS).reverse());
+    const rows = serializeShoppingAssignmentsCsv(reversed, ROUTE).split('\n').slice(1, 3);
+    expect(rows).toEqual(['Klopapier;dm;Drogerie', 'TK-Blaubeeren;REWE;TK-Obst']);
+  });
+
+  it('fails loudly when an assignment names a stop outside the route', () => {
+    const broken: ShoppingAssignments = { Seife: { store: 'dm', section: 'Haushalt' } };
+    expect(() => serializeShoppingAssignmentsCsv(broken, ROUTE)).toThrow(
+      /steht nicht im Einkaufsweg/,
+    );
+  });
+});
+
 describe('shopping-route seed files (docs/)', () => {
   /** Reads a seed file from the repository `docs/` folder. */
   const readSeed = (name: string): string => readFileSync(join(DOCS_DIR, name), 'utf8');
@@ -198,5 +252,16 @@ describe('shopping-route seed files (docs/)', () => {
     expect(assignments.Klopapier).toBeDefined();
     expect(assignments.Seife).toBeDefined();
     expect(assignments.Blumen).toBeDefined();
+  });
+
+  it('matches the generated seed module the runtime starts from', () => {
+    // The compiled seed (shoppingRouteData.ts) is what the app ships; it is
+    // generated from these two CSVs. This test is the drift guard between the
+    // authoritative repository files and the module — re-run
+    // `npm run generate:shopping-route` when it fails.
+    expect(SEED_SHOPPING_ROUTE).toEqual(parseShoppingRouteCsv(readSeed('shopping_route.csv')));
+    expect(SEED_SHOPPING_ASSIGNMENTS).toEqual(
+      parseShoppingAssignmentsCsv(readSeed('shopping_items.csv'), SEED_SHOPPING_ROUTE),
+    );
   });
 });

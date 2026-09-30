@@ -4,11 +4,11 @@
  * runtime for the user's authoritative master data in the Drive Cookbook
  * folder (einkaufsweg.csv + einkaufs-zuordnung.csv).
  *
- * This module builds the **data structure only**: where an item is bought and
- * in which order the stops are visited. It deliberately does not sort a list
- * and does not write files — the order a shopping list is derived from this
- * data, and the serializers, come with those steps
- * (docs/storage_format.md §10).
+ * This module owns the format and nothing else: the data structure (where an
+ * item is bought and in which order the stops are visited) plus its two codecs,
+ * parse and serialize. It deliberately does not sort a shopping list and does
+ * not touch a file system — the derived order and the Drive files belong to the
+ * steps that use this format (docs/storage_format.md §10).
  *
  * Two files, one concept:
  * - the **route** (`Store;Section`, one row per stop): the row order IS the
@@ -102,6 +102,29 @@ export function parseShoppingRouteCsv(text: string): ShoppingRoute {
 }
 
 /**
+ * Serializes the route back to the canonical CSV (`Store;Section`), one row per
+ * stop, in route order — the order IS the content, so the serializer never
+ * sorts, groups or deduplicates. The output round-trips through
+ * parseShoppingRouteCsv; it ends with a newline and uses LF line endings.
+ *
+ * Cells are written verbatim: this format has no quoting (csv.ts), so a cell
+ * containing a semicolon or a line break could not be read back. The round-trip
+ * check below turns such a cell into a loud failure here instead of into a
+ * corrupt file later.
+ */
+export function serializeShoppingRouteCsv(route: ShoppingRoute): string {
+  const lines = [ROUTE_HEADER];
+  for (const stop of route) {
+    lines.push(`${stop.store};${stop.section}`);
+  }
+  const text = `${lines.join('\n')}\n`;
+  // Round trip through the parser: the serializer must never produce text that
+  // the loader would reject (docs/storage_format.md §10).
+  parseShoppingRouteCsv(text);
+  return text;
+}
+
+/**
  * Parses the item-assignment CSV (`Item;Store;Section`) into name → stop. The
  * `route` is the cross-file reference this validation is about: every stop an
  * assignment names must exist in the route — a typo fails loudly at load, like
@@ -146,4 +169,34 @@ export function parseShoppingAssignmentsCsv(
     assignments[item] = stop;
   }
   return assignments;
+}
+
+/**
+ * Serializes the item assignment back to the canonical CSV
+ * (`Item;Store;Section`), one row per item, in the record's own key order —
+ * the file's row order carries no meaning, so the serializer keeps whatever
+ * order it is given (the parsed file order, plus appended items at the end)
+ * instead of sorting, which leaves hand-sorted spreadsheets untouched. The
+ * output round-trips through parseShoppingAssignmentsCsv; it ends with a
+ * newline and uses LF line endings.
+ *
+ * The `route` argument is the cross-file reference the text is validated
+ * against, exactly as on the parse side, so a serializer call can never emit a
+ * row that the next load would reject. Cells are written verbatim (no quoting,
+ * see csv.ts): a caller writing to Drive must parse the produced text first, as
+ * the route serializer documents.
+ */
+export function serializeShoppingAssignmentsCsv(
+  assignments: ShoppingAssignments,
+  route: ShoppingRoute,
+): string {
+  const lines = [ASSIGNMENTS_HEADER];
+  for (const [item, stop] of Object.entries(assignments)) {
+    lines.push(`${item};${stop.store};${stop.section}`);
+  }
+  const text = `${lines.join('\n')}\n`;
+  // Round trip through the parser: the serializer must never produce text that
+  // the loader would reject (docs/storage_format.md §10).
+  parseShoppingAssignmentsCsv(text, route);
+  return text;
 }

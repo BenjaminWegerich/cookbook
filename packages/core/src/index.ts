@@ -13,6 +13,10 @@
  * - ingredient and shopping-route master data parsing — implemented
  *   (docs/storage_format.md §9/§10, src/ingredientCsv.ts +
  *   src/shoppingRouteCsv.ts)
+ * - the shopping-route runtime registry: the current route, the item
+ *   assignment and the store/section lists the pickers are built from —
+ *   implemented (src/shoppingRouteRegistry.ts; seed data in
+ *   src/shoppingRouteData.ts, compiled by scripts/generate-shopping-route.mjs)
  * - recipe format parsing and validation — implemented
  *   (docs/storage_format.md, src/recipe/parse.ts + src/recipe/validate.ts)
  */
@@ -37,6 +41,8 @@ export * from './recipe/validate.js';
 export * from './recipe/yieldViews.js';
 export * from './shoppingList.js';
 export * from './shoppingRouteCsv.js';
+export * from './shoppingRouteData.js';
+export * from './shoppingRouteRegistry.js';
 
 /** Version of the core module, kept in sync with packages/core/package.json. */
 export const VERSION = '0.1.0';
