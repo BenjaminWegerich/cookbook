@@ -273,29 +273,47 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
+/** Aspect ratio (width / height) a stored recipe photo is cropped to: 4:3
+ * landscape (DESIGN.md §5.8, recipe_structure.md "Image"). */
+const PHOTO_ASPECT_RATIO = 4 / 3;
+
 /**
- * Center-crops a photo file to a square and re-encodes it in the same format.
- * Recipe photos are stored as squares (recipe_structure.md, "Image"): the
- * source is cropped to its shorter side at original resolution — a landscape
- * 4000×3000 shot becomes 3000×3000 — so no pixel information is discarded
- * except the bars that the square crop removes. The cropped result is drawn
- * upright (EXIF is applied while decoding and not written back).
+ * Center-crops a photo file to a 4:3 landscape and re-encodes it in the same
+ * format. Recipe photos are stored as 4:3 landscapes (recipe_structure.md,
+ * "Image"): the source is cropped to the largest centered 4:3 box at original
+ * resolution — an already-4:3 4000×3000 shot is stored unchanged, a portrait
+ * 3000×4000 becomes 3000×2250 — so no pixel information is discarded except the
+ * bars that the crop removes. The cropped result is drawn upright (EXIF is
+ * applied while decoding and not written back).
  */
-async function squareCropPhoto(file: File, extension: 'jpg' | 'png'): Promise<Blob> {
+async function landscapeCropPhoto(file: File, extension: 'jpg' | 'png'): Promise<Blob> {
   const url = URL.createObjectURL(file);
   try {
     const image = await loadImage(url);
     const { naturalWidth: width, naturalHeight: height } = image;
-    const side = Math.min(width, height);
+    // Largest centered 4:3 box that fits the source: a source wider than 4:3
+    // keeps its full height and loses width, a taller one keeps its full width.
+    const cropWidth = Math.min(width, Math.round(height * PHOTO_ASPECT_RATIO));
+    const cropHeight = Math.min(height, Math.round(width / PHOTO_ASPECT_RATIO));
     const canvas = document.createElement('canvas');
-    canvas.width = side;
-    canvas.height = side;
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
     const ctx = canvas.getContext('2d');
     if (ctx === null) {
       throw new Error('Canvas wird nicht unterstützt.');
     }
-    // Copy the centered square of the source onto the canvas.
-    ctx.drawImage(image, (width - side) / 2, (height - side) / 2, side, side, 0, 0, side, side);
+    // Copy the centered 4:3 box of the source onto the canvas.
+    ctx.drawImage(
+      image,
+      (width - cropWidth) / 2,
+      (height - cropHeight) / 2,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      cropWidth,
+      cropHeight,
+    );
     const mimeType = extension === 'jpg' ? 'image/jpeg' : 'image/png';
     const cropped = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, mimeType, JPEG_QUALITY),
@@ -1244,8 +1262,9 @@ function RecipeEditor({
 
   /**
    * Queues a photo replacement; the Drive write happens on Speichern. The
-   * file is center-cropped to a square first (recipe_structure.md, "Image"),
-   * and the preview shows the cropped result — what you see is what is saved.
+   * file is center-cropped to a 4:3 landscape first (recipe_structure.md,
+   * "Image"), and the preview shows the cropped result — what you see is what
+   * is saved.
    */
   const handlePhotoFile = async (file: File): Promise<void> => {
     const extension = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/png' ? 'png' : null;
@@ -1255,7 +1274,7 @@ function RecipeEditor({
     }
     setPhotoError(null);
     try {
-      const cropped = await squareCropPhoto(file, extension);
+      const cropped = await landscapeCropPhoto(file, extension);
       showPhotoUrl(cropped);
       setPhotoChange({ kind: 'set', blob: cropped, extension });
     } catch (err) {

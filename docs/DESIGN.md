@@ -84,7 +84,7 @@ components reference tokens, never a raw value.
 | `--color-olive` | `#6b7a4a` | herb: secondary accent — selected and secondary states, media grounds, success tone |
 | `--color-danger` | `#a63b2c` | destructive actions and errors |
 | `--color-on-accent` | `#fffcf6` | text on accent surfaces |
-| `--avatar-0` … `--avatar-3` | `#b85c38`, `#6b7a4a`, `#c08a3e`, `#8a6d4f` | deterministic letter-avatar grounds (§5.8), each with a `-fg` partner for its letter |
+| `--placeholder-0` … `--placeholder-3` | `#b85c38`, `#6b7a4a`, `#c08a3e`, `#8a6d4f` | deterministic placeholder grounds (§5.8), each with a `-fg` partner for its symbol |
 
 **Rules**
 
@@ -96,7 +96,7 @@ components reference tokens, never a raw value.
 - Colour never carries a meaning alone: success is olive **plus** the check symbol, an error
   is danger plus its symbol or an explicit sentence.
 - Every accent surface takes `--color-on-accent` as its text colour.
-- Letter-avatar colours are derived from the recipe title, not chosen per render (§5.8).
+- Placeholder colours are derived from the recipe title, not chosen per render (§5.8).
 
 *Cooking view: not written yet.*
 
@@ -181,13 +181,14 @@ interface.
 **Surfaces are flat, filled and opaque.** Every surface — page, card, sticky bar, sheet — is
 one opaque colour from the palette (§4.1), painted over its whole footprint, edge to edge.
 
-**Radius has three steps plus the circle:**
+**Radius has four steps plus the circle:**
 
 | Token | Value | Role |
 | --- | --- | --- |
 | `--radius-sm` | 6px | small elements: chips, badges, tags |
 | `--radius-md` | 10px | controls: buttons, inputs, list rows, card media tiles |
-| `--radius-lg` | 18px | containers: cards, sheets, panels |
+| `--radius-lg` | 18px | containers: cards, panels |
+| `--radius-xl` | 32px | sheets: bottom sheets |
 | `100%` or `100px` | — | circles and pills: the floating action button, pill buttons |
 
 **Elevation has two steps, both warm and low-contrast:**
@@ -207,9 +208,14 @@ one opaque colour from the palette (§4.1), painted over its whole footprint, ed
   two steps are never mixed on one element.
 - A sticky bar covers the screen gutters too (negative inline margin plus `--app-padding`)
   and masks the gap above itself, so scrolling content never peeks around its edges.
-- Nested rounded corners are concentric: an inner surface's radius is the outer radius minus
-  the distance between them. Where no two tokens satisfy that, the padding moves off the
-  ladder — never the radius.
+- **Nested corners are not concentric.** Both the radius and the padding of a nested
+  surface follow the pixel ladder (§4.3), as a fixed pair: 32px radius with 18px inner
+  padding, 18px radius with 10px inner padding. The inner padding equals the radius of the
+  elements inside it. Examples: the recipe card takes the 18px/10px pair — 18px radius,
+  10px padding, 10px image radius; the recipe overview sheet takes the 32px/18px pair —
+  32px radius, 18px padding, 18px image radius.
+- Atomic elements — buttons, badges, chips — are the exception: they never nest, so each
+  one always carries the same radius.
 
 *Cooking view: not written yet.*
 
@@ -450,13 +456,14 @@ field; a hint never repeats the caption.
 `--shadow-sm`. Everything drawn on the card — a badge, a caption, a value — is content, never
 a second hitbox: the whole card is the button.
 
-**A recipe card is media above title, inset by one mat.** The card carries `--space-3` (8px)
+**A recipe card is media above title, inset by one mat.** The card carries `--space-4` (10px)
 of padding on all four sides, so the square media area sits inside the border instead of
 bleeding into it. The title below starts on the same left edge (its own inline padding is 0),
 so media and title read as one column inside one frame.
 
-**Nested corners are concentric (§4.4).** The card's mat and its media tile are one such pair:
-`--radius-lg` (18px) − `--space-3` (8px) = `--radius-md` (10px).
+**Nested corners follow the fixed pairs (§4.4).** The card's mat and its media tile are the
+18px/10px pair: `--radius-lg` (18px) on the card, `--space-4` (10px) padding, and the media
+tile takes `--radius-md` (10px).
 
 **A list is rows inside one card, not a card per row.** Rows share the container's surface and
 are separated by a hairline divider (the first row carries none). A row's text column is
@@ -475,7 +482,8 @@ action may sit beside it in the same row, and `--space-7` separates two sections
   line or set in a smaller size to fit.
 - A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
   muted) beneath it.
-- An empty list is a muted German sentence, never a blank area.
+- An empty list is never a blank area: either it carries the established placeholder, or one
+  muted German sentence when §6.3 asks for it.
 - Rows are separated by a hairline, never by a shadow or a gap in the surface.
 - Cards in one row are equal height; the media row keeps its square height, so every title
   starts on the same line.
@@ -527,7 +535,7 @@ is a *change* ends in the bottom action row (§5.1, §6.1).
 *Applies to: web app.*
 
 **A sheet is a bottom sheet.** It is anchored to the bottom edge, spans the width, rounds its
-two top corners (`--radius-lg`), sits on the surface colour and casts `--shadow-md`. It grows
+two top corners (`--radius-xl`), sits on the surface colour and casts `--shadow-md`. It grows
 with its content up to 85% of the viewport height and then scrolls inside itself.
 
 **It is modal, and the scrim says so.** The backdrop is a flat `rgba(43, 36, 29, 0.4)` ink
@@ -575,7 +583,7 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 | „Neu" | new releases | danger | the ingredient is not in the master data yet |
 | „Rezept" | link | accent | the ingredient has a recipe of its own; the badge itself opens it |
 | „Referenz" | outline star | olive | mirrors the star toggle; its × clears the role |
-| „Unbekannt" | help | danger | a meal-plan line the app cannot recognise |
+| „Unbekannt" | room service | danger | a meal-plan line the app cannot recognise |
 
 **Rules**
 
@@ -592,26 +600,27 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 
 *Cooking view: not written yet.*
 
-### 5.8 Media: photo, thumbnail and letter avatar
+### 5.8 Media: photo, thumbnail and placeholder
 
 *Applies to: web app.*
 
 **A recipe's media area is landscape, cropped to 4:3.** It fills its container's width and is
-cropped to that ratio (`object-fit: cover`); it takes `--radius-md` (§5.4). One format serves
-the card, the overview hero and the editor preview.
+cropped to that ratio (`object-fit: cover`); its radius follows the fixed pair of its container
+(§4.4): 10px (`--radius-md`) in a card, 18px (`--radius-lg`) in the recipe overview sheet. One
+format serves the card, the overview hero and the editor preview.
 
 **An image is not a ladder value.** Aspect ratios and image pixel sizes come from the common
 photographic set (4:3, 3:2, 16:9; 120×90, 160×120, …), not from the UI ladder (§4.3): the
 ladder governs the box an image sits in, not the image itself.
 
-**Without a photo, a letter avatar.** The app derives a warm ground from the recipe's title:
-the title hashed onto one of four palette pairs (`--avatar-0` … `--avatar-3`, each with its
-`-fg` partner), carrying the title's first letter at `--avatar-letter-size` (42px) weight 600,
-centred on the landscape area. The same title always gets the same colour; the choice is never
-random and never per render.
+**Without a photo, the room-service placeholder.** The app derives a warm ground from the
+recipe's title: the title hashed onto one of four palette pairs (`--placeholder-0` …
+`--placeholder-3`, each with its `-fg` partner), carrying the serving cloche of `RoomServiceIcon`
+at `--placeholder-symbol-size` (42px), centred on the landscape area. The same title always gets
+the same colour; the choice is never random and never per render.
 
-**An unrecognised meal-plan line gets the danger media area** with the help symbol instead of a
-letter avatar — that card then needs no badge of its own (§5.7).
+**An unrecognised meal-plan line gets the danger media area** with the room-service symbol
+instead of a placeholder — that card then needs no badge of its own (§5.7).
 
 **Sizes.** Card media: the full card width, 4:3. Overview hero: the full sheet content width,
 4:3. Editor preview: 120 × 90px (4:3).
@@ -621,9 +630,10 @@ letter avatar — that card then needs no badge of its own (§5.7).
 - A photo inside a card is decorative for assistive tech (`alt=""`): the title beside it
   carries the name. A photo standing alone as a field preview gets a German `alt`.
 - Photos are cropped to 4:3, never letterboxed or stretched.
-- The avatar colour comes from the title, so it is stable across screens and reloads.
+- The placeholder colour comes from the title, so it is stable across screens and reloads.
 - Nothing is drawn over the media except a badge (§5.7).
-- A missing photo is a letter avatar, never an empty grey box or a broken-image glyph.
+- A missing photo is the room-service placeholder, never an empty grey box or a broken-image
+  glyph.
 
 *Cooking view: not written yet.*
 
@@ -727,6 +737,24 @@ wash (§5.1) — a scrim must not visibly react to the tap that dismisses it.
 ### 6.2 Browser Back, Escape and the exit guard
 
 ### 6.3 Loading, empty and error states
+
+**Explanatory text only where the empty state needs explaining.** A missing list, field or
+value stays as it is — a label, a caption, a counter or the bare em dash of the established
+placeholder. A sentence is added only when the user could otherwise be misled or stuck:
+
+| The sentence is due | Example |
+| --- | --- |
+| the empty state is an error on the app's side | the master data could not be loaded |
+| the reason for it is invisible on screen | the recipe file carries no cooking view yet |
+| it is a rare state the user reaches by surprise | the plan holds no dish at all |
+
+- **A common, expected outcome gets no sentence.** A search without a match is the case the
+  user typed for: the filtered area is simply empty, and the input still names the term, so
+  no text repeats it back (§5.4).
+- **Loading and failures keep their own rules**: the loading message (§6.3, to be written)
+  and the error next to its cause (§5.3, §5.9).
+
+*Cooking view: not written yet.*
 
 ### 6.4 Destructive actions and confirmations
 

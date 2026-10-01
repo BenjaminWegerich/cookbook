@@ -611,16 +611,16 @@ function NewIngredientSheet({
                     </ul>
                   )}
 
-                  {/* Nothing matches the typed text: a quiet report instead of a
-                      blank area, so the field never looks broken. Suppressed
+                  {/* Nothing matches the typed text: the established bare em dash
+                      placeholder, so the field never looks broken. Suppressed
                       while the field names a section exactly — the list is empty
                       because the pick moved into the field, not because nothing
-                      was found (same wording pattern as the recipe search). */}
+                      was found (same pattern as the recipe search). */}
                   {section !== '' &&
                     !sections.includes(section) &&
                     sectionSuggestions.length === 0 && (
                       <p className="field-hint" role="status">
-                        {`Keinen Bereich „${section}“ in „${store}“ gefunden.`}
+                        —
                       </p>
                     )}
                 </>

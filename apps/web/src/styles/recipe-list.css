@@ -313,7 +313,7 @@
   display: grid; /* let the card button fill the whole (stretched) row cell */
   /* A zero-minimum single column: the implicit `auto` column takes its minimum
      from the content, so one unbreakable word in a title (a URL, typically)
-     would push the cell — and with it the card and its square media area —
+     would push the cell — and with it the card and its landscape media area —
      wider than the grid column. */
   grid-template-columns: minmax(0, 1fr);
 }
@@ -332,7 +332,7 @@
      column, so the column itself must never grow past the card. */
   grid-template-columns: minmax(0, 1fr);
   /* Cards in one row stretch to the tallest card (the one with a two-line
-     title). The media row keeps its natural (square) height, so all left-over
+     title). The media row keeps its natural (4:3) height, so all left-over
      height lands in the title row instead of being split across both rows —
      otherwise a one-line title would be pushed down by half a line and its
      first line would no longer line up with the two-line neighbour's. */
@@ -418,17 +418,20 @@
   background: var(--color-danger);
 }
 
-/* Wrapper that groups a card's media area (the photo / avatar / symbol) as one
-   grid slot above the title. Plain block, so the square thumb keeps filling the
+/* Wrapper that groups a card's media area (the photo / placeholder / symbol) as one
+   grid slot above the title. Plain block, so the thumb keeps filling the
    card width exactly as it would as a direct child. */
 .recipe-media {
   display: block;
 }
 
-/* Square media area of a recipe card — the photo cropped to a square, or the
-   large letter-avatar fallback when the recipe has no photo. The media carries
+/* Landscape media area of a recipe card — the photo cropped to 4:3, or the
+   room-service placeholder (a serving cloche on a deterministic warm ground)
+   when the recipe has no photo. 4:3 is the common
+   photographic ratio of DESIGN.md §5.8, not a ladder value (§4.3): the ladder
+   governs the box an image sits in, not the image itself. The media carries
    its own radius now (decided with the user): the card's rounded corner no
-   longer clips a full-bleed square, so the inset tile has to round itself. It
+   longer clips a full-bleed tile, so the inset tile has to round itself. It
    takes --radius-md (10 px), one ladder step below the card's --radius-lg
    (18 px): the smaller tile stays visibly less round than the container it sits
    in, which reads as a framed photo rather than as two competing corners. The
@@ -438,35 +441,34 @@
    recipe-overview.css). */
 .recipe-thumb {
   position: relative;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 4 / 3;
   width: 100%;
   display: grid;
   place-items: center;
   overflow: hidden;
   border-radius: var(--radius-md);
-  font-size: var(--avatar-letter-size);
-  font-weight: 600;
-  background: var(--avatar-0); /* fallback until the inline variant applies */
-  color: var(--avatar-0-fg);
+  background: var(--placeholder-0); /* fallback until the inline variant applies */
+  color: var(--placeholder-0-fg);
 }
 
 /* Media area of an unrecognized meal-plan card: not a placeholder photo but the
-   "unbekannt" symbol (HelpIcon's question mark) on the danger colour, decided
-   with the user — the question mark reads as "not known yet" where the error
-   glyph read as a failure. It replaces the letter avatar with its overlaid
-   "Unbekannt" badge: one element, one message, and the card needs no badge of
-   its own. */
+   "unbekannt" symbol (RoomServiceIcon's serving cloche) on the danger colour,
+   decided with the user — the cloche reads as "a dish, not known yet" where the
+   error glyph read as a failure. One element, one message, and the card needs
+   no badge of its own. */
 .recipe-thumb-unknown {
   background: var(--color-danger);
   color: var(--color-on-accent);
 }
 
-/* The symbol on that area, at the letter avatar's size (42 px, a ladder value),
-   so the media area keeps its proportions whatever it carries. */
-.recipe-thumb-unknown-icon {
+/* The room-service symbol on a media area, at the former letter avatar's size
+   (42 px, a ladder value), so the media area keeps its proportions whatever it
+   carries. One class for both the no-photo placeholder and the unrecognized
+   entry's danger media area. */
+.recipe-thumb-icon {
   display: block;
-  width: var(--avatar-letter-size);
-  height: var(--avatar-letter-size);
+  width: var(--placeholder-symbol-size);
+  height: var(--placeholder-symbol-size);
   color: currentColor;
 }
 

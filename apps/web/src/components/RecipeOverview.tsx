@@ -27,7 +27,7 @@
  *    is enough, and this sheet is about the entry's text and its actions). Its
  *    body shows the title without the export link, the stated size and a
  *    trailing free-text note, then the parts the parser recognized: the danger
- *    "Unbekannt" badge (HelpIcon before the label) as the first item of the
+ *    "Unbekannt" badge (RoomServiceIcon before the label) as the first item of the
  *    caption/value row, the free-text note as a line of its own under the title
  *    (in its written parentheses), the stated size as the "Geplant"
  *    caption/value item exactly like a known planned
@@ -60,7 +60,7 @@
  *
  * Further decisions that hold for every variant:
  * - modal bottom sheet over the list (not a full-screen view);
- * - large square 1:1 photo (recipe photos are stored square, nothing is cropped);
+ * - large landscape 4:3 photo (recipe photos are stored 4:3, nothing is cropped);
  * - times (Arbeitszeit / Gesamtzeit) are shown, but not the recipe's own
  *   servings/yield or type. The "Geplant" value is the *meal plan's* size: the
  *   size the entry states, or — when it states none — the size the recipe is
@@ -122,12 +122,11 @@ import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import {
   CalendarAddIcon,
   CalendarEditIcon,
-  CloseIcon,
   EventBusyIcon,
-  HelpIcon,
   MenuBookIcon,
   MoreVertIcon,
   PencilIcon,
+  RoomServiceIcon,
   SkilletIcon,
   SparkleIcon,
   SwapHorizIcon,
@@ -216,7 +215,7 @@ interface RecipeOverviewProps {
   recipes: StoredRecipe[];
   /** The card that was tapped (see RecipeOverviewTarget). */
   target: RecipeOverviewTarget;
-  /** Closes the sheet (backdrop, close button, browser Back). */
+  /** Closes the sheet (scrim tap, Escape, browser Back). */
   onClose: () => void;
   /** Opens the recipe in the editor ("Mehr" → "Manuell bearbeiten"). */
   onEdit: (recipe: StoredRecipe) => void;
@@ -439,7 +438,7 @@ function RecipeOverview({
 
   // A tap anywhere outside the open menu (and outside its trigger) closes it.
   // This runs after the click finished its own handling, so the tapped element —
-  // the sheet's close button, the backdrop, another action — still does its job
+  // the scrim, another action — still does its job
   // once and only the menu additionally closes (decided with the user:
   // progressive dismissal, the tap is never swallowed).
   useEffect(() => {
@@ -600,32 +599,16 @@ function RecipeOverview({
     <>
       <div className="sheet-backdrop" onClick={onClose} role="presentation" />
       <div
-        className={
-          target.kind === 'unknown'
-            ? 'sheet overview-sheet is-unrecognized'
-            : 'sheet overview-sheet'
-        }
+        className="sheet overview-sheet"
         role="dialog"
         aria-modal="true"
         aria-labelledby="overview-title"
       >
-        <button
-          type="button"
-          className="overview-close"
-          aria-label="Schließen"
-          onClick={onClose}
-          autoFocus
-        >
-          <CloseIcon />
-        </button>
-
         {/* Hero: only a recognized recipe has an image. An unrecognized entry
             deliberately shows none (decided with the user) — the list card's
             danger "unbekannt" symbol already marks it, and its own badge sits in
-            the caption/value row below instead of on an image. The body then
-            starts at the top and
-            reserves the close button's line above itself (see
-            .overview-sheet.is-unrecognized in recipe-overview.css). A recognized
+            the caption/value row below instead of on an image; its body then
+            starts at the sheet's top padding. A recognized
             recipe's hero carries no badge: that it is on the plan is already
             stated by its "Geplant" value and its "Umplanen" action, and the home
             screen only ever shows a planned recipe in the "Essensplan" section
@@ -677,7 +660,7 @@ function RecipeOverview({
               {target.kind === 'unknown' && (
                 <div className="overview-meta-badge">
                   <span className="recipe-badge recipe-badge-unknown">
-                    <HelpIcon className="recipe-badge-icon" />
+                    <RoomServiceIcon className="recipe-badge-icon" />
                     <span>Unbekannt</span>
                   </span>
                 </div>

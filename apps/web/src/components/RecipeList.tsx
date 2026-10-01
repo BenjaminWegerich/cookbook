@@ -3,7 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import type { StoredRecipe } from '../drive/recipeStorage';
 import type { MealPlanCard } from '../keep/mealPlanCards';
 import type { KeepStatus } from '../keep/useKeep';
-import { CheckCircleIcon, CloseIcon, HelpIcon, ListPlusIcon, SearchIcon } from './icons';
+import { CheckCircleIcon, CloseIcon, ListPlusIcon, RoomServiceIcon, SearchIcon } from './icons';
 import RecipeThumb from './RecipeThumb';
 
 /**
@@ -271,12 +271,11 @@ function RecipeList({
     }
     if (visiblePlanCards.length === 0) {
       // The caption above still names the section, so the placeholder only has
-      // to say why nothing is listed here.
+      // to say why nothing is listed here: a search that found nothing is
+      // answer enough, so the text is a bare em dash.
       return (
         <p className="recipe-search-empty" role="status">
-          {trimmedQuery === ''
-            ? 'Kein Gericht im Essensplan.'
-            : `Nichts im Essensplan für „${trimmedQuery}“ gefunden.`}
+          —
         </p>
       );
     }
@@ -303,10 +302,10 @@ function RecipeList({
             );
           }
           // Unrecognized: no recipe stands behind the entry, so the card's media
-          // area is not a photo or a letter avatar but the danger "unbekannt"
-          // symbol — the question mark of HelpIcon, decided with the user, who
-          // wanted it to read as "not known yet" instead of as an error — which
-          // is why the card carries no badge any more. The title is the entry
+          // area is not a photo but the danger "unbekannt" symbol — the serving
+          // cloche of RoomServiceIcon, decided with the user, who wanted it to
+          // read as "a dish, not known yet" instead of as an error — which is why
+          // the card carries no badge any more. The title is the entry
           // without its export URL, its stated size and its free-text note —
           // exactly the shape a known recipe's card has — and the overview
           // behind the card shows those recognized parts (size, note, link)
@@ -316,7 +315,7 @@ function RecipeList({
               <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
                 <span className="recipe-media">
                   <span className="recipe-thumb recipe-thumb-unknown">
-                    <HelpIcon className="recipe-thumb-unknown-icon" />
+                    <RoomServiceIcon className="recipe-thumb-icon" />
                   </span>
                 </span>
                 <span className="recipe-card-title">
@@ -338,14 +337,11 @@ function RecipeList({
    */
   function renderCollection(): ReactNode {
     if (visibleRecipes.length === 0) {
+      // Same placeholder as the plan section above: the caption names the
+      // section, and a search without a match needs no sentence of its own.
       return (
         <p className="recipe-search-empty" role="status">
-          {trimmedQuery !== ''
-            ? `Kein Rezept für „${trimmedQuery}“ gefunden.`
-            : remainingRecipes.length === 0
-              ? // Every recipe of the collection stands on the meal plan.
-                'Alle Rezepte stehen auf dem Essensplan.'
-              : 'Keine Rezepte im Cookbook-Ordner.'}
+          —
         </p>
       );
     }

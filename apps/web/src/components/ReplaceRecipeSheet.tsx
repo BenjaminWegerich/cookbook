@@ -385,13 +385,13 @@ function ReplaceRecipeSheet({
           </ul>
         )}
 
-        {/* Nothing matches the typed text: a quiet report instead of a blank
-            area, so the field never looks broken. Suppressed while the field
-            holds a recipe's exact title — the list is empty because the pick
-            moved into the field, not because nothing was found. */}
+        {/* Nothing matches the typed text: the established bare em dash
+            placeholder, so the field never looks broken. Suppressed while the
+            field holds a recipe's exact title — the list is empty because the
+            pick moved into the field, not because nothing was found. */}
         {trimmedQuery !== '' && selected === null && suggestions.length === 0 && (
           <p className="recipe-search-empty" role="status">
-            {`Kein Rezept für „${trimmedQuery}“ gefunden.`}
+            —
           </p>
         )}
 

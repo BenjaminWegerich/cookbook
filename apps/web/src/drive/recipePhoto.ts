@@ -9,7 +9,7 @@
  * on unmount, so no consumer outlives the blob it shows.
  *
  * A photo is optional (§2): a failed download is not cached, callers simply
- * keep their fallback (avatar / placeholder) and the next mount retries.
+ * keep their fallback (the room-service placeholder) and the next mount retries.
  */
 
 import { getFileDownloadUrl } from './driveClient';

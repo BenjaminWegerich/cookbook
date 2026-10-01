@@ -79,19 +79,20 @@
   --fab-size: 56px; /* floating action button */
   --icon-size: 24px; /* inline icons */
 
-  /* ---- Letter-avatar palette --------------------------------------------- */
+  /* ---- Media placeholder palette ----------------------------------------- */
   /* Warm, deterministic background colors for recipe thumbnails without a
-     photo (§2). The initial letter is rendered in the matching -fg color. */
-  --avatar-0: #b85c38; /* clay */
-  --avatar-0-fg: #fffcf6;
-  --avatar-1: #6b7a4a; /* olive */
-  --avatar-1-fg: #fffcf6;
-  --avatar-2: #c08a3e; /* ochre */
-  --avatar-2-fg: #fffcf6;
-  --avatar-3: #8a6d4f; /* walnut */
-  --avatar-3-fg: #fffcf6;
+     photo (§2). The room-service placeholder symbol is rendered in the
+     matching -fg color. */
+  --placeholder-0: #b85c38; /* clay */
+  --placeholder-0-fg: #fffcf6;
+  --placeholder-1: #6b7a4a; /* olive */
+  --placeholder-1-fg: #fffcf6;
+  --placeholder-2: #c08a3e; /* ochre */
+  --placeholder-2-fg: #fffcf6;
+  --placeholder-3: #8a6d4f; /* walnut */
+  --placeholder-3-fg: #fffcf6;
 
-  /* Initial letter of the square no-photo media area on a home-screen card
-     (42 px, a ladder value like the typography scale). */
-  --avatar-letter-size: 42px;
+  /* Room-service symbol of the landscape no-photo media area on a home-screen
+     card (42 px, a ladder value like the typography scale). */
+  --placeholder-symbol-size: 42px;
 }

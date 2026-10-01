@@ -178,7 +178,7 @@ const GIS_POLL_INTERVAL_MS = 200;
  * editor (Phase 2).
  *
  * States: login (not connected), loading, error, empty collection, and the
- * recipe list (adaptive card grid with square photos). The floating action
+ * recipe list (adaptive card grid with landscape 4:3 photos). The floating action
  * button opens the create menu (manual / AI); a tap on a recipe card opens the
  * recipe overview sheet, whose "Mehr → Manuell bearbeiten" entry opens the editor.
  * UI language is German

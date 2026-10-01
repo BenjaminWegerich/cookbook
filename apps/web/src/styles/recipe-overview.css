@@ -8,7 +8,7 @@
  */
 
 /* The editor's form sheets are full width; the overview is a content sheet,
-   and a full-bleed square photo would dominate a wide desktop viewport. It is
+   and a full-bleed photo would dominate a wide desktop viewport. It is
    therefore capped to a comfortable reading width and centered. On phones the
    cap is wider than the viewport, so the sheet stays edge to edge. 42 rem is
    the layout breakpoint value used by the recipe grid, not a new token. */
@@ -22,59 +22,19 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* Circular close button in the top-right corner of the sheet, level with the
-   hero. The hero is narrower than the sheet, so the button sits on the plain
-   sheet surface and takes the opaque surface token like every other surface
-   (docs/CODING_CONVENTIONS.md, Design Conventions); the hairline border keeps it
-   visible against that same-coloured sheet. */
-.overview-close {
-  position: absolute;
-  top: var(--space-6);
-  right: var(--app-padding);
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: var(--space-9); /* 42 px — ladder value */
-  height: var(--space-9);
-  padding: 0;
-  border: 1px solid var(--color-line);
-  border-radius: 50%; /* structural exception to the ladder: full circle */
-  background: var(--color-surface);
-  color: var(--color-ink);
-  box-shadow: var(--shadow-sm);
-}
-
-.overview-close svg {
-  display: block;
-  width: var(--icon-size);
-  height: var(--icon-size);
-}
-
-/* Hero: the size (56 % of the content width — a preferred number like the
-   ladder) lives on this plain wrapper, centered. Only a recognized recipe has
-   one; an unrecognized entry's sheet starts with its body (see
-   `.overview-sheet.is-unrecognized` below). The wrapper deliberately has
-   no aspect ratio of its own: a grid item that carries the aspect ratio *and*
-   a percentage width does not reserve its row height, so the image overflowed
-   its row and painted over the details. Here the wrapper is an ordinary block
-   item whose height is set by its in-flow child (the square thumb), which sizes
-   the row reliably. */
+/* Hero: the full sheet content width (DESIGN.md §5.8). Only a recognized
+   recipe has one; an unrecognized entry's sheet starts with its body. The
+   wrapper deliberately has no aspect ratio of its own: a grid item that carries
+   the aspect ratio *and* a percentage width does not reserve its row height, so
+   the image overflowed its row and painted over the details. Here the wrapper is
+   an ordinary block item whose height is set by its in-flow child (the 4:3
+   thumb), which sizes the row reliably. */
 .overview-hero {
   position: relative;
-  width: 56%;
-  margin-inline: auto;
+  width: 100%;
 }
 
-/* The unrecognized entry's sheet carries no hero, so its body is the first
-   in-flow element and would start under the absolutely positioned close button
-   (top right, `--space-6` inset + `--space-9` square). That band is reserved
-   above the body, so the title starts exactly at the button's lower edge and a
-   long title can never run beneath it. */
-.overview-sheet.is-unrecognized .overview-body {
-  padding-block-start: var(--space-9);
-}
-
-/* Square photo / letter avatar, rounded like the recipe cards. */
+/* Landscape photo / room-service placeholder, rounded like the recipe cards. */
 .overview-sheet .recipe-thumb {
   border-radius: var(--radius-md);
 }

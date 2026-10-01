@@ -214,7 +214,8 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   entry that matches no recipe, `splitTitleNote` separates it as a free-text note.
 - **Cards.** Recognized entries use the known card format. An unrecognized entry renders with
   the danger „unbekannt“ symbol as its whole media area (no photo, no badge; the glyph is the
-  question mark of `HelpIcon`, so the state reads as "not known yet" and not as a failure) and
+  serving cloche of `RoomServiceIcon`, so the state reads as "a dish, not known yet" and not as a
+  failure) and
   its title without export link, stated size and free-text note — the shape a known card has —
   and is tappable: the recipe overview is its destination, where the entry can be replaced by
   an existing recipe or by a new one (manual or AI) or dropped from the plan with „Vom Plan
