@@ -220,9 +220,8 @@ export function shoppingNeeds(uses: readonly Ingredient[]): ShoppingNeed[] {
 
 /**
  * The amount part of a shopping line on its own (decided with the user): the
- * sheet's header line names the ingredient itself and prints only the amount
- * behind the shopping-list symbol ("1 Packung (1 kg)"), while the Keep write —
- * and the undo of it — needs the full line with the name.
+ * pantry sheet's "kaufen" side prints only the amount ("1 Packung (1 kg)"),
+ * while the Keep write — and the undo of it — needs the full line with the name.
  *
  * It is derived from the very same pieces as `shoppingRow`'s `text`, so both can
  * never drift apart: the ingredient name is substituted as the empty string,
@@ -268,13 +267,13 @@ export interface ShoppingRow {
   /**
    * The line for the Keep write — the shopping unit's arrangement
    * ("3 Becher Mehl (450 g)") or the base form ("850 g Butter"). Null when
-   * nothing is to buy; the sheet shows a dash then.
+   * nothing is to buy; the sheet shows a zero amount then.
    */
   readonly text: string | null;
   /**
    * The same amount without the ingredient name ("3 Becher (450 g)" /
-   * "850 g"), for the sheet's header line, which prints the name itself. Null
-   * exactly when `text` is null.
+   * "850 g"), shown on the pantry sheet's "kaufen" side. Null exactly when
+   * `text` is null.
    */
   readonly amountText: string | null;
 }
@@ -343,6 +342,27 @@ export function shoppingRow(need: ShoppingNeed, stock: number): ShoppingRow {
     text: `${formatBQ(amount, need.baseUnit)} ${need.ingredient}`,
     amountText: formatBQ(amount, need.baseUnit),
   };
+}
+
+/**
+ * The bought amount of one row for a chosen Vorrat, rounded **up** to whole
+ * shopping units (or to whole grams/millilitres without one) — the same
+ * arithmetic `shoppingRow` applies, returned as a bare number instead of a
+ * written line. This is the "kaufen" amount the pantry sheet starts on when the
+ * Vorrat changes; a typed amount overrides it without rounding.
+ */
+export function buyAmount(need: ShoppingNeed, stock: number): number {
+  const clamped = Math.min(need.needed, Math.max(0, roundThousandths(stock)));
+  const missing = roundThousandths(Math.max(0, need.needed - clamped));
+  const target = shoppingUnitFor(mappingsFor(need.ingredient), need.baseUnit);
+  if (target === null) {
+    return Math.ceil(missing);
+  }
+  if (!(missing > 0)) {
+    return 0;
+  }
+  const count = Math.ceil(roundThousandths(missing / target.factor));
+  return target.au.exact ? roundThousandths(count * target.factor) : missing;
 }
 
 /**

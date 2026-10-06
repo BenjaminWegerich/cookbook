@@ -29,7 +29,7 @@
  * (docs/CODING_CONVENTIONS.md).
  */
 
-import { aqNotation, aqToNumber, roundToAQValue } from './aqLadder.js';
+import { AQ_MAX, AQ_MIN, aqNotation, aqToNumber, isAQValue, roundToAQValue } from './aqLadder.js';
 import {
   ADDITIONAL_UNITS,
   NUMBER_SCHEMES,
@@ -426,6 +426,115 @@ export function renderUnitCount(
 ): string {
   const shownBq = au.exact ? count * factor : amount;
   return renderSelectedAQ(ingredient, { aq: String(count), au, factor }, bu, shownBq);
+}
+
+/**
+ * The count a pantry amount reads as (components/PantrySelect — the "auf
+ * Vorrat" and "kaufen" readings): the nearest AQ ladder value, ignoring the
+ * unit's number scheme, so the amount is always named in the ingredient's
+ * shopping unit ("⅕ Packung" for 200 g of a 1000 g pack) rather than dropping
+ * the unit. An empty amount reads 0; a count beyond the ladder's top (1000) is
+ * rounded to a whole number, like a recipe count above its scheme. A raw count
+ * between 0 and the ladder's floor reads 0 too — no fraction exists below ⅒,
+ * and "no pack" is the honest reading of a sliver of a pack.
+ */
+function roundPantryCount(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  if (raw < AQ_MIN) return 0;
+  if (raw > AQ_MAX) return Math.round(raw);
+  return roundToAQValue(raw)!;
+}
+
+/**
+ * One amount of the pantry sheet (see `pantryReading`): a base quantity in the
+ * ingredient's shopping unit, with its two linked numeric readings — the
+ * additional quantity (the count) and the base quantity (the grams /
+ * millilitres). Used for both the "auf Vorrat" (stock) and "kaufen" (buy)
+ * amounts, which share the same nearest-ladder reading.
+ */
+export interface PantryReading {
+  /** The shopping unit the amount is counted in, or null (the base form). */
+  readonly au: AdditionalUnit | null;
+  /** Conversion factor (family base unit per one AU); 1 without an AU. */
+  readonly factor: number;
+  /** The count for display (`roundPantryCount`), or null without an AU. */
+  readonly aq: number | null;
+  /** The base quantity in the family unit (g / ml) — the editable value. */
+  readonly bq: number;
+}
+
+/**
+ * The pantry sheet's reading of one base quantity (the "auf Vorrat" stock or
+ * the "kaufen" amount, components/PantrySelect): the amount in the ingredient's
+ * **shopping unit**, with the additional quantity rounded to the nearest AQ
+ * ladder value regardless of the unit's number scheme.
+ *
+ * Unlike a recipe line (§6.3), the shown base quantity is the amount itself:
+ * the two tappable readings are linked by the factor, and the grams/millilitres
+ * are what the sheet edits, so an exact unit must not overrule a typed amount.
+ */
+export function pantryReading(ingredient: string, bq: number, bu: string): PantryReading {
+  const target = shoppingUnitFor(mappingsFor(ingredient), bu);
+  if (target === null) {
+    return { au: null, factor: 1, aq: null, bq };
+  }
+  return {
+    au: target.au,
+    factor: target.factor,
+    aq: roundPantryCount(bq / target.factor),
+    bq,
+  };
+}
+
+/**
+ * Formats the count of a pantry reading (`PantryReading.aq`): a ladder value in
+ * the §8 glyph typography ("1 ¼"), 0 and whole counts beyond the ladder as
+ * plain decimal numbers ("0", "2000").
+ */
+export function formatPantryAq(aq: number): string {
+  return isAQValue(aq) ? formatAQ(aqNotation(aq)) : formatDecimal(aq);
+}
+
+/** Canonical notation of a pantry count (ladder form, or plain for 0 / whole). */
+function pantryAqNotation(aq: number): string {
+  return isAQValue(aq) ? aqNotation(aq) : String(aq);
+}
+
+/**
+ * Renders a pantry reading as text, with or without the ingredient name. The
+ * name-less form is what the sheet shows (it carries the name elsewhere); the
+ * named form is the Keep write's line.
+ */
+function renderPantryText(ingredient: string, reading: PantryReading, bu: string): string {
+  if (reading.au === null || reading.aq === null) {
+    const base = formatBQ(reading.bq, bu);
+    return ingredient === '' ? base : `${base} ${ingredient}`;
+  }
+  return renderSelectedAQ(
+    ingredient,
+    { aq: pantryAqNotation(reading.aq), au: reading.au, factor: reading.factor },
+    bu,
+    reading.bq,
+  );
+}
+
+/**
+ * Renders a pantry reading without the ingredient name ("1 ¼ Becher (500 g)"),
+ * or the base form ("500 g") when the ingredient has no shopping unit. The
+ * sheet's tappable form builds the same arrangement from `pantryReading`'s
+ * pieces; this string is the plain-text reading of it.
+ */
+export function renderPantryAmount(ingredient: string, bq: number, bu: string): string {
+  return renderPantryText('', pantryReading(ingredient, bq, bu), bu);
+}
+
+/**
+ * Renders a pantry reading with the ingredient name ("1 ¼ Becher Mehl (500 g)"),
+ * or the base form ("500 g Mehl") — the exact line the Keep write carries, so
+ * the sheet can never show a different wording than the list gets.
+ */
+export function renderPantryLine(ingredient: string, bq: number, bu: string): string {
+  return renderPantryText(ingredient, pantryReading(ingredient, bq, bu), bu);
 }
 
 /** The resolved create-form reorder point: its preview line and the value to store. */

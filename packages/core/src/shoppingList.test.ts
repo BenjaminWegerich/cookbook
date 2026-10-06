@@ -25,6 +25,7 @@ import { resetIngredientMappings, setIngredientMappings } from './ingredientRegi
 import type { PlannedAmount } from './planLink.js';
 import type { Ingredient, Recipe } from './recipe/types.js';
 import {
+  buyAmount,
   needText,
   scaledIngredientsForPlan,
   shoppingNeeds,
@@ -301,6 +302,29 @@ describe('the amount of a shopping row (amountText)', () => {
     expect(toBuy.amountText).toBe(`450${NB}g`);
     const covered = shoppingRow(need({ ingredient: 'Butter', needed: 850 }), 850);
     expect(covered.amountText).toBeNull();
+  });
+});
+
+describe('buyAmount (the rounded-up "kaufen" default)', () => {
+  it('rounds an exact purchase up to whole units', () => {
+    // 600 g of yoghurt in 400 g Becher → two Becher (800 g).
+    expect(buyAmount(need({ ingredient: 'Joghurt', needed: 600 }), 0)).toBe(800);
+  });
+
+  it('keeps the missing amount for an approximate shopping unit', () => {
+    // 500 g of carrots at about 80 g a piece → 7 pieces, but the authoritative
+    // amount stays the 500 g the dishes need (not 7 × 80 g = 560 g).
+    expect(buyAmount(need({ ingredient: 'Karotten', needed: 500 }), 0)).toBe(500);
+  });
+
+  it('rounds a purchase without a shopping unit up to a whole gram', () => {
+    expect(buyAmount(need({ ingredient: 'Butter', needed: 850 }), 400)).toBe(450);
+    expect(buyAmount(need({ ingredient: 'Butter', needed: 0.4 }), 0)).toBe(1);
+  });
+
+  it('reads zero for a covered need', () => {
+    expect(buyAmount(need({ ingredient: 'Mehl', needed: 800, reorderPoint: 1000 }), 800)).toBe(0);
+    expect(buyAmount(need({ ingredient: 'Butter', needed: 850 }), 900)).toBe(0);
   });
 });
 

@@ -1,27 +1,24 @@
 /**
  * Pantry sheet styles — the "Vorräte auswählen" page (components/PantrySelect)
- * with its stock picker (components/StockSlider).
+ * with its stock slider (components/StockSlider).
  *
- * **One ingredient is three lines, each introduced by the symbol for what it
- * says** (decided with the user; the sheet's intro paragraph names the symbols):
+ * **One ingredient is three lines** (decided with the user; no symbols any more,
+ * the lines' own wording carries the meaning):
  *
- * 1. the *recipe book*: what the selected dishes need together, in the ingredient's
- *    familiar arrangement ("2 Becher Joghurt (600 g)");
- * 2. the *shelves*: the stock picker — a discrete slider over the stock values at
- *    which the bought amount changes, with two tappable value fields above it (the
- *    chosen amount in the family base unit and, where the ingredient has one, its
- *    whole count in the shopping unit);
- * 3. the *shopping list*: the line the row writes to Keep, word for word,
- *    including the ingredient name ("1 Packung Mehl (1 kg)"), or a dash when
- *    nothing is to buy. Written like the other two lines (decided with the user):
- *    plain text, one weight, no box.
+ * 1. the *need* — the ingredient's familiar arrangement, name and exact amount,
+ *    followed by "benötigt";
+ * 2. the *stock and the purchase* side by side — left "… auf Vorrat", right
+ *    "… kaufen", each written as plain text whose count and grams/millilitres
+ *    are tappable (no boxed fields);
+ * 3. the *slider* — the discrete stock picker, without the value boxes (they
+ *    moved up into the second line).
  *
- * The previous three-column table (name / Vorrat / Einkaufen with a caption row)
- * is gone: the symbols carry the captions now, so nothing has to be squeezed into
- * a narrow column, and the layout is the same on every screen (no breakpoint).
- * The chip row and the −/ + stepper are gone as well: one control shape answers
- * every row now, and the stops' **even** spacing is what makes a small step as
- * easy to hit as a large one.
+ * The previous three-line layout with a symbol per line is gone, and so are the
+ * boxed value fields: nothing has to be squeezed into a narrow column any more,
+ * and the quantities read as ordinary text that happens to be tappable. The
+ * layout is the same on every screen (no breakpoint). The chip row and the −/ +
+ * stepper are gone as well: one control shape answers every row, and the stops'
+ * **even** spacing is what makes a small step as easy to hit as a large one.
  *
  * All pixel values come from the design ladder (docs/CODING_CONVENTIONS.md);
  * colors and sizes reference the tokens in styles/tokens.css.
@@ -37,26 +34,11 @@
 /* The instruction under the title: one quiet paragraph, as wide as the page
    (the same shape as the selection page's intro). Deliberately *not* capped to a
    reading measure — the cap would break the sentence into short lines on a
-   desktop screen while the list around it is wide (decided with the user). It
-   carries the three row symbols inline: the list itself has no captions, so this
-   paragraph is where the symbols get their names (decided with the user). */
+   desktop screen while the list around it is wide (decided with the user). */
 .pantry-select-intro {
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
-}
-
-/* A row symbol inside the intro paragraph: the same 14 px as a tag icon
-   (--space-5), sat on the text's optical centre. An inline-block's baseline is
-   its bottom edge, which would leave the box sitting on the baseline; pulling it
-   down by the ladder's 3 px centres it on the lower-case body of the text. The
-   glyph itself follows the paragraph's colour (`currentColor`), like every icon.
-   The line's own symbols use --icon-size (24 px) — see `.pantry-symbol`. */
-.pantry-intro-icon {
-  display: inline-block;
-  vertical-align: -3px;
-  width: var(--space-5);
-  height: var(--space-5);
 }
 
 .pantry-empty,
@@ -94,123 +76,108 @@
   border-block-start: 1px solid var(--color-line);
 }
 
-/* One of the row's three lines: its symbol, then what the line says. The symbol
-   column is the same on every line, so all three contents start at one x and the
-   symbols read as a column. The symbol is centred against its line's content
-   (decided with the user): beside the middle of the stock picker's block — the
-   two value fields over the slider — not floating above it. A line whose content
-   wraps (a long amount) keeps the symbol beside the middle of the whole block. */
-.pantry-line {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-/* A line's symbol: a label, not content — quiet, and always the same size, so the
-   three lines align. Decorative for assistive tech (`aria-hidden` in
-   components/icons.tsx): the line's text carries the meaning, `title` names it,
-   the sheet's intro names the symbol, and the stock line's picker names the
-   ingredient itself. */
-.pantry-symbol {
-  flex: none;
-  width: var(--icon-size);
-  height: var(--icon-size);
-  color: var(--color-ink-muted);
-}
-
-/* The text of a symbol line: the need on the first line and the written shopping
-   line on the last one read the same (decided with the user — the list line is
-   plain text like the need, not a boxed field). It wraps like body text instead
-   of being clamped: the amount and the name belong together, and cutting either
-   off would hide what the line says. */
-.pantry-line-text {
+/* Line 1: the need — the same reading weight as the old symbol line, wrapped
+   like body text instead of being clamped (the amount and the name belong
+   together). */
+.pantry-need {
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: var(--text-md);
   font-weight: 600;
 }
 
-/* Nothing to buy: the dash is a statement, not a value, so it reads muted. */
-.pantry-line-text-empty {
-  color: var(--color-ink-muted);
+/* ---- Line 2: the stock (left) and the purchase (right) ------------------- */
+
+/* The two sides of one reading, pushed apart: "… auf Vorrat" left-aligned,
+   "… kaufen" right-aligned. They wrap onto separate lines on a narrow phone,
+   and the purchase side keeps its right edge then. */
+.pantry-line-two {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
 }
 
-/* ---- The stock picker (the row's second line) --------------------------- */
-
-/* One row's stock picker (components/StockSlider): the two tappable value fields
-   above the slider. It grows into the width the row's symbol column leaves, so
-   the track spans the row; `min-width: 0` lets a narrow phone shrink it instead
-   of pushing the row wider. */
-.stock-slider {
-  display: grid;
-  flex: 1 1 auto;
-  gap: var(--space-4);
+/* One side: its amount and its quiet label on one baseline. */
+.pantry-side {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-/* The chosen stock in both readings, side by side: the family base unit first,
-   the shopping unit's whole count second (only where the ingredient has one). */
-.stock-values {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
+/* The purchase side takes the leftover space, so it sits right-aligned whether
+   it shares the line with the stock or wraps below it. */
+.pantry-side-buy {
+  margin-inline-start: auto;
 }
 
-/* One reading, closed: a button, because a tap opens the keyboard for a typed
-   amount (decided with the user). It wears the recessed field look of the app's
-   inputs, so it reads as something to fill in rather than as a label — and drops
-   the global button chrome. 74 px is the ladder's value-box width and holds the
-   longest amount the quantity format produces ("1,15 kg"). `cursor: text` says
-   what a tap does on a desktop screen. */
-.stock-value {
-  min-width: 74px;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-bg);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  color: var(--color-ink);
-  font-family: inherit;
+/* The "benötigt" / "auf Vorrat" / "kaufen" label: a property of the amount, not
+   a second value, so it reads muted and one step smaller. */
+.pantry-label {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* One amount as plain text: the count field, the unit's name and the
+   base-amount field, all on one baseline and at the reading weight. */
+.pantry-amount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  min-width: 0;
   font-size: var(--text-md);
   font-weight: 600;
+}
+
+/* ---- The tappable quantities (plain text, no box) ------------------------ */
+
+/* One quantity, closed: a tap opens the keyboard, but it stays written as
+   ordinary text — no background, border or padding, inheriting the arrangement's
+   weight. `cursor: text` says what a tap does on a desktop screen; the shared
+   press wash still lights the exact tap area. */
+.pantry-value {
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: inherit;
+  font: inherit;
   text-align: start;
   white-space: nowrap;
   cursor: text;
 }
 
-/* One reading, open: the same box in the accent outline while it holds the
-   keyboard, with the number left of its unit. */
-.stock-value-edit {
+/* One quantity, open: the same plain text with a keyboard, the number left of
+   its unit. A hairline under the number — not a box — marks the field being
+   edited. */
+.pantry-value-edit {
   display: inline-flex;
   align-items: baseline;
   gap: var(--space-1);
-  min-width: 74px;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-bg);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-md);
 }
 
-.stock-value-input {
-  flex: 1 1 0;
+.pantry-value-input {
   width: 74px;
   min-width: 0;
   padding: 0;
   background: none;
   border: none;
+  border-block-end: 1px solid var(--color-accent);
   color: inherit;
-  font-family: inherit;
-  font-size: var(--text-md);
-  font-weight: 600;
+  font: inherit;
 }
 
-/* The unit an open field is typed in ("g" / "Stück"): a label, not the value —
+/* The unit an open field is typed in ("g" / "Becher"): a label, not the value —
    quiet and one step smaller. */
-.stock-value-unit {
+.pantry-value-unit {
   flex: none;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
 }
+
+/* ---- The stock slider (the row's third line) ----------------------------- */
 
 /* The track and its stop marks. The thumb size lives here as one variable: the
    native thumb, the tick row's inset and the rail all derive from it, so the
@@ -282,8 +249,7 @@
   background: var(--color-olive);
 }
 
-/* A pool with a single stop has nothing to choose: the quieted slider says so
-   (the value fields stay readable). */
+/* A pool with a single stop has nothing to choose: the quieted slider says so. */
 .stock-range:disabled {
   opacity: var(--opacity-disabled);
 }

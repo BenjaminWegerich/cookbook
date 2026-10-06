@@ -6,12 +6,16 @@ import {
   formatAQValue,
   formatBQ,
   formatDecimal,
-  roundToAQ,
+  formatPantryAq,
+  pantryReading,
+  renderAQS,
+  renderPantryAmount,
+  renderPantryLine,
+  renderQuantityText,
   resolveReorderPoint,
+  roundToAQ,
   selectAQ,
   selectAQForEntry,
-  renderAQS,
-  renderQuantityText,
   masterIngredientNames,
 } from './additionalUnits.js';
 import { LADDER_RUNGS } from './ladderData.js';
@@ -461,5 +465,96 @@ describe('formatDecimal (§8 — German decimal comma on the display layer)', ()
     expect(formatDecimal(1.5)).toBe('1,5');
     expect(formatDecimal(0.25)).toBe('0,25');
     expect(formatDecimal(2)).toBe('2');
+  });
+});
+
+describe('pantryReading (the pantry sheet’s nearest-ladder reading)', () => {
+  it('rounds the count to the nearest AQ value, ignoring the number scheme', () => {
+    // 500 g of yoghurt in a 400 g Becher: raw 1.25 → the scheme would reject
+    // 1¼ (halves only), but the amount is still named in the unit.
+    const reading = pantryReading('Joghurt', 500, 'g');
+    expect(reading.au?.name).toBe('Becher');
+    expect(reading.factor).toBe(400);
+    expect(reading.aq).toBe(1.25);
+    expect(reading.bq).toBe(500);
+  });
+
+  it('names a fraction of an exact shopping unit instead of dropping it', () => {
+    // 200 g of flour in a 1000 g Packung is ⅕ of a pack — the base form would
+    // hide the unit, and a recipe line may not restate the amount, but the pantry
+    // reading keeps the unit ("⅕ Packung (200 g)").
+    const reading = pantryReading('Mehl', 200, 'g');
+    expect(reading.au?.name).toBe('Packung');
+    expect(reading.aq).toBe(0.2);
+    expect(renderPantryAmount('Mehl', 200, 'g')).toBe(`⅕${NNBSP}Packung (200${NNBSP}g)`);
+  });
+
+  it('reads an empty amount as 0 in the unit', () => {
+    expect(renderPantryAmount('Mehl', 0, 'g')).toBe(`0${NNBSP}Packung (0${NNBSP}g)`);
+    expect(renderPantryAmount('Karotten', 0, 'g')).toBe(`0${NNBSP}Stück (0${NNBSP}g)`);
+  });
+
+  it('keeps the amount itself as the shown base quantity, even for an exact unit', () => {
+    // 550 g of yoghurt rounds to 1½ Becher (600 g by the factor), but the base
+    // reading stays 550 g — the sheet edits grams, so the count must not
+    // overrule them.
+    const reading = pantryReading('Joghurt', 550, 'g');
+    expect(reading.aq).toBe(1.5);
+    expect(renderPantryAmount('Joghurt', 550, 'g')).toBe(
+      `1${NNBSP}½${NNBSP}Becher (550${NNBSP}g)`,
+    );
+  });
+
+  it('counts whole pieces for an approximate shopping unit', () => {
+    // 500 g of carrots at about 80 g a piece is 6¼ → 6 pieces.
+    expect(renderPantryAmount('Karotten', 500, 'g')).toBe(`6${NNBSP}Stück (500${NNBSP}g)`);
+  });
+
+  it('counts beyond the ladder as a whole number', () => {
+    // 20 kg of flour is 20 packs — above the ladder's top the count is whole.
+    expect(renderPantryAmount('Mehl', 20000, 'g')).toBe(`20${NNBSP}Packung (20${NNBSP}kg)`);
+  });
+
+  it('falls back to the base form without a shopping unit', () => {
+    // Butter has only spoons (recipe measures, not shopping units).
+    const reading = pantryReading('Butter', 500, 'g');
+    expect(reading.au).toBeNull();
+    expect(reading.aq).toBeNull();
+    expect(renderPantryAmount('Butter', 500, 'g')).toBe(`500${NNBSP}g`);
+  });
+
+  it('keeps the family unit of an ml ingredient', () => {
+    expect(renderPantryAmount('Milch', 500, 'ml')).toBe(`2${NNBSP}Becher (500${NNBSP}ml)`);
+  });
+});
+
+describe('renderPantryLine (the named form the Keep write carries)', () => {
+  it('adds the ingredient name to the same arrangement', () => {
+    expect(renderPantryLine('Joghurt', 600, 'g')).toBe(
+      `1${NNBSP}½${NNBSP}Becher Joghurt (600${NNBSP}g)`,
+    );
+  });
+
+  it('keeps the base form with the name without a shopping unit', () => {
+    expect(renderPantryLine('Butter', 850, 'g')).toBe(`850${NNBSP}g Butter`);
+  });
+
+  it('names a typed amount exactly, without rounding it up', () => {
+    // 600 g typed for a 400 g Becher is 1½ Becher — not rounded to 2 Becher.
+    expect(renderPantryLine('Joghurt', 600, 'g')).toBe(
+      `1${NNBSP}½${NNBSP}Becher Joghurt (600${NNBSP}g)`,
+    );
+  });
+});
+
+describe('formatPantryAq', () => {
+  it('uses the §8 glyph typography for ladder counts', () => {
+    expect(formatPantryAq(1.25)).toBe(`1${NNBSP}¼`);
+    expect(formatPantryAq(0.5)).toBe('½');
+  });
+
+  it('keeps 0 and whole counts beyond the ladder as plain decimals', () => {
+    expect(formatPantryAq(0)).toBe('0');
+    expect(formatPantryAq(20)).toBe('20');
   });
 });
