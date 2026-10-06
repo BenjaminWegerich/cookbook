@@ -184,6 +184,13 @@
   Escape is the keyboard equivalent of the browser Back button: a screen-level Escape trigger
   is registered only while the screen is the visible one (a hidden-but-mounted sheet, e.g. the
   AI screen under the editor, passes `enabled: false`).
+  Ctrl+S (⌘S on macOS) is the keyboard equivalent of a screen's primary save / confirm button
+  („Speichern" / „Übernehmen"): each layer that owns such a button registers its own
+  `useSaveShortcut` and disables it while it is not the visible topmost layer, so exactly one
+  save action reacts (the recipe editor passes `enabled: false` while an ingredient sheet is open
+  on top; the sheets are only ever mounted on top, so they stay enabled). `preventDefault`
+  suppresses the browser's own "Save Page" dialog, and `event.repeat` is ignored so a held
+  shortcut does not fire the write repeatedly.
 - **One pressed look for every button: the whole click area gets the same translucent ink wash.**
   A press is not a second colour per variant but one shared overlay, defined once in `index.css`
   and driven by a single token: `--color-press-overlay`

@@ -83,6 +83,7 @@ import { appendIngredientMasterData } from '../drive/ingredientMasterData';
 import { appendShoppingAssignment } from '../drive/shoppingRouteMasterData';
 import { loadRecipePhoto } from '../drive/recipePhoto';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
 import AutoGrowTextarea from './AutoGrowTextarea';
 import IngredientSheet, {
   type IngredientRecipeOption,
@@ -1232,6 +1233,12 @@ function RecipeEditor({
   // then the discard confirmation). Only the visible level listens: the levels
   // below stay mounted (hidden) and must not react.
   useEscapeTrigger(() => void requestLeave('escape'), visible);
+
+  // Ctrl+S is the keyboard equivalent of the „Speichern" button. It belongs to
+  // this editor only while it is the visible topmost layer AND no sheet is open
+  // on top of it — the sheet that is open registers its own shortcut instead,
+  // so exactly one save action reacts (see useSaveShortcut).
+  useSaveShortcut(() => void handleSave(), visible && sheet === null && createSheet === null);
 
   /** Toggles the reference role of a master-list row (§4; both recipe types). */
   const toggleReference = (name: string): void => {

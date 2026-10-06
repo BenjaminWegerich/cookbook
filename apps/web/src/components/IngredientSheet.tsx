@@ -55,6 +55,7 @@ import {
 import QuantityPicker from './QuantityPicker';
 import { LinkIcon, PlusIcon, TrashIcon } from './icons';
 import type { QuantityFamily } from './quantityChips';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /** One ingredient recipe of the collection, as the sheet needs it for the
  * name autofill (a sub-recipe is chosen by its title, like any ingredient). */
@@ -259,6 +260,12 @@ function IngredientSheet({
           : { quantity: pickerQuantity };
     onConfirm(value, mode === 'row-edit' || mode === 'inline-edit' ? 'update' : 'add');
   };
+
+  // Ctrl+S is the keyboard equivalent of the confirm button („Übernehmen" /
+  // „Hinzufügen" / „Einfügen"). The sheet is only ever mounted while it is the
+  // topmost layer, so the shortcut is always enabled here; the editor below
+  // disables its own while this sheet is open.
+  useSaveShortcut(handleConfirm);
 
   const showCreate = trimmedName !== '' && !validName;
 

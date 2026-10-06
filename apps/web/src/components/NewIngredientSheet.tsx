@@ -53,6 +53,7 @@ import {
 } from '@cookbook/core';
 
 import QuantityPicker from './QuantityPicker';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /** One filled mapping row handed to the parent for persistence. */
 export interface NewIngredientEntry {
@@ -414,6 +415,10 @@ function NewIngredientSheet({
    * and disappears the moment its cause is fixed.
    */
   const handleSave = (): void => {
+    // A write is already running: the button is disabled then, and the shortcut
+    // must honour the same state (a second in-flight write would append the
+    // ingredient twice).
+    if (saving) return;
     if (saveErrorNow !== null) {
       setLocalError(saveErrorNow);
       return;
@@ -421,6 +426,12 @@ function NewIngredientSheet({
     setLocalError(null);
     onSave(trimmedName, bu, reorder.storedValue, entries, chosenStop);
   };
+
+  // Ctrl+S is the keyboard equivalent of the „Speichern" button. The sheet is
+  // only ever mounted while it is the topmost layer, so the shortcut is always
+  // enabled here; the ingredient sheet and the editor below are closed/hidden
+  // while this one is open and do not react.
+  useSaveShortcut(handleSave);
 
   return (
     <>
