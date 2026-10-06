@@ -772,12 +772,13 @@
   gap: var(--space-5);
   max-height: 85%;
   overflow-y: auto;
-  /* Top padding one notch tighter than the sides/bottom (space-6 vs space-7):
-     the head block starts the sheet, so keeping it snug avoids a top-heavy
-     look once the heading's default margin is removed (.sheet-title). */
-  padding: var(--space-6) var(--app-padding) calc(var(--space-7) + env(safe-area-inset-bottom, 0px));
+  /* One uniform 18 px inner padding (--space-6 == --app-padding) on every side —
+     the fixed pair for the sheet's 32 px corners (§4.4): 32 px radius with
+     18 px inner padding. The bottom adds the safe-area inset below the last
+     control (§5.6). */
+  padding: var(--space-6) var(--app-padding) calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
   background: var(--color-surface);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   box-shadow: var(--shadow-md);
 }
 

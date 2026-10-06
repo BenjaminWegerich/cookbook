@@ -319,13 +319,13 @@
 }
 
 /* Whole recipe card (photo media area on top, title below).
-   The card carries one mat (--space-3, a ladder value) on all four sides, so
-   the media area sits inside the hairline border instead of bleeding into it
-   (decided with the user). The mat is what separates photo and border; the
-   photo therefore needs its own corner radius (see `.recipe-thumb` below),
-   because the card's rounded corner no longer clips it. `overflow: hidden`
-   stays as the standing guard of those rounded corners, even though the inset
-   media no longer depends on it. */
+   The card carries one mat (--space-4, 10 px) on all four sides, so the media
+   area sits inside the hairline border instead of bleeding into it — the
+   18 px/10 px pair of §4.4 (18 px radius, 10 px padding, 10 px image radius).
+   The mat is what separates photo and border; the photo therefore needs its
+   own corner radius (see `.recipe-thumb` below), because the card's rounded
+   corner no longer clips it. `overflow: hidden` stays as the standing guard of
+   those rounded corners, even though the inset media no longer depends on it. */
 .recipe-card {
   display: grid;
   /* Same reason as the list cell above: the media area is `width: 100%` of this
@@ -341,7 +341,7 @@
   width: 100%;
   /* The one mat of the card: the media area and the title both start at this
      inset (the title resets its own inline padding, see below). */
-  padding: var(--space-3);
+  padding: var(--space-4);
   overflow: hidden;
   background: var(--color-surface);
   border: 1px solid var(--color-line);
@@ -356,12 +356,14 @@
    text below is its own block child.
    With the card's mat in place, the title resets its inline padding (0), so the
    text starts on exactly the same left edge as the photo above it — one mat,
-   one text column. Its top padding keeps the old --space-3 gap to the photo;
-   the distance to the card's lower border comes from the card's own bottom mat,
-   so a bottom padding here would only add a second, different cushion. */
+   one text column. Its top padding keeps the same --space-4 (10 px) gap to the
+   photo as the card's mat, so the media-to-title step matches the mat on every
+   other side; the distance to the card's lower border comes from the card's own
+   bottom mat, so a bottom padding here would only add a second, different
+   cushion. */
 .recipe-card-title {
   display: block;
-  padding: var(--space-3) 0 0;
+  padding: var(--space-4) 0 0;
   font-size: var(--text-md);
   font-weight: 600;
   line-height: 1.3;
@@ -432,12 +434,9 @@
    governs the box an image sits in, not the image itself. The media carries
    its own radius now (decided with the user): the card's rounded corner no
    longer clips a full-bleed tile, so the inset tile has to round itself. It
-   takes --radius-md (10 px), one ladder step below the card's --radius-lg
-   (18 px): the smaller tile stays visibly less round than the container it sits
-   in, which reads as a framed photo rather than as two competing corners. The
-   pair is also the concentric one from the other direction — the 18 px card
-   corner measured one 8 px mat inwards is 10 px. The overview sheet's hero
-   photo uses the same --radius-md for its own, larger size class (see
+   takes --radius-md (10 px), the card's fixed-pair image radius (§4.4: 18 px
+   radius, 10 px padding, 10 px image radius). The overview sheet's hero photo
+   uses the pair one step up — --radius-lg (18 px) inside a 32 px sheet (see
    recipe-overview.css). */
 .recipe-thumb {
   position: relative;

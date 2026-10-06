@@ -34,9 +34,11 @@
   width: 100%;
 }
 
-/* Landscape photo / room-service placeholder, rounded like the recipe cards. */
+/* Landscape photo / room-service placeholder. The hero sits inside the sheet,
+   whose fixed pair is 32 px radius with 18 px inner padding and 18 px image
+   radius (§4.4), so it rounds one step above the card's 10 px tile. */
 .overview-sheet .recipe-thumb {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
 }
 
 /* ---- Details block ------------------------------------------------------- */

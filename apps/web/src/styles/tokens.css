@@ -62,13 +62,14 @@
   --space-10: 56px;
 
   /* ---- Radius ----------------------------------------------------------- */
-  /* All three are ladder values. lg moved from 14 px to 18 px (decided with
-     the user): the container corner reads softer, and 18 px is the ladder step
-     that keeps a home-screen card's corner clearly rounder than its 10 px
-     media tile below it. */
+  /* Four steps plus the circle (§4.4). lg moved from 14 px to 18 px (decided
+     with the user): the container corner reads softer, and 18 px is the ladder
+     step that keeps a home-screen card's corner clearly rounder than its 10 px
+     media tile below it. xl is the bottom sheet's top corners (§5.6). */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 18px;
+  --radius-xl: 32px;
 
   /* ---- Elevation (warm, low-contrast shadows) --------------------------- */
   --shadow-sm: 0 3px 8px rgba(43, 36, 29, 0.06);
