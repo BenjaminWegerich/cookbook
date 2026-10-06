@@ -66,8 +66,9 @@ size; the „Eintrag ersetzen“ menu is built (an unrecognized entry can be rep
 recipe 1:1 with an undo notice, or turned into a new recipe through the prefilled editor or AI
 screen, which return to the entry's overview). The shopping flow is built as well („Einkaufsliste
 schreiben“ selects the planned dishes, the pantry sheet „Vorräte auswählen“ sets each stock, and
-the difference goes to „Einkaufsliste“). What remains is the aisle sort and expanding linked
-Zutaten-Rezepte in the shopping list.
+the difference goes to „Einkaufsliste“). The aisle sort is built as well („Einkaufsliste
+sortieren“ assigns unassigned items a stop or ignores them, then reorders the list). What
+remains is expanding linked Zutaten-Rezepte in the shopping list.
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -98,8 +99,10 @@ not where it is used.
       difference to its yield so its own ingredients join the list
       (recipe_structure.md "The link means…"). Today a sub-recipe contributes one line for
       itself.
-- [ ] Sort the shopping list by category/aisle (needs the shopping-route master data,
-      storage_format.md §10), applied server-side via `List.sort_items`.
+- [x] Sort the shopping list by category/aisle (built on the shopping-route master data,
+      storage_format.md §10): „Einkaufsliste sortieren“ lists the unchecked entries without an
+      Einkaufsort, each of which is assigned a store + section (like „Neue Zutat anlegen“) or
+      ignored (placed at the top); the gateway applies the derived order and verifies it.
 - [ ] Give the additional units a plural form: a unit's name is used as it stands, so a count
       above one reads „2 Packung Mehl (2 kg)“ instead of „2 Packungen Mehl (2 kg)“. Needs a
       plural column in `docs/additional_units.csv` (compiled by the generator), the substitution
@@ -144,8 +147,8 @@ frontend and the actual features.
    seed CSVs, the codecs and serializers in `packages/core/src/shoppingRouteCsv.ts`, the
    runtime registry (`shoppingRouteRegistry.ts`) and the Drive pair
    (`apps/web/src/drive/shoppingRouteMasterData.ts`); the create sheet asks for the stop in the
-   new „Einkauf“ field (store chips + section search). Still open: the aisle sort itself and an
-   entry point for items that are not ingredients.
+   new „Einkauf“ field (store chips + section search). The aisle sort and its entry point for
+   items that are not ingredients are built on this data (see the `[x]` sort task above).
 5. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
    (the size is a query parameter on the export host), replacing the entries recognized as the
@@ -154,7 +157,7 @@ frontend and the actual features.
    `POST /keep/mealplan/check` and can be undone; changing the size reuses the meal-plan write),
    and so is the shopping list ([x] — „Einkaufsliste schreiben“ writes the chosen recipes'
    ingredients via `POST /keep/shopping`, with the pantry step and an undo).
-   Still open: the linked Zutaten-Rezepte in that list, and the aisle sort (§10).
+   Still open: the linked Zutaten-Rezepte in that list.
 6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
    query may-be-in-stock), which builds on the same gateway.
 
@@ -162,7 +165,7 @@ Two things to carry over rather than rediscover:
 - **Writes must be non-destructive.** The spike proved this is achievable — a write/delete
   cycle left the real 135-item list with identical order and sort ids — and both list writes
   already follow the technique (sort ids above every existing item, verify the result). The
-  aisle sort must reuse it rather than reinvent it.
+  aisle sort reuses it rather than reinventing it.
 - **`spike/keep-feasibility/` is a spike, not the product.** Its tooling, tests and the
   `mint-in-cloud.py` recovery script are worth keeping; the rest exists to answer questions
   that are now answered. The gateway keeps that authentication and diagnosis logic in

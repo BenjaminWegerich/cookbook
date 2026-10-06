@@ -3,7 +3,14 @@ import { useMemo, useState, type ReactNode } from 'react';
 import type { StoredRecipe } from '../drive/recipeStorage';
 import type { MealPlanCard } from '../keep/mealPlanCards';
 import type { KeepStatus } from '../keep/useKeep';
-import { CheckCircleIcon, CloseIcon, ListPlusIcon, RoomServiceIcon, SearchIcon } from './icons';
+import {
+  CheckCircleIcon,
+  CloseIcon,
+  ListPlusIcon,
+  RoomServiceIcon,
+  SearchIcon,
+  SortIcon,
+} from './icons';
 import RecipeThumb from './RecipeThumb';
 
 /**
@@ -68,6 +75,24 @@ interface RecipeListProps {
    * The button then reads "Einkaufsliste geschrieben" and is unavailable.
    */
   shoppingWritten: boolean;
+  /**
+   * Opens the shopping-list sort ("Einkaufsliste sortieren", the button next to
+   * the write button). App owns that screen, because only App holds the Keep
+   * state and the Drive writes for the newly assigned stops.
+   */
+  onSortShoppingList: () => void;
+  /**
+   * True while the shopping list carries entries and can be sorted. The sort is
+   * about the shopping list, not the meal plan, so this is independent of the
+   * write button's condition.
+   */
+  shoppingSortable: boolean;
+  /**
+   * True while the current shopping list has already been sorted this session
+   * (App tracks it, like `shoppingWritten`): Keep itself cannot say whether the
+   * list is in route order. The button then reads "Einkaufsliste sortiert".
+   */
+  shoppingSorted: boolean;
 }
 
 /**
@@ -138,6 +163,9 @@ function RecipeList({
   onRetryKeep,
   onWriteShoppingList,
   shoppingWritten,
+  onSortShoppingList,
+  shoppingSortable,
+  shoppingSorted,
 }: RecipeListProps) {
   const [query, setQuery] = useState('');
 
@@ -430,6 +458,30 @@ function RecipeList({
               )}
               <span>
                 {shoppingWritten ? 'Einkaufsliste geschrieben' : 'Einkaufsliste schreiben'}
+              </span>
+            </button>
+          )}
+
+          {/* The aisle sort ("Einkaufsliste sortieren"), next to the write button.
+              It acts on the shopping list, so it appears whenever that list
+              carries entries — independently of whether the meal plan offers
+              anything to write. After the sort ran, the same place reports the
+              state: a check instead of the sort symbol and an unavailable button
+              (a second sort is a no-op until the list changes again). */}
+          {shoppingSortable && (
+            <button
+              type="button"
+              className="text-button shopping-list-button"
+              onClick={onSortShoppingList}
+              disabled={shoppingSorted}
+            >
+              {shoppingSorted ? (
+                <CheckCircleIcon className="button-icon" />
+              ) : (
+                <SortIcon className="button-icon" />
+              )}
+              <span>
+                {shoppingSorted ? 'Einkaufsliste sortiert' : 'Einkaufsliste sortieren'}
               </span>
             </button>
           )}

@@ -11,7 +11,7 @@ Endpoints:
     POST /keep/mealplan         add dish lines to "Essensplan", replacing their entries
     POST /keep/mealplan/check   tick or untick meal-plan lines ("Entfernen")
     POST /keep/shopping         add a recipe's ingredients to the list
-    POST /keep/shopping/sort    reorder the list by category/aisle     (501 for now)
+    POST /keep/shopping/sort    reorder the list by category/aisle
     POST /shorten               shorten one export URL for a meal-plan line
 
 Three cross-cutting rules live here rather than at the call sites:
@@ -49,7 +49,6 @@ from .errors import (
     BadRequest,
     GatewayError,
     GatewayNotConfigured,
-    NotImplementedYet,
     OriginNotAllowed,
     ShortenUnavailable,
     Unauthorized,
@@ -76,12 +75,6 @@ HTTP_ERROR_CODES: dict[int, str] = {
     HTTPStatus.METHOD_NOT_ALLOWED: "method_not_allowed",
     HTTPStatus.NOT_IMPLEMENTED: "not_implemented",
     HTTPStatus.SERVICE_UNAVAILABLE: "unavailable",
-}
-
-# What each unwritten endpoint will do, quoted back in its 501 so the frontend (and a
-# curious curl) is told the truth instead of being handed an empty success.
-PENDING_ACTIONS: dict[str, str] = {
-    "/keep/shopping/sort": "Sorting the shopping list by category",
 }
 
 # A factory is anything that turns configuration into a Keep client: the real one is
@@ -422,10 +415,27 @@ def create_app(
 
     @app.post("/keep/shopping/sort")
     def keep_shopping_sort() -> Response:
-        """Sort the shopping list by category/aisle. Needs the ingredient-category step first."""
-        raise NotImplementedYet(
-            f"{PENDING_ACTIONS['/keep/shopping/sort']} is not implemented yet."
-        )
+        """Sort the shopping list by category/aisle, into the order the app derived.
+
+        Body: `{"order": ["<line>", ...]}` — the complete list of line texts in the
+        desired reading order (top first), a permutation of the current list. The app
+        owns that derivation (core's `shoppingSortOrder`, on the shopping-route master
+        data, storage_format.md §10): ignored lines at the top, then the assigned lines
+        in walking order, then the checked-off lines. This boundary treats a line as
+        opaque text and only executes the order it is handed — the same division of
+        labour as the write actions.
+
+        The answer is the shopping list after the sort, in the shape one checklist has
+        in `GET /keep/state`, so the app can update it without a second request — and
+        only that list, because it is the one the action changed.
+        """
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise BadRequest("A JSON object body is required.")
+        order = _entry_texts(payload, "order")
+        if not order:
+            raise BadRequest("The body needs the complete 'order' of the shopping list.")
+        return jsonify(client_factory(settings).sort_shopping_lines(order))
 
     @app.post("/shorten")
     def shorten() -> Response:

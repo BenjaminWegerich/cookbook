@@ -136,10 +136,10 @@
 - **Built and deployed** as `apps/keep-gateway/` (Python, Flask + gunicorn) on Cloud Run in
   `europe-west3`, scale-to-zero. `GET /health` is the liveness probe — deliberately not
   `/healthz`, which Google's frontend answers itself before a `run.app` request reaches the
-  container — and `GET /keep/state` reads the meal plan and the shopping list. Three of the four
-  write actions are built (the plan write, ticking a dish off, the shopping list); the aisle sort
-  answers `501` until that step is built on the shopping-route master data (storage_format.md
-  §10). A log-based alert
+  container — and `GET /keep/state` reads the meal plan and the shopping list. All four write
+  actions are built (the plan write, ticking a dish off, the shopping list, and the aisle sort,
+  which reorders the list on the shopping-route master data, storage_format.md §10). A log-based
+  alert
   watches for a rejected credential, and a €1 budget guardrail detaches billing if the project
   ever spends it (both in `deploy/cloud-run/`). The boundary fails closed (no gateway token ⇒
   every Keep route refuses) and the browser origin allowlist is explicit. The Keep code lives
@@ -185,9 +185,11 @@
   away from the real one. A master token grants full account access, so it is kept out of the
   frontend entirely — a static public bundle cannot keep a secret, and no browser can obtain a
   master token in the first place.
-- Sorting is applied server-side (`List.sort_items`), never in the client: the core derives
-  the target order from the shopping-route master data (docs/storage_format.md §10) and the
-  gateway only applies it.
+- Sorting is applied server-side, never in the client: the core derives the target order from
+  the shopping-route master data (docs/storage_format.md §10 — ignored lines first, then the
+  assigned lines in walking order, then the checked-off ones), and the gateway only applies it
+  (`KeepClient.sort_shopping_lines`: fresh sort ids above every item, the same non-destructive
+  technique and verification as the writes, not `List.sort_items`).
 
 #### Frontend integration (meal plan)
 

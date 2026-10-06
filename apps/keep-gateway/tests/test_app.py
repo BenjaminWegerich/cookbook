@@ -80,6 +80,8 @@ class FakeKeepClient:
         self.checks: list[tuple[list[str], list[str]]] = []
         # Every shopping write, in order: (add, remove).
         self.shopping_writes: list[tuple[list[str], list[str]]] = []
+        # Every shopping sort, in order: the complete desired order.
+        self.sort_orders: list[list[str]] = []
 
     def read_state(self) -> dict:
         if self._error is not None:
@@ -102,6 +104,12 @@ class FakeKeepClient:
         if self._error is not None:
             raise self._error
         self.shopping_writes.append((list(add), list(remove)))
+        return self._state
+
+    def sort_shopping_lines(self, order: list[str]) -> dict:
+        if self._error is not None:
+            raise self._error
+        self.sort_orders.append(list(order))
         return self._state
 
 
@@ -800,23 +808,72 @@ class GatewayBoundaryTests(unittest.TestCase):
         self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), ALLOWED_ORIGIN)
 
     # ----------------------------------------------------------------------------------
-    # Write actions still to come: defined in the boundary, not implemented yet
+    # POST /keep/shopping/sort (the aisle sort)
     # ----------------------------------------------------------------------------------
 
-    def test_the_aisle_sort_still_answers_501(self) -> None:
+    def test_shopping_sort_passes_the_order_to_the_client(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping/sort",
+                headers=self.auth_headers(),
+                json={"order": ["Klopapier", "500 g Kartoffeln"]},
+            )
+        self.assertEqual(response.status_code, 200)
+        # The app owns the derivation; the boundary only applies the order it is handed.
+        self.assertEqual(fake.sort_orders, [["Klopapier", "500 g Kartoffeln"]])
+        self.assertEqual(response.get_json()["shopping"]["title"], "Einkaufsliste")
+
+    def test_shopping_sort_trims_the_order(self) -> None:
+        app, fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping/sort",
+                headers=self.auth_headers(),
+                json={"order": ["  Klopapier  ", "500 g Kartoffeln"]},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.sort_orders, [["Klopapier", "500 g Kartoffeln"]])
+
+    def test_shopping_sort_rejects_a_missing_or_empty_order(self) -> None:
+        app, fake = self.build_app()
+        for payload in ({}, {"order": []}, {"order": ""}, {"order": "x"}, {"order": [1]}, {"order": [""]}):
+            with self.subTest(payload=payload):
+                with app.test_client() as client:
+                    response = client.post(
+                        "/keep/shopping/sort", headers=self.auth_headers(), json=payload
+                    )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+        self.assertEqual(fake.sort_orders, [])
+
+    def test_shopping_sort_requires_a_json_object(self) -> None:
         app, _fake = self.build_app()
         with app.test_client() as client:
             response = client.post(
-                "/keep/shopping/sort", headers=self.auth_headers(), json={}
+                "/keep/shopping/sort",
+                headers=self.auth_headers(),
+                data="not json",
+                content_type="application/json",
             )
-        self.assertEqual(response.status_code, 501)
-        self.assertEqual(response.get_json()["error"]["code"], "not_implemented")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"]["code"], "bad_request")
 
-    def test_write_actions_still_require_a_token(self) -> None:
-        """A 501 must not be reachable anonymously, or the seam would be untested."""
+    def test_shopping_sort_reports_keep_failures_with_their_code(self) -> None:
+        app, _fake = self.build_app(client=FakeKeepClient(error=KeepApiError("Kein Sync.")))
+        with app.test_client() as client:
+            response = client.post(
+                "/keep/shopping/sort",
+                headers=self.auth_headers(),
+                json={"order": ["Klopapier"]},
+            )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json()["error"]["code"], "keep_api_error")
+
+    def test_shopping_sort_still_requires_a_token(self) -> None:
         app, _fake = self.build_app()
         with app.test_client() as client:
-            response = client.post("/keep/shopping/sort")
+            response = client.post("/keep/shopping/sort", json={"order": ["Klopapier"]})
         self.assertEqual(response.status_code, 401)
 
     # ----------------------------------------------------------------------------------

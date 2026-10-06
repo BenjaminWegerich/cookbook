@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  analyzeShoppingList,
   existingPlanLink,
   mealPlanEntriesForTitle,
   mealPlanEntryLabel,
   mealPlanEntryText,
   mealPlanEntryTextWithShortLink,
   parseMealPlanText,
+  shoppingItemName,
+  shoppingSortOrder,
   withPlanSize,
   type PlannedAmount,
   type Recipe,
+  type ShoppingStop,
 } from '@cookbook/core';
 
 import {
@@ -31,16 +35,20 @@ import RecipeOverview, {
   type RecipeOverviewTarget,
 } from './components/RecipeOverview';
 import ShoppingListSelect from './components/ShoppingListSelect';
+import ShoppingSortSelect from './components/ShoppingSortSelect';
 import Snackbar from './components/Snackbar';
 import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
-import { loadShoppingRouteMasterData } from './drive/shoppingRouteMasterData';
+import {
+  appendShoppingAssignments,
+  loadShoppingRouteMasterData,
+} from './drive/shoppingRouteMasterData';
 import { listRecipes, recipeExportUrl, type StoredRecipe } from './drive/recipeStorage';
 import { useEscapeTrigger } from './hooks/useLeaveGuard';
 import { useScrollMemory } from './hooks/useScrollMemory';
 import { useSnackbar } from './hooks/useSnackbar';
-import { keepErrorMessage, type KeepChecklist, type KeepState } from './keep/keepClient';
+import { keepErrorMessage, type KeepChecklist, type KeepItem, type KeepState } from './keep/keepClient';
 import { resolveMealPlan, type MealPlanCard, type MealPlanResolution } from './keep/mealPlanCards';
 import { useKeep } from './keep/useKeep';
 import './styles/ai-create.css';
@@ -49,6 +57,7 @@ import './styles/recipe-overview.css';
 import './styles/meal-plan-sheet.css';
 import './styles/replace-recipe-sheet.css';
 import './styles/shopping-list-select.css';
+import './styles/shopping-sort-select.css';
 import './styles/pantry-select.css';
 import './styles/editor.css';
 import './styles/snackbar.css';
@@ -63,7 +72,7 @@ import './styles/snackbar.css';
  * sheets and the editor above the selection page, so it is not simply a sibling
  * of the list (see shoppingFlowRef).
  */
-type TopScreen = 'editor' | 'ai' | 'menu' | 'overview' | 'shopping' | 'pantry';
+type TopScreen = 'editor' | 'ai' | 'menu' | 'overview' | 'shopping' | 'pantry' | 'sort';
 
 /**
  * Which AI task the sheet runs while it is the visible 'ai' screen: create a new
@@ -289,6 +298,30 @@ function App() {
    */
   const [pantryCards, setPantryCards] = useState<MealPlanCard[]>([]);
   /**
+   * The shopping-list sort page ("Einkaufsliste sortieren") is open. Like the
+   * pantry step it is a place of its own, mounted while it is the visible page
+   * and unmounted when the flow leaves it; nothing opens above it, so it needs
+   * no hidden wrapper.
+   */
+  const [sortOpen, setSortOpen] = useState(false);
+  /**
+   * The shopping-list items the sort page was opened for — a snapshot taken when
+   * the page opens, so the rows do not move under the user's fingers while Keep
+   * state changes (the same reason the pantry step snapshots its cards).
+   */
+  const [sortItems, setSortItems] = useState<KeepItem[]>([]);
+  /**
+   * The shopping list the sort was last applied to, or null. The Keep state's
+   * shopping object *is* the marker, exactly like `shoppingWrittenFor` is for the
+   * meal plan: every shopping write, undo, fresh read and sort replaces
+   * `keep.state.shopping` with a new object, so "the list is still sorted" is an
+   * identity check and any later list change re-enables the button by itself.
+   *
+   * Session-only on purpose: Keep cannot tell whether a list is in route order,
+   * so after a reload the app does not pretend to know.
+   */
+  const [shoppingSortedFor, setShoppingSortedFor] = useState<KeepChecklist | null>(null);
+  /**
    * The meal plan the shopping list was last written for, or null. The Keep
    * state object *is* the marker: every meal-plan write (and every fresh read)
    * replaces `keep.state.mealplan` with a new object, while the shopping write
@@ -382,9 +415,11 @@ function App() {
         : 'ai'
       : pantryOpen
         ? 'pantry'
-        : shoppingOpen
-          ? 'shopping'
-          : 'list';
+        : sortOpen
+          ? 'sort'
+          : shoppingOpen
+            ? 'shopping'
+            : 'list';
   /** Remembers/restores the window scroll per page (see useScrollMemory). */
   const scrollMemory = useScrollMemory(visiblePageKey);
 
@@ -489,6 +524,9 @@ function App() {
       // the chosen stocks are gone and the next visit starts from the
       // pre-filled Vorräte again.
       setPantryOpen(next === 'pantry');
+      // The sort page is a place of its own over the list (nothing layers above
+      // it), so it is mounted while it is the visible page and dropped otherwise.
+      setSortOpen(next === 'sort');
       // The selection page stays mounted (hidden) while any layer of its flow is
       // above it — the overview opened from a row, the editor opened from that
       // sheet — so the checked dishes survive the detour. The flow flag is set
@@ -670,6 +708,13 @@ function App() {
         navRef.current = 'shopping';
         setPantryOpen(false);
         guardCurrentEntry();
+        return;
+      }
+      if (top === 'sort') {
+        // Back out of the sort page returns to the list, which sits on the
+        // guard entry the pop just landed on: nothing to re-establish.
+        navRef.current = null;
+        setSortOpen(false);
         return;
       }
       if (top === 'overview' && shoppingFlowRef.current) {
@@ -882,6 +927,23 @@ function App() {
     shoppingWrittenFor !== null && shoppingWrittenFor === keep.state?.mealplan;
 
   /**
+   * True while the current shopping list is the one the sort was applied to:
+   * an identity check against `shoppingSortedFor`, which any shopping-list
+   * change invalidates on its own (see the state's own comment).
+   */
+  const shoppingSorted =
+    shoppingSortedFor !== null && shoppingSortedFor === keep.state?.shopping;
+
+  /**
+   * True while the shopping list carries at least one unchecked entry and can be
+   * sorted. The sort reorders the unchecked entries (checked ones stay at the
+   * bottom), so a list of only checked entries offers nothing to sort. It is
+   * independent of the write button's condition: that one needs the meal plan.
+   */
+  const shoppingSortable =
+    keep.status === 'ready' && (keep.state?.shopping.items.some((item) => !item.checked) ?? false);
+
+  /**
    * The meal-plan resolution for the *current* Keep state, or null while none
    * exists (Keep off or loading, resolution still running, or it failed).
    */
@@ -1009,6 +1071,19 @@ function App() {
   }, [setNav]);
 
   /**
+   * Opens the shopping-list sort page ("Einkaufsliste sortieren"). The page is a
+   * new instance every time it is opened (it unmounts when the flow leaves it),
+   * so its remembered scroll is dropped and it starts at the top — the same rule
+   * the pantry step follows. The shopping-list items are snapshotted here so the
+   * page's rows stay stable for its lifetime.
+   */
+  const openShoppingSort = useCallback((): void => {
+    scrollMemory.forget('sort');
+    setSortItems([...(keep.state?.shopping.items ?? [])]);
+    setNav('sort');
+  }, [keep.state, setNav, scrollMemory]);
+
+  /**
    * Opens the pantry step for the dishes the selection page handed over
    * ("Vorräte auswählen"). The page is a new instance every time it is opened
    * (it unmounts when the flow leaves it), so its remembered scroll is dropped
@@ -1037,6 +1112,7 @@ function App() {
   const checkMealPlan = keep.checkMealPlan;
   const uncheckMealPlan = keep.uncheckMealPlan;
   const writeShopping = keep.writeShopping;
+  const sortShopping = keep.sortShopping;
   const shortenExportUrl = keep.shortenExportUrl;
 
   /**
@@ -1430,6 +1506,79 @@ function App() {
   );
 
   /**
+   * Performs the shopping-list sort: the sort page hands over its decisions (per
+   * unresolved line a chosen stop or 'ignore'), and this callback does the three
+   * writes the sort needs — the new master-data rows, then the reorder — before
+   * it closes the flow back to the home screen.
+   *
+   * The new stops are persisted first (a batch write to `einkaufs-zuordnung.csv`),
+   * then the target order is derived from the *pre-persist* analysis plus the
+   * decisions: core's `shoppingSortOrder` places the ignored lines at the top,
+   * the assigned ones in walking order and the checked-off ones at the bottom.
+   * Deriving from the pre-persist analysis keeps an ignored line that shares a
+   * name with a just-assigned one distinct — the decision is keyed by the exact
+   * line text, never by the item name the persist step writes.
+   *
+   * The gateway applies the order and answers the sorted list; its identity is
+   * kept as the "sortiert" marker, so the button reads "Einkaufsliste sortiert"
+   * until any later list change replaces it (see `shoppingSortedFor`).
+   *
+   * A failure is thrown on to the page, which stays open and shows the reason
+   * next to its button, so the decisions are not lost. There is deliberately no
+   * undo: the reorder is a pure order change and the persisted stops are master
+   * data, not a list write to take back.
+   */
+  const sortShoppingList = useCallback(
+    async (resolutions: ReadonlyMap<string, ShoppingStop | 'ignore'>): Promise<void> => {
+      const activeToken = token;
+      if (activeToken === null) {
+        throw new Error('Nicht mit Google Drive verbunden — der Einkaufsort kann nicht gespeichert werden.');
+      }
+
+      // The snapshot the page was opened with, in Keep's display order.
+      const analyzed = analyzeShoppingList(
+        sortItems.map((item) => ({ text: item.text, checked: item.checked })),
+      );
+
+      // Persist the newly chosen stops (the ignored lines write nothing).
+      const newAssignments: { item: string; stop: ShoppingStop }[] = [];
+      for (const [text, resolution] of resolutions) {
+        if (resolution !== 'ignore') {
+          newAssignments.push({ item: shoppingItemName(text), stop: resolution });
+        }
+      }
+      if (newAssignments.length > 0) {
+        await appendShoppingAssignments(activeToken, newAssignments);
+      }
+
+      // The target order, derived before the persist so an ignored line keeps its
+      // decision even when it shares a name with a just-assigned one.
+      const order = shoppingSortOrder(analyzed, (text) => resolutions.get(text) ?? 'ignore');
+
+      let sorted: KeepChecklist;
+      try {
+        sorted = await sortShopping(order);
+      } catch (err) {
+        throw new Error(keepErrorMessage(err));
+      }
+
+      setShoppingSortedFor(sorted);
+      setSortItems([]);
+      setNav(null);
+      const assigned = newAssignments.length;
+      showSnackbar({
+        text:
+          assigned > 0
+            ? `Einkaufsliste sortiert — ${assigned} ${
+                assigned === 1 ? 'Einkaufsort gespeichert' : 'Einkaufsorte gespeichert'
+              }.`
+            : 'Einkaufsliste sortiert.',
+      });
+    },
+    [token, sortItems, appendShoppingAssignments, sortShopping, setNav, showSnackbar],
+  );
+
+  /**
    * Shows the base recipe in the editor (`draft` prefills a brand-new recipe)
    * and keeps the target ref mirror in sync, so the synchronous event handlers
    * (sub-recipe jump, history popstate) see the recipe that is on screen.
@@ -1729,6 +1878,17 @@ function App() {
         />
       )}
 
+      {/* The shopping-list sort ("Einkaufsliste sortieren") — a place of its own
+          over the list, like the pantry step. Nothing opens above it, so it is
+          simply mounted while it is the visible page. */}
+      {sortOpen && (
+        <ShoppingSortSelect
+          items={sortItems}
+          onClose={() => setNav(null)}
+          onSort={sortShoppingList}
+        />
+      )}
+
       {editorOpen ? (
         <>
           {/* The base level (recipe from the list, or the AI draft). It stays
@@ -1774,7 +1934,7 @@ function App() {
             </div>
           ))}
         </>
-      ) : aiOpen ? null : shoppingOpen || pantryOpen ? null : (
+      ) : aiOpen ? null : shoppingOpen || pantryOpen || sortOpen ? null : (
         <main className="app">
           {/* No screen header any more (decided with the user): the search field
               alone opens the screen, and the two section captions below carry
@@ -1837,6 +1997,9 @@ function App() {
               onRetryKeep={keep.retry}
               onWriteShoppingList={openShoppingSelect}
               shoppingWritten={shoppingWritten}
+              onSortShoppingList={openShoppingSort}
+              shoppingSortable={shoppingSortable}
+              shoppingSorted={shoppingSorted}
             />
           )}
 

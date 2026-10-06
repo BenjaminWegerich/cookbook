@@ -41,6 +41,7 @@ export * from './recipe/validate.js';
 export * from './recipe/yieldViews.js';
 export * from './shoppingList.js';
 export * from './shoppingRouteCsv.js';
+export * from './shoppingSort.js';
 export * from './shoppingRouteData.js';
 export * from './shoppingRouteRegistry.js';
 

@@ -209,6 +209,25 @@ def verify_meal_plan_state(
         )
 
 
+def verify_shopping_sort(shopping: dict[str, Any], order: Iterable[str]) -> None:
+    """Refuse a sort whose result is not exactly the order the app asked for.
+
+    The app hands over the complete list of line texts in the desired reading
+    order (top first) — a permutation of the current list, with the ignored lines
+    at the top, then the assigned lines in walking order, then the checked-off
+    ones. The state read back after the sync must therefore be that exact
+    sequence; anything else (an indented sub-item that Keep keeps under its
+    parent, a concurrent edit) is a `KeepApiError`, never a silent "sorted".
+    """
+    expected = [text.strip() for text in order]
+    texts = [item["text"].strip() for item in shopping["items"]]
+    if texts != expected:
+        raise KeepApiError(
+            "The shopping list did not end up in the requested order.",
+            detail=f"expected {expected!r}, found {texts!r}",
+        )
+
+
 def verify_shopping_write(
     shopping: dict[str, Any],
     before: Mapping[str, int],
@@ -596,4 +615,70 @@ class KeepClient:
 
         shopping_state = describe_list(shopping)
         verify_shopping_write(shopping_state, before, added, removed)
+        return {"shopping": shopping_state}
+
+    def sort_shopping_lines(self, order: Sequence[str]) -> dict[str, Any]:
+        """Reorder the shopping list into the order the app derived from the route.
+
+        `order` is the complete list of line texts in the desired reading order
+        (top first): a permutation of the current list. The app owns the derivation
+        (core's `shoppingSortOrder` — ignored lines at the top, assigned lines in
+        walking order, checked-off lines last); this gateway only applies the order
+        it is handed, exactly like the write actions.
+
+        Non-destructive in the same way as the writes: nothing is added or deleted,
+        every existing item just gets a fresh sort id that places it where the order
+        says, and the whole change is one sync. A duplicate text is matched in Keep's
+        own display order, so two identical lines keep their relative order through
+        the round trip. The list read back from that sync is verified
+        (`verify_shopping_sort`) before it is returned, so the app never reports the
+        list as sorted on the strength of an unverified write.
+
+        The answer carries only the shopping list: it is the list this action changed.
+        """
+        ordered = [text.strip() for text in order]
+        if any(text == "" for text in ordered):
+            raise ValueError("Sorted line texts must be non-empty.")
+        if not ordered:
+            raise ValueError("A sort needs the complete order of the shopping list.")
+
+        keep = authenticate(self._config)
+        shopping = find_list_by_title(keep, self._config.shopping_title)
+
+        items = list(shopping.items)
+        current_texts = [item.text.strip() for item in items]
+        # The order must be exactly the current list — a permutation, not a subset.
+        # An app that sorts a list that changed underneath it (a line added or removed
+        # in Keep) is answered loudly instead of guessing where the difference goes.
+        if Counter(current_texts) != Counter(ordered):
+            raise KeepApiError(
+                "The sort order does not match the shopping list.",
+                detail=(
+                    f"expected {dict(Counter(ordered))!r}, "
+                    f"found {dict(Counter(current_texts))!r}"
+                ),
+            )
+
+        # Resolve the desired sequence of item nodes. Duplicate texts are matched in
+        # display order (a queue per text), so two identical lines keep their order.
+        by_text: dict[str, list[Any]] = {}
+        for item in items:
+            by_text.setdefault(item.text.strip(), []).append(item)
+        remaining = {text: list(nodes) for text, nodes in by_text.items()}
+
+        ordered_items: list[Any] = []
+        for text in ordered:
+            ordered_items.append(remaining[text].pop(0))
+
+        # `List.items` already hides deleted items, so the maximum is taken over what
+        # remains. A higher sort id renders closer to the top, so the first listed
+        # line gets the highest id — the reading order the app handed over survives
+        # the round trip (same technique and offset as the writes).
+        highest = max((int(item.sort) for item in items), default=0)
+        for index, item in enumerate(ordered_items):
+            item.sort = highest + (len(ordered_items) - index) * SORT_OFFSET_ABOVE_EXISTING
+        sync(keep)
+
+        shopping_state = describe_list(shopping)
+        verify_shopping_sort(shopping_state, ordered)
         return {"shopping": shopping_state}

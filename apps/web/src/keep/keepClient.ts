@@ -305,6 +305,34 @@ export async function writeShoppingList(
 }
 
 /**
+ * Sorts the shopping list into the order the app derived from the shopping-route
+ * master data (`POST /keep/shopping/sort`).
+ *
+ * `order` is the complete list of line texts in the desired reading order (top
+ * first): a permutation of the current shopping list, with ignored lines at the
+ * top, then the assigned lines in walking order, then the checked-off lines. The
+ * app owns the derivation (core's `shoppingSortOrder`); the gateway only applies
+ * the order it is handed — the same division of labour as the write actions.
+ *
+ * The answer is the shopping list after the sort, so the caller can adopt it
+ * without a second request.
+ */
+export async function sortShoppingList(
+  gatewayToken: string,
+  order: readonly string[],
+): Promise<KeepChecklist> {
+  const body = await requestJson('/keep/shopping/sort', gatewayToken, {
+    method: 'POST',
+    body: { order: [...order] },
+  });
+  const shopping = isRecord(body) ? parseChecklist(body.shopping) : null;
+  if (shopping === null) {
+    throw new KeepClientError('invalid_response', 'Das Keep-Gateway hat unerwartet geantwortet.');
+  }
+  return shopping;
+}
+
+/**
  * Asks the gateway to shorten one export URL (`POST /shorten`).
  *
  * The meal-plan write uses this so the Keep line stays readable: the line carries the export

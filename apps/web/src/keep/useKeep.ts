@@ -40,8 +40,10 @@ import {
   keepErrorMessage,
   setMealPlanChecked,
   shortenUrl,
+  sortShoppingList,
   writeMealPlan,
   writeShoppingList,
+  type KeepChecklist,
   type KeepState,
 } from './keepClient';
 
@@ -119,6 +121,15 @@ export interface UseKeepResult {
    * exactly like `planMeal` and rethrown, so the sheet can show the reason and stay open.
    */
   writeShopping: (add: readonly string[], remove: readonly string[]) => Promise<void>;
+  /**
+   * Reorders the shopping list into the order the sort flow derived from the
+   * shopping-route master data (`order`: the complete list of line texts, top
+   * first). Adopts the shopping list the gateway reports back (the meal plan is
+   * untouched) and resolves it, so the caller can mark it as the sorted list;
+   * a failure is mapped onto the status exactly like `writeShopping` and
+   * rethrown, so the sort page can show the reason and stay open.
+   */
+  sortShopping: (order: readonly string[]) => Promise<KeepChecklist>;
   /** Re-runs the current step (probe, silent sign-in and read) — the retry action. */
   retry: () => void;
 }
@@ -461,6 +472,41 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
     [state, runShoppingWrite],
   );
 
+  /**
+   * Runs one shopping-list sort and adopts the list the gateway answers. The sort
+   * and the ordinary write share their failure mapping (`reportWriteFailure`), but
+   * the sort's success has no `remove`/`add` counterpart, so it uses its own body.
+   * A 501 (`not_implemented`) is treated like the write: reported next to the
+   * button, not as a connection failure.
+   */
+  const sortShopping = useCallback(
+    async (order: readonly string[]): Promise<KeepChecklist> => {
+      // No loaded state means Keep was never read — there is no list to reorder.
+      if (state === null) {
+        throw new Error(
+          'Google Keep ist nicht verbunden — verbinde dich im Abschnitt „Essensplan“.',
+        );
+      }
+      try {
+        const updated = await withIdentityToken((token) => sortShoppingList(token, order));
+        // The endpoint answers the changed list; the meal plan is untouched, so the
+        // resolved cards of the "Essensplan" section stay exactly as they are.
+        setState((current) => (current === null ? current : { ...current, shopping: updated }));
+        setStatus('ready');
+        setError(null);
+        return updated;
+      } catch (err) {
+        // A 501 is not a connection problem (see runShoppingWrite): the gateway
+        // answers, only this action does not exist there yet.
+        if (!(err instanceof KeepClientError && err.code === 'not_implemented')) {
+          reportWriteFailure(err);
+        }
+        throw err;
+      }
+    },
+    [state, reportWriteFailure],
+  );
+
   return {
     status,
     state,
@@ -472,6 +518,7 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
     checkMealPlan,
     uncheckMealPlan,
     writeShopping,
+    sortShopping,
     retry,
   };
 }

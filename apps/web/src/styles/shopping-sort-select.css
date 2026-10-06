@@ -1,0 +1,110 @@
+/**
+ * Shopping-list sort screen — component styles.
+ *
+ * The full-screen page behind "Einkaufsliste sortieren"
+ * (components/ShoppingSortSelect.tsx): the unchecked shopping-list lines that
+ * have no Einkaufsort yet, each with the store-chips + section-search „Einkauf“
+ * field and an "Ignorieren" toggle. All pixel values come from the design
+ * ladder (docs/CODING_CONVENTIONS.md); colors and sizes reference the tokens in
+ * styles/tokens.css.
+ */
+
+.sort-select {
+  display: grid;
+  gap: var(--space-6);
+  /* Room for the last element's focus ring, like the other full screens. */
+  padding-block-end: var(--space-10);
+}
+
+/* The instruction under the title: one quiet paragraph, as wide as the page
+   (the same shape as the selection and pantry pages' intros). */
+.sort-intro {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.sort-empty {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+/* ---- The list ------------------------------------------------------------ */
+
+/* One paper surface for the whole list (the same shape as the pantry page's
+   table), with hairline dividers between the rows. `overflow: hidden` lets the
+   first and last rows meet the rounded corners. */
+.sort-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* One unresolved line: its text, its item name, the picker and the toggle. */
+.sort-entry {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+}
+
+.sort-entry + .sort-entry {
+  border-block-start: 1px solid var(--color-line);
+}
+
+/* The Keep line exactly as it stands on the list — the row's label. */
+.sort-entry-text {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+/* The item name the sort will persist: caption + name on one quiet line. */
+.sort-entry-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* The ignore toggle: a chip, right after the picker. When active it wears the
+   accent fill of any chosen chip; the label swap says which state it is in. */
+.sort-ignore {
+  justify-self: start;
+}
+
+/* Ignored: the picker is replaced by this note. */
+.sort-ignored-note {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- Forward action ------------------------------------------------------ */
+
+/* "Einkaufsliste sortieren": accent, content width, right-aligned under the
+   list — the same arrangement the pantry page's forward button uses. */
+.sort-actions {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+}
+
+.sort-action-note {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  text-align: end;
+}
+
+.sort-action-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  text-align: end;
+}

@@ -156,7 +156,9 @@ async function writeMasterDataFile(
 }
 
 /**
- * Records where a new item is bought and writes the master data pair to Drive.
+ * Records where new items are bought and writes the master data pair to Drive in
+ * one read/write cycle — the batch form of `appendShoppingAssignment`, used by
+ * the shopping-list sort when it assigns several items at once.
  *
  * The stop must be one of the route's stops (a section belongs to exactly one
  * store) — the round-trip check below enforces it, so a stop the route does not
@@ -166,16 +168,10 @@ async function writeMasterDataFile(
  * spreadsheet is corrected rather than rejected (`zutaten.csv` rejects a
  * duplicate ingredient instead, where the name is the identity of a whole
  * master-data entry).
- *
- * @param token the Google Drive access token
- * @param item the item name (exact, case-sensitive — recipe ingredient or, like
- *   Klopapier or Blumen, an item that is no ingredient at all)
- * @param stop the store and section the item is bought at
  */
-export async function appendShoppingAssignment(
+export async function appendShoppingAssignments(
   token: string,
-  item: string,
-  stop: ShoppingStop,
+  entries: ReadonlyArray<{ item: string; stop: ShoppingStop }>,
 ): Promise<void> {
   const folderId = await ensureRecipeFolder(token);
   const { route, assignments, routeFileId, assignmentsFileId } = await readCurrentMasterData(
@@ -183,7 +179,13 @@ export async function appendShoppingAssignment(
     folderId,
   );
 
-  const extended: ShoppingAssignments = { ...assignments, [item]: stop };
+  // Build on a mutable record, then freeze into the registry's read-only shape
+  // (the assignment's `Readonly<Record<...>>` only permits reading).
+  const mutable: Record<string, ShoppingStop> = { ...assignments };
+  for (const { item, stop } of entries) {
+    mutable[item] = stop;
+  }
+  const extended: ShoppingAssignments = mutable;
   // Both serializers round-trip their own output through the parsers before
   // returning it (shoppingRouteCsv.ts), so text the loader would reject can
   // never reach Drive — the same guard the ingredient write path applies.
@@ -202,4 +204,22 @@ export async function appendShoppingAssignment(
   // loadShoppingRouteMasterData) before publishing it.
   writtenSinceLoad = true;
   setShoppingAssignments(extended);
+}
+
+/**
+ * Records where a new item is bought and writes the master data pair to Drive —
+ * the single-entry form of `appendShoppingAssignments` (the new-ingredient
+ * sheet's „Einkauf“ field).
+ *
+ * @param token the Google Drive access token
+ * @param item the item name (exact, case-sensitive — recipe ingredient or, like
+ *   Klopapier or Blumen, an item that is no ingredient at all)
+ * @param stop the store and section the item is bought at
+ */
+export async function appendShoppingAssignment(
+  token: string,
+  item: string,
+  stop: ShoppingStop,
+): Promise<void> {
+  await appendShoppingAssignments(token, [{ item, stop }]);
 }
