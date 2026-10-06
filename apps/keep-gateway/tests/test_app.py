@@ -476,7 +476,7 @@ class GatewayBoundaryTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     # ----------------------------------------------------------------------------------
-    # POST /keep/mealplan/check ("Vom Plan entfernen" and its undo)
+    # POST /keep/mealplan/check ("Entfernen" and its undo)
     # ----------------------------------------------------------------------------------
 
     def test_mealplan_check_passes_both_directions_to_the_client(self) -> None:

@@ -118,9 +118,10 @@ export function EventAvailableIcon({ className }: IconProps) {
 }
 
 /**
- * Calendar with a cross — the "Vom Plan entfernen" action of an unrecognized
- * meal-plan entry: the calendar body with the cross of "take it off the plan".
- * The call site paints it in the danger colour,
+ * Calendar with a cross — the "Entfernen" action that takes a dish off the
+ * meal plan (the unrecognized entry's own button and the meal-plan overlay's
+ * replan mode): the calendar body with the cross of "take it off the plan".
+ * The call sites paint it in the danger colour,
  * which is the destructive half of its meaning.
  */
 export function EventBusyIcon({ className }: IconProps) {

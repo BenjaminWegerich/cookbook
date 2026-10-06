@@ -9,7 +9,7 @@ Endpoints:
     GET  /health                liveness, unauthenticated, cheap
     GET  /keep/state            the meal plan and shopping list, for app start
     POST /keep/mealplan         add dish lines to "Essensplan", replacing their entries
-    POST /keep/mealplan/check   tick or untick meal-plan lines ("Vom Plan entfernen")
+    POST /keep/mealplan/check   tick or untick meal-plan lines ("Entfernen")
     POST /keep/shopping         add a recipe's ingredients to the list
     POST /keep/shopping/sort    reorder the list by category/aisle     (501 for now)
     POST /shorten               shorten one export URL for a meal-plan line
@@ -360,7 +360,7 @@ def create_app(
 
         Body: `{"check": ["<entry text>", ...], "uncheck": ["<entry text>", ...]}`.
 
-        This is the recipe overview's "Vom Plan entfernen" and its undo. Removing
+        This is the recipe overview's "Entfernen" and its undo. Removing
         a dish from the plan does not delete the Keep line - it is ticked off, so
         the line stays visible in Keep as "cooked" - and "Rückgängig" ticks it
         back on. `check` are the exact texts to tick, `uncheck` the exact texts

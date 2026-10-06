@@ -91,7 +91,7 @@ export interface UseKeepResult {
   undoMealPlan: (entry: string, restore: readonly string[]) => Promise<void>;
   /**
    * Takes dishes off the meal plan without deleting them: the named lines are ticked off in
-   * Keep ("Vom Plan entfernen"), so they stay visible in Keep as cooked while the app's plan
+   * Keep ("Entfernen"), so they stay visible in Keep as cooked while the app's plan
    * no longer shows them. `entries` are the exact texts of the lines the caller recognized as
    * the recipe (it has the recipe's type and family unit, this hook does not).
    *

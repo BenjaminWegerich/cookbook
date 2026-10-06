@@ -105,7 +105,7 @@ def verify_meal_plan_checked_state(
 ) -> None:
     """Refuse a check/uncheck whose result is not exactly what was asked.
 
-    The app's "Vom Plan entfernen" ticks a meal-plan line off and its undo ticks
+    The app's "Entfernen" ticks a meal-plan line off and its undo ticks
     it back on; both must be verified before the app reports success, exactly
     like the add/replace write (`verify_meal_plan_state`). For every text:
 
@@ -459,7 +459,7 @@ class KeepClient:
     ) -> dict[str, Any]:
         """Tick ("check") or untick meal-plan lines, changing nothing else.
 
-        This is the app's "Vom Plan entfernen" and its undo. Removing a dish from
+        This is the app's "Entfernen" and its undo. Removing a dish from
         the meal plan deliberately does **not** delete the Keep line: it is
         ticked off, so the user can still see in Keep what was cooked. `check`
         are the exact texts to tick, `uncheck` the exact texts to tick back on;

@@ -16,9 +16,12 @@
  *   falls back to the written size, exactly like "Einplanen". The button is
  *   unavailable until the size actually differs from the one the plan states
  *   (docs/CODING_CONVENTIONS.md, unavailable buttons: the selected chips/stepper
- *   right above it show the reason). The overlay deliberately carries no
- *   "remove" action — taking the dish off the plan lives behind the overview's
- *   "Mehr" menu (decided with the user).
+ *   right above it show the reason). The replan overlay additionally carries the
+ *   "Entfernen" action (decided with the user): it sits first in the action row,
+ *   in the bottom-left corner, so taking the dish off the plan lives next to
+ *   "Abbrechen" and "Menge ändern" instead of behind the overview's "Mehr" menu.
+ *   "Einplanen" has no such button — a dish that is not on the plan has nothing
+ *   to remove.
  *
  * In both modes:
  * - the heading names the action with the recipe ("<Titel> einplanen" /
@@ -76,6 +79,7 @@ import {
   type Recipe,
 } from '@cookbook/core';
 
+import { EventBusyIcon } from './icons';
 import QuantityPicker from './QuantityPicker';
 import { safeRenderAQS } from './ingredientDisplay';
 
@@ -114,12 +118,29 @@ interface MealPlanSheetProps {
    * which keeps the overlay open.
    */
   onConfirm: (planned: PlannedAmount) => Promise<void>;
+  /**
+   * "Entfernen" (replan only): takes the dish off the meal plan. App owns the
+   * Keep check write and its undo notice; this overlay only hands over, exactly
+   * like the overview's other removal paths. On success App closes the whole
+   * flow (overview included), so this overlay unmounts with it; a failure is
+   * reported by App as its own error notice, because a fire-and-forget removal
+   * has no place here to show a reason. `plan` mode never offers it — a dish
+   * that is not on the plan has nothing to remove.
+   */
+  onRemove: () => void;
 }
 
 /**
  * The meal-plan overlay (see file header).
  */
-function MealPlanSheet({ mode, recipe, previous, onClose, onConfirm }: MealPlanSheetProps) {
+function MealPlanSheet({
+  mode,
+  recipe,
+  previous,
+  onClose,
+  onConfirm,
+  onRemove,
+}: MealPlanSheetProps) {
   const isDish = recipe.type === 'finished_dish';
   /** The recipe's own family unit; the meal plan only accepts a size in it. */
   const family = recipe.yield_unit === 'ml' ? 'ml' : 'g';
@@ -279,6 +300,17 @@ function MealPlanSheet({ mode, recipe, previous, onClose, onConfirm }: MealPlanS
         )}
 
         <div className="sheet-actions">
+          {/* "Entfernen" (replan only): takes the dish off the plan. It sits
+              first in the row, in the bottom-left corner (the shared
+              .sheet-actions .danger-button rule pulls it there), next to
+              "Abbrechen" and "Menge ändern". Like "Abbrechen" it is unavailable
+              while a write runs, so the two writes cannot interleave. */}
+          {isReplan && (
+            <button type="button" className="danger-button" onClick={onRemove} disabled={busy}>
+              <EventBusyIcon className="button-icon" />
+              <span>Entfernen</span>
+            </button>
+          )}
           <button type="button" className="text-button" onClick={onClose} disabled={busy} autoFocus>
             Abbrechen
           </button>

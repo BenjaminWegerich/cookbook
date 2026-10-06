@@ -15,13 +15,13 @@
  *    meta row (`formatPlannedAmount` in @cookbook/core), and "Einplanen" becomes "Umplanen" with
  *    the calendar-and-pencil glyph. "Umplanen" opens the same overlay in its
  *    replan mode, which pre-selects the plan's size and changes the entry with
- *    "Menge ändern" (./MealPlanSheet). "Vom Plan entfernen" does not sit in the
- *    action row: it is the last entry of this variant's "Mehr" menu (decided
- *    with the user), painted in the danger colour, and it *checks* the Keep line
- *    rather than deleting it. The hero carries no "Eingeplant" badge: the
- *    "Geplant" value and the "Umplanen" action already state that the dish is on
- *    the plan, and the home screen shows a planned recipe only in its
- *    "Essensplan" section.
+ *    "Menge ändern" (./MealPlanSheet). That overlay is also where the dish is
+ *    taken off the plan: its "Entfernen" button sits first in the overlay's
+ *    action row, in the bottom-left corner (decided with the user), painted in
+ *    the danger colour, and it *checks* the Keep line rather than deleting it.
+ *    The hero carries no "Eingeplant" badge: the "Geplant" value and the
+ *    "Umplanen" action already state that the dish is on the plan, and the home
+ *    screen shows a planned recipe only in its "Essensplan" section.
  * 3. **Unrecognized meal-plan entry** — no recipe behind it, so it carries **no
  *    hero image at all** (decided with the user; the list card's danger symbol
  *    is enough, and this sheet is about the entry's text and its actions). Its
@@ -35,7 +35,7 @@
  *    after it. It carries exactly one
  *    constructive action, "Eintrag ersetzen" (accent fill, growing), which
  *    opens a menu with "Bestehendes Rezept auswählen", "Rezept manuell
- *    schreiben" and "Rezept mit KI schreiben"; next to it "Vom Plan entfernen"
+ *    schreiben" and "Rezept mit KI schreiben"; next to it "Entfernen"
  *    (outlined, danger colour) drops the line from the meal plan. The two sit
  *    on a wrapping row, because both labels are full phrases and do not share
  *    one phone line (decided with the user). The trigger carries no caret
@@ -79,8 +79,8 @@
  *   entries are built (replace overlay, prefilled editor, prefilled AI create).
  * - a recognized recipe's plan state is rendered from the *live* plan App
  *   derives (`livePlan`), not only from the snapshot the target was opened with.
- *   Every action here ends the whole flow (the two overlay writes and "Vom Plan
- *   entfernen"), but the plan can still move while the sheet is open — the
+ *   Every action here ends the whole flow (the two overlay writes and
+ *   "Entfernen"), but the plan can still move while the sheet is open — the
  *   previous notice's "Rückgängig", or the meal plan resolving after the sheet
  *   was opened — so its badge, its "Geplant" value and its travel action follow
  *   the plan rather than a stale snapshot. The snapshot stays the fallback for
@@ -98,9 +98,10 @@
  *   the overview's per-recipe action must not be named "Zur Liste hinzufügen".
  * - "Mehr" (and, for an unrecognized entry, "Eintrag ersetzen") opens its
  *   actions as a small popover above the row: "Manuell bearbeiten" opens the
- *   editor, "Mit KI bearbeiten" opens the AI-edit screen, and a planned recipe
- *   additionally offers "Vom Plan entfernen". The menu is closed by an outside
- *   tap, Escape and any chosen entry.
+ *   editor and "Mit KI bearbeiten" opens the AI-edit screen. Taking a planned
+ *   recipe off the plan lives in the meal-plan overlay's "Entfernen", not in
+ *   this menu. The menu is closed by an outside tap, Escape and any chosen
+ *   entry.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -259,11 +260,11 @@ interface RecipeOverviewProps {
    */
   onReplaceEntry: (recipe: StoredRecipe, planned: PlannedAmount) => Promise<void>;
   /**
-   * Takes the open meal-plan entry off the plan: a recognized recipe's "Mehr" →
-   * "Vom Plan entfernen", or the unrecognized entry's own danger button. App
-   * owns the Keep write and the undo notice; this callback only closes the menu
-   * (where there is one) and hands over, because the entry cannot report a
-   * failure itself. On success App closes the whole flow.
+   * Takes the open meal-plan entry off the plan: a recognized recipe's
+   * "Umplanen" overlay ("Entfernen"), or the unrecognized entry's own danger
+   * button ("Entfernen"). App owns the Keep write and the undo notice; this
+   * callback only hands over, because the entry cannot report a failure itself.
+   * On success App closes the whole flow.
    */
   onRemoveFromMealPlan: () => void;
   /**
@@ -534,13 +535,15 @@ function RecipeOverview({
   };
 
   /**
-   * "Vom Plan entfernen": closes the menu (when the button sits in one) and
-   * hands the write to App, which owns the Keep action and the undo notice. App
-   * closes the whole flow on success, so the user lands back on the list — the
-   * card has left "Restliche Sammlung" and stands in "Essensplan" now.
+   * "Entfernen": hands the write to App, which owns the Keep action and the undo
+   * notice. App closes the whole flow on success, so the user lands back on the
+   * list — the card has left "Essensplan" and stands in "Restliche Sammlung"
+   * now (or the unrecognized line is gone). The recognized recipe reaches this
+   * through the meal-plan overlay's "Entfernen", the unrecognized entry through
+   * its own danger button; neither sits in a menu, so there is nothing to close
+   * here.
    */
   const removeFromPlan = (): void => {
-    setOpenMenu(null);
     onRemoveFromMealPlan();
   };
 
@@ -720,8 +723,8 @@ function RecipeOverview({
             kochen" grows, "Einplanen"/"Umplanen" and "Mehr" stay at content
             width. An unrecognized entry has no cook or edit action: its row
             carries "Eintrag ersetzen" (accent, growing, opens its menu) and
-            "Vom Plan entfernen" (outlined, danger) and may wrap, because both
-            labels are long phrases (see the file header). */}
+            "Entfernen" (outlined, danger) and may wrap, because both labels are
+            full phrases (see the file header). */}
         <div
           className={
             target.kind === 'unknown' ? 'overview-actions is-wrapping' : 'overview-actions'
@@ -762,13 +765,13 @@ function RecipeOverview({
                   </div>
                 )}
               </div>
-              {/* An unrecognized entry has no "Mehr" menu, so its removal keeps
-                  its own danger button. It runs the same App write as a planned
-                  recipe's menu entry: the entry's complete Keep line is ticked
-                  off (not deleted) and the flow closes back to the list. */}
+              {/* An unrecognized entry has no "Mehr" menu and no "Umplanen"
+                  overlay, so its removal keeps its own danger button, "Entfernen"
+                  (decided with the user): the entry's complete Keep line is
+                  ticked off (not deleted) and the flow closes back to the list. */}
               <button type="button" className="overview-action is-danger" onClick={removeFromPlan}>
                 <EventBusyIcon />
-                <span>Vom Plan entfernen</span>
+                <span>Entfernen</span>
               </button>
             </>
           ) : (
@@ -780,11 +783,11 @@ function RecipeOverview({
               {onMealPlan ? (
                 // "Umplanen" opens the same overlay in its replan mode: the size
                 // the plan states is pre-selected and "Menge ändern" replaces the
-                // entry. It needs the parsed recipe just like "Einplanen" (the
+                // entry, while "Entfernen" in that overlay takes the dish off the
+                // plan. It needs the parsed recipe just like "Einplanen" (the
                 // written size for the reference readout, the pre-selected size
                 // from the plan), so it stays unavailable until the file read
                 // finishes — the loading or error line above it is the cause.
-                // Taking the dish off the plan is not here but behind "Mehr".
                 <button
                   type="button"
                   className="overview-action"
@@ -833,24 +836,6 @@ function RecipeOverview({
                       <SparkleIcon />
                       <span>Mit KI bearbeiten</span>
                     </button>
-                    {/* "Vom Plan entfernen" is a planned recipe's destructive
-                        action, so it sits last and in the danger colour. It only
-                        exists while the dish is on the plan: the menu is built
-                        from the live plan state, so the entry disappears the
-                        moment the dish is taken off. The action *checks* the Keep
-                        line (App owns that write and the undo notice) — it does
-                        not delete it. */}
-                    {onMealPlan && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="danger-text"
-                        onClick={removeFromPlan}
-                      >
-                        <EventBusyIcon />
-                        <span>Vom Plan entfernen</span>
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
@@ -883,6 +868,7 @@ function RecipeOverview({
           previous={planned}
           onClose={() => setPlanOpen(false)}
           onConfirm={onMealPlan ? onChangeAmount : onAddToMealPlan}
+          onRemove={removeFromPlan}
         />
       )}
 

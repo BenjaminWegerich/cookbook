@@ -1154,11 +1154,11 @@ function App() {
    * uses, so the dish ends up on the plan exactly once and its link opens the new
    * size.
    *
-   * Unlike "Vom Plan entfernen", this does *not* keep the overview open: the
-   * whole flow closes back to the list like planning does (decided with the
-   * user), so only "Abbrechen" returns to the overview. The card there already
-   * carries the new size through the re-resolved plan. A failure is thrown on to
-   * the overlay, which stays open and shows the reason next to the button.
+   * The write closes the whole flow back to the list like planning does
+   * (decided with the user), so only "Abbrechen" returns to the overview. The
+   * card there already carries the new size through the re-resolved plan. A
+   * failure is thrown on to the overlay, which stays open and shows the reason
+   * next to the button.
    *
    * "Rückgängig" is the same full restore as planning's undo: it removes the
    * line this write added and puts back the exact lines it replaced
@@ -1278,11 +1278,11 @@ function App() {
 
   /**
    * Takes the open overview's meal-plan entry off the plan: a recognized recipe
-   * ("Mehr" → "Vom Plan entfernen") or an unrecognized entry (its own danger
-   * button), which has no recipe behind it. Removing deliberately *checks* the
-   * Keep lines instead of deleting them, so the user can still see in Keep what
-   * was cooked; `checkMealPlan` is therefore the write and `uncheckMealPlan` its
-   * undo.
+   * ("Umplanen" → "Entfernen" in the meal-plan overlay) or an unrecognized entry
+   * (its own danger button "Entfernen"), which has no recipe behind it. Removing
+   * deliberately *checks* the Keep lines instead of deleting them, so the user
+   * can still see in Keep what was cooked; `checkMealPlan` is therefore the write
+   * and `uncheckMealPlan` its undo.
    *
    * What is checked differs by card type, and both cases hand the gateway the
    * exact Keep texts:
