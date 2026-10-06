@@ -758,14 +758,255 @@ placeholder. A sentence is added only when the user could otherwise be misled or
 
 ### 6.4 Destructive actions and confirmations
 
+*Applies to: web app.*
+
+**One danger look, and a confirmation only when the action cannot be undone.** Every
+destructive action wears the same danger styling — the filled `.danger-button` for a labelled
+button, danger text for a menu entry. Whether it also asks first is decided by whether the
+action can be undone, not by how large it is.
+
+**The look**
+
+- A destructive button is the danger fill with `--color-on-accent` label, the primary button's
+  geometry (§5.1); a destructive menu entry is danger text on the surface.
+- Danger never decorates: the colour appears only on an action that really removes data, never
+  on a quiet answer. „Abbrechen" is always a text button.
+
+**The two-step armed confirm, in place**
+
+- An irreversible action („Rezept löschen") does not open a sheet. The button itself asks: the
+  first tap swaps its label for the question — `„<Titel>" wirklich löschen?` — and a second,
+  quiet „Abbrechen" appears beside it. The second tap on the danger button performs the action.
+- The armed state is a question, so it never lingers: it drops when the button loses focus, when
+  „Abbrechen" is tapped, or when any other change to the screen would make the question stale.
+- The same armed pair removes a photo and a step in the editor (`„Wirklich entfernen?"`) — an
+  empty step, which has nothing to lose, is removed immediately without asking.
+
+**When no confirm is due**
+
+- A reversible removal never asks: it just happens, and the undo is the notice (§5.9). Removing
+  a dish from the meal plan and removing an ingredient row are reversible, so they carry the
+  danger look and no confirmation.
+- The armed discard of unsaved work („Änderungen verwerfen?") is the exit guard's own pattern
+  (§6.2), not a destructive confirm: it answers „leave or stay", it never deletes.
+
+**Rules**
+
+- One destructive action per row; the danger button sits at the left end of the action row,
+  apart from the primary (§5.1).
+- The question names the object — the recipe title — never a generic „Wirklich löschen?".
+- „Abbrechen" is the only answer that drops an armed question; it never performs the action and
+  never navigates.
+
+*Cooking view: not written yet.*
+
 ### 6.5 Undo semantics
+
+*Applies to: web app.*
+
+**Undo exists only where the app can put the data back, and it is always the snackbar action
+„Rückgängig" (§5.9).** A success notice carries that action when the write it reports is
+reversible; an action that cannot be restored gets a confirmation before it happens (§6.4),
+never an undo after. The undo restores the *previous state*, not just a deletion: it removes
+what the write added and puts back what the write replaced, in one hop.
+
+**A write captures its own undo.** The snapshot of what changed — the added line and the
+replaced lines — is taken where the write happens, because only that callback knows what it
+actually touched. The snackbar itself is generic and knows nothing about the meal plan or the
+shopping list.
+
+**The meal plan restores, it never deletes.**
+
+- Planning or re-planning a dish is a full restore: the undo removes the line the write added
+  and puts back the exact lines it replaced, as one block at the top, in their reading order.
+- Replacing an unrecognized entry is a 1:1 restore: the chosen recipe's line leaves, the
+  unrecognized entry's line returns.
+- „Vom Plan entfernen" never deletes the line — it ticks it off, so the user still sees in Keep
+  what was cooked. Its undo is the inverse tick, so the dish reappears with the size it had.
+
+**The shopping list removes one instance per line, not every match.** A list of things to buy
+may hold the same line twice, so „Rückgängig" takes off exactly the instances the app added and
+leaves the user's own line standing.
+
+**Honest limits**
+
+- The undo is a snapshot of what the app last wrote; changes made in Keep in the meantime are
+  not reconciled.
+- A replaced line's checked state is not restored; restored lines come back unchecked.
+- The undo lives only while the notice is on screen (6 s); after that the normal actions apply.
+- A failed undo is its own error notice — the success notice has already closed.
+
+*Cooking view: not written yet.*
 
 ## 7. Language and formatting
 
+*Applies to: web app.*
+
+**The UI is German.** Every string the user reads — buttons, captions, errors, notices, empty
+states — is German. Recipe data is German as the user entered it; the app never translates it.
+There is no English UI and no locale switch.
+
+**Case is a job, not a decoration.**
+
+- Button labels are sentence case: normal German prose, capital first letter, nouns keep their
+  capitals. No Title Case, no all-lowercase, no ALL CAPS in the source string.
+- Field captions and data badges display in ALL CAPS, but only by CSS (`text-transform`); the
+  stored string stays in normal German case, so a screen reader announces the plain word.
+
+**Actions name what they do.**
+
+- Every button that runs an action carries a verb in the infinitive — „Speichern", „Entfernen",
+  „Rezept löschen" — alone or with its object when the verb alone is ambiguous.
+- Verbless labels stay reserved for navigation („Zurück"), the menu trigger („Mehr") and
+  controls that pick a value or state, never an action.
+- The same action is worded the same everywhere; a confirmation is the same button asking a
+  question („Wirklich entfernen?"), never a second naming scheme.
+
+**Numbers and units stay together.**
+
+- A number and its unit are joined by a narrow no-break space (U+202F) so they never wrap
+  apart: `300 g`, `1,5 kg`, `1 h 30 min`.
+- Fractions use the German decimal comma, never a dot: `1,5 kg`, `0,25 l`.
+- These are display-layer rules only; stored recipe files keep their canonical plain forms, and
+  the shared formatters (`formatBQ`, `renderAQS`, `formatDecimal`, `formatTimeDisplay`) build
+  the display text — never hand-joined strings.
+
+**Sentences, not labels.** A message that reports an outcome is a complete German sentence about
+the past („… zum Essensplan hinzugefügt."), never a bare label like „Erfolgreich!". Errors name
+the problem and say what to do; they never say only that something failed.
+
+The binding details — the exact tokens, the mandatory/optional marker, the browser-Back and busy
+state copy — live in `CODING_CONVENTIONS.md` (Design Conventions). This section names the rules
+the components follow; it does not override them.
+
+*Cooking view: not written yet.*
+
 ## 8. Accessibility
+
+*Applies to: web app.*
+
+**Every control is operable and announced, nothing relies on colour or shape alone.** The
+accessibility rules are not a checklist bolted on after design: they are the same rules the
+component sections already state, gathered here as one contract.
+
+**Names and announcements**
+
+- A control always has an accessible name: a visible label, or an `aria-label` that repeats the
+  action verbatim on an icon-only button (§4.5). A symbol beside a visible label is decorative
+  (`aria-hidden`) and never doubles as the name.
+- State is announced where it changes: a snackbar is a live region remounted per message
+  (`role="status"` / `role="alert"`), a field error is bound to its field with
+  `aria-describedby` and `aria-invalid`, a busy button sets `aria-busy="true"` (§5.1, §5.9).
+- Captions and badges read as their source case — the ALL CAPS are a CSS effect, never the
+  string a screen reader meets (§7).
+
+**Focus and keyboard**
+
+- Every interactive thing is reachable and usable by keyboard: buttons are real `<button>`
+  elements, and the tab order follows the visual order.
+- Focus is never moved or trapped by transient UI: a snackbar does not steal focus; its action
+  is reached by Tab, and focus pauses the countdown so it cannot vanish under a keyboard user
+  (§5.9).
+- A focused text field shows a solid accent outline, so the caret is visible without a pointer
+  (§5.3). A pressed look is never the only feedback, and a disabled button is never the only
+  explanation — the cause is visible next to it (§5.1).
+
+**Perception**
+
+- Colour never carries meaning alone: success is olive plus a symbol, an error is danger plus
+  text (§4.1, §5.9). Warm and flat is the palette, not a substitute for contrast.
+- Images are decorative where a visible label carries the name (`alt=""`); an image standing
+  alone as content gets a German `alt` (§5.8).
+- Every animation is disabled under `prefers-reduced-motion: reduce`, leaving the end state
+  visible (§4.6).
+
+*Cooking view: not written yet.*
 
 ## 9. Screen inventory
 
+*Applies to: web app.*
+
+**Every screen is one of three things: the list, a place above it, or a change over it.** The
+recipe list is the root layer; a *place* replaces it (§6.1) and takes „Zurück" top left; a
+*change* is a sheet that sits over whatever is beneath it and takes „Abbrechen" next to its
+primary action; a browsing layer (menu, overview) opens over the list with no pending decision.
+The cooking view (`.html`) has its own inventory and is not written yet.
+
+| Screen | State / component | Kind | Exit |
+| --- | --- | --- | --- |
+| Sign-in | `login-panel` (no token) | root | — |
+| Recipe list | `RecipeList` (root, state `null`) | root | — |
+| Create menu | `setNav('menu')`, the FAB's menu | browsing layer | scrim, Escape, choice |
+| Recipe overview | `setNav('overview')`, `RecipeOverview` | browsing layer | scrim, Escape, Back |
+| Recipe editor | `setNav('editor')`, `RecipeEditor` (base + each sub-recipe level) | place | „Zurück" |
+| AI create / edit | `setNav('ai')`, `AiCreateSheet` | place | „Zurück" |
+| „Einkaufsliste schreiben" | `setNav('shopping')`, `ShoppingListSelect` | place (flow step) | „Zurück" |
+| „Vorräte auswählen" | `setNav('pantry')`, `PantrySelect` | place (flow step) | „Zurück" |
+| „Zum Essensplan hinzufügen" / „Menge ändern" | `MealPlanSheet` | change | „Abbrechen" |
+| „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
+| Ingredient sheet / new ingredient | `IngredientSheet`, `NewIngredientSheet` | change | „Abbrechen" |
+| Snackbar | `Snackbar` (app root) | transient, never a layer | none |
+
+**Reading the table.** A screen is named as the user meets it; the state/component column is the
+single implementation hook. The flow steps `shopping` and `pantry` are two places of one bundled
+flow: they stay mounted while a sheet, the editor or the AI screen sits above them, so the
+checked dishes survive the detour and closing returns to the same step.
+
 ## 10. Implementation map
 
+*Applies to: web app.*
+
+**Every value and rule in this document has one implementing file.** The map is written by
+section: a rule lives in the file named for its section, and the section is authoritative over
+that file.
+
+| Section | Implements in |
+| --- | --- |
+| §4.1–4.4 tokens | `apps/web/src/styles/tokens.css` (colour, type, spacing, radius, elevation, layout constants) |
+| §4.5 Iconography | `apps/web/src/components/icons.tsx` |
+| §4.6 Motion | `apps/web/src/index.css` (global press/focus rules), the component stylesheets |
+| §4.7 Layout | `apps/web/src/index.css`, `apps/web/src/styles/recipe-list.css` |
+| §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.text-button`, `.sheet-actions`) |
+| §5.2 Chips and segmented controls | `apps/web/src/styles/editor.css`, `apps/web/src/components/quantityChips.ts` |
+| §5.3 Form fields | `apps/web/src/styles/editor.css` (`.field`, `.field-label`, `.field-error`) |
+| §5.4 Cards and list items | `apps/web/src/styles/recipe-list.css`, `apps/web/src/components/RecipeList.tsx` |
+| §5.5 Headers and sticky bars | `apps/web/src/styles/recipe-list.css` (`.app-header`, `.app-header-stacked`) |
+| §5.6 Sheets | `apps/web/src/styles/editor.css` (`.sheet`, `.sheet-backdrop`, `.sheet-actions`) |
+| §5.7 Badges and tags | `apps/web/src/styles/editor.css`, `apps/web/src/styles/recipe-list.css` |
+| §5.8 Media | `apps/web/src/components/RecipeThumb.tsx`, `apps/web/src/styles/recipe-list.css`, `apps/web/src/styles/recipe-overview.css` |
+| §5.9 Snackbar | `apps/web/src/components/Snackbar.tsx`, `apps/web/src/hooks/useSnackbar.ts`, `apps/web/src/styles/snackbar.css` |
+| §5.10 FAB and create menu | `apps/web/src/App.tsx`, `apps/web/src/styles/recipe-list.css` |
+| §6 Patterns | `apps/web/src/App.tsx` (navigation, flows), `apps/web/src/hooks/useLeaveGuard.ts`, `apps/web/src/components/LeaveConfirmBar.tsx` |
+| §7 Language | the component strings (source of truth); the rules bind every component above |
+| §8 Accessibility | the components above (`aria-*`, `role`, `alt` live in the markup) |
+
+**Reading the map.** A rule that names a component finds its file in the component's own row; a
+value with a token name lives in `tokens.css`. Nothing implements a design value inline: a
+component references the token, and the token is the only place the number is written.
+
 ## 11. Changing the design
+
+**The document changes first, the code second.** A deviation is never fixed in code and left to
+the document: either the screen is a bug, or the rule was never written down. In both cases the
+change is made here first, then the code follows (§1).
+
+**A change is a decision, and it is recorded.**
+
+- Any change to a rule here is a decision, not a note: state the new rule and delete the old one;
+  no struck-through text, no "now / before" commentary left in place.
+- A decision reached in discussion is marked *decided with the user* so a later implementation
+  detail cannot quietly reopen it.
+- A new value enters only through a token in §4: name the token, put the number in
+  `tokens.css`, and let every component reference it — never a literal at the call site.
+
+**Before the change, ask the three questions.**
+
+1. Which section owns this rule? A component's behaviour belongs in §5, a cross-screen pattern
+   in §6 — if it sits in neither, it may be a new section.
+2. Does it contradict an earlier section? When two principles collide, the earlier one wins
+   (§3) — a change that breaks that ordering is a new principle, not a small edit.
+3. Does it affect the cooking view? A rule marked for the cooking view is written there too, or
+   the section stays *Cooking view: not written yet* until it is.
+
+**When two documents disagree, this one wins** (§1). The other document is corrected to point
+here, never the other way round.
