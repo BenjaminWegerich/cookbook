@@ -58,6 +58,9 @@ view).*
    first.
 6. **[Both] Nothing stays hidden.** Every state is visible: what can be done, what is
    running, what just happened, and what it means for the user's data.
+7. **[Export] Same bones, different skin.** Every recipe's cooking view has one structure and
+   the same controls in the same places; only the theme — typeface, colours and decorative
+   details — changes with the recipe.
 
 When two principles collide, the earlier one wins.
 
@@ -98,7 +101,13 @@ components reference tokens, never a raw value.
 - Every accent surface takes `--color-on-accent` as its text colour.
 - Placeholder colours are derived from the recipe title, not chosen per render (§5.8).
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+**Light only.** The cooking view is always light; it does not follow the OS dark preference.
+
+**Themed.** Every colour of the export comes from the recipe's theme, or from its fixed and
+derived companions (§4.8); a recipe without theme data uses the web app's palette. The theme
+tokens are the only source — no raw colour appears in the export's styles.
 
 ### 4.2 Typography
 
@@ -123,7 +132,22 @@ components reference tokens, never a raw value.
 - Size and line height are one pair: a text style never takes one without the other.
 - A size is chosen by the text's role, never by how much room is left.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+**One typeface per recipe**, from the theme's `font`, self-hosted and embedded in the export —
+no runtime font fetch. The default typeface is Source Sans 3.
+
+**Four sizes**, each with its fixed line height, every value a ladder step:
+
+| Token | Size | Line height | Role |
+| --- | --- | --- | --- |
+| `--text-xl` | 32px | 42px | the intro title (`h1`) |
+| `--text-lg` | 24px | 32px | the Zutaten heading |
+| `--text-md` | 18px | 24px | step prose, step ingredients, check-list rows — the base size |
+| `--text-sm` | 14px | 18px | captions (the step-screen title), meta, the step counter |
+
+Titles and captions are weight 600, body text weight 400. The reading size of the step prose
+is provisional and settled in the prototype; every candidate stays a ladder value.
 
 ### 4.3 Geometry: pixel ladder and spacing
 
@@ -172,7 +196,10 @@ interface.
 - A second-priority step gets a `--space-*` token only when a repeated need appears, not in
   advance.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+The same pixel ladder and `--space-*` tokens as the web app. Screen gutters are `--app-padding`
+(18px). Every tappable control is at least 42px tall. No other pixel value exists.
 
 ### 4.4 Shape, elevation and surfaces
 
@@ -217,7 +244,12 @@ one opaque colour from the palette (§4.1), painted over its whole footprint, ed
 - Atomic elements — buttons, badges, chips — are the exception: they never nest, so each
   one always carries the same radius.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+Surfaces are flat, opaque `paper`. Radius follows the same steps: `--radius-md` (10px) for
+buttons and rows, `--radius-sm` (6px) for badges and chips, pills (100px) where pill-shaped.
+No translucency, no gradient, no blur. A hairline (the theme's `line`) separates the bottom
+step bar from the content.
 
 ### 4.5 Iconography
 
@@ -260,7 +292,13 @@ size drawn for it:
 - Optical size corrects legibility, never weight: a drawing that reads too light or too heavy
   at its size is replaced by the drawing for that size, not by another weight.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+Icons are inline SVG (no icon font, no runtime fetch), drawn on the Material Symbols Rounded
+family's grid, weight 400, `fill="currentColor"` — the same family as the web app. The export
+uses exactly one symbol: the sub-recipe badge's link glyph, beside its visible „Rezept" label.
+The check-list checkbox is a native `<input type="checkbox">` styled with the theme, never a
+hand-drawn glyph.
 
 ### 4.6 Motion
 
@@ -287,7 +325,12 @@ state changed; nothing moves to entertain.
   or the end state visible.
 - No animation delays the user: a screen is usable the moment it appears.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+Motion is subdued and never steals time: a step change may slide one step's width in the
+direction of travel over `--motion-base` (180ms) `ease-out`; a screen change fades over the
+same duration. Nothing bounces or overshoots. Every animation is disabled under
+`prefers-reduced-motion: reduce`, leaving the end state visible.
 
 ### 4.7 Layout and responsiveness
 
@@ -322,7 +365,46 @@ reading row or a form field (§5.6).
 - Sticky bars span the full width including the gutters (§4.4); floating elements clear the
   FAB by its own gap (§5.10).
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+Phone-first, one column, `max-width: 42rem` centred, `--app-padding` gutters — the same measure
+as the app's sheets. No horizontal scrolling at any viewport. The three screens (§5.11) are
+states of one page; the bottom step bar is fixed, full-bleed, and adds
+`env(safe-area-inset-bottom)`.
+
+### 4.8 Recipe theme
+
+*Applies to: cooking view.*
+
+**A theme is a recipe's visual skin, stored with the recipe** (storage_format.md, `theme`): a
+typeface and a small palette, plus optional decorative details. It changes nothing about the
+structure of the cooking view — every recipe uses the same screens, the same controls and the
+same order (§3.7) — only the look.
+
+**Tokens.** A theme defines five values, each optional and each falling back to the default
+theme independently:
+
+| Token | Default (the app palette) | Role |
+| --- | --- | --- |
+| `font` | Source Sans 3 | the one typeface of the export |
+| `accent` | `#b85c38` (clay) | active state, the forward actions, the sub-recipe badge, links |
+| `paper` | `#faf5ec` | page background |
+| `ink` | `#2b241d` | primary text |
+| `line` | `#e6dbc8` | hairlines, borders, dividers |
+
+**Fixed and derived colours.** `muted` (secondary text, captions, meta) is `ink` blended 40%
+toward `paper` (solid — no opacity). `on-accent` (text on a filled accent surface) is derived
+for contrast: `ink` when the accent is light, `paper` otherwise — the choice whose contrast
+against `accent` reaches WCAG AA.
+
+**Rules**
+
+- The default theme is the web app's palette and typeface: a recipe without `theme` data
+  renders in the app's look.
+- A recipe may override any subset; the rest fall back to the default.
+- The theme may carry decorative details (a divider motif, a badge shape) but never changes
+  the placement, size or wording of any control.
+- Sub-recipes carry their own theme; the parent's theme is not inherited.
 
 ## 5. Components
 
@@ -369,7 +451,13 @@ page has no cancel in its row — its navigation exit is „Zurück" at the top 
 - Labels follow §7: sentence case, a verb in the infinitive, the same action worded the same
   everywhere.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+The forward actions are one primary button each: accent fill, `on-accent` label, `--radius-md`,
+at least 42px tall — „Zutaten" on the intro, „Zubereitung" on the check screen. The step bar's
+buttons are large outlined buttons (surface fill, hairline border, ink label) with the same
+42px minimum: „Weiter" forward, and „Zurück" / „Zutaten" back. A quiet text button „Intro"
+top-left of the check screen returns to the intro.
 
 ### 5.2 Chips and segmented controls
 
@@ -405,7 +493,11 @@ exclusive modes (Typ, Einheit, KI-Modus), never for a longer list.
 - The group carries a German `aria-label` (`role="group"`, or `role="radiogroup"` where the
   choice really is one of a set) (§8).
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+The intro's size picker is a wrapping row of chips (pill radius, hairline border, `--text-sm`);
+the active size is accent fill with `on-accent`. An ingredient recipe adds the −/+ stepper
+beside the chips, exactly as today. The picker lives only on the intro screen.
 
 ### 5.3 Form fields, labels and validation
 
@@ -446,7 +538,7 @@ field; a hint never repeats the caption.
   marked `aria-invalid` (§8).
 - An error is never colour-only: the words carry the message, the danger colour supports it.
 
-*Cooking view: not written yet.*
+*Cooking view: not applicable* (no text entry). The one input is the check-list checkbox (§5.11).
 
 ### 5.4 Cards and list items
 
@@ -488,7 +580,11 @@ action may sit beside it in the same row, and `--space-7` separates two sections
 - Cards in one row are equal height; the media row keeps its square height, so every title
   starts on the same line.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+The ingredient check list is rows, not cards: one row per master ingredient — a checkbox, the
+quantity line, and (for a sub-recipe) the „Rezept" badge — separated by hairlines, the first
+row without one. A row is tappable as a whole to toggle the check.
 
 ### 5.5 Headers, titles and sticky bars
 
@@ -528,7 +624,13 @@ is a *change* ends in the bottom action row (§5.1, §6.1).
   header stick.
 - A sheet's head is not a sticky bar: the sheet scrolls as a whole (§5.6).
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+The intro opens with the recipe title as `h1` (`--text-xl`). The Zutaten screen opens with a
+heading „Zutaten" (`--text-lg`, 24px, weight 600, muted) above the check list — larger than
+the steps screen's title. The steps screen replaces it with a small caption — the recipe title
+in `--text-sm`, weight 600, muted, ALL CAPS by CSS — so the current step stays the focus. The
+step bar is the sticky bottom bar (§5.11), full-bleed.
 
 ### 5.6 Sheets, overlays and scrims
 
@@ -567,7 +669,7 @@ photo, a reading row or a form field (§4.7).
 - Below the last control the sheet adds the safe-area inset, so its actions clear the phone's
   gesture bar.
 
-*Cooking view: not written yet.*
+*Cooking view: not applicable.*
 
 ### 5.7 Badges and tags
 
@@ -598,7 +700,11 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 - A state that persists is a badge; a state that just happened is a notice (§5.9).
 - A badge's wording matches the action that caused it and the action that undoes it.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+A sub-recipe use (master row, step row or artifact) carries the app's „Rezept" badge: the link
+symbol, `--radius-sm`, accent fill, `on-accent` label. It opens the sub-recipe's export in a
+new tab. It is the one badge in the export.
 
 ### 5.8 Media: photo, thumbnail and placeholder
 
@@ -640,7 +746,12 @@ instead of a placeholder — that card then needs no badge of its own (§5.7).
 - A missing photo is the room-service placeholder, never an empty grey box or a broken-image
   glyph.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+The intro shows the recipe photo as a 4:3 landscape media area, `--radius-md`,
+`object-fit: cover`, at the top of the intro. A recipe without a photo omits the media area
+entirely — the intro starts with the title — like the recipe overview sheet. The photo is
+decorative (`alt=""`); the title beside it carries the name.
 
 ### 5.9 Snackbar and transient notices
 
@@ -696,7 +807,7 @@ translucency, no close button, no countdown.
 screen reader announces it even while the previous one is still up. Focus is never moved or
 trapped; the action is reachable with Tab, and focus pauses the countdown.
 
-*Cooking view: not written yet.*
+*Cooking view: not applicable.*
 
 ### 5.10 Floating action button and create menu
 
@@ -733,7 +844,40 @@ wash (§5.1) — a scrim must not visibly react to the tap that dismisses it.
   the content.
 - The menu closes on a scrim tap, on Escape and on choosing a destination.
 
-*Cooking view: not written yet.*
+*Cooking view: not applicable.*
+
+### 5.11 Cooking view screens
+
+*Applies to: cooking view.*
+
+**Three screens, one page, in order.** The cooking view is Intro → Zutaten → Zubereitung.
+Each is a full state of the one page; the recipe's theme skins all three. Navigation buttons
+are named after their destination. The view is the same for every reader — owner and friend —
+no account and no personalisation.
+
+**Intro.** The first screen: the photo (§5.8), the title (`h1`), the description, the meta
+(prep / total time), the size picker (§5.2), the forward action „Zutaten", and the
+„Erstellt mit Cookbook" footer. Scaling happens here and only here. A meal-plan link opens
+this screen with the promised size pre-selected.
+
+**Zutaten.** The check screen: a quiet „Intro" button top-left, the heading „Zutaten" (§5.5),
+the master ingredient list of the chosen size as checkable rows (§5.4), then the forward action
+„Zubereitung". Checks are purely local; a size change discards them, while moving between
+screens without changing the size keeps them.
+
+**Zubereitung.** One step at a time: the caption title (§5.5), the step's own ingredient rows,
+the step prose, and the bottom step bar. The size picker is absent here.
+
+**The step bar** is the fixed bottom bar: the left button, „Weiter" on the right, the step
+counter — „3 von 8" — centred between them. The left button reads „Zurück" (previous step)
+except on step 1, where it reads „Zutaten" and returns to the check screen. A swipe left goes
+forward, a swipe right goes back; the Escape key and the browser Back button go to the previous
+step, and from step 1 to the Zutaten screen (browser Forward returns to the next step). Tapping
+the step text does not advance.
+
+**Going back.** Every back action moves one node at a time: from a step to the previous step,
+from step 1 to Zutaten, from Zutaten to the intro. Changing the size on the intro discards the
+checkmarks.
 
 ## 6. Patterns and flows
 
@@ -759,7 +903,7 @@ placeholder. A sentence is added only when the user could otherwise be misled or
 - **Loading and failures keep their own rules**: the loading message (§6.3, to be written)
   and the error next to its cause (§5.3, §5.9).
 
-*Cooking view: not written yet.*
+*Cooking view: not applicable.*
 
 ### 6.4 Destructive actions and confirmations
 
@@ -803,7 +947,7 @@ action can be undone, not by how large it is.
 - „Abbrechen" is the only answer that drops an armed question; it never performs the action and
   never navigates.
 
-*Cooking view: not written yet.*
+*Cooking view: not applicable.*
 
 ### 6.5 Undo semantics
 
@@ -841,7 +985,18 @@ leaves the user's own line standing.
 - The undo lives only while the notice is on screen (6 s); after that the normal actions apply.
 - A failed undo is its own error notice — the success notice has already closed.
 
-*Cooking view: not written yet.*
+*Cooking view: not applicable.*
+
+### 6.6 The cooking flow
+
+*Applies to: cooking view.*
+
+The cooking view has one path: Intro → Zutaten → Zubereitung. The forward actions carry it.
+Scaling happens once, on the intro, before the first step is shown — the steps screen has no
+size control. Every back action (the left step-bar button, Escape, browser Back, a rightward
+swipe) moves one node: to the previous step, from step 1 to Zutaten, from Zutaten to the
+intro. A size change discards the checkmarks. A sub-recipe opens in a new tab; the parent
+keeps its state because it stays in its own tab.
 
 ## 7. Language and formatting
 
@@ -884,7 +1039,13 @@ The binding details — the exact tokens, the mandatory/optional marker, the bro
 state copy — live in `CODING_CONVENTIONS.md` (Design Conventions). This section names the rules
 the components follow; it does not override them.
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+The cooking view is German, like the app. Navigation buttons are named after their destination
+— „Zutaten", „Zubereitung", „Intro", „Zurück" — following the app's rule that verbless labels
+are reserved for navigation; a screen's forward action is the next screen's name. Its other
+strings: „Weiter", the step counter „x von y", „Rezept" (sub-recipe badge), „Erstellt mit
+Cookbook" (footer). Numbers and units are joined by the narrow no-break space.
 
 ## 8. Accessibility
 
@@ -925,7 +1086,15 @@ component sections already state, gathered here as one contract.
 - Every animation is disabled under `prefers-reduced-motion: reduce`, leaving the end state
   visible (§4.6).
 
-*Cooking view: not written yet.*
+*Applies to: cooking view.*
+
+Every control is a real `<button>` or a native checkbox, at least 42px, with an accessible name
+(visible label or `aria-label`). The step counter is `aria-live="polite"`. The check list is a
+labelled group; each checkbox carries its row text as its label. Colour never carries meaning
+alone. Swipe is an alternative to the buttons, never the only way: step navigation is mirrored
+in browser history so Back and Forward move through the screens and steps, and the Escape key
+steps back — a keyboard user is never dependent on the buttons. Motion honours
+`prefers-reduced-motion`.
 
 ## 9. Screen inventory
 
@@ -935,7 +1104,7 @@ component sections already state, gathered here as one contract.
 recipe list is the root layer; a *place* replaces it (§6.1) and takes „Zurück" top left; a
 *change* is a sheet that sits over whatever is beneath it and takes „Abbrechen" next to its
 primary action; a browsing layer (menu, overview) opens over the list with no pending decision.
-The cooking view (`.html`) has its own inventory and is not written yet.
+The cooking view (`.html`) has its own inventory, written below.
 
 | Screen | State / component | Kind | Exit |
 | --- | --- | --- | --- |
@@ -951,6 +1120,10 @@ The cooking view (`.html`) has its own inventory and is not written yet.
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
 | Ingredient sheet / new ingredient | `IngredientSheet`, `NewIngredientSheet` | change | „Abbrechen" |
 | Snackbar | `Snackbar` (app root) | transient, never a layer | none |
+
+The cooking view has its own inventory: one page, three states — **Intro** (scaling, meta,
+photo), **Zutaten** (the check list), **Zubereitung** (the steps + step bar). A sub-recipe is
+the same page for another recipe, opened in a new tab.
 
 **Reading the table.** A screen is named as the user meets it; the state/component column is the
 single implementation hook. The flow steps `shopping` and `pantry` are two places of one bundled
@@ -984,6 +1157,10 @@ that file.
 | §6 Patterns | `apps/web/src/App.tsx` (navigation, flows), `apps/web/src/hooks/useLeaveGuard.ts`, `apps/web/src/components/LeaveConfirmBar.tsx` |
 | §7 Language | the component strings (source of truth); the rules bind every component above |
 | §8 Accessibility | the components above (`aria-*`, `role`, `alt` live in the markup) |
+| §4.1–4.8 cooking view | `packages/core/src/recipe/exportHtml.ts` (inline `<style>`; theme tokens); theme data → `storage_format.md`, `types.ts`, `parse.ts`, `serialize.ts` |
+| §5.11 cooking view screens | `packages/core/src/recipe/exportHtml.ts` (structure + embedded script) |
+| §4.5 sub-recipe badge | `packages/core/src/recipe/exportHtml.ts` (inline SVG) |
+| meal-plan preselect | `packages/core/src/planLink.ts` + `apps/export-host/Code.gs` (land on the intro at the promised size) |
 
 **Reading the map.** A rule that names a component finds its file in the component's own row; a
 value with a token name lives in `tokens.css`. Nothing implements a design value inline: a
