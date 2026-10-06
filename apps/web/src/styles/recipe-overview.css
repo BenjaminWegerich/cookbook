@@ -249,32 +249,27 @@
 /* The "Eintrag ersetzen" menu sizes to its entries, not to its trigger, and
    never wider than the sheet: that trigger grows to fill its row line (up to the
    full content width), and a menu as wide as a full-width button would dwarf its
-   three entries. `max-width: 100%` of the positioned wrapper keeps it inside the
-   sheet on a narrow phone, where the long entry labels then wrap instead of
-   forcing a horizontal scroll on the sheet. It stays right-aligned to the
-   trigger, like the "Mehr" menu. */
-.overview-more.is-primary .overview-menu {
-  min-width: 0;
-  max-width: 100%;
-}
-
+   three entries. The trigger's measured width caps the menu, so the long entry
+   labels then wrap instead of forcing a horizontal scroll on the sheet. It stays
+   right-aligned to the trigger, like the "Mehr" menu. (The width bounds are set
+   inline by the component — see RecipeOverview.tsx — because a fixed-positioned
+   menu would resolve CSS percentages against the viewport, not the trigger.) */
 .overview-more.is-primary .overview-menu button {
   white-space: normal;
 }
 
 /* The overflow menu pops directly above its trigger instead of floating
    anywhere in the sheet: the entry a tap lands on is always the one next to
-   the button just pressed. Right-aligned to the trigger, which is the last
-   item of the action row. An outside tap closes it (document listener in
-   the component), so no backdrop layer is needed. */
+   the button just pressed. It renders `position: fixed` at a viewport anchor
+   the component measures from the trigger (RecipeOverview.tsx), so it can
+   escape the sheet's `overflow-y: auto` clip and draw above the sheet's top
+   edge in the image-less layout, where the sheet is shorter than the menu.
+   An outside tap closes it (document listener in the component), so no
+   backdrop layer is needed. */
 .overview-menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + var(--space-2));
   z-index: 41;
   display: grid;
   gap: var(--space-1);
-  min-width: 100%;
   padding: var(--space-2);
   background: var(--color-surface);
   border: 1px solid var(--color-line);

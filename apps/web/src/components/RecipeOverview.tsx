@@ -106,8 +106,8 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useEffect, useImperativeHandle, useRef, useState } from 'react';
-import type { Ref } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, Ref } from 'react';
 
 import {
   displayTimeText,
@@ -297,6 +297,14 @@ export interface RecipeOverviewHandle {
 type OverviewMenu = 'more' | 'replace';
 
 /**
+ * The vertical gap between the open popover and its trigger. The popover is now
+ * positioned with `position: fixed` (so it can escape the sheet's overflow clip),
+ * so this value — previously `var(--space-2)` in CSS — has to live here as a
+ * pixel number for the JS-measured anchor (6 px is the ladder's --space-2).
+ */
+const MENU_GAP_PX = 6;
+
+/**
  * The overview sheet (see file header). For a recognized recipe the list entry
  * already carries title and photo, so the hero renders immediately; times and
  * description are read from the recipe file and fill in when the load finishes.
@@ -346,6 +354,19 @@ function RecipeOverview({
   const [openMenu, setOpenMenu] = useState<OverviewMenu | null>(null);
   /** The open trigger's wrapper: what the outside-tap check must not close. */
   const menuWrapRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * The open popover's viewport anchor, measured from its trigger wrapper: the
+   * menu's bottom-right pixel offsets plus its width bounds. null while no menu
+   * is open. The menu renders `position: fixed` at these offsets so it escapes
+   * the sheet's `overflow-y: auto` clip and can float above the sheet's top edge
+   * when the image-less sheet is shorter than the menu (the bug this fixes).
+   */
+  const [menuAnchor, setMenuAnchor] = useState<{
+    bottom: number;
+    right: number;
+    minWidth: number | undefined;
+    maxWidth: number | undefined;
+  } | null>(null);
 
   /** The recognized recipe, or null for an unrecognized entry. */
   const recipe = target.kind === 'recipe' ? target.recipe : null;
@@ -452,6 +473,45 @@ function RecipeOverview({
     document.addEventListener('click', onDocumentClick);
     return () => {
       document.removeEventListener('click', onDocumentClick);
+    };
+  }, [openMenu]);
+
+  /** Opens the given menu, or closes it when it is already the open one. */
+  const toggleMenu = (kind: OverviewMenu): void => {
+    setOpenMenu((open) => (open === kind ? null : kind));
+  };
+
+  // Position the fixed popover at its trigger and keep it glued there. It runs
+  // in `useLayoutEffect` so the menu never paints at a stale or default spot:
+  // the image-less sheet is too short for the popover, so the menu is rendered
+  // `position: fixed` (escaping the sheet's `overflow-y: auto` clip) and this
+  // measures its viewport anchor from the trigger wrapper. The scroll listener
+  // uses capture because the sheet's scroll events do not bubble to `window`.
+  useLayoutEffect(() => {
+    if (openMenu === null) return;
+    const measure = (): void => {
+      const el = menuWrapRef.current;
+      if (el === null) return;
+      const rect = el.getBoundingClientRect();
+      // The primary ("Eintrag ersetzen") trigger grows to fill its row, so its
+      // menu is content-sized but capped at the trigger's width (the long
+      // entries then wrap); the "Mehr" trigger stays at content width, so its
+      // menu is at least as wide as the trigger. The wrapper's class tells the
+      // one shared helper which of the two is open.
+      const primary = el.classList.contains('is-primary');
+      setMenuAnchor({
+        bottom: window.innerHeight - rect.top + MENU_GAP_PX,
+        right: window.innerWidth - rect.right,
+        minWidth: primary ? undefined : rect.width,
+        maxWidth: primary ? rect.width : undefined,
+      });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, { capture: true });
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, { capture: true });
     };
   }, [openMenu]);
 
@@ -597,6 +657,24 @@ function RecipeOverview({
    */
   const hasMeta =
     target.kind === 'unknown' || prepTime !== null || totalTime !== null || plannedText !== null;
+
+  /**
+   * The inline position/width the open popover renders at, or undefined while
+   * closed. The menu is `position: fixed`, so its anchor and width are explicit
+   * pixel values measured from the trigger rather than CSS percentages — for a
+   * fixed box those percentages would resolve against the viewport, not the
+   * trigger wrapper.
+   */
+  const menuStyle: CSSProperties | undefined =
+    menuAnchor === null
+      ? undefined
+      : {
+          position: 'fixed',
+          bottom: `${menuAnchor.bottom}px`,
+          right: `${menuAnchor.right}px`,
+          minWidth: menuAnchor.minWidth !== undefined ? `${menuAnchor.minWidth}px` : undefined,
+          maxWidth: menuAnchor.maxWidth !== undefined ? `${menuAnchor.maxWidth}px` : undefined,
+        };
 
   return (
     <>
@@ -745,14 +823,19 @@ function RecipeOverview({
                   }
                   aria-haspopup="menu"
                   aria-expanded={openMenu === 'replace'}
-                  onClick={() => setOpenMenu((open) => (open === 'replace' ? null : 'replace'))}
+                  onClick={() => toggleMenu('replace')}
                 >
                   <SwapHorizIcon />
                   <span>Eintrag ersetzen</span>
                 </button>
 
-                {openMenu === 'replace' && (
-                  <div className="overview-menu" role="menu" aria-label="Eintrag ersetzen">
+                {openMenu === 'replace' && menuStyle !== undefined && (
+                  <div
+                    className="overview-menu"
+                    role="menu"
+                    aria-label="Eintrag ersetzen"
+                    style={menuStyle}
+                  >
                     <button type="button" role="menuitem" onClick={openReplace}>
                       <MenuBookIcon />
                       <span>Bestehendes Rezept auswählen</span>
@@ -823,14 +906,19 @@ function RecipeOverview({
                   className={openMenu === 'more' ? 'overview-action is-open' : 'overview-action'}
                   aria-haspopup="menu"
                   aria-expanded={openMenu === 'more'}
-                  onClick={() => setOpenMenu((open) => (open === 'more' ? null : 'more'))}
+                  onClick={() => toggleMenu('more')}
                 >
                   <MoreVertIcon />
                   <span>Mehr</span>
                 </button>
 
-                {openMenu === 'more' && (
-                  <div className="overview-menu" role="menu" aria-label="Weitere Aktionen">
+                {openMenu === 'more' && menuStyle !== undefined && (
+                  <div
+                    className="overview-menu"
+                    role="menu"
+                    aria-label="Weitere Aktionen"
+                    style={menuStyle}
+                  >
                     <button type="button" role="menuitem" onClick={openManualEdit}>
                       <PencilIcon />
                       <span>Manuell bearbeiten</span>
