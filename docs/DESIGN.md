@@ -619,6 +619,11 @@ recipe's title: the title hashed onto one of four palette pairs (`--placeholder-
 at `--placeholder-symbol-size` (42px), centred on the landscape area. The same title always gets
 the same colour; the choice is never random and never per render.
 
+**The overview sheet shows a media area only for a recipe with a photo.** A recognized recipe
+without a photo starts its body at the sheet's top padding, like an unrecognized entry: the card
+that opened the sheet already carried the room-service placeholder, so the sheet does not repeat
+it. The card grid keeps the placeholder for recipes without a photo.
+
 **An unrecognised meal-plan line gets the danger media area** with the room-service symbol
 instead of a placeholder — that card then needs no badge of its own (§5.7).
 

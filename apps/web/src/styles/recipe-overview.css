@@ -23,7 +23,8 @@
 }
 
 /* Hero: the full sheet content width (DESIGN.md §5.8). Only a recognized
-   recipe has one; an unrecognized entry's sheet starts with its body. The
+   recipe with a photo has one; an unrecognized entry's sheet and a recognized
+   recipe without a photo start with their body. The
    wrapper deliberately has no aspect ratio of its own: a grid item that carries
    the aspect ratio *and* a percentage width does not reserve its row height, so
    the image overflowed its row and painted over the details. Here the wrapper is

@@ -607,16 +607,19 @@ function RecipeOverview({
         aria-modal="true"
         aria-labelledby="overview-title"
       >
-        {/* Hero: only a recognized recipe has an image. An unrecognized entry
-            deliberately shows none (decided with the user) — the list card's
-            danger "unbekannt" symbol already marks it, and its own badge sits in
-            the caption/value row below instead of on an image; its body then
-            starts at the sheet's top padding. A recognized
-            recipe's hero carries no badge: that it is on the plan is already
-            stated by its "Geplant" value and its "Umplanen" action, and the home
-            screen only ever shows a planned recipe in the "Essensplan" section
-            ("Restliche Sammlung" leaves the planned ones out). */}
-        {target.kind === 'recipe' && (
+        {/* Hero: only a recognized recipe with a photo has one. An unrecognized
+            entry deliberately shows none (decided with the user) — the list
+            card's danger "unbekannt" symbol already marks it, and its own badge
+            sits in the caption/value row below instead of on an image; its body
+            then starts at the sheet's top padding. A recognized recipe without
+            a photo also shows none (decided with the user): its body starts at
+            the sheet's top padding too, and the list card already carried the
+            room-service placeholder, so the sheet does not repeat it. A
+            recognized recipe's hero carries no badge: that it is on the plan is
+            already stated by its "Geplant" value and its "Umplanen" action, and
+            the home screen only ever shows a planned recipe in the "Essensplan"
+            section ("Restliche Sammlung" leaves the planned ones out). */}
+        {target.kind === 'recipe' && target.recipe.image !== undefined && (
           <div className="overview-hero">
             <RecipeThumb recipe={target.recipe} token={token} />
           </div>
