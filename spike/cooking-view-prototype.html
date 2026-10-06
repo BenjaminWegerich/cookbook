@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cooking view — Prototyp</title>
+<!--
+  Stage-2 throwaway prototype for the HTML export's cooking view (docs/DESIGN.md §5.11).
+  Purpose: fine-tune step-counter style, swipe feel, motion, ladder sizes and decorative
+  motifs BEFORE touching exportHtml.ts. It is NOT production code.
+
+  Fonts load from Google Fonts here purely to evaluate the "vibe". The real export embeds
+  the faces as WOFF2 (no network) — the shortlist is decided in Stage 3. The three faces
+  below are stand-ins, not the final shortlist.
+
+  Prototype-only controls (bottom-right): theme switcher + counter-style switcher.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&family=Poppins:wght@400;600&family=Lora:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* ---- Ladder tokens (DESIGN.md §4.3) ---- */
+  :root {
+    --text-xl: 32px; --text-xl-lh: 42px;
+    --text-lg: 24px; --text-lg-lh: 32px;
+    --text-md: 18px; --text-md-lh: 24px;
+    --text-sm: 14px; --text-sm-lh: 18px;
+    --space-1: 4px; --space-2: 6px; --space-3: 8px; --space-4: 10px; --space-5: 14px;
+    --space-6: 18px; --space-7: 24px; --space-8: 32px; --space-9: 42px; --space-10: 56px;
+    --radius-sm: 6px; --radius-md: 10px; --radius-lg: 18px;
+    --app-padding: 18px;
+    --motion-base: 180ms;
+    --bar-h: 74px;               /* step bar height (ladder value) */
+  }
+
+  /* ---- Theme skins (DESIGN.md §4.8). Stand-in colours; on-accent is hard-coded here,
+          the real export derives it from contrast. ---- */
+  :root, [data-theme="default"] {
+    --font: 'Source Sans 3', system-ui, sans-serif;
+    --paper: #faf5ec; --ink: #2b241d; --accent: #b85c38; --line: #e6dbc8;
+    --on-accent: #fffcf6;
+  }
+  [data-theme="tacos"] {
+    --font: 'Poppins', system-ui, sans-serif;   /* geometric sans */
+    --paper: #f6f8f0; --ink: #1f2316; --accent: #8fc31f; --line: #e3e8d5; /* lime */
+    --on-accent: #1f2316;
+  }
+  [data-theme="risotto"] {
+    --font: 'Lora', Georgia, serif;             /* traditional serif */
+    --paper: #f3ecdf; --ink: #3a312a; --accent: #a57a48; --line: #e2d7c3; /* muted beige */
+    --on-accent: #f3ecdf;
+  }
+  :root {
+    --muted: color-mix(in srgb, var(--ink) 60%, var(--paper)); /* ink 40% → paper */
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    font-size: var(--text-md);
+    line-height: var(--text-md-lh);
+    color: var(--ink);
+    background: var(--paper);
+    max-width: 42rem;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- Screens ---- */
+  .screen { display: none; min-height: 100vh; padding: var(--app-padding); padding-bottom: calc(var(--bar-h) + var(--space-9)); }
+  .screen.active { display: block; }
+
+  /* ---- Intro ---- */
+  .photo { width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius-md); object-fit: cover;
+           background: linear-gradient(135deg, var(--accent), var(--muted));
+           display: grid; place-items: center; color: var(--on-accent);
+           font-size: var(--text-sm); letter-spacing: 0.06em; text-transform: uppercase; }
+  h1 { font-size: var(--text-xl); line-height: var(--text-xl-lh); margin: var(--space-6) 0 var(--space-2); }
+  .description { margin: 0 0 var(--space-3); color: var(--ink); }
+  .meta { color: var(--muted); font-size: var(--text-sm); line-height: var(--text-sm-lh); margin: 0 0 var(--space-7); }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-8); }
+  .chip { font: inherit; font-size: var(--text-sm); line-height: 1; padding: var(--space-3) var(--space-5);
+          border-radius: 100px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .primary { display: block; width: 100%; font: inherit; font-weight: 600; font-size: var(--text-md);
+             padding: var(--space-4) var(--space-6); min-height: 42px; border: none; border-radius: var(--radius-md);
+             background: var(--accent); color: var(--on-accent); cursor: pointer; }
+  .footer { margin-top: var(--space-10); color: var(--muted); font-size: var(--text-sm); }
+
+  /* ---- Zutaten ---- */
+  .back-top { font: inherit; font-size: var(--text-sm); color: var(--muted); background: none; border: none;
+              padding: var(--space-2) 0; cursor: pointer; margin-bottom: var(--space-4); }
+  .screen-title { font-size: var(--text-lg); line-height: var(--text-lg-lh); font-weight: 600; margin: 0 0 var(--space-5); }
+  .check-list { list-style: none; margin: 0 0 var(--space-8); padding: 0; }
+  .check-row { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) 0;
+               border-top: 1px solid var(--line); cursor: pointer; }
+  .check-row:first-child { border-top: none; }
+  .check-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); cursor: pointer; }
+  .check-row .qty { flex: 1; min-width: 0; }
+  .check-row input:checked + .qty { color: var(--muted); text-decoration: line-through; }
+
+  /* ---- Zubereitung (steps) ---- */
+  .step-caption { font-size: var(--text-sm); line-height: var(--text-sm-lh); font-weight: 600; text-transform: uppercase;
+                  letter-spacing: 0.04em; color: var(--muted); margin: 0 0 var(--space-6); }
+  .step-wrap { overflow: hidden; }
+  .step { display: none; }
+  .step.active { display: block; }
+  .step.slide-fwd { animation: stepFwd var(--motion-base) ease-out; }
+  .step.slide-back { animation: stepBack var(--motion-base) ease-out; }
+  @keyframes stepFwd { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes stepBack { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .step-rows { list-style: none; margin: 0 0 var(--space-4); padding: 0; }
+  .step-rows li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
+  .step-rows li::before { content: "– "; color: var(--muted); }
+  .step-text { margin: 0; font-size: var(--text-md); line-height: var(--text-md-lh); }
+
+  /* ---- Sub-recipe badge (DESIGN.md §5.7) ---- */
+  .badge { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm);
+           line-height: 1; padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
+           background: var(--accent); color: var(--on-accent); text-decoration: none; white-space: nowrap; }
+  .badge svg { width: 14px; height: 14px; fill: currentColor; }
+
+  /* ---- Step bar (fixed bottom) ---- */
+  .step-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 42rem;
+              min-height: var(--bar-h); display: flex; align-items: center; gap: var(--space-4);
+              padding: var(--space-3) var(--app-padding) calc(var(--space-3) + env(safe-area-inset-bottom));
+              background: var(--paper); border-top: 1px solid var(--line); }
+  .step-bar .btn { font: inherit; font-weight: 600; font-size: var(--text-md); min-height: 42px; min-width: 90px;
+                   padding: var(--space-3) var(--space-5); border-radius: var(--radius-md);
+                   border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+  .step-bar .btn:disabled { opacity: 0.4; cursor: default; }
+  .step-bar .btn.next { margin-left: auto; }
+  .counter { flex: 1; text-align: center; font-size: var(--text-sm); color: var(--muted); }
+
+  /* Counter variants (prototype-only switcher) */
+  .counter .dots { display: flex; justify-content: center; gap: var(--space-2); }
+  .counter .dot { width: 8px; height: 8px; border-radius: 100%; background: var(--line); }
+  .counter .dot.on { background: var(--accent); }
+  .counter .bar-track { height: 4px; background: var(--line); border-radius: 100px; overflow: hidden; margin-bottom: var(--space-1); }
+  .counter .bar-fill { height: 100%; background: var(--accent); border-radius: 100px; transition: width var(--motion-base) ease-out; }
+
+  /* ---- Decorative motif (DESIGN.md §4.8: decorative details) ---- */
+  .motif { height: var(--space-2); margin: var(--space-1) 0 var(--space-6); }
+  [data-theme="default"] .motif { border-bottom: 2px solid var(--accent); width: 42px; }
+  [data-theme="tacos"] .motif { height: 8px; width: 100%;
+    background: repeating-linear-gradient(135deg, var(--accent) 0 10px, transparent 10px 20px); }
+  [data-theme="risotto"] .motif { height: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    padding: 2px 0; text-align: center; font-size: var(--text-sm); color: var(--muted); }
+  [data-theme="risotto"] .motif::after { content: "❦"; }
+
+  /* ---- Prototype-only control panel ---- */
+  .proto { position: fixed; right: var(--space-4); top: var(--space-4); z-index: 50;
+           background: var(--ink); color: var(--paper); border-radius: var(--radius-md);
+           padding: var(--space-4); font-size: var(--text-sm); line-height: 1.3; max-width: 220px; }
+  .proto h2 { font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 var(--space-2); }
+  .proto .row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .proto button { font: inherit; font-size: var(--text-sm); padding: var(--space-1) var(--space-3);
+                  border-radius: 100px; border: 1px solid var(--paper); background: transparent; color: var(--paper); cursor: pointer; }
+  .proto button.on { background: var(--paper); color: var(--ink); }
+  .proto .hint { opacity: 0.7; }
+</style>
+</head>
+<body data-theme="default">
+
+  <!-- ===================== Intro ===================== -->
+  <section class="screen active" data-screen="intro">
+    <div class="photo">Foto · 4:3</div>
+    <h1>Street Tacos</h1>
+    <div class="motif"></div>
+    <p class="description">Knusprige Tacos mit mariniertem Tofu, Pico de Gallo und Joghurt-Dip.</p>
+    <p class="meta">25&#8239;min · 40&#8239;min</p>
+    <div class="chips" role="group" aria-label="Portionen wählen">
+      <button class="chip" type="button">4</button>
+      <button class="chip" type="button">5</button>
+      <button class="chip active" type="button">6</button>
+      <button class="chip" type="button">8</button>
+      <button class="chip" type="button">10</button>
+    </div>
+    <button class="primary" type="button" data-nav="forward">Zutaten</button>
+    <p class="footer">Erstellt mit Cookbook</p>
+  </section>
+
+  <!-- ===================== Zutaten ===================== -->
+  <section class="screen" data-screen="zutaten">
+    <button class="back-top" type="button" data-nav="back">Intro</button>
+    <h2 class="screen-title">Zutaten</h2>
+    <ul class="check-list">
+      <li class="check-row"><input type="checkbox" id="z1"><label class="qty" for="z1">250&#8239;g Tortillas</label></li>
+      <li class="check-row"><input type="checkbox" id="z2"><label class="qty" for="z2">400&#8239;g Tofu</label></li>
+      <li class="check-row"><input type="checkbox" id="z3"><label class="qty" for="z3">200&#8239;g Pico de Gallo</label>
+        <a class="badge" href="#"><svg viewBox="0 0 960 960"><path d="M440-280q-72 0-124-52t-52-124q0-72 52-124t124-52h120v80H440q-40 0-68 28t-28 68q0 40 28 68t68 28h120v80H440Zm-80-120q-17 0-28.5-11.5T320-440q0-17 11.5-28.5T360-480h240q17 0 28.5 11.5T640-440q0 17-11.5 28.5T600-400H360Zm160 120v-80h120q40 0 68-28t28-68q0-40-28-68t-68-28H520v-80h120q72 0 124 52t52 124q0 72-52 124t-124 52H520Z"/></svg>Rezept</a></li>
+      <li class="check-row"><input type="checkbox" id="z4"><label class="qty" for="z4">150&#8239;g Joghurt-Dip</label>
+        <a class="badge" href="#"><svg viewBox="0 0 960 960"><path d="M440-280q-72 0-124-52t-52-124q0-72 52-124t124-52h120v80H440q-40 0-68 28t-28 68q0 40 28 68t68 28h120v80H440Zm-80-120q-17 0-28.5-11.5T320-440q0-17 11.5-28.5T360-480h240q17 0 28.5 11.5T640-440q0 17-11.5 28.5T600-400H360Zm160 120v-80h120q40 0 68-28t28-68q0-40-28-68t-68-28H520v-80h120q72 0 124 52t52 124q0 72-52 124t-124 52H520Z"/></svg>Rezept</a></li>
+      <li class="check-row"><input type="checkbox" id="z5"><label class="qty" for="z5">1 Stück Limette</label></li>
+    </ul>
+    <button class="primary" type="button" data-nav="forward">Zubereitung</button>
+  </section>
+
+  <!-- ===================== Zubereitung ===================== -->
+  <section class="screen" data-screen="zubereitung">
+    <p class="step-caption">Street Tacos</p>
+    <div class="step-wrap" id="step-wrap">
+      <div class="step" data-step="1">
+        <ul class="step-rows"><li>250&#8239;g Tortillas</li></ul>
+        <p class="step-text">Tortillas im Ofen erwärmen und warm halten.</p>
+      </div>
+      <div class="step" data-step="2">
+        <ul class="step-rows"><li>400&#8239;g Tofu</li></ul>
+        <p class="step-text">Tofu würfeln, marinieren und scharf anbraten.</p>
+      </div>
+      <div class="step" data-step="3">
+        <ul class="step-rows"><li>200&#8239;g Pico de Gallo <a class="badge" href="#"><svg viewBox="0 0 960 960"><path d="M440-280q-72 0-124-52t-52-124q0-72 52-124t124-52h120v80H440q-40 0-68 28t-28 68q0 40 28 68t68 28h120v80H440Zm-80-120q-17 0-28.5-11.5T320-440q0-17 11.5-28.5T360-480h240q17 0 28.5 11.5T640-440q0 17-11.5 28.5T600-400H360Zm160 120v-80h120q40 0 68-28t28-68q0-40-28-68t-68-28H520v-80h120q72 0 124 52t52 124q0 72-52 124t-124 52H520Z"/></svg>Rezept</a></li></ul>
+        <p class="step-text">Tomaten, Zwiebel und Koriander klein schneiden und mischen.</p>
+      </div>
+      <div class="step" data-step="4">
+        <ul class="step-rows"><li>150&#8239;g Joghurt-Dip <a class="badge" href="#"><svg viewBox="0 0 960 960"><path d="M440-280q-72 0-124-52t-52-124q0-72 52-124t124-52h120v80H440q-40 0-68 28t-28 68q0 40 28 68t68 28h120v80H440Zm-80-120q-17 0-28.5-11.5T320-440q0-17 11.5-28.5T360-480h240q17 0 28.5 11.5T640-440q0 17-11.5 28.5T600-400H360Zm160 120v-80h120q40 0 68-28t28-68q0-40-28-68t-68-28H520v-80h120q72 0 124 52t52 124q0 72-52 124t-124 52H520Z"/></svg>Rezept</a></li></ul>
+        <p class="step-text">Joghurt-Dip bereitstellen.</p>
+      </div>
+      <div class="step" data-step="5">
+        <ul class="step-rows"><li>1 Stück Limette</li></ul>
+        <p class="step-text">Limette in Spalten schneiden.</p>
+      </div>
+      <div class="step" data-step="6">
+        <p class="step-text">Tacos mit Tofu, Pico de Gallo und Dip füllen, mit Limette beträufeln und servieren.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Step bar ===================== -->
+  <div class="step-bar" id="step-bar">
+    <button class="btn prev" type="button" id="btn-back">Zurück</button>
+    <div class="counter" id="counter"></div>
+    <button class="btn next" type="button" id="btn-next">Weiter</button>
+  </div>
+
+  <!-- ===================== Prototype controls ===================== -->
+  <div class="proto">
+    <h2>Prototyp</h2>
+    <div class="row" id="theme-switch">
+      <button data-theme="default" class="on" type="button">Standard</button>
+      <button data-theme="tacos" type="button">Tacos</button>
+      <button data-theme="risotto" type="button">Risotto</button>
+    </div>
+    <div class="row" id="counter-switch">
+      <button data-mode="text" class="on" type="button">3 von 8</button>
+      <button data-mode="fraction" type="button">3 / 8</button>
+      <button data-mode="dots" type="button">Punkte</button>
+      <button data-mode="bar" type="button">Balken</button>
+    </div>
+    <p class="hint">Tippen/Wischen auf den Schritten · Esc = zurück</p>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---- Node model: intro → zutaten → step 1 … step N (DESIGN.md §6.6) ----
+  var stepEls = Array.prototype.slice.call(document.querySelectorAll('.step'));
+  var N = stepEls.length;
+  var nodes = ['intro', 'zutaten'].concat(stepEls.map(function (_, i) { return 'step-' + (i + 1); }));
+  var current = 0; // index into `nodes`
+
+  var screens = {
+    intro: document.querySelector('[data-screen="intro"]'),
+    zutaten: document.querySelector('[data-screen="zutaten"]'),
+    zubereitung: document.querySelector('[data-screen="zubereitung"]'),
+  };
+  var bar = document.getElementById('step-bar');
+  var btnBack = document.getElementById('btn-back');
+  var btnNext = document.getElementById('btn-next');
+  var counter = document.getElementById('counter');
+  var counterMode = 'text'; // prototype-only
+
+  // The two primary buttons (intro / zutaten) navigate by relative direction.
+  document.querySelectorAll('[data-nav]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.getAttribute('data-nav') === 'back') { back(); } else { forward(); }
+    });
+  });
+
+  function isStep(node) { return node.indexOf('step-') === 0; }
+  function stepNumber(node) { return Number(node.slice('step-'.length)); }
+
+  // Direction-aware step entrance (DESIGN.md §4.6: subdued slide, no bounce).
+  function showStep(el, direction) {
+    el.classList.remove('slide-fwd', 'slide-back');
+    // Re-trigger the animation by forcing a reflow, then re-adding the class.
+    void el.offsetWidth;
+    el.classList.add(direction === 'forward' ? 'slide-fwd' : 'slide-back');
+  }
+
+  // Renders one node: screen visibility, step visibility, buttons, counter.
+  function render(direction) {
+    var node = nodes[current];
+    var onSteps = isStep(node);
+
+    screens.intro.classList.toggle('active', node === 'intro');
+    screens.zutaten.classList.toggle('active', node === 'zutaten');
+    screens.zubereitung.classList.toggle('active', onSteps);
+    bar.style.display = onSteps ? 'flex' : 'none';
+
+    if (onSteps) {
+      var n = stepNumber(node);
+      stepEls.forEach(function (el, i) {
+        var active = (i + 1) === n;
+        el.classList.toggle('active', active);
+        if (active && direction) { showStep(el, direction); }
+      });
+      // Left button: „Zutaten" on step 1 (back to the check screen), „Zurück" otherwise.
+      btnBack.textContent = n === 1 ? 'Zutaten' : 'Zurück';
+      btnBack.disabled = false;
+      // „Weiter" disabled on the last step.
+      btnNext.disabled = n === N;
+      renderCounter(n);
+    }
+  }
+
+  function renderCounter(n) {
+    if (counterMode === 'text') {
+      counter.textContent = n + ' von ' + N;
+    } else if (counterMode === 'fraction') {
+      counter.textContent = n + ' / ' + N;
+    } else if (counterMode === 'dots') {
+      var dots = '<div class="dots">';
+      for (var i = 1; i <= N; i++) { dots += '<span class="dot' + (i === n ? ' on' : '') + '"></span>'; }
+      counter.innerHTML = dots + '</div>';
+    } else { // bar
+      var pct = (n / N * 100).toFixed(0) + '%';
+      counter.innerHTML = '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '"></div></div>' +
+        (n + ' von ' + N);
+    }
+  }
+
+  function forward() {
+    if (current < nodes.length - 1) { go(current + 1, 'forward', true); }
+  }
+  function back() {
+    if (current > 0) { go(current - 1, 'back', true); }
+  }
+  function go(index, direction, push) {
+    current = index;
+    render(direction);
+    if (push) { history.pushState({ node: nodes[index] }, ''); }
+  }
+
+  // Escape = one node back (DESIGN.md §6.6).
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { back(); }
+  });
+
+  // Browser Back/Forward (history is mirrored into the node list).
+  window.addEventListener('popstate', function (e) {
+    var node = e.state && e.state.node;
+    var i = node ? nodes.indexOf(node) : 0;
+    current = i < 0 ? 0 : i;
+    render();
+  });
+
+  // Swipe: left = forward, right = back (steps screen only, DESIGN.md §5.11).
+  var touchX = null;
+  screens.zubereitung.addEventListener('touchstart', function (e) {
+    touchX = e.touches[0].clientX;
+  }, { passive: true });
+  screens.zubereitung.addEventListener('touchend', function (e) {
+    if (touchX === null) { return; }
+    var dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 48) { (dx < 0 ? forward : back)(); }
+    touchX = null;
+  }, { passive: true });
+
+  // ---- Prototype-only controls ----
+  document.getElementById('theme-switch').addEventListener('click', function (e) {
+    var t = e.target.getAttribute('data-theme');
+    if (!t) { return; }
+    document.body.setAttribute('data-theme', t);
+    this.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b === e.target); });
+  });
+  document.getElementById('counter-switch').addEventListener('click', function (e) {
+    var m = e.target.getAttribute('data-mode');
+    if (!m) { return; }
+    counterMode = m;
+    this.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b === e.target); });
+    render();
+  });
+
+  // Initial state (no history entry yet; replace so Back does not reload).
+  history.replaceState({ node: nodes[0] }, '');
+  render();
+})();
+</script>
+</body>
+</html>
