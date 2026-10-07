@@ -23,7 +23,7 @@
  *   history is sent again, so the model revises its own draft.
  * - **Live prompt blocks**: {@link AiCreateSession.setSpecifications} replaces
  *   the user's recipe specifications (Typ, Portionen/Ergiebigkeit, Merkmale,
- *   „KI-Verhalten“) and {@link AiCreateSession.setContextText} the runtime
+ *   „KI-Verhalten“) and {@link AiCreateSession.setCollectionText} the collection
  *   context (used after a sub-recipe was saved mid-conversation). Both only
  *   rebuild the single system message, which is sent anew with every request —
  *   the AiClient contract stays untouched.
@@ -48,40 +48,33 @@ const MAX_REPAIR_ROUNDS = 2;
 const ZUBEREITUNG = '## Zubereitung';
 
 /**
- * Prefix of a revision turn (Task A4): the change request refers to the file of
- * the previous assistant reply, which must be returned in full again.
+ * Label of a change-request turn. The change refers either to the original file
+ * transferred in the system instruction (edit) or to the draft of the previous
+ * assistant reply (revision); the `Ablauf` section of the rules document
+ * carries the "return the complete corrected file" requirement, so the label
+ * itself stays minimal.
  */
-const REVISION_PREFIX =
-  'Überarbeite den Entwurf aus deiner letzten Antwort und gib die vollständige, korrigierte ' +
-  'Rezeptdatei zurück (kein Diff, keine Auslassungen, kein Kommentar außer optional ein bis ' +
-  'zwei Sätzen). Behalte `title` und `type` bei, sofern der Wunsch nichts anderes verlangt. ' +
-  'Änderungswunsch:';
-
-/**
- * Prefix of the first user turn of an edit session (Task B): the change request
- * refers to the original file transferred in the system instruction, not to a
- * previous assistant reply — so it cannot reuse {@link REVISION_PREFIX}.
- */
-const EDIT_PREFIX =
-  'Überarbeite das oben übergebene Rezept und gib die vollständige, korrigierte Rezeptdatei ' +
-  'zurück (kein Diff, keine Auslassungen, kein Kommentar außer optional ein bis zwei Sätzen). ' +
-  'Behalte `title` und `type` bei, sofern der Wunsch nichts anderes verlangt. Änderungswunsch:';
+const CHANGE_PREFIX = 'Änderungswunsch:';
 
 /** Which task a session runs: create a new recipe (Task A) or revise an
  *  existing one (Task B). */
 export type AiRecipeTask = 'create' | 'edit';
 
 /**
- * The task framing of a create session (Task A). The rules document carries
- * both task sections, so the system instruction names the one in force — the
- * edit session names its own in the transferred-recipe block
- * (aiContext.buildEditTaskText).
+ * The task framing of a create session. The static rules document carries the
+ * shared role/format/Ablauf rules; this block adds the create-specific delta.
  */
 const CREATE_TASK_TEXT =
-  '## Auftrag: neues Rezept aus einer Beschreibung erstellen (Task A)\n\n' +
-  'Der Nutzer beschreibt unten ein Gericht; es gibt kein Ausgangsrezept. Erstelle daraus gemäß ' +
-  'Task A ein neues Rezept im kanonischen Format. Task B („vorhandenes Rezept überarbeiten“) ' +
-  'gilt für diese Unterhaltung nicht.';
+  '# Auftrag\n\n' +
+  'Erstelle aus der Beschreibung ein neues Rezept (kein Ausgangsrezept).\n' +
+  '- `finished_dish`, außer der Wunsch ist klar eine wiederverwendbare Basis — dann ' +
+  '`ingredient_recipe`. Im Zweifel `finished_dish`.\n' +
+  '- Sinnvolle ganze `servings` (2, 4, 6 …) und dazu stimmige Mengen.\n' +
+  '- Schritte in echter Kochreihenfolge (Vorbereitung zuerst); jede Zutatenzeile auf dem ' +
+  'Schritt, der sie verwendet.\n' +
+  '- Vollständiges, kochbares Rezept (typisch 3–8 Schritte).\n' +
+  '- Übernimm die Formulierung des Nutzers, wo möglich; bevorzuge eine aussagekräftige ' +
+  '`description`.';
 
 /**
  * Strips one optional markdown code fence (```markdown … ```) around a reply:
@@ -136,8 +129,8 @@ export interface AiCreateSession {
    */
   setSpecifications(text: string): void;
 
-  /** Replaces the runtime context block (e.g. after a recipe was saved). */
-  setContextText(text: string): void;
+  /** Replaces the collection block (e.g. after a recipe was saved). */
+  setCollectionText(text: string): void;
 
   /** Replaces the valid sub-recipe titles (a saved draft is one of them now). */
   setIngredientRecipeTitles(titles: ReadonlySet<string>): void;
@@ -147,8 +140,10 @@ export interface AiCreateSession {
 export interface AiCreateSessionOptions {
   /** The provider client to call (key already bound). */
   client: AiClient;
-  /** The serialized runtime context block (see aiContext.ts). */
-  contextText: string;
+  /** The serialized guidelines block (see aiContext.buildGuidelinesText). */
+  guidelinesText: string;
+  /** The serialized collection block (see aiContext.buildCollectionText). */
+  collectionText: string;
   /** The serialized Vorgaben block (see aiContext.buildSpecificationsText). */
   specificationsText?: string;
   /**
@@ -174,14 +169,14 @@ interface ExtractedFile {
 }
 
 /**
- * Creates the session. The system instruction = static AI rules + the runtime
- * context (personal rules, master data, collection) + the user's Vorgaben.
+ * Creates the session. The system instruction = static AI rules + the user's
+ * guidelines + the task framing + the collection + the user's Vorgaben.
  */
 export function createAiCreateSession(options: AiCreateSessionOptions): AiCreateSession {
   /** Which task this session runs (Task A create vs. Task B edit). */
   const task: AiRecipeTask = options.task ?? 'create';
-  /** The runtime context block (aiContext.ts); replaced after a save. */
-  let contextText = options.contextText;
+  /** The collection block (aiContext.ts); replaced after a save. */
+  let collectionText = options.collectionText;
   /** The user's Vorgaben block; replaced whenever the settings change. */
   let specificationsText = options.specificationsText ?? '';
   /** Valid sub-recipe titles for the new-ingredient proposal list. */
@@ -191,15 +186,19 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
 
   /**
    * Rebuilds the head of the history (the only system message): static rules,
-   * the task framing in force, runtime context and the current Vorgaben. The
-   * provider receives the system instruction with every request, so replacing
-   * it here is enough.
+   * the user's guidelines, the task framing in force, the collection and the
+   * current Vorgaben. The provider receives the system instruction with every
+   * request, so replacing it here is enough.
    */
   function rebuildSystemInstruction(): void {
     const taskText = task === 'edit' ? (options.editTaskText ?? '') : CREATE_TASK_TEXT;
-    const parts = [AI_RULES_TEXT, taskText, contextText, specificationsText].filter(
-      (part) => part.trim() !== '',
-    );
+    const parts = [
+      AI_RULES_TEXT,
+      options.guidelinesText,
+      taskText,
+      collectionText,
+      specificationsText,
+    ].filter((part) => part.trim() !== '');
     messages[0] = { role: 'system', content: parts.join('\n\n') };
   }
   rebuildSystemInstruction();
@@ -324,8 +323,8 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
       messages.push({
         role: 'user',
         content:
-          `Das Rezept ist noch nicht im gültigen kanonischen Format. Behebe bitte genau diese ` +
-          `Probleme und gib ausschließlich die korrigierte Rezeptdatei zurück (kein Kommentar):\n${detail}`,
+          `Die Datei ist noch nicht gültig. Behebe genau diese Probleme und gib nur die ` +
+          `korrigierte Datei zurück:\n${detail}`,
       });
       return requestRepair();
     }
@@ -347,16 +346,16 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
       // several drafts must not accumulate it across turns.
       repairRounds = 0;
       // In an edit session the first turn already revises the transferred
-      // original, so it carries the same "complete corrected file" framing as a
-      // later revision (a clarifying answer keeps it, which is harmless).
-      const content = task === 'edit' ? `${EDIT_PREFIX}\n${userText}` : userText;
+      // original, so it carries the same change-request label as a later
+      // revision (a clarifying answer keeps it, which is harmless).
+      const content = task === 'edit' ? `${CHANGE_PREFIX}\n${userText}` : userText;
       messages.push({ role: 'user', content });
       return runTurn();
     },
 
     async sendRevision(userText: string): Promise<AiCreateStepResult> {
       repairRounds = 0;
-      messages.push({ role: 'user', content: `${REVISION_PREFIX}\n${userText}` });
+      messages.push({ role: 'user', content: `${CHANGE_PREFIX}\n${userText}` });
       return runTurn();
     },
 
@@ -365,8 +364,8 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
       rebuildSystemInstruction();
     },
 
-    setContextText(text: string): void {
-      contextText = text;
+    setCollectionText(text: string): void {
+      collectionText = text;
       rebuildSystemInstruction();
     },
 

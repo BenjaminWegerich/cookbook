@@ -2,49 +2,35 @@
  * Runtime context serialization for AI-assisted recipe work.
  *
  * The AI rules document (docs/ai_recipe_rules.md, embedded via recipeRules.ts)
- * is static. Everything that varies per user and per collection — the personal
- * rules, the loaded ingredient master data, and the recipes of the collection
- * (esp. the ingredient-recipes the AI may reference) — is serialized here into
- * one German-labeled context block appended to the system instruction on every
- * call of a create/edit session.
+ * is static: role, format rules and the shared process (Ablauf). Everything
+ * that varies is serialized here and appended to the system instruction:
  *
- * The block that varies per *request* — the recipe specifications the user sets
- * on the AI-create screen (Typ, Portionen/Ergiebigkeit, Merkmale, „KI-Verhalten“)
- * — is serialized by {@link buildSpecificationsText} and appended after the
- * context block, so both live in the system instruction and never appear as a
- * chat bubble.
+ * - {@link buildGuidelinesText}: the user's personal recipe guidelines
+ *   (Drive file `rezept-richtlinien.md`) — ingredients, techniques, wording.
+ * - {@link buildCollectionText}: the collection — ingredient master data, all
+ *   recipe titles and the full content of the ingredient-recipes the AI may
+ *   reference as sub-recipes.
+ * - {@link buildSpecificationsText}: the per-request Vorgaben the user sets on
+ *   the AI-create screen (Typ, Portionen/Ergiebigkeit, Merkmale, KI-Verhalten).
+ * - {@link buildEditTaskText}: the AI-edit task framing plus the original
+ *   recipe in full.
  *
- * The AI-edit screen ("Mit KI bearbeiten") needs no such controls: the original
- * recipe is transferred in full by {@link buildEditTaskText} (Task B of the
- * rules) and the user only describes the desired changes, which travel as the
- * normal chat message.
+ * All blocks live in the system instruction and never appear as a chat bubble.
  */
 
 import { serializeRecipe } from '@cookbook/core';
 import type { IngredientMappings, Recipe, RecipeType } from '@cookbook/core';
 
 /**
- * Serializes one ingredient's master-data entry to a compact context line.
- *
- * Example line:
- *   - Joghurt — Basiseinheit: g — Zusatzeinheiten: Becher (1 Becher = 400 g), EL (1 EL = 24 g)
+ * Serializes the ingredient master data as `- Name (base unit)` lines. The AI
+ * only needs the names (to reuse them) and the base unit family (g/ml, so it
+ * writes the right unit); the additional-unit conversions are display data the
+ * AI never writes.
  */
-function ingredientLine(name: string, entry: IngredientMappings[string]): string {
-  const base = `Basiseinheit: ${entry.bu}`;
-  if (entry.entries.length === 0) {
-    return `- ${name} — ${base} — keine Zusatzeinheiten`;
-  }
-  const units = entry.entries
-    .map((mapping) => `${mapping.au} (1 ${mapping.au} = ${mapping.factor} ${entry.bu})`)
-    .join(', ');
-  return `- ${name} — ${base} — Zusatzeinheiten: ${units}`;
-}
-
-/** Serializes the full ingredient master data (names + base units + AU mappings). */
 function serializeMasterData(mappings: IngredientMappings): string {
   const names = Object.keys(mappings).sort((a, b) => a.localeCompare(b, 'de'));
   if (names.length === 0) return '(keine Zutaten-Stammdaten geladen)';
-  return names.map((name) => ingredientLine(name, mappings[name]!)).join('\n');
+  return names.map((name) => `- ${name} (${mappings[name]!.bu})`).join('\n');
 }
 
 /** A recipe of the collection as far as the AI context needs it. */
@@ -53,10 +39,8 @@ export interface ContextRecipe {
   recipe: Recipe;
 }
 
-/** Everything the AI-create/edit prompt needs beyond the static rules. */
-export interface AiContextInput {
-  /** The user's personal rules text (docs file `zutaten-regeln.md`), raw. */
-  personalRules: string;
+/** The collection facts the AI context block needs. */
+export interface AiCollectionInput {
   /** The loaded ingredient master data (runtime registry). */
   masterData: IngredientMappings;
   /**
@@ -68,20 +52,24 @@ export interface AiContextInput {
 }
 
 /**
- * Builds the runtime context block for the system instruction. German labels
- * (the data language), English scaffolding; appended verbatim to the rules doc
- * text in every create/edit prompt.
+ * Builds the `# Rezept-Richtlinien` block from the user's personal guidelines
+ * (Drive file `rezept-richtlinien.md`, edited outside the app). A missing or
+ * empty file serializes as "(keine hinterlegt)".
  */
-export function buildAiContextText(input: AiContextInput): string {
-  const sections: string[] = [];
+export function buildGuidelinesText(personalRules: string): string {
+  const rules = personalRules.trim();
+  return rules === ''
+    ? '# Rezept-Richtlinien\n(keine hinterlegt)'
+    : `# Rezept-Richtlinien\n${rules}`;
+}
 
-  // Personal rules (docs file `zutaten-regeln.md`, user-edited).
-  const rules = input.personalRules.trim();
-  sections.push(
-    rules === ''
-      ? '## Persönliche Regeln des Nutzers\n(keine hinterlegt)'
-      : `## Persönliche Regeln des Nutzers\n${rules}`,
-  );
+/**
+ * Builds the `# Sammlung` block: ingredient master data, all recipe titles and
+ * the full content of the ingredient-recipes (usable as sub-recipes). German
+ * labels (the data language), English scaffolding.
+ */
+export function buildCollectionText(input: AiCollectionInput): string {
+  const sections: string[] = [];
 
   sections.push(`## Zutaten-Stammdaten\n${serializeMasterData(input.masterData)}`);
 
@@ -93,7 +81,7 @@ export function buildAiContextText(input: AiContextInput): string {
     .sort((a, b) => a.recipe.title.localeCompare(b.recipe.title, 'de'));
 
   sections.push(
-    `## Vorhandene Rezepte (Titel)\n${
+    `## Vorhandene Rezepte\n${
       titles.length === 0 ? '(keine)' : titles.map((title) => `- ${title}`).join('\n')
     }`,
   );
@@ -104,13 +92,13 @@ export function buildAiContextText(input: AiContextInput): string {
         `### ${recipe.title}\n\`\`\`markdown\n${serializeRecipe(recipe).trimEnd()}\n\`\`\``,
     );
     sections.push(
-      `## Vorhandene ingredient_recipes (Zutaten-Rezepte, vollständiger Inhalt)\n` +
+      `## Zutaten-Rezepte (vollständiger Inhalt)\n` +
         `Diese Rezepte kannst du als Zutat verwenden (Name = Titel). Nutze ihre exakten Titel,\n` +
         `skaliere ihre Menge zur benötigten Portion und zähle sie in den Schritten wie eine Zutat.\n${bodies.join('\n\n')}`,
     );
   }
 
-  return sections.join('\n\n');
+  return `# Sammlung\n\n${sections.join('\n\n')}`;
 }
 
 /**
@@ -139,99 +127,84 @@ export interface RecipeSpecifications {
 }
 
 /**
- * The Merkmale in display order, with the German constraint line each selected
- * flag adds to the prompt. The wording is instruction text for the AI (not UI),
- * so it stays a plain line of prose.
+ * German display labels of the Merkmale flags. The model knows what each means,
+ * so only the bare keywords are sent — no definition lines.
  */
-const MERKMAL_LINES: ReadonlyArray<{
-  key: 'vegan' | 'fast' | 'cheap';
-  line: string;
-}> = [
-  {
-    key: 'vegan',
-    line: 'vegan: ausschließlich pflanzliche Zutaten, keine tierischen Produkte oder Derivate',
-  },
-  {
-    key: 'fast',
-    line: 'schnell und einfach: kurze Zubereitungszeit, wenige, unkomplizierte Schritte',
-  },
-  {
-    key: 'cheap',
-    line: 'günstig: preiswerte, gängige Zutaten, keine teuren Spezialprodukte',
-  },
-];
+const MERKMAL_LABELS: Readonly<Record<'vegan' | 'fast' | 'cheap', string>> = {
+  vegan: 'vegan',
+  fast: 'schnell und einfach',
+  cheap: 'günstig',
+};
 
 /**
- * Serializes the user's recipe specifications into the verbindliche Vorgaben
- * block of the system instruction. The numbers are stated as the literal front
- * matter values the AI has to write (`servings: 6`, `yield: 1000`), and the last
- * line gives the chat precedence over the standing values — otherwise a later
- * "mach es für 4 Portionen" would fight the Vorgaben block.
+ * Serializes the user's recipe specifications into the `# Vorgaben` block of
+ * the system instruction. The numbers are stated as the literal front matter
+ * values the AI has to write (`servings: 6`, `yield: 1000`); the Merkmale are
+ * bare keywords; the Verhalten line is only emitted for the non-default
+ * "Direkt entwerfen" mode (the Ablauf rules already describe asking first).
+ * The last line gives the chat precedence over the standing values.
  */
 export function buildSpecificationsText(spec: RecipeSpecifications): string {
   const lines: string[] = [];
 
   if (spec.type === 'finished_dish') {
-    lines.push('- Rezept-Typ: `finished_dish` (Gericht) — liefere genau diesen Typ.');
+    lines.push('- Typ: `finished_dish` (Gericht)');
     if (spec.servings !== null) {
       lines.push(
-        `- Portionen: ${spec.servings} — setze \`servings: ${spec.servings}\` und skaliere alle ` +
-          'Mengen darauf.',
+        `- Portionen: ${spec.servings} → setze \`servings: ${spec.servings}\`, skaliere alle ` +
+          'Mengen darauf',
       );
     }
   } else {
-    lines.push(
-      '- Rezept-Typ: `ingredient_recipe` (Zutaten-Rezept) — liefere genau diesen Typ, ohne ' +
-        '`servings`.',
-    );
+    lines.push('- Typ: `ingredient_recipe` (Zutaten-Rezept)');
     if (spec.yieldQuantity !== null) {
       lines.push(
-        `- Ergiebigkeit: ${spec.yieldQuantity} ${spec.yieldUnit} — setze ` +
-          `\`yield: ${spec.yieldQuantity}\` und \`yield_unit: ${spec.yieldUnit}\`.`,
+        `- Ergiebigkeit: ${spec.yieldQuantity} ${spec.yieldUnit} → setze \`yield: ${spec.yieldQuantity}\`, ` +
+          `\`yield_unit: ${spec.yieldUnit}\``,
       );
     }
   }
 
-  const flags = MERKMAL_LINES.filter((merkmale) => spec[merkmale.key]);
-  if (flags.length === 0) {
-    lines.push('- Merkmale: (keine besonderen Vorgaben)');
-  } else {
-    lines.push(['- Merkmale:', ...flags.map((merkmale) => `  - ${merkmale.line}`)].join('\n'));
+  const flags = (['vegan', 'fast', 'cheap'] as const).filter((key) => spec[key]);
+  lines.push(
+    flags.length === 0
+      ? '- Merkmale: keine'
+      : `- Merkmale: ${flags.map((key) => MERKMAL_LABELS[key]).join(', ')}`,
+  );
+
+  if (spec.replyMode === 'draft') {
+    lines.push('- Verhalten: Schreibe ohne Rückfragen direkt den Entwurf');
   }
 
-  lines.push(
-    spec.replyMode === 'draft'
-      ? '- Verhalten: Schreibe ohne Rückfragen direkt den Entwurf; entscheide bei Unklarheiten ' +
-          'selbst sinnvoll.'
-      : '- Verhalten: Stelle bei Unklarheiten zuerst eine kurze Rückfrage (das Standardverhalten).',
-  );
   lines.push(
     '- Vorrang: Widerspricht eine spätere Nutzernachricht diesen Vorgaben, gilt die neuere ' +
       'Nutzernachricht.',
   );
 
-  return `## Vorgaben für dieses Rezept (verbindlich)\n\n${lines.join('\n')}`;
+  return `# Vorgaben\n\n${lines.join('\n')}`;
 }
 
 /**
- * Serializes the AI-edit task (Task B of docs/ai_recipe_rules.md): the original
- * recipe file in full, framed as the binding starting version. It takes the
- * place of the create task framing in an edit session's system instruction, so
- * the recipe is present on every turn (including clarifying questions and
- * repair rounds) and never appears as a chat bubble. The user's own message
- * then carries only the desired change.
+ * Serializes the AI-edit task: the original recipe file in full, framed as the
+ * binding starting version. It takes the place of the create task framing in
+ * an edit session's system instruction, so the recipe is present on every turn
+ * (including clarifying questions and repair rounds) and never appears as a
+ * chat bubble. The user's own message then carries only the desired change.
  *
  * The file is embedded fenced so its front matter and headings cannot be read
  * as instructions of the context block around it.
  */
-export function buildEditTaskText(originalText: string, title: string): string {
+export function buildEditTaskText(originalText: string): string {
   return (
-    '## Auftrag: vorhandenes Rezept überarbeiten (Task B)\n\n' +
-    `Das folgende Rezept „${title}“ ist die verbindliche Ausgangsfassung und wird dir ` +
-    'vollständig übergeben. Der Nutzer beschreibt in seiner Nachricht ausschließlich die ' +
-    'gewünschten Änderungen; alles, was er nicht nennt, bleibt unverändert. Gib als Antwort die ' +
-    'vollständige, überarbeitete Rezeptdatei im kanonischen Format zurück (siehe Task B der ' +
-    'Regeln oben).\n\n' +
+    '# Auftrag\n\n' +
+    'Überarbeite das folgende Rezept — es ist die verbindliche Ausgangsfassung. Der Nutzer ' +
+    'beschreibt nur die gewünschten Änderungen; alles, was er nicht nennt, bleibt unverändert.\n' +
+    '- Übernimm unverändert: Titel, Typ, Wortlaut der Schritte, Zeiten, `description`, `reference`.\n' +
+    '- Setze Änderungen vollständig um: Portionsänderung skaliert alle Mengen und `servings`; ' +
+    'entfernte Zutat verschwindet aus Zeilen und Inline-Erwähnungen; Einheitenkorrektur hält ' +
+    'die Mengenregeln ein.\n' +
+    '- Titeländerung: neuen Titel in der Datei durchgehend verwenden.\n' +
+    '- Liefere die vollständige, überarbeitete Datei zurück.\n\n' +
     `\`\`\`markdown\n${originalText.trimEnd()}\n\`\`\``
   );
 }

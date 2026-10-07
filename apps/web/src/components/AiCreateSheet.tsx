@@ -55,7 +55,12 @@ import type { KeyboardEvent, Ref } from 'react';
 import { NNBSP, allIngredientMappings, integerLadderValues, serializeRecipe } from '@cookbook/core';
 import type { Recipe, RecipeType } from '@cookbook/core';
 
-import { buildAiContextText, buildEditTaskText, buildSpecificationsText } from '../ai/aiContext';
+import {
+  buildCollectionText,
+  buildEditTaskText,
+  buildGuidelinesText,
+  buildSpecificationsText,
+} from '../ai/aiContext';
 import type { RecipeSpecifications } from '../ai/aiContext';
 import { createAiCreateSession } from '../ai/createRecipeDraft';
 import type { AiCreateSession } from '../ai/createRecipeDraft';
@@ -63,7 +68,7 @@ import { createAiClient } from '../ai/client';
 import { getAiApiKey, setAiApiKey } from '../ai/sessionKey';
 import type { StoredRecipe } from '../drive/recipeStorage';
 import { listRecipes, readRecipe } from '../drive/recipeStorage';
-import { loadPersonalRules } from '../drive/personalRules';
+import { loadRecipeGuidelines } from '../drive/personalRules';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
 import LeaveConfirmBar from './LeaveConfirmBar';
 import QuantityPicker from './QuantityPicker';
@@ -223,8 +228,10 @@ interface AiCreateSheetProps {
 /** The AI context block (aiContext.ts) plus the collection facts it was built
  *  from — the session needs the sub-recipe titles for its proposal list too. */
 interface LoadedContext {
-  /** The serialized runtime context block for the system instruction. */
-  text: string;
+  /** The serialized guidelines block for the system instruction. */
+  guidelinesText: string;
+  /** The serialized collection block for the system instruction. */
+  collectionText: string;
   /** Titles of the collection's ingredient-recipes (valid link targets). */
   ingredientRecipeTitles: Set<string>;
 }
@@ -235,7 +242,7 @@ interface LoadedContext {
  * title). Broken files are skipped — like the editor does.
  */
 async function loadContext(token: string, stored: readonly StoredRecipe[]): Promise<LoadedContext> {
-  const personalRules = await loadPersonalRules(token);
+  const personalRules = await loadRecipeGuidelines(token);
   const contextRecipes: Array<{ recipe: Recipe }> = [];
   for (const entry of stored) {
     try {
@@ -250,8 +257,8 @@ async function loadContext(token: string, stored: readonly StoredRecipe[]): Prom
       .map(({ recipe }) => recipe.title),
   );
   return {
-    text: buildAiContextText({
-      personalRules,
+    guidelinesText: buildGuidelinesText(personalRules),
+    collectionText: buildCollectionText({
       masterData: allIngredientMappings(),
       recipes: contextRecipes,
     }),
@@ -279,8 +286,9 @@ async function prepareSession(
     const originalText = serializeRecipe(await readRecipe(token, editTarget.fileId));
     return createAiCreateSession({
       client: createAiClient({ provider: 'gemini', apiKey }),
-      contextText: context.text,
-      editTaskText: buildEditTaskText(originalText, editTarget.title),
+      guidelinesText: context.guidelinesText,
+      collectionText: context.collectionText,
+      editTaskText: buildEditTaskText(originalText),
       task: 'edit',
       knownIngredientNames: new Set(Object.keys(allIngredientMappings())),
       ingredientRecipeTitles: context.ingredientRecipeTitles,
@@ -288,7 +296,8 @@ async function prepareSession(
   }
   return createAiCreateSession({
     client: createAiClient({ provider: 'gemini', apiKey }),
-    contextText: context.text,
+    guidelinesText: context.guidelinesText,
+    collectionText: context.collectionText,
     knownIngredientNames: new Set(Object.keys(allIngredientMappings())),
     ingredientRecipeTitles: context.ingredientRecipeTitles,
   });
@@ -301,9 +310,9 @@ async function prepareSession(
  */
 function handoffNote(title: string): string {
   return (
-    '## Stand dieser Unterhaltung\n' +
+    '# Stand dieser Unterhaltung\n' +
     `Das Zutaten-Rezept „${title}“ wurde soeben gespeichert und ist jetzt in der Sammlung ` +
-    'vorhanden (siehe „Vorhandene ingredient_recipes“ oben). Du darfst es ab jetzt als Zutat in ' +
+    'vorhanden (siehe „Zutaten-Rezepte“ oben). Du darfst es ab jetzt als Zutat in ' +
     'einem Gericht verwenden; der Nutzer muss dafür keine neue Anfrage starten.'
   );
 }
@@ -486,7 +495,7 @@ export default function AiCreateSheet({
       .then((stored) => loadContext(token, stored))
       .then((context) => {
         if (!mountedRef.current) return;
-        session.setContextText(`${context.text}\n\n${handoffNote(handoff.title)}`);
+        session.setCollectionText(`${context.collectionText}\n\n${handoffNote(handoff.title)}`);
         session.setIngredientRecipeTitles(context.ingredientRecipeTitles);
         // The saved draft's card is history now — the next message is the dish.
         setDraft(null);
@@ -899,11 +908,11 @@ export default function AiCreateSheet({
                         </div>
                       ) : (
                         <div className="field ai-yield">
-                          <span className="field-label">Ergiebigkeit</span>
+                          <span className="field-label">Menge</span>
                           <div
                             className="segmented"
                             role="group"
-                            aria-label="Einheit der Ergiebigkeit"
+                            aria-label="Einheit der Menge"
                           >
                             <button
                               type="button"
