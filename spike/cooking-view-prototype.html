@@ -13,7 +13,7 @@
   the faces as WOFF2 (no network) — the shortlist is decided in Stage 3. The three faces
   below are stand-ins, not the final shortlist.
 
-  Prototype-only controls (bottom-right): theme switcher + counter-style switcher.
+  Prototype-only controls (bottom-right): theme switcher.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -67,9 +67,12 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* ---- Screens ---- */
-  .screen { display: none; min-height: 100vh; padding: var(--app-padding); padding-bottom: calc(var(--bar-h) + var(--space-9)); }
-  .screen.active { display: block; }
+  /* ---- Screens ----
+     min-height uses 100dvh (dynamic viewport) so the page does not scroll when the
+     content fits the visible screen; 100vh is the fallback for browsers without dvh. */
+  .screen { display: none; min-height: 100vh; min-height: 100dvh;
+            padding: var(--app-padding); padding-bottom: calc(var(--bar-h) + var(--space-9)); }
+  .screen.active { display: flex; flex-direction: column; }
 
   /* ---- Intro ---- */
   .photo { width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius-md); object-fit: cover;
@@ -77,32 +80,44 @@
            display: grid; place-items: center; color: var(--on-accent);
            font-size: var(--text-sm); letter-spacing: 0.06em; text-transform: uppercase; }
   h1 { font-size: var(--text-xl); line-height: var(--text-xl-lh); margin: var(--space-6) 0 var(--space-2); }
-  .description { margin: 0 0 var(--space-3); color: var(--ink); }
-  .meta { color: var(--muted); font-size: var(--text-sm); line-height: var(--text-sm-lh); margin: 0 0 var(--space-7); }
-  .chips { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-8); }
+  .description { margin: 0 0 var(--space-6); color: var(--ink); }
+
+  /* Times and the Cookbook brand mark share one line. The caption/value pairs mirror the
+     recipe overview's .overview-meta: an all-caps muted caption before a bold value. */
+  .meta-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-7); margin: 0 0 var(--space-6); }
+  .meta-item { display: inline-flex; align-items: baseline; gap: var(--space-2); }
+  .caption { color: var(--muted); font-size: var(--text-sm); line-height: var(--text-sm-lh); font-weight: 600; text-transform: uppercase; }
+  .meta-value { font-weight: 600; font-size: var(--text-sm); line-height: var(--text-sm-lh); }
+  .brand { display: flex; align-items: center; gap: var(--space-2); color: var(--muted);
+           font-size: var(--text-sm); line-height: var(--text-sm-lh); margin-top: auto; padding-top: var(--space-6); }
+  .brand svg { width: 20px; height: 20px; }
+
+  .picker-caption { font-size: var(--text-sm); line-height: var(--text-sm-lh); color: var(--muted);
+                    font-weight: 600; text-transform: uppercase; margin: 0 0 var(--space-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); }
   .chip { font: inherit; font-size: var(--text-sm); line-height: 1; padding: var(--space-3) var(--space-5);
           border-radius: 100px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-  .primary { display: block; width: 100%; font: inherit; font-weight: 600; font-size: var(--text-md);
-             padding: var(--space-4) var(--space-6); min-height: 42px; border: none; border-radius: var(--radius-md);
-             background: var(--accent); color: var(--on-accent); cursor: pointer; }
-  .footer { margin-top: var(--space-10); color: var(--muted); font-size: var(--text-sm); }
+  /* Reference ingredients readout under the size picker (mirrors the Einplanen sheet's
+     .meal-plan-reference): small, muted, amounts only — no caption. */
+  .reference { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--text-sm-lh); }
 
   /* ---- Zutaten ---- */
-  .back-top { font: inherit; font-size: var(--text-sm); color: var(--muted); background: none; border: none;
-              padding: var(--space-2) 0; cursor: pointer; margin-bottom: var(--space-4); }
-  .screen-title { font-size: var(--text-lg); line-height: var(--text-lg-lh); font-weight: 600; margin: 0 0 var(--space-5); }
+  .screen-title { font-size: var(--text-lg); line-height: var(--text-lg-lh); font-weight: 600; margin: 0 0 var(--space-3); }
   .check-list { list-style: none; margin: 0 0 var(--space-8); padding: 0; }
   .check-row { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) 0;
-               border-top: 1px solid var(--line); cursor: pointer; }
+               border-top: 1px solid var(--line); cursor: pointer;
+               font-size: var(--text-lg); line-height: var(--text-lg-lh); }
   .check-row:first-child { border-top: none; }
   .check-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); cursor: pointer; }
   .check-row .qty { flex: 1; min-width: 0; }
-  .check-row input:checked + .qty { color: var(--muted); text-decoration: line-through; }
+  /* A checked row goes muted, but its text is NOT crossed out (decided with the user). */
+  .check-row input:checked + .qty { color: var(--muted); }
 
   /* ---- Zubereitung (steps) ---- */
   .step-caption { font-size: var(--text-sm); line-height: var(--text-sm-lh); font-weight: 600; text-transform: uppercase;
                   letter-spacing: 0.04em; color: var(--muted); margin: 0 0 var(--space-6); }
+  .step-title { font-size: var(--text-lg); line-height: var(--text-lg-lh); font-weight: 600; margin: 0 0 var(--space-3); }
   .step-wrap { overflow: hidden; }
   .step { display: none; }
   .step.active { display: block; }
@@ -110,55 +125,58 @@
   .step.slide-back { animation: stepBack var(--motion-base) ease-out; }
   @keyframes stepFwd { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes stepBack { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .step-rows { list-style: none; margin: 0 0 var(--space-4); padding: 0; }
-  .step-rows li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
-  .step-rows li::before { content: "– "; color: var(--muted); }
-  .step-text { margin: 0; font-size: var(--text-md); line-height: var(--text-md-lh); }
+  /* The ingredient rows and the prose read at arm's length, so both use --text-lg. Rows are
+     bulleted; a plain margin separates them from the prose. */
+  .step-rows { list-style: none; margin: 0 0 var(--space-6); padding: 0; }
+  .step-rows li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0;
+                  font-size: var(--text-lg); line-height: var(--text-lg-lh); }
+  .step-rows li::before { content: "• "; color: var(--muted); }
+  .step-text { margin: 0; font-size: var(--text-lg); line-height: var(--text-lg-lh); }
 
-  /* ---- Sub-recipe badge (DESIGN.md §5.7) ---- */
+  /* ---- The theme's decorative divider (DESIGN.md §4.8) ----
+     Below the „Zutaten" heading and below the step title — more prominent than a plain
+     hairline. */
+  .divider { margin: 0 0 var(--space-4); }
+  [data-theme="default"] .divider { height: 0; border-bottom: 2px solid var(--accent); width: 42px; }
+  [data-theme="tacos"] .divider { height: 8px; width: 100%; background: repeating-linear-gradient(135deg, var(--accent) 0 10px, transparent 10px 20px); }
+  [data-theme="risotto"] .divider { height: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 2px 0; text-align: center; font-size: var(--text-sm); color: var(--muted); }
+  [data-theme="risotto"] .divider::after { content: "❦"; }
+
+  /* ---- Sub-recipe badge (DESIGN.md §5.7). All-caps like the web app. ---- */
   .badge { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm);
-           line-height: 1; padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
+           font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1;
+           padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
            background: var(--accent); color: var(--on-accent); text-decoration: none; white-space: nowrap; }
   .badge svg { width: 14px; height: 14px; fill: currentColor; }
 
-  /* ---- Step bar (fixed bottom) ---- */
+  /* ---- Bottom bar (fixed): back · dots · forward on every screen ---- */
   .step-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 42rem;
               min-height: var(--bar-h); display: flex; align-items: center; gap: var(--space-4);
               padding: var(--space-3) var(--app-padding) calc(var(--space-3) + env(safe-area-inset-bottom));
               background: var(--paper); border-top: 1px solid var(--line); }
-  .step-bar .btn { font: inherit; font-weight: 600; font-size: var(--text-md); min-height: 42px; min-width: 90px;
+  .step-bar .btn { display: inline-flex; align-items: center; gap: var(--space-2); font: inherit; font-weight: 600;
+                   font-size: var(--text-md); min-height: 42px; min-width: 90px;
                    padding: var(--space-3) var(--space-5); border-radius: var(--radius-md);
                    border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+  .step-bar .btn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+  /* The forward action is the one primary button of each screen (DESIGN.md §5.1). */
+  .step-bar .btn.next { margin-left: auto; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .step-bar .btn:disabled { opacity: 0.4; cursor: default; }
-  .step-bar .btn.next { margin-left: auto; }
-  .counter { flex: 1; text-align: center; font-size: var(--text-sm); color: var(--muted); }
-
-  /* Counter variants (prototype-only switcher) */
+  .counter { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
   .counter .dots { display: flex; justify-content: center; gap: var(--space-2); }
   .counter .dot { width: 8px; height: 8px; border-radius: 100%; background: var(--line); }
   .counter .dot.on { background: var(--accent); }
-  .counter .bar-track { height: 4px; background: var(--line); border-radius: 100px; overflow: hidden; margin-bottom: var(--space-1); }
-  .counter .bar-fill { height: 100%; background: var(--accent); border-radius: 100px; transition: width var(--motion-base) ease-out; }
-
-  /* ---- Decorative motif (DESIGN.md §4.8: decorative details) ---- */
-  .motif { height: var(--space-2); margin: var(--space-1) 0 var(--space-6); }
-  [data-theme="default"] .motif { border-bottom: 2px solid var(--accent); width: 42px; }
-  [data-theme="tacos"] .motif { height: 8px; width: 100%;
-    background: repeating-linear-gradient(135deg, var(--accent) 0 10px, transparent 10px 20px); }
-  [data-theme="risotto"] .motif { height: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
-    padding: 2px 0; text-align: center; font-size: var(--text-sm); color: var(--muted); }
-  [data-theme="risotto"] .motif::after { content: "❦"; }
 
   /* ---- Prototype-only control panel ---- */
   .proto { position: fixed; right: var(--space-4); top: var(--space-4); z-index: 50;
            background: var(--ink); color: var(--paper); border-radius: var(--radius-md);
            padding: var(--space-4); font-size: var(--text-sm); line-height: 1.3; max-width: 220px; }
   .proto h2 { font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 var(--space-2); }
-  .proto .row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .proto .row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
   .proto button { font: inherit; font-size: var(--text-sm); padding: var(--space-1) var(--space-3);
                   border-radius: 100px; border: 1px solid var(--paper); background: transparent; color: var(--paper); cursor: pointer; }
   .proto button.on { background: var(--paper); color: var(--ink); }
-  .proto .hint { opacity: 0.7; }
+  .proto .hint { opacity: 0.7; margin: var(--space-3) 0 0; }
 </style>
 </head>
 <body data-theme="default">
@@ -167,9 +185,12 @@
   <section class="screen active" data-screen="intro">
     <div class="photo">Foto · 4:3</div>
     <h1>Street Tacos</h1>
-    <div class="motif"></div>
     <p class="description">Knusprige Tacos mit mariniertem Tofu, Pico de Gallo und Joghurt-Dip.</p>
-    <p class="meta">25&#8239;min · 40&#8239;min</p>
+    <div class="meta-line">
+      <span class="meta-item"><span class="caption">Arbeitszeit</span><span class="meta-value">25&#8239;min</span></span>
+      <span class="meta-item"><span class="caption">Gesamtzeit</span><span class="meta-value">40&#8239;min</span></span>
+    </div>
+    <p class="picker-caption">Portionen</p>
     <div class="chips" role="group" aria-label="Portionen wählen">
       <button class="chip" type="button">4</button>
       <button class="chip" type="button">5</button>
@@ -177,29 +198,34 @@
       <button class="chip" type="button">8</button>
       <button class="chip" type="button">10</button>
     </div>
-    <button class="primary" type="button" data-nav="forward">Zutaten</button>
-    <p class="footer">Erstellt mit Cookbook</p>
+    <p class="reference">400&#8239;g Tofu, 250&#8239;g Tortillas</p>
+    <footer class="brand">
+      <svg viewBox="0 0 960 960" width="20" height="20" aria-hidden="true" focusable="false"><g transform="translate(0 960)"><path d="M240-80q-33 0-56.5-23.5T160-160v-80q-17 0-28.5-11.5T120-280q0-17 11.5-28.5T160-320v-120q-17 0-28.5-11.5T120-480q0-17 11.5-28.5T160-520v-120q-17 0-28.5-11.5T120-680q0-17 11.5-28.5T160-720v-80q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v640q0 33-23.5 56.5T720-80H240Zm0-80h480v-640H240v80q17 0 28.5 11.5T280-680q0 17-11.5 28.5T240-640v120q17 0 28.5 11.5T280-480q0 17-11.5 28.5T240-440v120q17 0 28.5 11.5T280-280q0 17-11.5 28.5T240-240v80Zm140-280v130q0 13 8.5 21.5T410-280q13 0 21.5-8.5T440-310v-130q26-7 43-28.5t17-48.5v-143q0-8-6-14t-14-6q-8 0-14 6t-6 14v131h-30v-131q0-8-6-14t-14-6q-8 0-14 6t-6 14v131h-30v-131q0-8-6-14t-14-6q-8 0-14 6t-6 14v143q0 27 17 48.5t43 28.5Zm220 0v130q0 13 8.5 21.5T630-280q13 0 21.5-8.5T660-310v-347q0-11-7.5-17t-19.5-6q-13 0-28.5 7T575-652q-17 17-26 38.5t-9 46.5v87q0 17 11.5 28.5T580-440h20ZM240-160v-640 640Z" fill="currentColor"/></g></svg>
+      <span>Erstellt mit Cookbook</span>
+    </footer>
   </section>
 
   <!-- ===================== Zutaten ===================== -->
   <section class="screen" data-screen="zutaten">
-    <button class="back-top" type="button" data-nav="back">Intro</button>
+    <p class="step-caption">Street Tacos</p>
     <h2 class="screen-title">Zutaten</h2>
+    <div class="divider"></div>
     <ul class="check-list">
       <li class="check-row"><input type="checkbox" id="z1"><label class="qty" for="z1">250&#8239;g Tortillas</label></li>
       <li class="check-row"><input type="checkbox" id="z2"><label class="qty" for="z2">400&#8239;g Tofu</label></li>
       <li class="check-row"><input type="checkbox" id="z3"><label class="qty" for="z3">200&#8239;g Pico de Gallo</label>
-        <a class="badge" href="#"><svg viewBox="0 0 960 960"><path d="M440-280q-72 0-124-52t-52-124q0-72 52-124t124-52h120v80H440q-40 0-68 28t-28 68q0 40 28 68t68 28h120v80H440Zm-80-120q-17 0-28.5-11.5T320-440q0-17 11.5-28.5T360-480h240q17 0 28.5 11.5T640-440q0 17-11.5 28.5T600-400H360Zm160 120v-80h120q40 0 68-28t28-68q0-40-28-68t-68-28H520v-80h120q72 0 124 52t52 124q0 72-52 124t-124 52H520Z"/></svg>Rezept</a></li>
+        <a class="badge" href="#"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
       <li class="check-row"><input type="checkbox" id="z4"><label class="qty" for="z4">150&#8239;g Joghurt-Dip</label>
-        <a class="badge" href="#"><svg viewBox="0 0 960 960"><path d="M440-280q-72 0-124-52t-52-124q0-72 52-124t124-52h120v80H440q-40 0-68 28t-28 68q0 40 28 68t68 28h120v80H440Zm-80-120q-17 0-28.5-11.5T320-440q0-17 11.5-28.5T360-480h240q17 0 28.5 11.5T640-440q0 17-11.5 28.5T600-400H360Zm160 120v-80h120q40 0 68-28t28-68q0-40-28-68t-68-28H520v-80h120q72 0 124 52t52 124q0 72-52 124t-124 52H520Z"/></svg>Rezept</a></li>
+        <a class="badge" href="#"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
       <li class="check-row"><input type="checkbox" id="z5"><label class="qty" for="z5">1 Stück Limette</label></li>
     </ul>
-    <button class="primary" type="button" data-nav="forward">Zubereitung</button>
   </section>
 
   <!-- ===================== Zubereitung ===================== -->
   <section class="screen" data-screen="zubereitung">
     <p class="step-caption">Street Tacos</p>
+    <h2 class="step-title" id="step-title" aria-live="polite">Schritt 1 von 6</h2>
+    <div class="divider"></div>
     <div class="step-wrap" id="step-wrap">
       <div class="step" data-step="1">
         <ul class="step-rows"><li>250&#8239;g Tortillas</li></ul>
@@ -210,11 +236,11 @@
         <p class="step-text">Tofu würfeln, marinieren und scharf anbraten.</p>
       </div>
       <div class="step" data-step="3">
-        <ul class="step-rows"><li>200&#8239;g Pico de Gallo <a class="badge" href="#"><svg viewBox="0 0 960 960"><path d="M440-280q-72 0-124-52t-52-124q0-72 52-124t124-52h120v80H440q-40 0-68 28t-28 68q0 40 28 68t68 28h120v80H440Zm-80-120q-17 0-28.5-11.5T320-440q0-17 11.5-28.5T360-480h240q17 0 28.5 11.5T640-440q0 17-11.5 28.5T600-400H360Zm160 120v-80h120q40 0 68-28t28-68q0-40-28-68t-68-28H520v-80h120q72 0 124 52t52 124q0 72-52 124t-124 52H520Z"/></svg>Rezept</a></li></ul>
+        <ul class="step-rows"><li>200&#8239;g Pico de Gallo <a class="badge" href="#"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li></ul>
         <p class="step-text">Tomaten, Zwiebel und Koriander klein schneiden und mischen.</p>
       </div>
       <div class="step" data-step="4">
-        <ul class="step-rows"><li>150&#8239;g Joghurt-Dip <a class="badge" href="#"><svg viewBox="0 0 960 960"><path d="M440-280q-72 0-124-52t-52-124q0-72 52-124t124-52h120v80H440q-40 0-68 28t-28 68q0 40 28 68t68 28h120v80H440Zm-80-120q-17 0-28.5-11.5T320-440q0-17 11.5-28.5T360-480h240q17 0 28.5 11.5T640-440q0 17-11.5 28.5T600-400H360Zm160 120v-80h120q40 0 68-28t28-68q0-40-28-68t-68-28H520v-80h120q72 0 124 52t52 124q0 72-52 124t-124 52H520Z"/></svg>Rezept</a></li></ul>
+        <ul class="step-rows"><li>150&#8239;g Joghurt-Dip <a class="badge" href="#"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li></ul>
         <p class="step-text">Joghurt-Dip bereitstellen.</p>
       </div>
       <div class="step" data-step="5">
@@ -227,7 +253,7 @@
     </div>
   </section>
 
-  <!-- ===================== Step bar ===================== -->
+  <!-- ===================== Bottom bar ===================== -->
   <div class="step-bar" id="step-bar">
     <button class="btn prev" type="button" id="btn-back">Zurück</button>
     <div class="counter" id="counter"></div>
@@ -242,13 +268,7 @@
       <button data-theme="tacos" type="button">Tacos</button>
       <button data-theme="risotto" type="button">Risotto</button>
     </div>
-    <div class="row" id="counter-switch">
-      <button data-mode="text" class="on" type="button">3 von 8</button>
-      <button data-mode="fraction" type="button">3 / 8</button>
-      <button data-mode="dots" type="button">Punkte</button>
-      <button data-mode="bar" type="button">Balken</button>
-    </div>
-    <p class="hint">Tippen/Wischen auf den Schritten · Esc = zurück</p>
+    <p class="hint">Tippen/Wischen auf allen Seiten · Esc = zurück</p>
   </div>
 
 <script>
@@ -266,18 +286,24 @@
     zutaten: document.querySelector('[data-screen="zutaten"]'),
     zubereitung: document.querySelector('[data-screen="zubereitung"]'),
   };
-  var bar = document.getElementById('step-bar');
   var btnBack = document.getElementById('btn-back');
   var btnNext = document.getElementById('btn-next');
   var counter = document.getElementById('counter');
-  var counterMode = 'text'; // prototype-only
+  var stepTitle = document.getElementById('step-title');
 
-  // The two primary buttons (intro / zutaten) navigate by relative direction.
-  document.querySelectorAll('[data-nav]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      if (btn.getAttribute('data-nav') === 'back') { back(); } else { forward(); }
-    });
-  });
+  // Material Symbols (Rounded, weight 400), paths verbatim from
+  // google/material-design-icons (same source as apps/web/src/components/icons.tsx).
+  function glyph(path) {
+    return '<svg viewBox="0 0 960 960" width="18" height="18" aria-hidden="true" focusable="false">' +
+      '<path d="' + path + '" fill="currentColor" /></svg>';
+  }
+  var ICONS = {
+    back: glyph('M313,520L509,716Q521,728 520.5,744Q520,760 508,772Q496,783 480,783.5Q464,784 452,772L188,508Q182,502 179.5,495Q177,488 177,480Q177,472 179.5,465Q182,458 188,452L452,188Q463,177 479.5,177Q496,177 508,188Q520,200 520,216.5Q520,233 508,245L313,440L760,440Q777,440 788.5,451.5Q800,463 800,480Q800,497 788.5,508.5Q777,520 760,520L313,520Z'),
+    next: glyph('M647,520L200,520Q183,520 171.5,508.5Q160,497 160,480Q160,463 171.5,451.5Q183,440 200,440L647,440L451,244Q439,232 439.5,216Q440,200 452,188Q464,177 480,176.5Q496,176 508,188L772,452Q778,458 780.5,465Q783,472 783,480Q783,488 780.5,495Q778,502 772,508L508,772Q497,783 480.5,783Q464,783 452,772Q440,760 440,743.5Q440,727 452,715L647,520Z'),
+  };
+
+  function setBack(label) { btnBack.innerHTML = ICONS.back + '<span>' + label + '</span>'; }
+  function setNext(label) { btnNext.innerHTML = ICONS.next + '<span>' + label + '</span>'; }
 
   function isStep(node) { return node.indexOf('step-') === 0; }
   function stepNumber(node) { return Number(node.slice('step-'.length)); }
@@ -285,12 +311,17 @@
   // Direction-aware step entrance (DESIGN.md §4.6: subdued slide, no bounce).
   function showStep(el, direction) {
     el.classList.remove('slide-fwd', 'slide-back');
-    // Re-trigger the animation by forcing a reflow, then re-adding the class.
-    void el.offsetWidth;
+    void el.offsetWidth; // re-trigger the animation by forcing a reflow
     el.classList.add(direction === 'forward' ? 'slide-fwd' : 'slide-back');
   }
 
-  // Renders one node: screen visibility, step visibility, buttons, counter.
+  // The dots span the whole flow — intro, Zutaten and each step — with the current lit.
+  function renderDots(index) {
+    var dots = '<div class="dots">';
+    for (var i = 0; i < nodes.length; i++) { dots += '<span class="dot' + (i === index ? ' on' : '') + '"></span>'; }
+    counter.innerHTML = dots + '</div>';
+  }
+
   function render(direction) {
     var node = nodes[current];
     var onSteps = isStep(node);
@@ -298,37 +329,29 @@
     screens.intro.classList.toggle('active', node === 'intro');
     screens.zutaten.classList.toggle('active', node === 'zutaten');
     screens.zubereitung.classList.toggle('active', onSteps);
-    bar.style.display = onSteps ? 'flex' : 'none';
+
+    // Left button: "Zurück" everywhere, hidden on the intro (nothing precedes it).
+    if (node === 'intro') {
+      btnBack.style.display = 'none';
+    } else {
+      btnBack.style.display = '';
+      setBack('Zurück');
+    }
+
+    // Right button: "Weiter" everywhere, removed on the last step (nothing follows it).
+    setNext('Weiter');
+    btnNext.style.display = onSteps && stepNumber(node) === N ? 'none' : '';
+
+    // Middle: the dots span the whole flow (intro, Zutaten and the steps).
+    renderDots(current);
 
     if (onSteps) {
-      var n = stepNumber(node);
+      stepTitle.textContent = 'Schritt ' + stepNumber(node) + ' von ' + N;
       stepEls.forEach(function (el, i) {
-        var active = (i + 1) === n;
+        var active = (i + 1) === stepNumber(node);
         el.classList.toggle('active', active);
         if (active && direction) { showStep(el, direction); }
       });
-      // Left button: „Zutaten" on step 1 (back to the check screen), „Zurück" otherwise.
-      btnBack.textContent = n === 1 ? 'Zutaten' : 'Zurück';
-      btnBack.disabled = false;
-      // „Weiter" disabled on the last step.
-      btnNext.disabled = n === N;
-      renderCounter(n);
-    }
-  }
-
-  function renderCounter(n) {
-    if (counterMode === 'text') {
-      counter.textContent = n + ' von ' + N;
-    } else if (counterMode === 'fraction') {
-      counter.textContent = n + ' / ' + N;
-    } else if (counterMode === 'dots') {
-      var dots = '<div class="dots">';
-      for (var i = 1; i <= N; i++) { dots += '<span class="dot' + (i === n ? ' on' : '') + '"></span>'; }
-      counter.innerHTML = dots + '</div>';
-    } else { // bar
-      var pct = (n / N * 100).toFixed(0) + '%';
-      counter.innerHTML = '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '"></div></div>' +
-        (n + ' von ' + N);
     }
   }
 
@@ -344,6 +367,9 @@
     if (push) { history.pushState({ node: nodes[index] }, ''); }
   }
 
+  btnBack.addEventListener('click', back);
+  btnNext.addEventListener('click', forward);
+
   // Escape = one node back (DESIGN.md §6.6).
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { back(); }
@@ -357,31 +383,24 @@
     render();
   });
 
-  // Swipe: left = forward, right = back (steps screen only, DESIGN.md §5.11).
+  // Swipe on every screen (not only the steps): left = forward, right = back.
   var touchX = null;
-  screens.zubereitung.addEventListener('touchstart', function (e) {
+  document.addEventListener('touchstart', function (e) {
     touchX = e.touches[0].clientX;
   }, { passive: true });
-  screens.zubereitung.addEventListener('touchend', function (e) {
+  document.addEventListener('touchend', function (e) {
     if (touchX === null) { return; }
     var dx = e.changedTouches[0].clientX - touchX;
     if (Math.abs(dx) > 48) { (dx < 0 ? forward : back)(); }
     touchX = null;
   }, { passive: true });
 
-  // ---- Prototype-only controls ----
+  // ---- Prototype-only theme switcher ----
   document.getElementById('theme-switch').addEventListener('click', function (e) {
     var t = e.target.getAttribute('data-theme');
     if (!t) { return; }
     document.body.setAttribute('data-theme', t);
     this.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b === e.target); });
-  });
-  document.getElementById('counter-switch').addEventListener('click', function (e) {
-    var m = e.target.getAttribute('data-mode');
-    if (!m) { return; }
-    counterMode = m;
-    this.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b === e.target); });
-    render();
   });
 
   // Initial state (no history entry yet; replace so Back does not reload).

@@ -276,7 +276,7 @@ function MealPlanSheet({
           // only accepts a size that fits the recipe, mealPlan.ts), so only the
           // quantity is chosen here — no Gewicht/Volumen switch.
           <div className="field">
-            <span className="field-label">Ergiebigkeit</span>
+            <span className="field-label">Menge</span>
             <QuantityPicker
               value={yieldQuantity}
               onChange={setYieldQuantity}

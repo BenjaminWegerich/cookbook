@@ -142,12 +142,13 @@ no runtime font fetch. The default typeface is Source Sans 3.
 | Token | Size | Line height | Role |
 | --- | --- | --- | --- |
 | `--text-xl` | 32px | 42px | the intro title (`h1`) |
-| `--text-lg` | 24px | 32px | the Zutaten heading |
-| `--text-md` | 18px | 24px | step prose, step ingredients, check-list rows — the base size |
-| `--text-sm` | 14px | 18px | captions (the step-screen title), meta, the step counter |
+| `--text-lg` | 24px | 32px | the Zutaten heading, the step title, step prose, step ingredients, check-list rows |
+| `--text-md` | 18px | 24px | the bottom-bar buttons — the base size |
+| `--text-sm` | 14px | 18px | captions (the recipe-title caption, the size-picker caption), meta |
 
-Titles and captions are weight 600, body text weight 400. The reading size of the step prose
-is provisional and settled in the prototype; every candidate stays a ladder value.
+Titles and captions are weight 600, body text weight 400. Step prose, its ingredient rows and
+the check-list read at arm's length and use `--text-lg`; the step title „Schritt x von y" shares
+that size.
 
 ### 4.3 Geometry: pixel ladder and spacing
 
@@ -296,9 +297,10 @@ size drawn for it:
 
 Icons are inline SVG (no icon font, no runtime fetch), drawn on the Material Symbols Rounded
 family's grid, weight 400, `fill="currentColor"` — the same family as the web app. The export
-uses exactly one symbol: the sub-recipe badge's link glyph, beside its visible „Rezept" label.
-The check-list checkbox is a native `<input type="checkbox">` styled with the theme, never a
-hand-drawn glyph.
+uses these symbols: the sub-recipe badge's link glyph beside its visible „Rezept" label, the
+back/forward arrows on every navigation button (left = back, right = forward), and the Cookbook
+brand mark (menu book 2) beside „Erstellt mit Cookbook". The check-list checkbox is a native
+`<input type="checkbox">` styled with the theme, never a hand-drawn glyph.
 
 ### 4.6 Motion
 
@@ -402,8 +404,8 @@ against `accent` reaches WCAG AA.
 - The default theme is the web app's palette and typeface: a recipe without `theme` data
   renders in the app's look.
 - A recipe may override any subset; the rest fall back to the default.
-- The theme may carry decorative details (a divider motif, a badge shape) but never changes
-  the placement, size or wording of any control.
+- The theme may carry decorative details but never changes the placement, size or wording of
+  any control.
 - Sub-recipes carry their own theme; the parent's theme is not inherited.
 
 ## 5. Components
@@ -453,11 +455,12 @@ page has no cancel in its row — its navigation exit is „Zurück" at the top 
 
 *Applies to: cooking view.*
 
-The forward actions are one primary button each: accent fill, `on-accent` label, `--radius-md`,
-at least 42px tall — „Zutaten" on the intro, „Zubereitung" on the check screen. The step bar's
-buttons are large outlined buttons (surface fill, hairline border, ink label) with the same
-42px minimum: „Weiter" forward, and „Zurück" / „Zutaten" back. A quiet text button „Intro"
-top-left of the check screen returns to the intro.
+Every navigation control lives in the one fixed bottom bar, not on the screens. The forward
+action is the bar's primary button — accent fill, `on-accent` label, `--radius-md`, at least
+42px tall, with a leading right arrow: „Weiter" on every screen except the last step, where the
+button is removed. The bar's back button is outlined (surface fill, hairline border, ink
+label), at least 42px, with a leading left arrow: „Zurück" on every screen except the intro,
+where it is hidden.
 
 ### 5.2 Chips and segmented controls
 
@@ -626,11 +629,12 @@ is a *change* ends in the bottom action row (§5.1, §6.1).
 
 *Applies to: cooking view.*
 
-The intro opens with the recipe title as `h1` (`--text-xl`). The Zutaten screen opens with a
-heading „Zutaten" (`--text-lg`, 24px, weight 600, muted) above the check list — larger than
-the steps screen's title. The steps screen replaces it with a small caption — the recipe title
-in `--text-sm`, weight 600, muted, ALL CAPS by CSS — so the current step stays the focus. The
-step bar is the sticky bottom bar (§5.11), full-bleed.
+The intro opens with the recipe title as `h1` (`--text-xl`). The Zutaten screen opens with the
+recipe-title caption (`--text-sm`, weight 600, muted, ALL CAPS by CSS), a heading „Zutaten"
+(`--text-lg`, 24px, weight 600) and the theme's divider below it (§4.8). The steps screen
+carries the same recipe-title caption, a step title „Schritt x von y" (`--text-lg`, weight 600)
+with the theme's divider below it — so the current step stays the focus. The bottom bar is the
+fixed bottom bar (§5.11), full-bleed.
 
 ### 5.6 Sheets, overlays and scrims
 
@@ -851,29 +855,39 @@ wash (§5.1) — a scrim must not visibly react to the tap that dismisses it.
 *Applies to: cooking view.*
 
 **Three screens, one page, in order.** The cooking view is Intro → Zutaten → Zubereitung.
-Each is a full state of the one page; the recipe's theme skins all three. Navigation buttons
-are named after their destination. The view is the same for every reader — owner and friend —
-no account and no personalisation.
+Each is a full state of the one page; the recipe's theme skins all three. Navigation lives in
+the one fixed bottom bar, whose two buttons are the directional „Zurück" (left arrow) and
+„Weiter" (right arrow). The view is the same for every reader — owner and friend — no account
+and no personalisation.
 
-**Intro.** The first screen: the photo (§5.8), the title (`h1`), the description, the meta
-(prep / total time), the size picker (§5.2), the forward action „Zutaten", and the
-„Erstellt mit Cookbook" footer. Scaling happens here and only here. A meal-plan link opens
-this screen with the promised size pre-selected.
+**Intro.** The first screen: the photo (§5.8), the title (`h1`), the description, the meta line
+— „Arbeitszeit …" and „Gesamtzeit …" as caption/value pairs in the recipe overview's look
+(all-caps muted captions, bold values) — the size picker under an all-caps „Portionen" /
+„Menge" caption (§5.2), and, when the recipe defines reference ingredients, a small muted
+readout of them below the picker (the Einplanen sheet's look). Scaling happens here and only
+here. A meal-plan link opens this screen with the promised size pre-selected.
 
-**Zutaten.** The check screen: a quiet „Intro" button top-left, the heading „Zutaten" (§5.5),
-the master ingredient list of the chosen size as checkable rows (§5.4), then the forward action
-„Zubereitung". Checks are purely local; a size change discards them, while moving between
+**Zutaten.** The check screen: the recipe-title caption, the heading „Zutaten" with the theme's
+divider below it (§5.5), the master ingredient list of the chosen size as checkable rows (§5.4),
+and the bottom bar. Checks are purely local; a size change discards them, while moving between
 screens without changing the size keeps them.
 
-**Zubereitung.** One step at a time: the caption title (§5.5), the step's own ingredient rows,
-the step prose, and the bottom step bar. The size picker is absent here.
+**Zubereitung.** One step at a time: the recipe-title caption, the step title „Schritt x von y"
+with the theme's divider below it (§5.5), the step's own bulleted ingredient rows followed by
+the step prose, and the bottom bar. The size picker is absent here.
 
-**The step bar** is the fixed bottom bar: the left button, „Weiter" on the right, the step
-counter — „3 von 8" — centred between them. The left button reads „Zurück" (previous step)
-except on step 1, where it reads „Zutaten" and returns to the check screen. A swipe left goes
-forward, a swipe right goes back; the Escape key and the browser Back button go to the previous
-step, and from step 1 to the Zutaten screen (browser Forward returns to the next step). Tapping
-the step text does not advance.
+**The footer** „Erstellt mit Cookbook" (the Cookbook brand mark beside the words) sits at the
+bottom of the intro screen, left-aligned, above the fixed bottom bar; it scrolls with the
+content while the bar stays put.
+
+**The bottom bar** is the fixed bar on every screen: the „Zurück" button on the left, the
+primary „Weiter" button on the right, and the flow dots centred in the bar — even when only one
+button is present on the first or last screen. The dots span the whole flow — intro, Zutaten
+and each step — with the current one lit. „Zurück" is hidden on the
+intro (nothing precedes it); „Weiter" is removed on the last step (nothing follows it). A swipe
+left goes forward and a swipe right goes back on every screen; the Escape key and the browser
+Back button go to the previous step, and from step 1 to the Zutaten screen (browser Forward
+returns to the next step). Tapping the step text does not advance.
 
 **Going back.** Every back action moves one node at a time: from a step to the previous step,
 from step 1 to Zutaten, from Zutaten to the intro. Changing the size on the intro discards the
@@ -1041,11 +1055,11 @@ the components follow; it does not override them.
 
 *Applies to: cooking view.*
 
-The cooking view is German, like the app. Navigation buttons are named after their destination
-— „Zutaten", „Zubereitung", „Intro", „Zurück" — following the app's rule that verbless labels
-are reserved for navigation; a screen's forward action is the next screen's name. Its other
-strings: „Weiter", the step counter „x von y", „Rezept" (sub-recipe badge), „Erstellt mit
-Cookbook" (footer). Numbers and units are joined by the narrow no-break space.
+The cooking view is German, like the app. The bottom bar's two navigation buttons are the
+verbless „Zurück" and „Weiter". Its other strings: the step title „Schritt x von y", „Rezept"
+(sub-recipe badge), the size-picker captions „Portionen" / „Menge", the time captions
+„Arbeitszeit" / „Gesamtzeit", and the footer „Erstellt mit Cookbook" beside the brand mark.
+Numbers and units are joined by the narrow no-break space.
 
 ## 8. Accessibility
 
@@ -1089,7 +1103,7 @@ component sections already state, gathered here as one contract.
 *Applies to: cooking view.*
 
 Every control is a real `<button>` or a native checkbox, at least 42px, with an accessible name
-(visible label or `aria-label`). The step counter is `aria-live="polite"`. The check list is a
+(visible label or `aria-label`). The step title („Schritt x von y") is `aria-live="polite"`. The check list is a
 labelled group; each checkbox carries its row text as its label. Colour never carries meaning
 alone. Swipe is an alternative to the buttons, never the only way: step navigation is mirrored
 in browser history so Back and Forward move through the screens and steps, and the Escape key

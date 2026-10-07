@@ -233,6 +233,7 @@ function renderServingButtons(recipe: Recipe): string {
     .join('\n      ');
   return (
     `<section aria-label="Portionen">\n` +
+    `  <p class="picker-caption">Portionen</p>\n` +
     `  <div class="servings" role="group" aria-label="Portionen wählen">\n` +
     `    ${buttons}\n` +
     `  </div>\n` +
@@ -280,8 +281,9 @@ function renderYieldPicker(recipe: Recipe, quantities: readonly number[]): strin
     })
     .join('\n      ');
   return (
-    `<section aria-label="Ergiebigkeit">\n` +
-    `  <div class="yield-chips" role="group" aria-label="Ergiebigkeit wählen">\n` +
+    `<section aria-label="Menge">\n` +
+    `  <p class="picker-caption">Menge</p>\n` +
+    `  <div class="yield-chips" role="group" aria-label="Menge wählen">\n` +
     `    ${chips}\n` +
     `  </div>\n` +
     `  <div class="yield-row">\n` +
@@ -492,6 +494,7 @@ const STYLES = `
   .yield-step-button:disabled { opacity: 0.5; cursor: default; }
   .yield-value { font-weight: 600; min-width: 5rem; text-align: center; }
   .serving-headline { font-weight: 600; margin: 0.6rem 0; }
+  .picker-caption { font-weight: 600; margin: 0.6rem 0 0.4rem; color: #666; }
   .sub-recipe-link { color: #1a73e8; text-decoration: underline; }
   .ingredients, .steps { padding-left: 1.3rem; }
   .ingredients li, .step-ingredients li { margin: 0.35rem 0; }

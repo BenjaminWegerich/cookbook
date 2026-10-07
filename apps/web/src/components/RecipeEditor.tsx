@@ -1575,8 +1575,8 @@ function RecipeEditor({
           ) : (
             <>
               <div className="field" id="editor-field-yield">
-                <span className="field-label">Ergiebigkeit</span>
-                <div className="segmented" role="group" aria-label="Einheit der Ergiebigkeit">
+                <span className="field-label">Menge</span>
+                <div className="segmented" role="group" aria-label="Einheit der Menge">
                   <button
                     type="button"
                     className={draft.yield_unit !== 'ml' ? 'segmented-active' : ''}
