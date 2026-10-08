@@ -369,14 +369,14 @@
   line-height: 1.3;
 }
 
-/* The title text: at most two lines, then an ellipsis. `min-width: 0` lets the
-   text shrink below its longest word and `overflow-wrap: anywhere` breaks a long
-   unbreakable word (a URL in a title, in practice) instead of widening the
+/* The title text: at most three lines, then an ellipsis. `min-width: 0` lets
+   the text shrink below its longest word and `overflow-wrap: anywhere` breaks a
+   long unbreakable word (a URL in a title, in practice) instead of widening the
    card. */
 .recipe-card-title-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   min-width: 0;
   overflow: hidden;
   overflow-wrap: anywhere;

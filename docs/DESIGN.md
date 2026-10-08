@@ -611,7 +611,7 @@ action may sit beside it in the same row, and `--space-7` separates two sections
 
 - A card or row is tappable as a whole; a control inside it (a badge's ×, a checkbox) is the
   only thing that may carry its own target.
-- A card title clamps to two lines and is cut with an ellipsis; it is never pushed to a third
+- A card title clamps to three lines and is cut with an ellipsis; it is never pushed to a fourth
   line or set in a smaller size to fit.
 - A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
   muted) beneath it.
@@ -1022,7 +1022,7 @@ shopping list.
   and puts back the exact lines it replaced, as one block at the top, in their reading order.
 - Replacing an unrecognized entry is a 1:1 restore: the chosen recipe's line leaves, the
   unrecognized entry's line returns.
-- „Vom Plan entfernen" never deletes the line — it ticks it off, so the user still sees in Keep
+- „Abhaken" never deletes the line — it ticks it off, so the user still sees in Keep
   what was cooked. Its undo is the inverse tick, so the dish reappears with the size it had.
 
 **The shopping list removes one instance per line, not every match.** A list of things to buy
