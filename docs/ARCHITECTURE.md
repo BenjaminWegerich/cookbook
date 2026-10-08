@@ -201,10 +201,13 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   never twice on one screen). Both render the same card grid and the one search field filters
   both at once. Each caption carries its counter („Essensplan (5 Einträge, davon 2 unbekannt)“,
   „Restliche Sammlung (8 Rezepte)“) in the editor's field-caption typography; the counter
-  disappears while a search runs, the caption stays and the body carries the placeholder
-  sentence, so a section that is empty only because of the search still says which section it
-  is. „Einkaufsliste schreiben“ sits in the „Essensplan“ caption row as a quiet text button: it
-  acts on the plan, and a filled button would compete with the floating action button.
+  disappears as soon as the search field is focused or carries a query, the caption stays and the
+  body carries the placeholder sentence, so a section that is empty only because of the search
+  still says which section it is. The caption row's two actions — „Einkaufsliste schreiben“ and
+  „Einkaufsliste sortieren“ — disappear the same way, because both act on the whole list rather
+  than the filtered result. „Einkaufsliste schreiben“ sits in the „Essensplan“ caption row as a
+  quiet text button: it acts on the plan, and a filled button would compete with the floating
+  action button.
 - **Recognition.** An entry is a recipe when its text — without a trailing export link and
   without an optional ` (6 Portionen)`, ` (500 g)` or ` (1,5 l)` suffix — is the exact,
   case-sensitive title of a recipe file, and a stated size fits the recipe: an integer ladder

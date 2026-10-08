@@ -121,10 +121,11 @@ interface RecipeListProps {
  * editor's field-caption typography (.field-label: small, semibold, muted, all
  * caps), with the counter itself set exactly like the editor's quiet
  * "(optional)" marker: normal case, italic, slightly translucent, one en space
- * after the caption word. The counter disappears while a search runs (it
- * counts the section, not the result), the caption stays: it is the section's
- * heading, and a section that is empty only because of the search still has to
- * say which section it is. The body then carries the placeholder sentence.
+ * after the caption word. The counter disappears while the search is active —
+ * the field is focused or carries a query — because it counts the section, not
+ * the result; the caption stays: it is the section's heading, and a section
+ * that is empty only because of the search still has to say which section it
+ * is. The body then carries the placeholder sentence.
  *
  * In the "Essensplan" caption row sits **"Einkaufsliste schreiben"** (decided
  * with the user), the entry into the bundled shopping-list selection: there the
@@ -146,9 +147,13 @@ interface RecipeListProps {
  * memory, see the `shoppingWritten` prop).
  *
  * Search filters the cards of both sections (recipe title, complete meal-plan
- * entry text), never the captions. The whole card is the hitbox — the badges are
- * plain content inside it, never a target of their own. UI language is German
- * (see docs/CODING_CONVENTIONS.md).
+ * entry text), never the captions. The two caption-row actions of the
+ * "Essensplan" section and both section counters hide as soon as the search
+ * field is focused or carries a query: the actions act on the whole list, not
+ * on whatever the search narrows it to, and a counter that ignores the query
+ * would contradict the cards below it. The whole card is the hitbox — the
+ * badges are plain content inside it, never a target of their own. UI language
+ * is German (see docs/CODING_CONVENTIONS.md).
  */
 function RecipeList({
   recipes,
@@ -168,6 +173,7 @@ function RecipeList({
   shoppingSorted,
 }: RecipeListProps) {
   const [query, setQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
 
   // Normalized once so the per-render filters below only repeat the cheap
   // includes comparisons, not the normalization. Empty query and thus an empty
@@ -175,6 +181,13 @@ function RecipeList({
   // spaces is treated as no query at all.
   const trimmedQuery = query.trim();
   const needle = trimmedQuery.toLowerCase();
+
+  // The search is "active" while the field is focused or carries a query: the
+  // two caption-row actions of the "Essensplan" section and the section counters
+  // hide then, because the user is busy with the search, not with the whole
+  // list — and a counter that ignores the query would contradict the cards
+  // below it.
+  const searchActive = needle !== '' || searchFocused;
 
   /**
    * The recipes of "Restliche Sammlung": the collection without the titles the
@@ -402,6 +415,8 @@ function RecipeList({
             placeholder={SEARCH_PLACEHOLDER}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             aria-label={SEARCH_LABEL}
           />
           {/* The clear button is an overlay inside the field, not a second grid
@@ -429,22 +444,25 @@ function RecipeList({
         <div className="recipe-section-header">
           <h2 className="recipe-section-caption" id={MEALPLAN_CAPTION_ID}>
             Essensplan
-            {/* No counter while a search runs: it counts the plan, not the
-                result, and a number that ignores the query would contradict the
-                cards below it. */}
-            {needle === '' && planCounter !== null && (
+            {/* No counter while the search is active (the field is focused or
+                carries a query): it counts the plan, not the result, and a
+                number that ignores the query would contradict the cards below
+                it. */}
+            {!searchActive && planCounter !== null && (
               <span className="recipe-section-counter">{planCounter}</span>
             )}
           </h2>
 
           {/* The entry into the bundled shopping-list view. It only exists while
               the plan is connected and carries entries — there is nothing to
-              select from otherwise. After the flow wrote the list, the same
-              place reports that state: the symbol becomes a check, the label
-              says so and the button is unavailable (a second write would
+              select from otherwise — and hides while the search is active (the
+              field is focused or carries a query), because it acts on the whole
+              plan, not on the filtered result. After the flow wrote the list,
+              the same place reports that state: the symbol becomes a check, the
+              label says so and the button is unavailable (a second write would
               duplicate the lines, and Keep itself cannot tell the app whether
               the list matches the plan). */}
-          {canWriteShoppingList && (
+          {!searchActive && canWriteShoppingList && (
             <button
               type="button"
               className="text-button shopping-list-button"
@@ -465,10 +483,13 @@ function RecipeList({
           {/* The aisle sort ("Einkaufsliste sortieren"), next to the write button.
               It acts on the shopping list, so it appears whenever that list
               carries entries — independently of whether the meal plan offers
-              anything to write. After the sort ran, the same place reports the
-              state: a check instead of the sort symbol and an unavailable button
-              (a second sort is a no-op until the list changes again). */}
-          {shoppingSortable && (
+              anything to write — and hides while the search is active (the field
+              is focused or carries a query), because it acts on the whole list,
+              not on the filtered result. After the sort ran, the same place
+              reports the state: a check instead of the sort symbol and an
+              unavailable button (a second sort is a no-op until the list changes
+              again). */}
+          {!searchActive && shoppingSortable && (
             <button
               type="button"
               className="text-button shopping-list-button"
@@ -494,7 +515,7 @@ function RecipeList({
         <div className="recipe-section-header">
           <h2 className="recipe-section-caption" id={COLLECTION_CAPTION_ID}>
             Restliche Sammlung
-            {needle === '' && collectionCounter !== null && (
+            {!searchActive && collectionCounter !== null && (
               <span className="recipe-section-counter">{collectionCounter}</span>
             )}
           </h2>
