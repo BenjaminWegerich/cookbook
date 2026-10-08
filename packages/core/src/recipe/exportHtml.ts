@@ -41,7 +41,7 @@
  * must never be able to inject markup into the exported file.
  */
 
-import { formatAQValue, formatBQ, NNBSP, renderAQS } from '../additionalUnits.js';
+import { formatAQValueSlash, formatBQ, NNBSP, renderAQSSlash } from '../additionalUnits.js';
 import { scaleAQ } from '../aqLadder.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
 import type { TextArtifact } from './artifacts.js';
@@ -64,7 +64,7 @@ const SERVING_MAX = 30;
  * Renders a quantity/ingredient display line (already HTML-escaped). A link is
  * added when the name is present in `links` (implicit sub-recipe, §4). A
  * quantity-only artifact may be unitless (`{{1/2}}`) and then renders as its AQ
- * standard number in the fraction typography.
+ * standard number in the slash form (DESIGN §7).
  */
 function displayLine(
   name: string | undefined,
@@ -75,9 +75,9 @@ function displayLine(
   const line =
     name === undefined
       ? bu === undefined
-        ? formatAQValue(bq)
+        ? formatAQValueSlash(bq)
         : formatBQ(bq, bu)
-      : renderAQS(name, bq, bu ?? 'g');
+      : renderAQSSlash(name, bq, bu ?? 'g');
   const url = name !== undefined ? links[name] : undefined;
   if (url === undefined) return escapeHtml(line);
   return (

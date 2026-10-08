@@ -3,12 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { ADDITIONAL_UNITS, INGREDIENT_MAPPINGS, NUMBER_SCHEMES } from './additionalUnitsData.js';
 import {
   formatAQ,
+  formatAQSlash,
   formatAQValue,
+  formatAQValueSlash,
   formatBQ,
   formatDecimal,
   formatPantryAq,
   pantryReading,
   renderAQS,
+  renderAQSSlash,
   renderPantryAmount,
   renderPantryLine,
   renderQuantityText,
@@ -432,6 +435,56 @@ describe('formatAQ / formatAQValue (§8 — fraction glyph typography)', () => {
 
   it('rejects a value that is not an AQ ladder number', () => {
     expect(() => formatAQValue(0.3)).toThrow();
+  });
+});
+
+describe('formatAQSlash / formatAQValueSlash (DESIGN §7 — cooking view slash form)', () => {
+  it('keeps proper fractions in full-size slash digits, no glyph', () => {
+    expect(formatAQSlash('1/10')).toBe('1/10');
+    expect(formatAQSlash('1/8')).toBe('1/8');
+    expect(formatAQSlash('1/3')).toBe('1/3');
+    expect(formatAQSlash('1/2')).toBe('1/2');
+    expect(formatAQSlash('2/5')).toBe('2/5');
+    expect(formatAQSlash('2/3')).toBe('2/3');
+    expect(formatAQSlash('3/4')).toBe('3/4');
+    expect(formatAQSlash('7/8')).toBe('7/8');
+  });
+
+  it('joins a mixed number with the narrow no-break space', () => {
+    expect(formatAQSlash('1+1/4')).toBe(`1${NNBSP}1/4`);
+    expect(formatAQSlash('2+1/2')).toBe(`2${NNBSP}1/2`);
+  });
+
+  it('keeps whole AQ values unchanged', () => {
+    expect(formatAQSlash('1')).toBe('1');
+    expect(formatAQSlash('12')).toBe('12');
+    expect(formatAQSlash('1000')).toBe('1000');
+  });
+
+  it('formats numeric AQ values in the slash form', () => {
+    expect(formatAQValueSlash(0.1)).toBe('1/10');
+    expect(formatAQValueSlash(0.5)).toBe('1/2');
+    expect(formatAQValueSlash(1.25)).toBe(`1${NNBSP}1/4`);
+    expect(formatAQValueSlash(3)).toBe('3');
+  });
+
+  it('rejects a value that is not an AQ ladder number', () => {
+    expect(() => formatAQValueSlash(0.3)).toThrow();
+  });
+});
+
+describe('renderAQSSlash (DESIGN §7 — cooking view)', () => {
+  it('renders AQ fractions in the slash form instead of glyphs', () => {
+    expect(renderAQSSlash('Joghurt', 200, 'g')).toBe(`1/2${NNBSP}Becher Joghurt (200${NNBSP}g)`);
+    expect(renderAQSSlash('Joghurt', 600, 'g')).toBe(
+      `1${NNBSP}1/2${NNBSP}Becher Joghurt (600${NNBSP}g)`,
+    );
+  });
+
+  it('matches renderAQS wherever no fraction is shown', () => {
+    expect(renderAQSSlash('Joghurt', 400, 'g')).toBe(renderAQS('Joghurt', 400, 'g'));
+    expect(renderAQSSlash('Joghurt', 500, 'g')).toBe(`500${NNBSP}g Joghurt`);
+    expect(renderAQSSlash('Zucker', 400, 'g')).toBe(`400${NNBSP}g Zucker`);
   });
 });
 

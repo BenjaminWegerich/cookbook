@@ -234,12 +234,37 @@ export function formatAQ(aq: string): string {
 }
 
 /**
+ * Formats a canonical AQ fraction ("1/2", "1+1/4") in the slash form of
+ * DESIGN §7 (cooking view): a proper fraction keeps its full-size digits
+ * ("1/2", "2/5"), and a mixed number joins its integer and fraction with the
+ * narrow no-break space ("1 1/4"). Unlike `formatAQ`, which substitutes the
+ * web app's single Unicode fraction glyphs, this form asks no fraction glyph
+ * of the export's theme font and reads at arm's length (§4.8 character
+ * coverage). Whole AQ values pass through unchanged.
+ */
+export function formatAQSlash(aq: string): string {
+  const plus = aq.indexOf('+');
+  if (plus === -1) return aq;
+  return `${aq.slice(0, plus)}${NNBSP}${aq.slice(plus + 1)}`;
+}
+
+/**
  * Formats a numeric AQ value in the §8 typography (0.25 → "¼", 1.25 → "1 ¼").
  * Used for unitless inline quantities, which are AQ ladder values. Throws when
  * `value` is not an AQ value — non-standard numbers do not exist in the app.
  */
 export function formatAQValue(value: number): string {
   return formatAQ(aqNotation(value));
+}
+
+/**
+ * Formats a numeric AQ value in the slash form of DESIGN §7 (0.25 → "1/4",
+ * 1.25 → "1 1/4") — the cooking view's counterpart of `formatAQValue`, used
+ * for unitless inline quantities. Throws when `value` is not an AQ value,
+ * exactly like `formatAQValue`.
+ */
+export function formatAQValueSlash(value: number): string {
+  return formatAQSlash(aqNotation(value));
 }
 
 /**
@@ -253,13 +278,14 @@ function renderSelectedAQ(
   selected: AdditionalQuantity,
   bu: string,
   shownBq: number,
+  formatAq: (aq: string) => string,
 ): string {
   // The arrangement binds <BQ> and <BU> together with a narrow no-break
   // space; substitute that pair with the formatted base quantity first (the
   // <NNBSP> placeholder is consumed here, before the general substitution).
   const line = selected.au.arrangement
     .replace('<BQ><NNBSP><BU>', formatBQ(shownBq, bu))
-    .replaceAll('<AQ>', formatAQ(selected.aq))
+    .replaceAll('<AQ>', formatAq(selected.aq))
     .replaceAll('<AU>', selected.au.name)
     .replaceAll('<IN>', ingredient)
     .replaceAll('<NNBSP>', NNBSP);
@@ -285,13 +311,35 @@ function renderSelectedAQ(
  * either way.
  */
 export function renderAQS(ingredient: string, bq: number, bu: string): string {
+  return renderAQSWith(ingredient, bq, bu, formatAQ);
+}
+
+/**
+ * The cooking view's counterpart of `renderAQS` (DESIGN §7): the same line,
+ * but the additional quantity renders in the slash form (`formatAQSlash`)
+ * instead of the web app's fraction glyphs.
+ */
+export function renderAQSSlash(ingredient: string, bq: number, bu: string): string {
+  return renderAQSWith(ingredient, bq, bu, formatAQSlash);
+}
+
+/**
+ * The shared core of `renderAQS` and `renderAQSSlash`: selects the additional
+ * quantity, then renders the arrangement with the caller's fraction formatter.
+ */
+function renderAQSWith(
+  ingredient: string,
+  bq: number,
+  bu: string,
+  formatAq: (aq: string) => string,
+): string {
   const selected = selectAQ(ingredient, bq, bu);
   if (selected === null) {
     return `${formatBQ(bq, bu)} ${ingredient}`;
   }
   // Exact unit (§6.3): the count is the source of truth for the shown amount.
   const shownBq = selected.au.exact ? aqToNumber(selected.aq) * selected.factor : bq;
-  return renderSelectedAQ(ingredient, selected, bu, shownBq);
+  return renderSelectedAQ(ingredient, selected, bu, shownBq, formatAq);
 }
 
 /**
@@ -357,7 +405,7 @@ export function renderQuantityText(ingredient: string, bq: number, bu: string): 
     if (au.exact && Math.abs(value * mapping.factor - bq) > AMOUNT_EPSILON) {
       continue;
     }
-    return renderSelectedAQ(ingredient, { aq, au, factor: mapping.factor }, bu, bq);
+    return renderSelectedAQ(ingredient, { aq, au, factor: mapping.factor }, bu, bq, formatAQ);
   }
   return base;
 }
@@ -425,7 +473,7 @@ export function renderUnitCount(
   amount: number,
 ): string {
   const shownBq = au.exact ? count * factor : amount;
-  return renderSelectedAQ(ingredient, { aq: String(count), au, factor }, bu, shownBq);
+  return renderSelectedAQ(ingredient, { aq: String(count), au, factor }, bu, shownBq, formatAQ);
 }
 
 /**
@@ -515,6 +563,7 @@ function renderPantryText(ingredient: string, reading: PantryReading, bu: string
     { aq: pantryAqNotation(reading.aq), au: reading.au, factor: reading.factor },
     bu,
     reading.bq,
+    formatAQ,
   );
 }
 
@@ -590,5 +639,8 @@ export function resolveReorderPoint(
     return { preview: ingredient === '' ? base : `${base} ${ingredient}`, storedValue: bq };
   }
   const storedValue = selected.au.exact ? aqToNumber(selected.aq) * selected.factor : bq;
-  return { preview: renderSelectedAQ(ingredient, selected, bu, storedValue), storedValue };
+  return {
+    preview: renderSelectedAQ(ingredient, selected, bu, storedValue, formatAQ),
+    storedValue,
+  };
 }

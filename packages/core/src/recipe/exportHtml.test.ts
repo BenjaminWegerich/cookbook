@@ -170,7 +170,7 @@ prep_time: 5 min
 
   const html = generateRecipeHtml(counts);
 
-  it('scales a unitless count along the AQ ladder and shows fraction glyphs', () => {
+  it('scales a unitless count along the AQ ladder and shows slash-form fractions', () => {
     const delta = difference(counts.servings!, 6); // +2
     // Inspect the option-6 view: 1/2 → 2/3, 100 → 120, 1/3 → 2/5.
     const marker = '<div class="serving-view" data-servings="6">';
@@ -178,17 +178,17 @@ prep_time: 5 min
     const end = html.indexOf('<div class="serving-view"', start + 1);
     const option6 = html.slice(start, end);
     expect(start).toBeGreaterThanOrEqual(0);
-    expect(option6).toContain('<code class="step-artifact">⅔</code>');
+    expect(option6).toContain('<code class="step-artifact">2/3</code>');
     expect(option6).toContain(`<code class="step-artifact">${scaleAQ(100, delta)}</code>`);
-    expect(option6).toContain('<code class="step-artifact">⅖</code>');
+    expect(option6).toContain('<code class="step-artifact">2/5</code>');
     // The stored option 4 shows the unscaled fractions.
     const option4Start = html.indexOf('<div class="serving-view" data-servings="4">');
     const option4 = html.slice(
       option4Start,
       html.indexOf('<div class="serving-view"', option4Start + 1),
     );
-    expect(option4).toContain('<code class="step-artifact">½</code>');
-    expect(option4).toContain('<code class="step-artifact">⅓</code>');
+    expect(option4).toContain('<code class="step-artifact">1/2</code>');
+    expect(option4).toContain('<code class="step-artifact">1/3</code>');
     expect(html).not.toContain('{{');
   });
 });
