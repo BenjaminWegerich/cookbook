@@ -24,10 +24,9 @@
  * rendered in the unit's familiar arrangement ("3 Becher Mehl (450 g)"); without
  * one it is rounded up to a whole family unit ("850 g Mehl").
  *
- * The need is named on the sheet as well (`needText`), and also in the
- * ingredient's familiar arrangement — but only where that arrangement does not
- * have to restate the amount: "2 Becher Joghurt (600 g)", "1,15 kg Mehl",
- * "60 g Trockenhefe".
+ * The need is named on the sheet as well (`needText`), as its plain base form
+ * — "600 g Joghurt", "1,15 kg Mehl" — without the additional unit: the
+ * additional quantity names the *shopping* unit, which belongs on the buy side.
  *
  * Rounding up is also what makes the stock picker cheap: because a whole number
  * of shopping units is bought, whole ranges of stock produce the *same* list, so
@@ -44,14 +43,13 @@ import {
   formatBQ,
   formatDecimal,
   NNBSP,
-  renderQuantityText,
   renderUnitCount,
   shoppingUnitFor,
 } from './additionalUnits.js';
 import { aqToNumber, isAQValue } from './aqLadder.js';
 import { NUMBER_SCHEMES, type AdditionalUnit } from './additionalUnitsData.js';
 import { mappingsFor } from './ingredientRegistry.js';
-import { difference, rungAbove, rungAtOrAbove, scale } from './ladder.js';
+import { difference, pos, roundedBQ, rungAbove, rungAtOrAbove, rungBelow, scale } from './ladder.js';
 import { convertYieldUnit, writtenPlannedAmount, type PlannedAmount } from './planLink.js';
 import type { Ingredient, Recipe } from './recipe/types.js';
 
@@ -452,6 +450,67 @@ export function stockPool(need: ShoppingNeed): readonly number[] {
 }
 
 /**
+ * The ladder mantissas in decreasing keep-priority, decided with the user. Each
+ * stands for a whole "family" of ladder values that are ten times apart: "1" is
+ * 0.1 / 1 / 10 / 100 …, "3" is 3 / 30 / 300 …, and so on. A value and every
+ * value a decade above or below it share one priority, because they are the same
+ * rung of the ladder's repeating 16-rung decade pattern. Used only for
+ * ingredients **without** a shopping unit (with one, the chips are the stock
+ * thresholds where the bought amount changes — see `suggestedStocks`).
+ */
+const SUGGESTED_MANTISSA_PRIORITY: readonly number[] = [
+  1, 3, 2, 6, 4, 8, 1.5, 2.5, 5, 7, 9, 3.5, 1.2, 1.8, 2.2, 2.8,
+];
+
+/** The same priorities as ladder step offsets within a decade (0 … 15). */
+const SUGGESTED_MANTISSA_X: readonly number[] = SUGGESTED_MANTISSA_PRIORITY.map((mantissa) =>
+  pos(mantissa),
+);
+
+/**
+ * The stock values a row's chips suggest, in the order the row keeps them when
+ * space runs out (decided with the user): **0 and the required quantity first**
+ * (always kept), then the remaining candidates in decreasing priority. The chip
+ * row itself displays the kept values in **increasing** order — the priority
+ * here only decides *which* survive a narrow screen, never the display order.
+ *
+ * - **With a shopping unit**, the relevant values are the stock thresholds where
+ *   the bought amount changes (core's `stockPool`, "like the slider before"): a
+ *   1200 g need in 1000 g packs offers only 0, 200 and 1200. The middle
+ *   thresholds follow in ascending order behind 0 and the need.
+ * - **Without a shopping unit** (grams / millilitres, no packages), one value
+ *   per ladder mantissa, each the largest rung with that mantissa below the
+ *   need, in `SUGGESTED_MANTISSA_PRIORITY` order.
+ *
+ * Every value is rounded to the thousandth and each appears once, strictly
+ * inside [0, needed] with 0 and the need included exactly once.
+ */
+export function suggestedStocks(need: ShoppingNeed): readonly number[] {
+  const needed = roundThousandths(need.needed);
+  if (!(needed > 0)) {
+    return [0];
+  }
+  // A shopping unit makes the bought amount jump only at whole packages: those
+  // thresholds are the only stock values that change the result.
+  if (shoppingUnitOf(need) !== null) {
+    const pool = stockPool(need);
+    return [0, needed, ...pool.filter((value) => value !== 0 && value !== needed)];
+  }
+  // No shopping unit: 0 and the need, then one candidate per mantissa — each the
+  // largest ladder rung with that mantissa below the need — in priority order.
+  const below = rungBelow(needed);
+  const xBelow = pos(below);
+  const values: number[] = [0, needed];
+  for (const offset of SUGGESTED_MANTISSA_X) {
+    // The largest rung with this mantissa at or below `below`: step xBelow back
+    // by its remainder mod 16, so the result shares the offset's decade slot.
+    const remainder = ((xBelow - offset) % 16 + 16) % 16;
+    values.push(roundThousandths(roundedBQ(xBelow - remainder)));
+  }
+  return values;
+}
+
+/**
  * The nearest count of an additional unit for a raw count (see
  * `stockCountText`): 0 or a value of the unit's number scheme (§6.1), the
  * nearest by absolute distance, ties toward the larger count like `roundToAQ`.
@@ -481,16 +540,13 @@ function nearestCount(au: AdditionalUnit, raw: number): number {
 
 /**
  * The need of one row as a line of its own: what the selected dishes need
- * together, in the ingredient's familiar arrangement ("2 Becher Joghurt
- * (600 g)", "6 Stück Karotten (500 g)", "1,15 kg Mehl", "60 g Trockenhefe").
- *
- * The need is a sum over dishes and therefore not necessarily a standard number,
- * and it must never be *restated* as a different amount (an exact unit's line
- * shows what its count brings home, §6.3) — both are the tolerant renderer's job
- * (`renderQuantityText` in ../additionalUnits).
+ * together, as the plain base form — the exact amount and the ingredient name,
+ * without the additional unit ("600 g Joghurt", "1,15 kg Mehl", "60 g
+ * Trockenhefe"). Decided with the user: the additional quantity names the
+ * *shopping* unit, which belongs on the buy side, not on the requirement.
  */
 export function needText(need: ShoppingNeed): string {
-  return renderQuantityText(need.ingredient, need.needed, need.baseUnit);
+  return `${formatBQ(need.needed, need.baseUnit)} ${need.ingredient}`;
 }
 
 /**

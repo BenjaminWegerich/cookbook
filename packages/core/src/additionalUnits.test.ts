@@ -7,12 +7,14 @@ import {
   formatAQValue,
   formatAQValueSlash,
   formatBQ,
+  formatBQNumber,
   formatDecimal,
   formatPantryAq,
   pantryReading,
   renderAQS,
   renderAQSSlash,
   renderPantryAmount,
+  renderPantryChip,
   renderPantryLine,
   renderQuantityText,
   resolveReorderPoint,
@@ -609,5 +611,45 @@ describe('formatPantryAq', () => {
   it('keeps 0 and whole counts beyond the ladder as plain decimals', () => {
     expect(formatPantryAq(0)).toBe('0');
     expect(formatPantryAq(20)).toBe('20');
+  });
+});
+
+describe('formatBQNumber (the unit-less number of formatBQ)', () => {
+  it('keeps the family unit below 1000', () => {
+    expect(formatBQNumber(400, 'g')).toBe('400');
+    expect(formatBQNumber(0, 'g')).toBe('0');
+    expect(formatBQNumber(750, 'ml')).toBe('750');
+  });
+
+  it('switches to kg / l at 1000, with the German comma', () => {
+    expect(formatBQNumber(1000, 'g')).toBe('1');
+    expect(formatBQNumber(1600, 'g')).toBe('1,6');
+    expect(formatBQNumber(1250, 'ml')).toBe('1,25');
+  });
+
+  it('matches the numeric part of formatBQ', () => {
+    expect(formatBQ(400, 'g')).toBe(`400${NNBSP}g`);
+    expect(formatBQ(1600, 'g')).toBe(`1,6${NNBSP}kg`);
+    expect(formatBQNumber(400, 'g')).toBe('400');
+    expect(formatBQNumber(1600, 'g')).toBe('1,6');
+  });
+});
+
+describe('renderPantryChip (the unit-full stock chip label)', () => {
+  it('names both units of a shopping-unit arrangement', () => {
+    expect(renderPantryChip('Joghurt', 400, 'g')).toBe(`1${NNBSP}Becher (400${NNBSP}g)`);
+    expect(renderPantryChip('Joghurt', 600, 'g')).toBe(`1${NNBSP}½${NNBSP}Becher (600${NNBSP}g)`);
+  });
+
+  it('keeps the base form with its unit without a shopping unit', () => {
+    expect(renderPantryChip('Butter', 500, 'g')).toBe(`500${NNBSP}g`);
+  });
+
+  it('keeps the kg / l switch of the base amount', () => {
+    expect(renderPantryChip('Mehl', 1600, 'g')).toBe(`1${NNBSP}½${NNBSP}Packung (1,6${NNBSP}kg)`);
+  });
+
+  it('reads an empty stock as plain 0, never "0 Becher (0 g)"', () => {
+    expect(renderPantryChip('Joghurt', 0, 'g')).toBe('0');
   });
 });

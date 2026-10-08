@@ -174,6 +174,22 @@ export function formatDecimal(value: number): string {
 }
 
 /**
+ * The numeric part of `formatBQ` on its own: the base quantity with the German
+ * decimal comma and the kg / l switch at 1000, but **without the unit**.
+ * `formatBQ` builds on it; it exists on its own for callers that want the number
+ * without appending the unit themselves.
+ */
+export function formatBQNumber(bq: number, bu: string): string {
+  if (bu === 'g' && bq >= 1000) {
+    return formatDecimal(bq / 1000);
+  }
+  if (bu === 'ml' && bq >= 1000) {
+    return formatDecimal(bq / 1000);
+  }
+  return formatDecimal(bq);
+}
+
+/**
  * Formats a base quantity for display (decided with the user): quantities are
  * stored in the family unit g or ml, and the display switches to kg / l at
  * 1000 ("right between 750 and 1000, the unit changes"). Values below 1000
@@ -184,13 +200,8 @@ export function formatDecimal(value: number): string {
  * displays in the app (§8).
  */
 export function formatBQ(bq: number, bu: string): string {
-  if (bu === 'g' && bq >= 1000) {
-    return `${formatDecimal(bq / 1000)}${NNBSP}kg`;
-  }
-  if (bu === 'ml' && bq >= 1000) {
-    return `${formatDecimal(bq / 1000)}${NNBSP}l`;
-  }
-  return `${formatDecimal(bq)}${NNBSP}${bu}`;
+  const unit = bu === 'g' && bq >= 1000 ? 'kg' : bu === 'ml' && bq >= 1000 ? 'l' : bu;
+  return `${formatBQNumber(bq, bu)}${NNBSP}${unit}`;
 }
 
 /**
@@ -575,6 +586,20 @@ function renderPantryText(ingredient: string, reading: PantryReading, bu: string
  */
 export function renderPantryAmount(ingredient: string, bq: number, bu: string): string {
   return renderPantryText('', pantryReading(ingredient, bq, bu), bu);
+}
+
+/**
+ * The label of a pantry stock chip (decided with the user): the reading's
+ * arrangement **with both units** — the additional unit and the base unit — so
+ * a chip names the amount it stands for on its own ("1 Becher (400 g)", "600 g",
+ * "⅕ Packung (200 g)"). It is the same reading as `renderPantryAmount`, except
+ * that an empty stock reads just "0" — never "0 Becher (0 g)".
+ */
+export function renderPantryChip(ingredient: string, bq: number, bu: string): string {
+  if (!(bq > 0)) {
+    return '0';
+  }
+  return renderPantryAmount(ingredient, bq, bu);
 }
 
 /**

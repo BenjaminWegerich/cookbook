@@ -6,7 +6,8 @@
  * *which dishes* are shopped for; this one decides *what is already at home*,
  * per ingredient. The rows come from `../keep/shoppingBundle` (one read per
  * selected recipe), the arithmetic from `@cookbook/core` (`stockPrefill`,
- * `buyAmount`, `pantryReading`, `renderPantryLine`):
+ * `buyAmount`, `pantryReading`, `renderPantryLine`, `suggestedStocks`,
+ * `renderPantryChip`):
  *
  * - the Vorrat starts on `min(need, reorder point)` — the reorder point is the
  *   amount the master data says is on the shelf after a shopping trip;
@@ -16,32 +17,35 @@
  *   rounded, and allowed to exceed the need (the Vorrat then reads zero);
  * - the rows are filed once, when the page opens: the ingredients the pre-filled
  *   Vorrat already covers go below the ones that still need a purchase. That
- *   filing is a snapshot — the slider updates its row's amounts in place instead
- *   of moving it under the user's finger — while the amounts and the write always
- *   follow the *current* values: a row with nothing to buy is not written,
- *   wherever it stands.
+ *   filing is a snapshot — picking a chip updates its row's amounts in place
+ *   instead of moving it under the user's finger — while the amounts and the
+ *   write always follow the *current* values: a row with nothing to buy is not
+ *   written, wherever it stands.
  *
- * **One ingredient is three lines** (decided with the user):
+ * **One ingredient is two lines** (decided with the user):
  *
- * 1. the *need*: what the selected dishes need together, in the ingredient's
- *    familiar arrangement, including the name and the exact, unrounded amount
- *    (core's `needText`), followed by "benötigt";
- * 2. the *stock and the purchase*, side by side: left "… auf Vorrat", right
- *    "… kaufen", each the amount in the ingredient's shopping unit with its
- *    count rounded to the nearest AQ ladder value regardless of the unit's
- *    number scheme, so the unit is always named (core's `pantryReading`);
- * 3. the *slider*: one discrete slider whose stops are the stock values at which
- *    the bought amount changes (core's `stockPool`), spaced evenly rather than by
- *    amount, so a small step is as easy to hit as a large one.
+ * 1. the *need and the purchase*, side by side: left what the selected dishes
+ *    need together, as its plain base form — the name and the exact, unrounded
+ *    amount (core's `needText`); right, smaller, the amount to buy behind a
+ *    shopping-cart symbol — the amount in the
+ *    ingredient's shopping unit with its count rounded to the nearest AQ ladder
+ *    value regardless of the unit's number scheme (core's `pantryReading`);
+ * 2. the *stock chips*: one row of the stock values where the bought amount
+ *    changes — the package thresholds for a shopping unit, ladder steps
+ *    otherwise (core's `suggestedStocks`) — labelled with both units (core's
+ *    `renderPantryChip`) and shown in increasing order. Only as many chips as
+ *    fit on one row are shown; the rest hide behind the "andere" chip, which
+ *    opens the keyboard on the Vorrat's base-quantity field. A typed value that
+ *    is no suggestion then shows as an additional chip with an edit symbol
+ *    (components/StockChips).
  *
- * **Both quantities of both lines are tappable** (the count and the
- * grams/millilitres, on the "auf Vorrat" side and on the "kaufen" side): each
- * opens a keyboard, written as plain text rather than a box. A typed amount need
- * not be a stop, must not be negative, and is never rounded; the base quantity
- * is always typed in g / ml, the count in the shopping unit (converted by its
- * factor). Changing the Vorrat recomputes the "kaufen" default (rounded up);
- * changing the "kaufen" amount back-computes the Vorrat and keeps the typed
- * amount exactly. The slider thumb marks the stop bucket the stock falls in.
+ * **Both quantities of the purchase line are tappable** (the count and the
+ * grams/millilitres): each opens a keyboard, written as plain text rather than
+ * a box. A typed amount must not be negative and is never rounded; the base
+ * quantity is always typed in g / ml, the count in the shopping unit (converted
+ * by its factor). Changing the Vorrat recomputes the "kaufen" default (rounded
+ * up); changing the "kaufen" amount back-computes the Vorrat and keeps the
+ * typed amount exactly.
  *
  * "Einkaufsliste schreiben" writes one line per row that currently has something
  * to buy, exactly as displayed (with the name, via core's `renderPantryLine`),
@@ -63,16 +67,19 @@ import {
   needText,
   NNBSP,
   pantryReading,
+  renderPantryChip,
   renderPantryLine,
-  stockPool,
   stockPrefill,
+  suggestedStocks,
   type AdditionalUnit,
   type ShoppingNeed,
 } from '@cookbook/core';
 
 import { resolveShoppingBundle, type ShoppingBundle } from '../keep/shoppingBundle';
 import type { MealPlanCard } from '../keep/mealPlanCards';
-import StockSlider from './StockSlider';
+import { ShoppingCartIcon } from './icons';
+import StockChips, { type StockChip } from './StockChips';
+import { parseInput, roundThousandths } from './pantryInput';
 
 interface PantrySelectProps {
   /**
@@ -99,9 +106,8 @@ function rowKey(ingredient: string, baseUnit: string): string {
 }
 
 /**
- * One rendered row: what the ingredient needs, the stock the user picked, the
- * amount they will buy (derived from the stock or typed directly), and the
- * stops its slider snaps to.
+ * One rendered row: what the ingredient needs, the stock the user picked and
+ * the amount they will buy (derived from the stock or typed directly).
  */
 interface PantryEntry {
   readonly need: ShoppingNeed;
@@ -109,35 +115,12 @@ interface PantryEntry {
   readonly stock: number;
   /** The amount to buy in the family unit (may exceed the need when typed). */
   readonly buy: number;
-  /** The slider's stops: every stock value that changes the bought amount. */
-  readonly stops: readonly number[];
 }
 
 /** One row's saved choices: the stock and the amount to buy, both in g / ml. */
 interface PantryState {
   readonly stock: number;
   readonly buy: number;
-}
-
-/**
- * Parses a typed number with German typography: the comma is the decimal
- * separator and a dot may separate thousands ("1.200" is 1200, "1,2" is 1.2).
- * Anything else is ignored, so a typed unit or a stray space does not spoil the
- * input ("1200 g"). NaN for an input without a number — the caller keeps the
- * stock then.
- */
-function parseInput(text: string): number {
-  return Number(
-    text
-      .replace(/[^\d.,]/g, '')
-      .replaceAll('.', '')
-      .replace(',', '.'),
-  );
-}
-
-/** One thousandth — the precision the sheet rounds a stock to. */
-function roundThousandths(value: number): number {
-  return Math.round(value * 1000) / 1000;
 }
 
 /**
@@ -190,18 +173,32 @@ interface TappableQuantityProps {
   editValue: number;
   /** The unit the open input is typed in ("g" / "ml" / the shopping unit). */
   unitName: string;
+  /**
+   * Whether the open input shows its unit beside it. The count hides it: the
+   * arrangement's <AU> already names that unit right after the input, so the
+   * label would double it. Defaults to true — a base amount's "g"/"ml" is only
+   * shown here.
+   */
+  showEditUnit?: boolean;
   /** Reports a committed number (already clamped to ≥ 0 by the caller). */
   onCommit: (typed: number) => void;
-  /** Accessible name of the reading, e.g. "Vorrat für Mehl". */
+  /** Accessible name of the reading, e.g. "Kaufen für Mehl". */
   label: string;
 }
 
 /**
  * One tappable quantity (a count or a base amount): plain text when closed, an
  * inline keyboard input when tapped. Committing the unchanged value is a no-op,
- * so a tap that merely opens the keyboard can never alter the stock.
+ * so a tap that merely opens the keyboard can never alter the value.
  */
-function TappableQuantity({ display, editValue, unitName, onCommit, label }: TappableQuantityProps) {
+function TappableQuantity({
+  display,
+  editValue,
+  unitName,
+  showEditUnit = true,
+  onCommit,
+  label,
+}: TappableQuantityProps) {
   /** True while the keyboard is open; `draft` holds what is being typed. */
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -242,8 +239,10 @@ function TappableQuantity({ display, editValue, unitName, onCommit, label }: Tap
           aria-label={`${label} in ${unitName}`}
         />
         {/* The field's unit while it is open: g / ml for a base amount, the
-            shopping unit's name for a count. */}
-        <span className="pantry-value-unit">{unitName}</span>
+            shopping unit's name for a count. A count hides it — that unit is
+            already the arrangement's <AU> right beside the input. The unit's
+            leading margin is the space between the number and its unit. */}
+        {showEditUnit && <span className="pantry-value-unit">{unitName}</span>}
       </span>
     );
   }
@@ -277,7 +276,7 @@ interface TappableAmountProps {
   onCommitAq: (count: number) => void;
   /** Reports a committed base amount (converted to a stock by the caller). */
   onCommitBq: (amount: number) => void;
-  /** Accessible name of the amount, e.g. "Vorrat für Mehl" / "Kaufen für Mehl". */
+  /** Accessible name of the amount, e.g. "Kaufen für Mehl". */
   label: string;
 }
 
@@ -314,6 +313,7 @@ function TappableAmount({
       display={aqDisplay}
       editValue={aqEdit}
       unitName={au.name}
+      showEditUnit={false}
       onCommit={onCommitAq}
       label={label}
     />
@@ -346,6 +346,13 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
    * stale default.
    */
   const [stocks, setStocks] = useState<ReadonlyMap<string, PantryState>>(() => new Map());
+  /**
+   * The custom Vorrat value the user typed through the "andere" chip's keyboard,
+   * keyed by row. Only rows the user actually typed a value for are stored; the
+   * entry is dropped again as soon as the stock is set any other way (a
+   * suggestion chip or the "kaufen" amount).
+   */
+  const [customStocks, setCustomStocks] = useState<ReadonlyMap<string, number>>(() => new Map());
   /** True while the write runs — the button is unavailable then. */
   const [busy, setBusy] = useState(false);
   /** Reason the write failed, shown next to the button (null = no failure). */
@@ -389,15 +396,15 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
         ];
 
   /**
-   * The rows with the chosen stock and buy amount, and the stops their slider
-   * snaps to. Built from the needs rather than from the rows, because the stops
-   * need the need the row was derived from.
+   * The rows with the chosen stock and buy amount. The stock is rounded to the
+   * thousandth so the chip comparison and the tappable fields never see the
+   * float noise a summed need can carry.
    */
   const entries: PantryEntry[] = orderedNeeds.map((need) => {
     const saved = stocks.get(rowKey(need.ingredient, need.baseUnit));
-    const stock = saved === undefined ? stockPrefill(need) : saved.stock;
+    const stock = roundThousandths(saved === undefined ? stockPrefill(need) : saved.stock);
     const buy = saved === undefined ? buyAmount(need, stock) : saved.buy;
-    return { need, stock, buy, stops: stockPool(need) };
+    return { need, stock, buy };
   });
 
   /**
@@ -407,28 +414,62 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
    */
   const toBuy = entries.filter((entry) => entry.buy > 0);
 
-  /** Remembers one row's new stock; the buy amount follows it (rounded up). */
+  /** Remembers one row's new stock (a suggestion chip); the buy amount follows
+   *  it (rounded up), and any custom value is dropped. */
   function setStock(need: ShoppingNeed, next: number): void {
     const stock = Math.max(0, roundThousandths(next));
+    const key = rowKey(need.ingredient, need.baseUnit);
     setStocks((current) => {
       const updated = new Map(current);
-      updated.set(rowKey(need.ingredient, need.baseUnit), {
+      updated.set(key, {
         stock,
         buy: buyAmount(need, stock),
       });
       return updated;
     });
+    setCustomStocks((current) => {
+      const updated = new Map(current);
+      updated.delete(key);
+      return updated;
+    });
   }
 
-  /** Remembers one row's new buy amount exactly as typed; the stock follows it. */
+  /** Remembers one row's new buy amount exactly as typed; the stock follows it,
+   *  and any custom value is dropped (the Vorrat is now derived from the buy). */
   function setBuy(need: ShoppingNeed, next: number): void {
     const buy = Math.max(0, roundThousandths(next));
+    const key = rowKey(need.ingredient, need.baseUnit);
     setStocks((current) => {
       const updated = new Map(current);
-      updated.set(rowKey(need.ingredient, need.baseUnit), {
+      updated.set(key, {
         stock: Math.max(0, roundThousandths(need.needed - buy)),
         buy,
       });
+      return updated;
+    });
+    setCustomStocks((current) => {
+      const updated = new Map(current);
+      updated.delete(key);
+      return updated;
+    });
+  }
+
+  /** Remembers a value the user typed through the "andere" keyboard as the
+   *  row's stock *and* its custom value (it stays visible as the edit chip). */
+  function commitCustom(need: ShoppingNeed, next: number): void {
+    const stock = Math.max(0, roundThousandths(next));
+    const key = rowKey(need.ingredient, need.baseUnit);
+    setStocks((current) => {
+      const updated = new Map(current);
+      updated.set(key, {
+        stock,
+        buy: buyAmount(need, stock),
+      });
+      return updated;
+    });
+    setCustomStocks((current) => {
+      const updated = new Map(current);
+      updated.set(key, stock);
       return updated;
     });
   }
@@ -450,37 +491,37 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
     }
   }
 
-  /** One ingredient row: the need, the stock and the purchase side by side, and
-   *  the slider. */
+  /** One ingredient row: the need with the purchase on its right, and the stock
+   *  chips below. */
   function renderRow(entry: PantryEntry): ReactNode {
-    const { need, stock, buy, stops } = entry;
-    const vorrat = pantryReading(need.ingredient, stock, need.baseUnit);
+    const { need, stock, buy } = entry;
     const kaufen = pantryReading(need.ingredient, buy, need.baseUnit);
+    const key = rowKey(need.ingredient, need.baseUnit);
+    // The value the user typed through the "andere" keyboard (null = none yet).
+    const customValue = customStocks.get(key) ?? null;
+    // The custom value as a chip, labelled with the ingredient's full arrangement
+    // (shopping unit included when one exists).
+    const customChip: StockChip | null =
+      customValue === null
+        ? null
+        : { value: customValue, label: renderPantryChip(need.ingredient, customValue, need.baseUnit) };
+    // The suggested stock values as chips, each labelled with both units. The
+    // custom value is left out so it never duplicates the edit chip below.
+    const chips: StockChip[] = suggestedStocks(need)
+      .filter((value) => value !== customValue)
+      .map((value) => ({
+        value,
+        label: renderPantryChip(need.ingredient, value, need.baseUnit),
+      }));
+
     return (
-      <div className="pantry-row" key={rowKey(need.ingredient, need.baseUnit)}>
-        {/* What the selected dishes need together, in the ingredient's familiar
-            arrangement (exact, unrounded amount). */}
-        <div className="pantry-need">
-          {needText(need)} <span className="pantry-label">benötigt</span>
-        </div>
-        {/* The stock and the purchase, side by side — each an arrangement whose
-            count and base amount are tappable. */}
-        <div className="pantry-line-two">
-          <span className="pantry-side">
-            <TappableAmount
-              au={vorrat.au}
-              baseUnit={need.baseUnit}
-              aqDisplay={vorrat.aq === null ? null : formatPantryAq(vorrat.aq)}
-              aqEdit={vorrat.aq ?? 0}
-              bqDisplay={formatBQ(stock, need.baseUnit)}
-              bqEdit={stock}
-              onCommitAq={(count) => setStock(need, count * vorrat.factor)}
-              onCommitBq={(amount) => setStock(need, amount)}
-              label={`Vorrat für ${need.ingredient}`}
-            />
-            <span className="pantry-label">auf Vorrat</span>
-          </span>
-          <span className="pantry-side pantry-side-buy">
+      <div className="pantry-row" key={key}>
+        {/* Line 1: what the selected dishes need together (left) and what is
+            bought (right, smaller, led by a shopping-cart symbol). */}
+        <div className="pantry-head">
+          <div className="pantry-need">{needText(need)}</div>
+          <span className="pantry-buy">
+            <ShoppingCartIcon className="pantry-buy-icon" />
             <TappableAmount
               au={kaufen.au}
               baseUnit={need.baseUnit}
@@ -492,15 +533,16 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
               onCommitBq={(amount) => setBuy(need, amount)}
               label={`Kaufen für ${need.ingredient}`}
             />
-            <span className="pantry-label">kaufen</span>
           </span>
         </div>
-        {/* The discrete slider: the row's stock, snapped to the stops. */}
-        <StockSlider
-          values={stops}
+        {/* Line 2: the stock chips (suggestions + the custom/“andere” entry). */}
+        <StockChips
+          chips={chips}
           value={stock}
           baseUnit={need.baseUnit}
+          customChip={customChip}
           onChange={(next) => setStock(need, next)}
+          onCommitCustom={(value) => commitCustom(need, value)}
           label={`Vorrat für ${need.ingredient}`}
         />
       </div>
@@ -550,15 +592,11 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
         <h1>Vorräte auswählen</h1>
       </header>
 
-      {/* The instruction under the title: it names the three lines of a row,
-          says where the stock is set, and gives the one reading the stop amounts
-          cannot show by themselves. */}
+      {/* The instruction under the title: pick a stock of at least this amount
+          (the chips), or type the amount to buy directly. */}
       <p className="pantry-select-intro">
-        Je Zutat drei Zeilen: oben der Bedarf, in der mittleren Zeile links der Vorrat und
-        rechts, was gekauft wird – diese Menge steht so auf der Einkaufsliste. Den Vorrat stellst
-        du mit dem Regler ein: jede Raststufe heißt „so viel habe ich <strong>mindestens</strong>{' '}
-        im Vorrat“. Die Zahlen links und rechts (in der Zusatzeinheit und in Gramm-/Milliliter)
-        kannst du antippen und einen genauen Wert eintippen.
+        Wähle die Menge, die <strong>mindestens</strong> auf Vorrat ist, oder gib direkt die zu
+        kaufende Menge ein.
       </p>
 
       {renderList()}

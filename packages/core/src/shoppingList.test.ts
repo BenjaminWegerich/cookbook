@@ -34,6 +34,7 @@ import {
   stockCountText,
   stockPool,
   stockPrefill,
+  suggestedStocks,
   sumIngredientUses,
   type ShoppingNeed,
 } from './shoppingList.js';
@@ -399,6 +400,46 @@ describe('stockPool', () => {
   });
 });
 
+describe('suggestedStocks (the stock chips\' suggested values)', () => {
+  it('offers the thresholds where the bought amount changes for a shopping unit', () => {
+    // 600 g of yoghurt in 400 g Becher: below 200 g two Becher, from 200 g one,
+    // from 600 g none — so 0, 200 and 600 are the only relevant stock values.
+    // 0 and the need lead (always kept); the chip row displays them ascending.
+    expect(suggestedStocks(need({ ingredient: 'Joghurt', needed: 600 }))).toEqual([0, 600, 200]);
+  });
+
+  it('names the user example: 1200 g of flour in 1000 g packs', () => {
+    expect(suggestedStocks(need({ ingredient: 'Mehl', needed: 1200 }))).toEqual([0, 1200, 200]);
+  });
+
+  it('walks whole packs beyond six units, with 0 and the need leading', () => {
+    expect(suggestedStocks(need({ ingredient: 'Joghurt', needed: 2400 }))).toEqual([
+      0, 2400, 400, 800, 1200, 1600, 2000,
+    ]);
+  });
+
+  it('offers one rung per mantissa, in the decided priority, without a shopping unit', () => {
+    // Butter has only recipe measures (EL/TL). The candidates are the 16 rungs
+    // just below the need (90 … 800), ordered by their mantissa's priority:
+    // "1" (100), "3" (300), "2" (200), … down to "2.8" (280).
+    expect(suggestedStocks(need({ ingredient: 'Butter', needed: 850 }))).toEqual([
+      0, 850, 100, 300, 200, 600, 400, 800, 150, 250, 500, 700, 90, 350, 120, 180, 220, 280,
+    ]);
+  });
+
+  it('does not repeat a need that is itself a ladder rung', () => {
+    // 600 g is the rung "6" of its decade: the "6" family then contributes 60,
+    // not 600 (which is the need itself and already the second entry).
+    expect(suggestedStocks(need({ ingredient: 'Butter', needed: 600 }))).toEqual([
+      0, 600, 100, 300, 200, 60, 400, 80, 150, 250, 500, 70, 90, 350, 120, 180, 220, 280,
+    ]);
+  });
+
+  it('keeps an inert single-value list for a row without a need', () => {
+    expect(suggestedStocks(need({ ingredient: 'Mehl', needed: 0 }))).toEqual([0]);
+  });
+});
+
 describe('shoppingUnitOf', () => {
   it('answers the shopping unit and its factor', () => {
     // Flour is bought in 1000 g packs, carrots in pieces of about 80 g.
@@ -416,18 +457,12 @@ describe('shoppingUnitOf', () => {
 });
 
 describe('needText', () => {
-  it('names the need in the ingredient’s familiar arrangement', () => {
-    // 600 g of yoghurt in 400 g Becher: the count restates the amount exactly.
-    expect(needText(need({ ingredient: 'Joghurt', needed: 600 }))).toBe(
-      `1${NB}½${NB}Becher Joghurt (600${NB}g)`,
-    );
-    // An approximate unit keeps the needed amount and rounds only its count.
-    expect(needText(need({ ingredient: 'Karotten', needed: 500 }))).toBe(
-      `6${NB}Stück Karotten (500${NB}g)`,
-    );
+  it('names the need as its plain base form, without the additional unit', () => {
+    expect(needText(need({ ingredient: 'Joghurt', needed: 600 }))).toBe(`600${NB}g Joghurt`);
+    expect(needText(need({ ingredient: 'Karotten', needed: 500 }))).toBe(`500${NB}g Karotten`);
   });
 
-  it('keeps the exact amount when no unit can name it without restating it', () => {
+  it('switches to kg/l at 1000, like every base amount', () => {
     expect(needText(need({ ingredient: 'Mehl', needed: 1150 }))).toBe(`1,15${NB}kg Mehl`);
     expect(needText(need({ ingredient: 'Trockenhefe', needed: 60 }))).toBe(`60${NB}g Trockenhefe`);
   });

@@ -1,24 +1,20 @@
 /**
  * Pantry sheet styles — the "Vorräte auswählen" page (components/PantrySelect)
- * with its stock slider (components/StockSlider).
+ * with its stock chips (components/StockChips).
  *
- * **One ingredient is three lines** (decided with the user; no symbols any more,
- * the lines' own wording carries the meaning):
+ * **One ingredient is two lines** (decided with the user):
  *
- * 1. the *need* — the ingredient's familiar arrangement, name and exact amount,
- *    followed by "benötigt";
- * 2. the *stock and the purchase* side by side — left "… auf Vorrat", right
- *    "… kaufen", each written as plain text whose count and grams/millilitres
- *    are tappable (no boxed fields);
- * 3. the *slider* — the discrete stock picker, without the value boxes (they
- *    moved up into the second line).
+ * 1. the *need and the purchase* — left the need (its plain base form: the name
+ *    and the exact amount), right the amount to buy behind a shopping-cart
+ *    symbol, one step smaller than the need;
+ * 2. the *stock chips* — one row of suggestions, with the overflow hidden
+ *    behind the "andere" chip; a custom (typed) value shows as a chip with an
+ *    edit symbol.
  *
- * The previous three-line layout with a symbol per line is gone, and so are the
- * boxed value fields: nothing has to be squeezed into a narrow column any more,
- * and the quantities read as ordinary text that happens to be tappable. The
- * layout is the same on every screen (no breakpoint). The chip row and the −/ +
- * stepper are gone as well: one control shape answers every row, and the stops'
- * **even** spacing is what makes a small step as easy to hit as a large one.
+ * The layout is the same on every screen (no breakpoint). The previous discrete
+ * slider, the symbol-led stock/purchase line and the boxed value fields are
+ * gone: the chips answer every row with one control shape, and the quantities
+ * read as ordinary text that happens to be tappable.
  *
  * All pixel values come from the design ladder (docs/CODING_CONVENTIONS.md);
  * colors and sizes reference the tokens in styles/tokens.css.
@@ -39,6 +35,12 @@
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+}
+
+/* The one emphasised word of the instruction: the same semibold weight the
+   headings use, never the browser's default bold. */
+.pantry-select-intro strong {
+  font-weight: 600;
 }
 
 .pantry-empty,
@@ -64,8 +66,8 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* One ingredient: its three lines stacked. The row's inset is the tap-room around
-   the slider — a finger lands on the control, not on the surface edge. */
+/* One ingredient: its two lines stacked. The row's inset is the tap-room around
+   the chips — a finger lands on a control, not on the surface edge. */
 .pantry-row {
   display: grid;
   gap: var(--space-4);
@@ -76,9 +78,20 @@
   border-block-start: 1px solid var(--color-line);
 }
 
-/* Line 1: the need — the same reading weight as the old symbol line, wrapped
-   like body text instead of being clamped (the amount and the name belong
-   together). */
+/* ---- Line 1: the need (left) and the purchase (right) -------------------- */
+
+/* The two readings of one line, pushed apart: the need left-aligned, the
+   purchase right-aligned. They wrap onto separate lines on a narrow phone, and
+   the purchase keeps its right edge then. */
+.pantry-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+/* The need — the reading weight, wrapped like body text instead of being
+   clamped (the amount and the name belong together). */
 .pantry-need {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -86,45 +99,46 @@
   font-weight: 600;
 }
 
-/* ---- Line 2: the stock (left) and the purchase (right) ------------------- */
-
-/* The two sides of one reading, pushed apart: "… auf Vorrat" left-aligned,
-   "… kaufen" right-aligned. They wrap onto separate lines on a narrow phone,
-   and the purchase side keeps its right edge then. */
-.pantry-line-two {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-/* One side: its amount and its quiet label on one baseline. */
-.pantry-side {
+/* The purchase: its shopping-cart symbol and the amount on one baseline, one
+   step smaller than the need. It takes the leftover space, so it sits
+   right-aligned whether it shares the line with the need or wraps below it. */
+.pantry-buy {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-/* The purchase side takes the leftover space, so it sits right-aligned whether
-   it shares the line with the stock or wraps below it. */
-.pantry-side-buy {
+  gap: var(--space-1);
   margin-inline-start: auto;
+  font-size: var(--text-sm);
 }
 
-/* The "benötigt" / "auf Vorrat" / "kaufen" label: a property of the amount, not
-   a second value, so it reads muted and one step smaller. */
-.pantry-label {
+/* The shopping-cart symbol that leads the amount (it replaced the "Kaufen:"
+   caption): 14 px (ladder: --space-5) — the amount's own text size — and muted
+   like the caption it replaced. `align-self: center` sits it on the text's
+   optical center instead of its baseline (the tall glyph would otherwise float
+   above the digits); `flex: none` keeps it from shrinking when the row runs out
+   of width. */
+.pantry-buy-icon {
+  display: block;
+  flex: none;
+  align-self: center;
+  width: var(--space-5);
+  height: var(--space-5);
   color: var(--color-ink-muted);
+}
+
+/* The purchase amount shares the caption's smaller step; it keeps the reading
+   weight of a value. */
+.pantry-buy .pantry-amount {
   font-size: var(--text-sm);
 }
 
 /* One amount as plain text: the count field, the unit's name and the
-   base-amount field, all on one baseline and at the reading weight. */
+   base-amount field, all on one baseline and at the reading weight. No flex
+   gap: the arrangement's own spaces (the narrow no-break space, the space
+   before the parenthesis) already provide the spacing, and a gap would double
+   them around every value. */
 .pantry-amount {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--space-1);
   flex-wrap: wrap;
   min-width: 0;
   font-size: var(--text-md);
@@ -151,16 +165,20 @@
 
 /* One quantity, open: the same plain text with a keyboard, the number left of
    its unit. A hairline under the number — not a box — marks the field being
-   edited. */
+   edited. The flex gap is the space between the number and its unit. */
 .pantry-value-edit {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
+/* The open keyboard input: just wide enough for the number it edits (32 px,
+   --space-8), so a short number does not leave a wide, empty field. The hard
+   max-width keeps the input from growing past that and covering its unit. */
 .pantry-value-input {
-  width: 74px;
+  width: var(--space-8);
   min-width: 0;
+  max-width: var(--space-8);
   padding: 0;
   background: none;
   border: none;
@@ -177,105 +195,53 @@
   font-size: var(--text-sm);
 }
 
-/* ---- The stock slider (the row's third line) ----------------------------- */
+/* ---- The stock chips (the row's second line) ----------------------------- */
 
-/* The track and its stop marks. The thumb size lives here as one variable: the
-   native thumb, the tick row's inset and the rail all derive from it, so the
-   marks stay under the thumb however the platform draws it. */
-.stock-track {
-  --stock-thumb: 24px;
+/* The visible chip row: one line, no wrap, no scroll. Chips that no longer fit
+   are hidden (components/StockChips measures how many do), and the "andere"
+   chip takes the last visible slot. `position: relative` anchors the off-screen
+   measurement strip (below) to the wrapper. */
+.stock-chips-wrap {
   position: relative;
+  min-width: 0;
 }
 
-/* The discrete slider — the real control, so dragging, the arrow keys and
-   assistive tech all work on it. `appearance: none` strips the platform look so
-   the rail and thumb can wear the app's palette; the ladder's 42 px height gives
-   the thumb room without moving the rail's centre. It paints above the tick
-   layer, whose marks stay visible through its transparent background. */
-.stock-range {
-  -webkit-appearance: none;
-  appearance: none;
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: 100%;
-  height: 42px;
-  margin: 0;
-  background: transparent;
-}
-
-/* The rail: one line-coloured hairline, the 100% radius the ladder allows for
-   circles. */
-.stock-range::-webkit-slider-runnable-track {
-  height: 4px;
-  background: var(--color-line);
-  border-radius: 100%;
-}
-
-.stock-range::-moz-range-track {
-  height: 4px;
-  background: var(--color-line);
-  border-radius: 100%;
-}
-
-/* The thumb: the accent circle the app uses for a chosen value. It turns olive
-   once the stock covers the need — the same "nothing to buy" signal the old
-   chip carried (".stock-range-covered"). */
-.stock-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: var(--stock-thumb);
-  height: var(--stock-thumb);
-  /* Centres the thumb on the 4 px rail: (4 − 24) / 2. */
-  margin-block-start: -10px;
-  background: var(--color-accent);
-  border: none;
-  border-radius: 100%;
-}
-
-.stock-range::-moz-range-thumb {
-  width: var(--stock-thumb);
-  height: var(--stock-thumb);
-  background: var(--color-accent);
-  border: none;
-  border-radius: 100%;
-}
-
-.stock-range-covered::-webkit-slider-thumb {
-  background: var(--color-olive);
-}
-
-.stock-range-covered::-moz-range-thumb {
-  background: var(--color-olive);
-}
-
-/* A pool with a single stop has nothing to choose: the quieted slider says so. */
-.stock-range:disabled {
-  opacity: var(--opacity-disabled);
-}
-
-/* The stop marks: one per stock value, at **even** distances (the whole point of
-   the picker — the amounts behind them are not evenly spaced). The row is inset
-   by half a thumb, so a mark sits under the thumb's centre at each end, and it is
-   not interactive: the slider above it is. */
-.stock-ticks {
-  position: absolute;
-  inset-inline: 0;
-  top: 50%;
-  transform: translateY(-50%);
+.stock-chips {
   display: flex;
-  justify-content: space-between;
-  padding-inline: calc(var(--stock-thumb) / 2);
-  pointer-events: none;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  overflow: hidden;
+  min-width: 0;
 }
 
-/* One mark: a short stroke of muted ink, taller than the rail so it reads as a
-   notch rather than as the rail itself. */
-.stock-tick {
-  width: 2px;
-  height: 10px;
-  background: var(--color-ink-muted);
-  border-radius: 100%;
+/* A chip never shrinks to fit: the row clips instead, so a suggestion stays
+   readable and the overflow goes behind "andere". */
+.stock-chips .chip {
+  flex: none;
+}
+
+/* The custom value chip (the "andere" result): an active chip with an edit
+   symbol, laid out as a flex row so symbol and value share one line. */
+.stock-chips .chip-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The off-screen strip every chip and the "andere" chip are measured from. It
+   stays laid out at its natural width (invisible, out of the flow) so the
+   visible row can hide its overflow without losing a width it still needs for a
+   later, wider layout. Its gap must match .stock-chips. */
+.stock-chips-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* ---- Forward action ------------------------------------------------------ */
