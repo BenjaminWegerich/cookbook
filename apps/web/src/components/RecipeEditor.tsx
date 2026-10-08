@@ -51,18 +51,23 @@ import type { Ref } from 'react';
 
 import {
   RecipeParseError,
+  DEFAULT_THEME,
+  THEME_FONT_SHORTLIST,
   deriveIngredients,
   displayTimeText,
   integerLadderValues,
+  isHexColor,
   masterIngredientNames,
   parseRecipe,
   parseTimeValue,
+  resolveTheme,
   serializeRecipe,
   splitArtifacts,
   artifactToText,
   STANDARD_TIME_VALUES,
   type Ingredient,
   type Recipe,
+  type RecipeTheme,
   type Step,
   type ShoppingStop,
   type TextArtifact,
@@ -370,6 +375,27 @@ function mapIssue(issue: ValidationIssue): IssueTarget {
 }
 
 /**
+ * Normalizes a recipe theme for writing (DESIGN §4.8, storage_format.md §3):
+ * drops tokens that equal their default (files never write defaults) and
+ * lower-cases hex colours to the canonical form; a theme with no remaining
+ * token collapses to undefined — equivalent to no theme.
+ */
+function normalizeTheme(theme: RecipeTheme | undefined): RecipeTheme | undefined {
+  if (theme === undefined) return undefined;
+  const result: RecipeTheme = {};
+  if (theme.font !== undefined && theme.font !== DEFAULT_THEME.font) {
+    result.font = theme.font;
+  }
+  for (const key of ['accent', 'paper', 'ink', 'line'] as const) {
+    const value = theme[key];
+    if (value !== undefined && value.toLowerCase() !== DEFAULT_THEME[key].toLowerCase()) {
+      result[key] = value.toLowerCase();
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/**
  * Normalizes the draft into the form that is written to Drive (§7 round-trip):
  * trimmed single-line step prose (internal line breaks collapse to spaces),
  * empty optional fields dropped, the reference list kept for both recipe types,
@@ -392,6 +418,7 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
   const reference =
     draft.reference !== undefined && draft.reference.length > 0 ? draft.reference : undefined;
   const ingredients = deriveIngredients(steps, reference ?? []);
+  const theme = normalizeTheme(draft.theme);
   const base = {
     title: draft.title.trim(),
     type: draft.type,
@@ -402,6 +429,7 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
         ? draft.total_time.trim()
         : undefined,
     steps: steps.length > 0 ? steps : [{ ingredients: [], text: '' }],
+    ...(theme !== undefined ? { theme } : {}),
   };
   if (draft.type === 'finished_dish') {
     return {
@@ -484,6 +512,263 @@ function TimeChips({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * CSS font stacks for the export font shortlist, as registered by their
+ * @fontsource packages (main.tsx). Variable fonts register "<Name> Variable"
+ * as the family; the IBM Plex faces ship only as static weights and keep their
+ * plain family name. Each stack ends in a genre-appropriate system fallback,
+ * so a face still reads with the right character while loading.
+ */
+const THEME_FONT_STACKS: Readonly<Record<string, string>> = {
+  'Source Sans 3': "'Source Sans 3 Variable', 'Source Sans 3', system-ui, sans-serif",
+  Inter: "'Inter Variable', 'Inter', system-ui, sans-serif",
+  Montserrat: "'Montserrat Variable', 'Montserrat', system-ui, sans-serif",
+  Nunito: "'Nunito Variable', 'Nunito', system-ui, sans-serif",
+  'Source Serif 4': "'Source Serif 4 Variable', 'Source Serif 4', Georgia, serif",
+  Fraunces: "'Fraunces Variable', 'Fraunces', Georgia, serif",
+  'Playfair Display': "'Playfair Display Variable', 'Playfair Display', Georgia, serif",
+  Bitter: "'Bitter Variable', 'Bitter', Georgia, serif",
+  'IBM Plex Sans Condensed': "'IBM Plex Sans Condensed', system-ui, sans-serif",
+  Caveat: "'Caveat Variable', 'Caveat', cursive",
+  'IBM Plex Mono': "'IBM Plex Mono', ui-monospace, monospace",
+};
+
+/** The CSS font stack that renders one shortlist typeface in the web app. */
+function themeFontStack(name: string): string {
+  return THEME_FONT_STACKS[name] ?? 'system-ui, sans-serif';
+}
+
+/** Relative luminance (WCAG) of a #rrggbb colour, 0 (black) … 1 (white). */
+function relativeLuminance(hex: string): number {
+  const channel = (offset: number): number => {
+    const value = parseInt(hex.slice(1 + offset, 3 + offset), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+}
+
+/** WCAG contrast ratio between two relative luminances (1 … 21). */
+function contrastRatio(a: number, b: number): number {
+  const lighter = Math.max(a, b);
+  const darker = Math.min(a, b);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
+ * Text colour on a filled accent surface — the derived `on-accent` of DESIGN
+ * §4.8: `ink` or `paper`, whichever contrasts more strongly against `accent`.
+ */
+function onAccentColor(accent: string, ink: string, paper: string): string {
+  const accentLuminance = relativeLuminance(accent);
+  return contrastRatio(accentLuminance, relativeLuminance(ink)) >=
+    contrastRatio(accentLuminance, relativeLuminance(paper))
+    ? ink
+    : paper;
+}
+
+/** One colour token: a swatch (native picker) plus a #rrggbb text field. */
+function ThemeColorField({
+  label,
+  value,
+  overridden,
+  onChange,
+}: {
+  label: string;
+  /** The resolved colour — always a valid #rrggbb (the default when unset). */
+  value: string;
+  /** True when the token carries a non-default override ("Standard" shows). */
+  overridden: boolean;
+  /** Passed undefined to clear the override (back to the default). */
+  onChange: (hex: string | undefined) => void;
+}) {
+  // The text field holds what the user is typing, which may be a partial value
+  // ("#b8") that is not a valid colour yet. It is synced back to the resolved
+  // value whenever that value changes from outside (load, the swatch's picker
+  // or the "Standard" reset) and commits only on blur / Enter.
+  const [text, setText] = useState(value);
+  useEffect(() => {
+    setText(value);
+  }, [value]);
+
+  const commit = (): void => {
+    const trimmed = text.trim().toLowerCase();
+    if (trimmed === '') {
+      onChange(undefined); // empty → back to the default
+      setText(value);
+      return;
+    }
+    if (isHexColor(trimmed)) {
+      onChange(trimmed);
+      setText(trimmed);
+    } else {
+      setText(value); // invalid → revert to the current value
+    }
+  };
+
+  return (
+    <div className="field">
+      <div className="theme-color-head">
+        <span className="field-label">{label}</span>
+        {overridden && (
+          <button type="button" className="text-button" onClick={() => onChange(undefined)}>
+            Standard
+          </button>
+        )}
+      </div>
+      <div className="theme-color-row">
+        <label
+          className="theme-swatch"
+          style={{ backgroundColor: value }}
+          title={`${label} auswählen`}
+        >
+          <input
+            type="color"
+            className="theme-color-input"
+            value={value}
+            onChange={(event) => {
+              const hex = event.target.value.toLowerCase();
+              onChange(hex);
+              setText(hex);
+            }}
+            aria-label={`${label} auswählen`}
+          />
+        </label>
+        <input
+          type="text"
+          className="theme-hex-input"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commit();
+              event.currentTarget.blur();
+            }
+          }}
+          aria-label={`${label} (Hex)`}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** The recipe-theme editor: live preview, typeface chips and colour tokens. */
+function ThemeEditor({
+  title,
+  theme,
+  onChange,
+}: {
+  title: string;
+  theme: RecipeTheme | undefined;
+  onChange: (theme: RecipeTheme | undefined) => void;
+}) {
+  // Resolve the five tokens once; each falls back to the default independently.
+  const resolved = resolveTheme(theme);
+  const onAccent = onAccentColor(resolved.accent, resolved.ink, resolved.paper);
+  const fontStack = themeFontStack(resolved.font);
+
+  // Every change passes through the save-time normalization: defaults dropped,
+  // hex lower-cased, an empty theme collapsing back to undefined.
+  const patch = (next: Partial<RecipeTheme>): void => {
+    onChange(normalizeTheme({ ...theme, ...next }));
+  };
+
+  // "Standard" (the reset) shows only for a token that is genuinely overridden
+  // — a stored value that equals its default is not an override.
+  const colorIsOverridden = (key: 'accent' | 'paper' | 'ink' | 'line'): boolean => {
+    const value = theme?.[key];
+    return value !== undefined && value.toLowerCase() !== DEFAULT_THEME[key].toLowerCase();
+  };
+
+  return (
+    <>
+      <div className="field">
+        <span className="field-label">Vorschau</span>
+        <div
+          className="theme-preview"
+          style={{
+            backgroundColor: resolved.paper,
+            color: resolved.ink,
+            fontFamily: fontStack,
+          }}
+        >
+          <span className="theme-preview-kicker" style={{ fontFamily: fontStack }}>
+            {resolved.font}
+          </span>
+          <span className="theme-preview-title" style={{ fontFamily: fontStack }}>
+            {title.trim() !== '' ? title.trim() : 'Rezepttitel'}
+          </span>
+          <span className="theme-preview-line" style={{ backgroundColor: resolved.line }} />
+          <span className="theme-preview-body" style={{ fontFamily: fontStack }}>
+            Zutaten vorbereiten, Schritt für Schritt.
+          </span>
+          <span
+            className="theme-preview-accent"
+            style={{ backgroundColor: resolved.accent, color: onAccent }}
+          >
+            Akzent
+          </span>
+        </div>
+      </div>
+
+      <div className="field">
+        <span className="field-label">Schriftart</span>
+        <div className="theme-font-chips" role="group" aria-label="Schriftart">
+          <button
+            type="button"
+            className={resolved.font === DEFAULT_THEME.font ? 'chip chip-active' : 'chip'}
+            style={{ fontFamily: themeFontStack(DEFAULT_THEME.font) }}
+            onClick={() => patch({ font: undefined })}
+            title="Standard-Schriftart (Source Sans 3)"
+          >
+            Standard
+          </button>
+          {THEME_FONT_SHORTLIST.filter((font) => font !== DEFAULT_THEME.font).map((font) => (
+            <button
+              key={font}
+              type="button"
+              className={resolved.font === font ? 'chip chip-active' : 'chip'}
+              style={{ fontFamily: themeFontStack(font) }}
+              onClick={() => patch({ font })}
+            >
+              {font}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ThemeColorField
+        label="Akzent"
+        value={resolved.accent}
+        overridden={colorIsOverridden('accent')}
+        onChange={(hex) => patch({ accent: hex })}
+      />
+      <ThemeColorField
+        label="Hintergrund"
+        value={resolved.paper}
+        overridden={colorIsOverridden('paper')}
+        onChange={(hex) => patch({ paper: hex })}
+      />
+      <ThemeColorField
+        label="Text"
+        value={resolved.ink}
+        overridden={colorIsOverridden('ink')}
+        onChange={(hex) => patch({ ink: hex })}
+      />
+      <ThemeColorField
+        label="Linie"
+        value={resolved.line}
+        overridden={colorIsOverridden('line')}
+        onChange={(hex) => patch({ line: hex })}
+      />
+    </>
   );
 }
 
@@ -2051,6 +2336,21 @@ function RecipeEditor({
               </ul>
             </>
           )}
+        </section>
+
+        {/* Thema — the recipe's visual skin for the export (DESIGN §4.8);
+            every token is optional and falls back to the default independently. */}
+        <section className="editor-card" aria-label="Thema">
+          <h3 className="editor-card-title">Thema</h3>
+          <p className="field-hint">
+            Aussehen der Export-Ansicht (Kochansicht). Jedes Feld ist optional und fällt einzeln
+            auf den Standard zurück.
+          </p>
+          <ThemeEditor
+            title={draft.title}
+            theme={draft.theme}
+            onChange={(theme) => patchDraft({ theme })}
+          />
         </section>
 
         {/* Danger zone (edit mode only) */}
