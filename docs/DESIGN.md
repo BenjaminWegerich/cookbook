@@ -399,10 +399,48 @@ toward `paper` (solid — no opacity). `on-accent` (text on a filled accent surf
 for contrast: `ink` when the accent is light, `paper` otherwise — the choice whose contrast
 against `accent` reaches WCAG AA.
 
+**Theme font.** The `font` token names one typeface from the export font shortlist. The
+shortlist holds eleven typefaces, deliberately unlike each other, spanning a wide range of
+genres — sans, serif, slab, condensed, handwriting, monospace. A typeface need not be warm or
+humanist, and it need not harmonise with the web app's palette; a theme's colours are chosen
+independently of its typeface. *decided with the user*
+
+| Typeface | Vibe |
+| --- | --- |
+| Source Sans 3 | humanist sans — the default |
+| Inter | neutral grotesque sans |
+| Montserrat | geometric sans |
+| Nunito | rounded, friendly sans |
+| Source Serif 4 | transitional book serif |
+| Fraunces | soft, expressive serif |
+| Playfair Display | elegant didone serif |
+| Bitter | slab serif |
+| IBM Plex Sans Condensed | condensed headline |
+| Caveat | handwriting |
+| IBM Plex Mono | monospace |
+
+A typeface joins the shortlist only when it meets every requirement:
+
+- **Embeddable and offline.** Self-hostable and inlined into the standalone `.html`; no CDN,
+  no runtime fetch, no server. Subset to the required coverage so the inlined font stays
+  practical in size.
+- **Redistributable.** The export is a shareable file, so the license permits embedding and
+  redistribution (SIL OFL or equivalent).
+- **Weights 400 and 600.** The typeface offers both weights of §4.2; a variable font and two
+  static files satisfy this equally. *decided with the user*
+- **Character coverage.** Native glyphs for Basic Latin and Latin-1 (the German letters
+  `ä ö ü ß Ä Ö Ü` included), the typographic punctuation the content uses (`„ " ' – — …`). Fraction
+  glyphs and the narrow no-break space are not required: fractions render in the slash form
+  (§7), and a missing narrow no-break space degrades invisibly.
+- **Legible at arm's length** at the four sizes of §4.2 within their fixed line-heights, with
+  clear figures. A typeface may be expressive in any genre, but body text (18–24 px) that
+  fails at arm's length is out.
+
 **Rules**
 
 - The default theme is the web app's palette and typeface: a recipe without `theme` data
   renders in the app's look.
+- A recipe's `font` is one of the shortlist's eleven typefaces; no other typeface is selectable.
 - A recipe may override any subset; the rest fall back to the default.
 - The theme may carry decorative details but never changes the placement, size or wording of
   any control.
@@ -1059,7 +1097,10 @@ The cooking view is German, like the app. The bottom bar's two navigation button
 verbless „Zurück" and „Weiter". Its other strings: the step title „Schritt x von y", „Rezept"
 (sub-recipe badge), the size-picker captions „Portionen" / „Menge", the time captions
 „Arbeitszeit" / „Gesamtzeit", and the footer „Erstellt mit Cookbook" beside the brand mark.
-Numbers and units are joined by the narrow no-break space.
+Numbers and units are joined by the narrow no-break space. Quantities show proper fractions
+in the slash form — `1/2`, `2/5`, `1 1/4` — never the web app's vulgar-fraction glyphs: the
+slash form keeps full-size digits for arm's-length reading and asks no fraction glyphs of the
+theme font. A mixed number joins its integer and fraction with the narrow no-break space.
 
 ## 8. Accessibility
 
