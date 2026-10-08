@@ -363,7 +363,7 @@ export async function shortenUrl(gatewayToken: string, target: string): Promise<
 /**
  * Ticks ("checks") or unticks meal-plan lines, changing nothing else.
  *
- * This is the recipe overview's "Entfernen" and its undo. Removing a
+ * This is the recipe overview's "Abhaken" and its undo. Removing a
  * dish from the meal plan deliberately does not delete the Keep line: it is
  * ticked off, so the line stays visible in Keep as "cooked", and the undo ticks
  * it back on. `check` are the exact texts to tick, `uncheck` the exact texts to

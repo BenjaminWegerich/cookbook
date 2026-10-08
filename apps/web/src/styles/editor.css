@@ -858,8 +858,31 @@
   gap: var(--space-3);
 }
 
-.sheet-actions .danger-button {
+/* The lead action of a sheet action row is pulled to the bottom-left corner,
+   away from the right-aligned "Abbrechen" and the primary confirm: the danger
+   button of the destructive sheets ("Entfernen" in the ingredient sheet) and
+   the meal-plan overlay's neutral "Abhaken". */
+.sheet-actions .danger-button,
+.sheet-actions .sheet-actions-lead {
   margin-inline-end: auto;
+}
+
+/* Outlined button: the neutral secondary action that matches the recipe
+   overview's outlined action row ("Abhaken" in the meal-plan overlay). Surface
+   fill, hairline border, ink label — the same geometry as .overview-action. */
+.outlined-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 42px; /* ladder: thumb-reachable action height */
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  font-weight: 600;
 }
 
 /* ---- Primary button (Speichern / Hinzufügen) ----------------------------- */

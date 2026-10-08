@@ -36,9 +36,9 @@ overview, the fifth the shopping list:
 > `Menge für <Titel> auf dem Essensplan geändert. Die Einkaufsliste bleibt unverändert.`
 > with the action **Rückgängig** („Umplanen“ → „Menge ändern“).
 
-> `<Titel> vom Essensplan entfernt. Die Einkaufsliste bleibt unverändert.`
-> with the action **Rückgängig** („Mehr“ → „Vom Plan entfernen“ on a recognized recipe, or an
-> unrecognized entry's own „Vom Plan entfernen“).
+> `<Titel> vom Essensplan abgehakt. Die Einkaufsliste bleibt unverändert.`
+> with the action **Rückgängig** („Umplanen“ → „Abhaken“ on a recognized recipe, or an
+> unrecognized entry's own „Abhaken“).
 
 > `„<Vorheriger Eintrag>“ durch <Titel> (<Größe>) ersetzt. Die Einkaufsliste bleibt unverändert.`
 > with the action **Rückgängig** („Eintrag ersetzen“ → „Bestehendes Rezept auswählen“ on an
@@ -217,7 +217,7 @@ must not delete the line — it ticks it off:
 of the two must be non-empty, no text may appear in both, and every named line
 must exist and end up in the requested state — a line the user deleted in Keep in
 the meantime fails the write instead of reporting success. The gateway writes
-only the `checked` flag, syncs once and verifies the result. "Vom Plan entfernen"
+only the `checked` flag, syncs once and verifies the result. "Abhaken"
 and its "Rückgängig" therefore tick the same line off and on again rather than
 deleting and re-adding it, so the line stays visible in Keep as cooked.
 
@@ -249,7 +249,7 @@ A named line that Keep no longer carries fails the undo instead of reporting
 - The undo is a snapshot of what the app last wrote. Changes made in Keep in the
   meantime are not reconciled; the notice's 6 s window is the realistic scope.
 - The undo is available only while the notice is on screen. After that, the
-  normal meal-plan actions apply ("Vom Plan entfernen", re-planning) — and in the
+  normal meal-plan actions apply ("Abhaken", re-planning) — and in the
   shopping flow the list can simply be written again.
 
 ### 1.9 Implementation map

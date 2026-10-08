@@ -155,8 +155,8 @@
 }
 
 /* The unrecognized entry's two-button row may wrap: "Eintrag ersetzen" is a
-   full action phrase and, next to "Entfernen", may not fit one narrow phone
-   line. The primary grows on its line and the danger action drops to a line of
+   full action phrase and, next to "Abhaken", may not fit one narrow phone
+   line. The primary grows on its line and the "Abhaken" action drops to a line of
    its own instead of either label being squeezed or wrapped inside its
    button. */
 .overview-actions.is-wrapping {
@@ -201,14 +201,6 @@
   color: var(--color-on-accent);
 }
 
-/* "Entfernen" (unrecognized entry): outlined danger. It removes the
-   line from the meal plan, so it carries the danger colour on label, symbol and
-   border, but it stays the row's secondary action — the fill stays the plain
-   surface, because the one filled button of that row is "Eintrag ersetzen". */
-.overview-action.is-danger {
-  border-color: var(--color-danger);
-  color: var(--color-danger);
-}
 
 /*
  * The symbols are 18 px (ladder: space-6) and inherit the button's ink color,

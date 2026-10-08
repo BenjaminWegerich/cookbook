@@ -28,7 +28,7 @@ spend guardrail are all in place — see
 | `GET`  | `/health`              | Liveness. No Keep call, no token, no config details. | works |
 | `GET`  | `/keep/state`          | Meal plan and shopping list, in Keep's display order. | works |
 | `POST` | `/keep/mealplan`       | Add dish lines to "Essensplan".                       | works |
-| `POST` | `/keep/mealplan/check` | Tick meal-plan lines off / back on ("Vom Plan entfernen"). | works |
+| `POST` | `/keep/mealplan/check` | Tick meal-plan lines off / back on ("Abhaken"). | works |
 | `POST` | `/shorten`             | Shorten one export URL for a meal-plan line.         | works with a token, else `503` |
 | `POST` | `/keep/shopping`       | Add a recipe's scaled ingredients to "Einkaufsliste". | works |
 | `POST` | `/keep/shopping/sort`  | Reorder the shopping list by category/aisle.          | `501` until the category and write-action steps |
@@ -108,7 +108,7 @@ sits behind the same Google sign-in as the Keep routes. Without a `TINYURL_API_T
 shortening never blocks a plan write.
 
 `POST /keep/mealplan/check` ticks meal-plan lines off or back on, without deleting them — the
-recipe overview's "Vom Plan entfernen" and its "Rückgängig":
+recipe overview's "Abhaken" and its "Rückgängig":
 
 ```json
 {

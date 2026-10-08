@@ -5,7 +5,8 @@
  * It reuses the shared bottom-sheet pattern and, for its fields and chips, the
  * editor's own control styles (.sheet / .sheet-title / .field / .field-label /
  * .quantity-chips / .quantity-picker / .sheet-actions / .text-button /
- * .primary-button in editor.css and recipe-list.css). This file adds only what
+ * .outlined-button / .primary-button in editor.css and recipe-list.css). This
+ * file adds only what
  * belongs to this overlay: its own stacking layer, the content-sheet width and
  * the two small text lines. All pixel values come from the design ladder
  * (docs/CODING_CONVENTIONS.md).

@@ -17,7 +17,7 @@
  *   unavailable until the size actually differs from the one the plan states
  *   (docs/CODING_CONVENTIONS.md, unavailable buttons: the selected chips/stepper
  *   right above it show the reason). The replan overlay additionally carries the
- *   "Entfernen" action (decided with the user): it sits first in the action row,
+ *   "Abhaken" action (decided with the user): it sits first in the action row,
  *   in the bottom-left corner, so taking the dish off the plan lives next to
  *   "Abbrechen" and "Menge ändern" instead of behind the overview's "Mehr" menu.
  *   "Einplanen" has no such button — a dish that is not on the plan has nothing
@@ -79,7 +79,7 @@ import {
   type Recipe,
 } from '@cookbook/core';
 
-import { EventBusyIcon } from './icons';
+import { CheckBoxIcon } from './icons';
 import QuantityPicker from './QuantityPicker';
 import { safeRenderAQS } from './ingredientDisplay';
 
@@ -119,7 +119,7 @@ interface MealPlanSheetProps {
    */
   onConfirm: (planned: PlannedAmount) => Promise<void>;
   /**
-   * "Entfernen" (replan only): takes the dish off the meal plan. App owns the
+   * "Abhaken" (replan only): takes the dish off the meal plan. App owns the
    * Keep check write and its undo notice; this overlay only hands over, exactly
    * like the overview's other removal paths. On success App closes the whole
    * flow (overview included), so this overlay unmounts with it; a failure is
@@ -300,15 +300,15 @@ function MealPlanSheet({
         )}
 
         <div className="sheet-actions">
-          {/* "Entfernen" (replan only): takes the dish off the plan. It sits
+          {/* "Abhaken" (replan only): takes the dish off the plan. It sits
               first in the row, in the bottom-left corner (the shared
-              .sheet-actions .danger-button rule pulls it there), next to
+              .sheet-actions .sheet-actions-lead rule pulls it there), next to
               "Abbrechen" and "Menge ändern". Like "Abbrechen" it is unavailable
               while a write runs, so the two writes cannot interleave. */}
           {isReplan && (
-            <button type="button" className="danger-button" onClick={onRemove} disabled={busy}>
-              <EventBusyIcon className="button-icon" />
-              <span>Entfernen</span>
+            <button type="button" className="outlined-button sheet-actions-lead" onClick={onRemove} disabled={busy}>
+              <CheckBoxIcon className="button-icon" />
+              <span>Abhaken</span>
             </button>
           )}
           <button type="button" className="text-button" onClick={onClose} disabled={busy} autoFocus>

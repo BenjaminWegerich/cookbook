@@ -1354,8 +1354,8 @@ function App() {
 
   /**
    * Takes the open overview's meal-plan entry off the plan: a recognized recipe
-   * ("Umplanen" → "Entfernen" in the meal-plan overlay) or an unrecognized entry
-   * (its own danger button "Entfernen"), which has no recipe behind it. Removing
+   * ("Umplanen" → "Abhaken" in the meal-plan overlay) or an unrecognized entry
+   * (its own danger button "Abhaken"), which has no recipe behind it. Removing
    * deliberately *checks* the Keep lines instead of deleting them, so the user
    * can still see in Keep what was cooked; `checkMealPlan` is therefore the write
    * and `uncheckMealPlan` its undo.
@@ -1403,13 +1403,13 @@ function App() {
         const reason = err instanceof Error ? err.message : String(err);
         showSnackbar({
           tone: 'error',
-          text: `„${name}“ konnte nicht vom Essensplan entfernt werden. ${reason}`,
+          text: `„${name}“ konnte nicht vom Essensplan abgehakt werden. ${reason}`,
         });
         return;
       }
       closeOverview();
       showSnackbar({
-        text: `${name} vom Essensplan entfernt. Die Einkaufsliste bleibt unverändert.`,
+        text: `${name} vom Essensplan abgehakt. Die Einkaufsliste bleibt unverändert.`,
         action: {
           label: 'Rückgängig',
           busyLabel: 'Wird rückgängig gemacht …',

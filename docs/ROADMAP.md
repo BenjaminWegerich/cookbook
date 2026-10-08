@@ -59,7 +59,7 @@ self-contained. The read-only frontend, the meal-plan recipe overview and the me
 are built (the two captioned sections, recognition, the Google sign-in, the overview's three
 card forms,
 „Zum Essensplan hinzufügen“, which links the entry at the recipe's cooking view through the
-deployed export host, „Umplanen“ with its size change, and „Vom Plan entfernen“, which ticks
+deployed export host, „Umplanen“ with its size change, and „Abhaken“, which ticks
 the entry off and can be undone). „Jetzt kochen“ opens the recipe's HTML export in a new tab,
 at the size the plan states when the dish is planned — otherwise at the recipe's written default
 size; the „Eintrag ersetzen“ menu is built (an unrecognized entry can be replaced by an existing
@@ -132,8 +132,8 @@ frontend and the actual features.
 3. [x] **Meal-plan recipe overview**: a recognized plan card opens the overview with the
    entry's planned size (servings/yield) shown first in its caption/value row, so the dish
    can be viewed, edited and scaled from the plan; an unrecognized entry gets a destination
-   of its own there („Eintrag ersetzen“ / „Vom Plan entfernen“). „Einplanen“ performs the
-   write, „Umplanen“ changes the size and „Vom Plan entfernen“ ticks the entry off (step 5);
+   of its own there („Eintrag ersetzen“ / „Abhaken“). „Einplanen“ performs the
+   write, „Umplanen“ changes the size and „Abhaken“ ticks the entry off (step 5);
    „Jetzt kochen“ opens the recipe's HTML export in a new tab, at the size the plan states when
    the dish is planned and otherwise at the recipe's written default size; the „Eintrag
    ersetzen“ menu is built:
@@ -153,7 +153,7 @@ frontend and the actual features.
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
    (the size is a query parameter on the export host), replacing the entries recognized as the
    same recipe; the gateway changes as little as possible and verifies the result), and so is
-   taking a dish off the plan ([x] — „Vom Plan entfernen“ ticks the entry off in Keep via
+   taking a dish off the plan ([x] — „Abhaken“ ticks the entry off in Keep via
    `POST /keep/mealplan/check` and can be undone; changing the size reuses the meal-plan write),
    and so is the shopping list ([x] — „Einkaufsliste schreiben“ writes the chosen recipes'
    ingredients via `POST /keep/shopping`, with the pantry step and an undo).

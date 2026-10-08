@@ -103,8 +103,8 @@ export function CalendarEditIcon({ className }: IconProps) {
 /**
  * Calendar with a checkmark — the positive "it is planned" counterpart of
  * CalendarAddIcon: the same calendar body, with the checkmark instead of the
- * plus. Without a call site since the recipe overview dropped its "Eingeplant"
- * badge (the "Geplant" value and "Umplanen" state the plan on their own).
+ * plus. Without a call site since the "Abhaken" action switched to the plain
+ * checkbox (CheckBoxIcon); retained for a future "planned" badge.
  */
 export function EventAvailableIcon({ className }: IconProps) {
   return (
@@ -118,17 +118,34 @@ export function EventAvailableIcon({ className }: IconProps) {
 }
 
 /**
- * Calendar with a cross — the "Entfernen" action that takes a dish off the
- * meal plan (the unrecognized entry's own button and the meal-plan overlay's
- * replan mode): the calendar body with the cross of "take it off the plan".
- * The call sites paint it in the danger colour,
- * which is the destructive half of its meaning.
+ * Calendar with a cross — kept without a call site since the action that ticks
+ * a dish off the meal plan is "Abhaken" and uses the checkbox (CheckBoxIcon),
+ * not the cross: the cross read as "delete the line", but the action only ticks
+ * it off. Retained in case a genuinely destructive "take off the plan" action
+ * returns.
  */
 export function EventBusyIcon({ className }: IconProps) {
   return (
     <svg className={className} {...ICON_PROPS}>
       <path
         d="M480,656L416,720Q405,731 388,731Q371,731 360,720Q349,709 349,692Q349,675 360,664L424,600L360,536Q349,525 349,508Q349,491 360,480Q371,469 388,469Q405,469 416,480L480,544L544,480Q555,469 572,469Q589,469 600,480Q611,491 611,508Q611,525 600,536L536,600L600,664Q611,675 611,692Q611,709 600,720Q589,731 572,731Q555,731 544,720L480,656ZM200,880Q167,880 143.5,856.5Q120,833 120,800L120,240Q120,207 143.5,183.5Q167,160 200,160L240,160L240,120Q240,103 251.5,91.5Q263,80 280,80Q297,80 308.5,91.5Q320,103 320,120L320,160L640,160L640,120Q640,103 651.5,91.5Q663,80 680,80Q697,80 708.5,91.5Q720,103 720,120L720,160L760,160Q793,160 816.5,183.5Q840,207 840,240L840,800Q840,833 816.5,856.5Q793,880 760,880L200,880ZM200,800L760,800Q760,800 760,800Q760,800 760,800L760,400L200,400L200,800Q200,800 200,800Q200,800 200,800ZM200,320L760,320L760,240Q760,240 760,240Q760,240 760,240L200,240Q200,240 200,240Q200,240 200,240L200,320ZM200,320L200,240Q200,240 200,240Q200,240 200,240L200,240Q200,240 200,240Q200,240 200,240L200,320L200,320Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Checkbox with a checkmark — the "Abhaken" action that ticks a dish off the
+ * meal plan (the unrecognized entry's own button and the meal-plan overlay's
+ * replan mode): a plain checkbox reads as "tick off a list", which is exactly
+ * what the action does — the Keep line is checked, not deleted.
+ */
+export function CheckBoxIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M424,536L338,450Q327,439 310,439Q293,439 282,450Q271,461 271,478Q271,495 282,506L396,620Q408,632 424,632Q440,632 452,620L678,394Q689,383 689,366Q689,349 678,338Q667,327 650,327Q633,327 622,338L424,536ZM200,840Q167,840 143.5,816.5Q120,793 120,760L120,200Q120,167 143.5,143.5Q167,120 200,120L760,120Q793,120 816.5,143.5Q840,167 840,200L840,760Q840,793 816.5,816.5Q793,840 760,840L200,840ZM200,760L760,760Q760,760 760,760Q760,760 760,760L760,200Q760,200 760,200Q760,200 760,200L200,200Q200,200 200,200Q200,200 200,200L200,760Q200,760 200,760Q200,760 200,760ZM200,200L200,200Q200,200 200,200Q200,200 200,200L200,760Q200,760 200,760Q200,760 200,760L200,760Q200,760 200,760Q200,760 200,760L200,200Q200,200 200,200Q200,200 200,200Z"
         fill="currentColor"
       />
     </svg>

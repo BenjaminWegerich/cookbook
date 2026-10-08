@@ -220,8 +220,7 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   failure) and
   its title without export link, stated size and free-text note — the shape a known card has —
   and is tappable: the recipe overview is its destination, where the entry can be replaced by
-  an existing recipe or by a new one (manual or AI) or dropped from the plan with „Vom Plan
-  entfernen“.
+  an existing recipe or by a new one (manual or AI) or dropped from the plan with „Abhaken“.
 - **Recipe overview.** A card opens the overview sheet in one of three forms. A recipe that is
   not on the meal plan is unchanged. A planned recipe shows the entry's stated size first in
   its caption/value row („Geplant 6 Portionen“ / „Geplant 1,5 l“) and turns „Einplanen“ into
@@ -236,8 +235,8 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   destination described above. „Einplanen“ writes the dish to the meal plan;
   „Umplanen“ opens the same overlay in a replan mode that pre-selects the plan's stated size
   and replaces the entry with „Menge ändern“. Every carry-out action ends the flow back at the
-  list: a planned recipe's „Vom Plan entfernen“ (in its „Mehr“ menu) and an unrecognized
-  entry's own „Vom Plan entfernen“ button both check the entry off. The sheet renders the
+  list: a planned recipe's „Abhaken“ (in its „Umplanen“ overlay) and an unrecognized
+  entry's own „Abhaken“ button both check the entry off. The sheet renders the
   *live* plan App derives from the current resolution, so its „Geplant“ value and its travel
   action follow the plan while it is open. „Jetzt kochen“ opens the
   recipe's HTML export in a new tab, at the size the plan states when the dish is planned and
@@ -273,7 +272,7 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   successful unverified. Success is reported by the shared snackbar with a full undo
   („Rückgängig“ puts the replaced lines back; the gateway accepts one or several added lines
   for exactly that, see [ui_patterns.md](ui_patterns.md)).
-- **Removing from the plan is a check, not a delete.** „Vom Plan entfernen“ ticks the entry's
+- **Removing from the plan is a check, not a delete.** „Abhaken“ ticks the entry's
   Keep lines off (`POST /keep/mealplan/check`) instead of deleting them, so the lines stay
   visible in Keep as cooked; the success snackbar's „Rückgängig“ ticks them back on. The app
   sends the exact texts it recognized as the entry: a recognized recipe's lines by the same

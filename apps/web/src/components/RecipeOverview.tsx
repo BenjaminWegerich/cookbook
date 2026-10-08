@@ -16,9 +16,9 @@
  *    the calendar-and-pencil glyph. "Umplanen" opens the same overlay in its
  *    replan mode, which pre-selects the plan's size and changes the entry with
  *    "Menge ändern" (./MealPlanSheet). That overlay is also where the dish is
- *    taken off the plan: its "Entfernen" button sits first in the overlay's
- *    action row, in the bottom-left corner (decided with the user), painted in
- *    the danger colour, and it *checks* the Keep line rather than deleting it.
+ *    taken off the plan: its "Abhaken" button sits first in the overlay's
+ *    action row, in the bottom-left corner (decided with the user), and it
+ *    *checks* the Keep line rather than deleting it.
  *    The hero carries no "Eingeplant" badge: the "Geplant" value and the
  *    "Umplanen" action already state that the dish is on the plan, and the home
  *    screen shows a planned recipe only in its "Essensplan" section.
@@ -35,8 +35,8 @@
  *    after it. It carries exactly one
  *    constructive action, "Eintrag ersetzen" (accent fill, growing), which
  *    opens a menu with "Bestehendes Rezept auswählen", "Rezept manuell
- *    schreiben" and "Rezept mit KI schreiben"; next to it "Entfernen"
- *    (outlined, danger colour) drops the line from the meal plan. The two sit
+ *    schreiben" and "Rezept mit KI schreiben"; next to it "Abhaken"
+ *    (outlined) drops the line from the meal plan. The two sit
  *    on a wrapping row, because both labels are full phrases and do not share
  *    one phone line (decided with the user). The trigger carries no caret
  *    (decided with the user): this sheet marks a menu with the three-dot glyph,
@@ -80,7 +80,7 @@
  * - a recognized recipe's plan state is rendered from the *live* plan App
  *   derives (`livePlan`), not only from the snapshot the target was opened with.
  *   Every action here ends the whole flow (the two overlay writes and
- *   "Entfernen"), but the plan can still move while the sheet is open — the
+ *   "Abhaken"), but the plan can still move while the sheet is open — the
  *   previous notice's "Rückgängig", or the meal plan resolving after the sheet
  *   was opened — so its badge, its "Geplant" value and its travel action follow
  *   the plan rather than a stale snapshot. The snapshot stays the fallback for
@@ -99,7 +99,7 @@
  * - "Mehr" (and, for an unrecognized entry, "Eintrag ersetzen") opens its
  *   actions as a small popover above the row: "Manuell bearbeiten" opens the
  *   editor and "Mit KI bearbeiten" opens the AI-edit screen. Taking a planned
- *   recipe off the plan lives in the meal-plan overlay's "Entfernen", not in
+ *   recipe off the plan lives in the meal-plan overlay's "Abhaken", not in
  *   this menu. The menu is closed by an outside tap, Escape and any chosen
  *   entry.
  *
@@ -123,7 +123,7 @@ import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import {
   CalendarAddIcon,
   CalendarEditIcon,
-  EventBusyIcon,
+  CheckBoxIcon,
   MenuBookIcon,
   MoreVertIcon,
   PencilIcon,
@@ -261,8 +261,8 @@ interface RecipeOverviewProps {
   onReplaceEntry: (recipe: StoredRecipe, planned: PlannedAmount) => Promise<void>;
   /**
    * Takes the open meal-plan entry off the plan: a recognized recipe's
-   * "Umplanen" overlay ("Entfernen"), or the unrecognized entry's own danger
-   * button ("Entfernen"). App owns the Keep write and the undo notice; this
+   * "Umplanen" overlay ("Abhaken"), or the unrecognized entry's own danger
+   * button ("Abhaken"). App owns the Keep write and the undo notice; this
    * callback only hands over, because the entry cannot report a failure itself.
    * On success App closes the whole flow.
    */
@@ -595,11 +595,11 @@ function RecipeOverview({
   };
 
   /**
-   * "Entfernen": hands the write to App, which owns the Keep action and the undo
+   * "Abhaken": hands the write to App, which owns the Keep action and the undo
    * notice. App closes the whole flow on success, so the user lands back on the
    * list — the card has left "Essensplan" and stands in "Restliche Sammlung"
    * now (or the unrecognized line is gone). The recognized recipe reaches this
-   * through the meal-plan overlay's "Entfernen", the unrecognized entry through
+   * through the meal-plan overlay's "Abhaken", the unrecognized entry through
    * its own danger button; neither sits in a menu, so there is nothing to close
    * here.
    */
@@ -804,7 +804,7 @@ function RecipeOverview({
             kochen" grows, "Einplanen"/"Umplanen" and "Mehr" stay at content
             width. An unrecognized entry has no cook or edit action: its row
             carries "Eintrag ersetzen" (accent, growing, opens its menu) and
-            "Entfernen" (outlined, danger) and may wrap, because both labels are
+            "Abhaken" (outlined, danger) and may wrap, because both labels are
             full phrases (see the file header). */}
         <div
           className={
@@ -852,12 +852,12 @@ function RecipeOverview({
                 )}
               </div>
               {/* An unrecognized entry has no "Mehr" menu and no "Umplanen"
-                  overlay, so its removal keeps its own danger button, "Entfernen"
+                  overlay, so its removal keeps its own button, "Abhaken"
                   (decided with the user): the entry's complete Keep line is
                   ticked off (not deleted) and the flow closes back to the list. */}
-              <button type="button" className="overview-action is-danger" onClick={removeFromPlan}>
-                <EventBusyIcon />
-                <span>Entfernen</span>
+              <button type="button" className="overview-action" onClick={removeFromPlan}>
+                <CheckBoxIcon />
+                <span>Abhaken</span>
               </button>
             </>
           ) : (
@@ -869,7 +869,7 @@ function RecipeOverview({
               {onMealPlan ? (
                 // "Umplanen" opens the same overlay in its replan mode: the size
                 // the plan states is pre-selected and "Menge ändern" replaces the
-                // entry, while "Entfernen" in that overlay takes the dish off the
+                // entry, while "Abhaken" in that overlay takes the dish off the
                 // plan. It needs the parsed recipe just like "Einplanen" (the
                 // written size for the reference readout, the pre-selected size
                 // from the plan), so it stays unavailable until the file read
