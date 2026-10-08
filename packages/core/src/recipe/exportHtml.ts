@@ -52,6 +52,8 @@ import {
   PLAN_PRESELECT_ELEMENT_ID,
   formatLinkQuantity,
 } from '../planLink.js';
+import { resolveTheme } from './theme.js';
+import type { ResolvedTheme } from './theme.js';
 import { displayTimeText } from './timeValues.js';
 import { yieldViewQuantities } from './yieldViews.js';
 import type { Ingredient, Recipe, Step, Unit } from './types.js';
@@ -517,6 +519,24 @@ const STYLES = `
 `;
 
 /**
+ * The resolved theme tokens as CSS custom properties (DESIGN §4.8). Emitted so
+ * the export's stylesheet can *access* the recipe's theme; nothing in the
+ * cooking view consumes these variables yet — applying them (and computing the
+ * derived colours `muted` / `on-accent`, plus the font @font-face embedding) is
+ * the next rendering step, deliberately not built here.
+ */
+function themeVariables(theme: ResolvedTheme): string {
+  const lines = [
+    `--theme-font: '${theme.font}';`,
+    `--theme-accent: ${theme.accent};`,
+    `--theme-paper: ${theme.paper};`,
+    `--theme-ink: ${theme.ink};`,
+    `--theme-line: ${theme.line};`,
+  ];
+  return `:root {\n${lines.map((line) => `  ${line}`).join('\n')}\n}`;
+}
+
+/**
  * Generates the self-contained HTML export of a recipe (decision 7).
  *
  * @param recipe a parsed recipe (validated by the caller)
@@ -549,6 +569,10 @@ export function generateRecipeHtml(
           .join('\n')
       : ingredientRecipeBody(recipe, links);
 
+  // Resolve the recipe's theme to its five concrete tokens (defaults filled in)
+  // and expose them to the export's stylesheet (DESIGN §4.8).
+  const theme = resolveTheme(recipe.theme);
+
   return (
     `<!doctype html>\n` +
     `<html lang="de">\n` +
@@ -556,7 +580,7 @@ export function generateRecipeHtml(
     `  <meta charset="utf-8">\n` +
     `  <meta name="viewport" content="width=device-width, initial-scale=1">\n` +
     `  <title>${escapeHtml(recipe.title)}</title>\n` +
-    `  <style>${STYLES}\n  </style>\n` +
+    `  <style>${themeVariables(theme)}${STYLES}\n  </style>\n` +
     `</head>\n` +
     `<body>\n` +
     `${header}\n` +

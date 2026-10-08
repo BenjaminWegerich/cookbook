@@ -329,6 +329,86 @@ describe('parseRecipe — schema validation (§3)', () => {
   });
 });
 
+describe('parseRecipe — theme validation (§3, DESIGN §4.8)', () => {
+  it('parses a full and a partial theme', () => {
+    const full = parseRecipe(`---
+title: X
+type: finished_dish
+servings: 2
+theme:
+  font: Fraunces
+  accent: "#b85c38"
+  paper: "#faf5ec"
+  ink: "#2b241d"
+  line: "#e6dbc8"
+prep_time: 25 min
+---
+## Zubereitung
+1. x
+`);
+    expect(full.theme).toEqual({
+      font: 'Fraunces',
+      accent: '#b85c38',
+      paper: '#faf5ec',
+      ink: '#2b241d',
+      line: '#e6dbc8',
+    });
+
+    // Only the tokens the author set are stored; the rest fall back later.
+    const partial = parseRecipe(`---
+title: Y
+type: ingredient_recipe
+yield: 500
+yield_unit: ml
+theme:
+  accent: "#123456"
+prep_time: 15 min
+---
+## Zubereitung
+1. x
+`);
+    expect(partial.theme).toEqual({ accent: '#123456' });
+  });
+
+  it('rejects a theme that is not a mapping', () => {
+    const issues = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\ntheme: blau\n---\n## Zubereitung\n1. x\n',
+    );
+    expectIssueAt(issues, 'theme', 'Map');
+  });
+
+  it('rejects unknown theme sub-fields', () => {
+    const issues = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\ntheme:\n  fotn: Inter\n---\n## Zubereitung\n1. x\n',
+    );
+    expectIssueAt(issues, 'theme.fotn', 'Unbekanntes Theme-Feld');
+  });
+
+  it('rejects a font outside the shortlist', () => {
+    const issues = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\ntheme:\n  font: Comic Sans\n---\n## Zubereitung\n1. x\n',
+    );
+    expectIssueAt(issues, 'theme.font', 'Kurzliste');
+  });
+
+  it('rejects colours that are not canonical 6-digit hex', () => {
+    const named = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\ntheme:\n  accent: red\n---\n## Zubereitung\n1. x\n',
+    );
+    expectIssueAt(named, 'theme.accent', '#rrggbb');
+
+    const shortHex = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\ntheme:\n  paper: "#fff"\n---\n## Zubereitung\n1. x\n',
+    );
+    expectIssueAt(shortHex, 'theme.paper', '#rrggbb');
+
+    const nonString = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 2\ntheme:\n  ink: 123\n---\n## Zubereitung\n1. x\n',
+    );
+    expectIssueAt(nonString, 'theme.ink', 'String');
+  });
+});
+
 describe('parseRecipe — reference validation (§4)', () => {
   it('rejects non-integer and non-ladder servings', () => {
     const fractional = parseIssues(

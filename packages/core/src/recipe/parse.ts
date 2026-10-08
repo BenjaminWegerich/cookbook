@@ -39,8 +39,17 @@ import { isAQValue } from '../aqLadder.js';
 import { pos } from '../ladder.js';
 import { parseIngredientPhrase, replaceArtifacts } from './artifacts.js';
 import { deriveIngredients } from './ingredientList.js';
+import { isHexColor, THEME_FONT_SHORTLIST } from './theme.js';
 import { RecipeParseError } from './types.js';
-import type { Ingredient, Recipe, RecipeType, Step, Unit, ValidationIssue } from './types.js';
+import type {
+  Ingredient,
+  Recipe,
+  RecipeTheme,
+  RecipeType,
+  Step,
+  Unit,
+  ValidationIssue,
+} from './types.js';
 
 /** The line that opens and closes the YAML front matter (§2). */
 const FRONT_MATTER_DELIMITER = '---';
@@ -65,9 +74,15 @@ const COMMON_FIELDS: ReadonlySet<string> = new Set([
   'type',
   'description',
   'reference',
+  'theme',
   'prep_time',
   'total_time',
 ]);
+/** The five theme tokens (DESIGN §4.8); unknown sub-fields are rejected. */
+const THEME_FIELDS: ReadonlySet<string> = new Set(['font', 'accent', 'paper', 'ink', 'line']);
+/** The four colour tokens, validated as canonical 6-digit hex (§3). */
+const THEME_COLOR_FIELDS = ['accent', 'paper', 'ink', 'line'] as const;
+
 /** Fields allowed only on finished_dish (§3). */
 const FINISHED_DISH_ONLY: ReadonlySet<string> = new Set(['servings']);
 /** Fields allowed only on ingredient_recipe (§3). */
@@ -117,6 +132,68 @@ function readOptionalString(
     return undefined;
   }
   return value;
+}
+
+/**
+ * Validates the optional `theme` front-matter field (DESIGN §4.8): a map of up
+ * to five optional tokens, each falling back to the default theme. Every token
+ * is validated independently (font against the shortlist, colours as canonical
+ * hex); unknown sub-fields are rejected like unknown top-level fields. Returns
+ * undefined when the field is absent or empty — an empty theme is equivalent to
+ * no theme.
+ */
+function readTheme(
+  data: Record<string, unknown>,
+  issues: ValidationIssue[],
+): RecipeTheme | undefined {
+  const raw = data['theme'];
+  if (raw === undefined) return undefined;
+  if (!isPlainObject(raw)) {
+    issues.push({
+      path: 'theme',
+      message:
+        '"theme" muss eine Map sein (ein Objekt mit den Feldern font, accent, paper, ink, line).',
+    });
+    return undefined;
+  }
+  for (const key of Object.keys(raw)) {
+    if (!THEME_FIELDS.has(key)) {
+      issues.push({ path: `theme.${key}`, message: `Unbekanntes Theme-Feld "${key}".` });
+    }
+  }
+
+  const theme: RecipeTheme = {};
+  const font = raw['font'];
+  if (font !== undefined) {
+    if (typeof font !== 'string') {
+      issues.push({ path: 'theme.font', message: '"font" muss ein String sein.' });
+    } else if (!THEME_FONT_SHORTLIST.includes(font)) {
+      issues.push({
+        path: 'theme.font',
+        message: `"font" muss eine Schriftart aus der Kurzliste sein (gefunden: ${JSON.stringify(font)}).`,
+      });
+    } else {
+      theme.font = font;
+    }
+  }
+  for (const colorKey of THEME_COLOR_FIELDS) {
+    const value = raw[colorKey];
+    if (value === undefined) continue;
+    if (typeof value !== 'string') {
+      issues.push({
+        path: `theme.${colorKey}`,
+        message: `"${colorKey}" muss ein String sein.`,
+      });
+    } else if (!isHexColor(value)) {
+      issues.push({
+        path: `theme.${colorKey}`,
+        message: `"${colorKey}" muss eine Hex-Farbe im Format #rrggbb sein (gefunden: ${JSON.stringify(value)}).`,
+      });
+    } else {
+      theme[colorKey] = value;
+    }
+  }
+  return Object.keys(theme).length > 0 ? theme : undefined;
 }
 
 /**
@@ -350,6 +427,9 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     }
   }
 
+  // Theme (§3, DESIGN §4.8): the recipe's optional visual skin for the export.
+  const theme = readTheme(data, issues);
+
   if (title === undefined || type === undefined || prepTime === undefined) {
     // The problems are already recorded; the recipe cannot be built.
     return undefined;
@@ -364,6 +444,7 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     prep_time: prepTime,
     ...(totalTime !== undefined ? { total_time: totalTime } : {}),
     ...(reference !== undefined ? { reference } : {}),
+    ...(theme !== undefined ? { theme } : {}),
     ...(servings !== undefined ? { servings } : {}),
     ...(yieldValue !== undefined ? { yield: yieldValue } : {}),
     ...(yieldUnit !== undefined ? { yield_unit: yieldUnit } : {}),

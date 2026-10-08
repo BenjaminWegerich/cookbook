@@ -199,7 +199,7 @@ export function buildEditTaskText(originalText: string): string {
     '# Auftrag\n\n' +
     'Überarbeite das folgende Rezept — es ist die verbindliche Ausgangsfassung. Der Nutzer ' +
     'beschreibt nur die gewünschten Änderungen; alles, was er nicht nennt, bleibt unverändert.\n' +
-    '- Übernimm unverändert: Titel, Typ, Wortlaut der Schritte, Zeiten, `description`, `reference`.\n' +
+    '- Übernimm unverändert: Titel, Typ, Wortlaut der Schritte, Zeiten, `description`, `reference`, `theme`.\n' +
     '- Setze Änderungen vollständig um: Portionsänderung skaliert alle Mengen und `servings`; ' +
     'entfernte Zutat verschwindet aus Zeilen und Inline-Erwähnungen; Einheitenkorrektur hält ' +
     'die Mengenregeln ein.\n' +

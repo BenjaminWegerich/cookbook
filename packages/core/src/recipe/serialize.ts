@@ -21,7 +21,7 @@
 
 import { stringify } from 'yaml';
 
-import type { Recipe, Unit } from './types.js';
+import type { Recipe, RecipeTheme, Unit } from './types.js';
 
 /** Returns the canonical text of a quantity row / artifact base ("250 g"). */
 function quantityText(quantity: number, unit: Unit): string {
@@ -31,6 +31,21 @@ function quantityText(quantity: number, unit: Unit): string {
 /** Returns the canonical text of one step row ("250 g Tortillas"). */
 function rowToText(name: string, quantity: number, unit: Unit): string {
   return `${quantityText(quantity, unit)} ${name}`;
+}
+
+/**
+ * Returns the `theme` front-matter mapping (DESIGN §4.8, storage_format.md §3):
+ * only the tokens that are set, in the canonical order font, accent, paper,
+ * ink, line. Undefined when no token is set — an empty theme is equivalent to
+ * no theme and is not written.
+ */
+function buildTheme(theme: RecipeTheme): Record<string, string> | undefined {
+  const result: Record<string, string> = {};
+  for (const key of ['font', 'accent', 'paper', 'ink', 'line'] as const) {
+    const value = theme[key];
+    if (value !== undefined) result[key] = value;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /** Returns the front-matter mapping in the canonical field order of §3. */
@@ -53,6 +68,12 @@ function buildFrontMatter(recipe: Recipe): Record<string, unknown> {
   }
   frontMatter.prep_time = recipe.prep_time;
   if (recipe.total_time !== undefined) frontMatter.total_time = recipe.total_time;
+  // The theme is the recipe's visual skin for the export (DESIGN §4.8); written
+  // last, after total_time; only the tokens that are set are written.
+  const theme = recipe.theme === undefined ? undefined : buildTheme(recipe.theme);
+  if (theme !== undefined) {
+    frontMatter.theme = theme;
+  }
   // The master ingredient list is derived from the step rows (§4) — it is
   // never written to the front matter (only the reference *names* are, and
   // only because the reference role is a property of the master list).

@@ -25,9 +25,7 @@ function makeDish(overrides: Partial<Recipe> = {}): Recipe {
       },
       { ingredients: [], text: 'Tofu marinieren.' },
     ],
-    ingredients: [
-      { name: 'Tortillas', quantity: 250, unit: 'g', reference: true },
-    ],
+    ingredients: [{ name: 'Tortillas', quantity: 250, unit: 'g', reference: true }],
     ...overrides,
   };
 }
@@ -109,6 +107,50 @@ describe('serializeRecipe', () => {
     expect(reparsed.ingredients).toEqual(recipe.ingredients);
   });
 
+  it('writes the theme tokens in the canonical order (only those set)', () => {
+    const text = serializeRecipe(
+      makeDish({
+        theme: {
+          font: 'Fraunces',
+          accent: '#b85c38',
+          paper: '#faf5ec',
+          ink: '#2b241d',
+          line: '#e6dbc8',
+        },
+      }),
+    );
+    // The theme sits at the end of the front matter, after total_time (§3 field
+    // order); colours are quoted because a leading "#" would otherwise start a
+    // YAML comment.
+    expect(text).toContain(
+      'prep_time: 25 min\n' +
+        'total_time: 40 min\n' +
+        'theme:\n' +
+        '  font: Fraunces\n' +
+        '  accent: "#b85c38"\n' +
+        '  paper: "#faf5ec"\n' +
+        '  ink: "#2b241d"\n' +
+        '  line: "#e6dbc8"\n',
+    );
+    // Only the tokens the author set are written, not the defaults.
+    const partial = serializeRecipe(makeDish({ theme: { accent: '#123456' } }));
+    expect(partial).toContain('total_time: 40 min\ntheme:\n  accent: "#123456"\n');
+  });
+
+  it('round-trips a theme through parseRecipe', () => {
+    const theme = {
+      font: 'Caveat',
+      accent: '#123456',
+      paper: '#ffffff',
+      ink: '#000000',
+      line: '#aaaaaa',
+    };
+    const text = serializeRecipe(makeDish({ theme }));
+    expect(parseRecipe(text).theme).toEqual(theme);
+    // A recipe without a theme stays without one.
+    expect(parseRecipe(serializeRecipe(makeDish())).theme).toBeUndefined();
+  });
+
   it('refuses values that cannot be represented faithfully', () => {
     // No steps at all.
     expect(() => serializeRecipe({ ...makeDish(), steps: [] })).toThrow(/at least one step/);
@@ -129,9 +171,9 @@ describe('serializeRecipe', () => {
     ).toThrow(/"- "/);
 
     // Empty step text.
-    expect(() =>
-      serializeRecipe(makeDish({ steps: [{ ingredients: [], text: '' }] })),
-    ).toThrow(/text/);
+    expect(() => serializeRecipe(makeDish({ steps: [{ ingredients: [], text: '' }] }))).toThrow(
+      /text/,
+    );
 
     // Untrimmed / empty / braced ingredient names.
     expect(() =>

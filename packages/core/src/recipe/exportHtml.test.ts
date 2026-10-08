@@ -282,3 +282,37 @@ prep_time: über Nacht
     expect(html).toContain('<p class="meta">über Nacht</p>');
   });
 });
+
+describe('generateRecipeHtml — theme access (§4.8)', () => {
+  const themed = parseRecipe(`---
+title: X
+type: finished_dish
+servings: 2
+theme:
+  font: Fraunces
+  accent: "#123456"
+prep_time: 15 min
+---
+## Zubereitung
+1. x
+`);
+
+  it('exposes the resolved theme tokens as CSS variables', () => {
+    const html = generateRecipeHtml(themed);
+    expect(html).toContain("--theme-font: 'Fraunces';");
+    expect(html).toContain('--theme-accent: #123456;');
+    // Missing tokens fall back to the default theme independently.
+    expect(html).toContain('--theme-paper: #faf5ec;');
+    expect(html).toContain('--theme-ink: #2b241d;');
+    expect(html).toContain('--theme-line: #e6dbc8;');
+  });
+
+  it('uses the default theme for a recipe without theme data', () => {
+    const html = generateRecipeHtml(WRAPS);
+    expect(html).toContain("--theme-font: 'Source Sans 3';");
+    expect(html).toContain('--theme-accent: #b85c38;');
+    expect(html).toContain('--theme-paper: #faf5ec;');
+    expect(html).toContain('--theme-ink: #2b241d;');
+    expect(html).toContain('--theme-line: #e6dbc8;');
+  });
+});

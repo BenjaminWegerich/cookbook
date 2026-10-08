@@ -65,6 +65,30 @@ export interface Step {
 export type MasterIngredient = Ingredient & { reference?: boolean };
 
 /**
+ * A recipe's visual skin for the exported cooking view (docs/DESIGN.md §4.8,
+ * stored in the `theme` front-matter field of storage_format.md §3).
+ *
+ * Five optional tokens, each falling back to the default theme independently:
+ * the export typeface (`font`) and a small palette (`accent`, `paper`, `ink`,
+ * `line`). The defaults and the font shortlist live in ./theme.ts. The derived
+ * colours of §4.8 — `muted` (ink blended toward paper) and `on-accent` (ink or
+ * paper chosen for contrast) — are never stored; the export computes them at
+ * render time.
+ */
+export interface RecipeTheme {
+  /** Export typeface, one of the shortlist (DESIGN §4.8); default Source Sans 3. */
+  font?: string;
+  /** Accent colour: active state, forward actions, links, sub-recipe badge. */
+  accent?: string;
+  /** Page background colour. */
+  paper?: string;
+  /** Primary text colour. */
+  ink?: string;
+  /** Hairlines, borders, dividers. */
+  line?: string;
+}
+
+/**
  * A parsed recipe (storage_format.md §3–§5).
  *
  * Which optional fields are allowed depends on `type`: `finished_dish` carries
@@ -88,6 +112,12 @@ export interface Recipe {
    * must match rows of the recipe; never set per step. There is no upper limit.
    */
   reference?: string[];
+  /**
+   * Optional visual skin for the exported cooking view (DESIGN §4.8): typeface
+   * + palette tokens, each optional and falling back to the default theme.
+   * Allowed on both recipe types.
+   */
+  theme?: RecipeTheme;
   /** finished_dish only: integer standard number (ladder value), e.g. 6. */
   servings?: number;
   /** ingredient_recipe only: standard number in the base unit. */

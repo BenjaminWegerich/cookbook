@@ -35,6 +35,7 @@ export * from './recipe/ingredientList.js';
 export * from './recipe/parse.js';
 export * from './recipe/rename.js';
 export * from './recipe/serialize.js';
+export * from './recipe/theme.js';
 export * from './recipe/timeValues.js';
 export * from './recipe/types.js';
 export * from './recipe/validate.js';

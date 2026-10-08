@@ -68,6 +68,38 @@ Additional fields:
 |---|---|---|---|
 | `reference` | list of strings | both types | Names of any number of ingredients anchored to the recipe's size — the portion size (`finished_dish`) or the yield (`ingredient_recipe`), §4. Names must occur in the recipe rows. |
 
+### Theme (optional, both types)
+
+`theme` is the recipe's visual skin for the HTML share export — a typeface and a
+small palette. [DESIGN.md](DESIGN.md) §4.8 is authoritative for the theme; this
+document only fixes its physical encoding. It is a mapping of up to five optional
+tokens; each token may be omitted and then falls back to the default theme
+independently:
+
+| Token | Type | Default | Notes |
+|---|---|---|---|
+| `font` | string | `Source Sans 3` | One typeface of the export font shortlist (DESIGN.md §4.8); no other typeface is allowed. |
+| `accent` | string | `#b85c38` | Active state, forward actions, links, sub-recipe badge. |
+| `paper` | string | `#faf5ec` | Page background. |
+| `ink` | string | `#2b241d` | Primary text. |
+| `line` | string | `#e6dbc8` | Hairlines, borders, dividers. |
+
+Colours are canonical 6-digit hex (`#rrggbb`); the serializer quotes them because
+a leading `#` would otherwise start a YAML comment. The derived colours of
+DESIGN.md §4.8 (`muted`, `on-accent`) are never stored — the export computes them
+at render time. A recipe without `theme` (or with an empty mapping) renders in
+the app's look.
+
+```markdown
+theme:
+  font: Fraunces
+  accent: "#b85c38"
+  paper: "#faf5ec"
+```
+
+In the file, `theme` is written last, after `total_time`; only the tokens the
+author set are written, never the defaults.
+
 A front-matter `ingredients` field is **rejected**: the master list is derived
 from the step rows (§4), never typed. The editor's quantity pool is bounded to
 1 … 10000 (g/ml); values are stored in the family unit, `kg`/`l` appear only in
@@ -200,6 +232,9 @@ the file. Two levels:
   quantity, a step whose prose is missing, and prose starting with `- ` are errors.
 - `reference` may list any number of names on both recipe types, and every name
   must occur among the recipe's merged ingredients.
+- `theme`, when present, is a mapping whose keys must be `font`/`accent`/`paper`/
+  `ink`/`line` (unknown sub-fields are errors); `font` must be one of the export
+  font shortlist and the colours canonical `#rrggbb`.
 - The body contains exactly one `## Zubereitung` heading followed by the numbered
   step blocks of §5.
 

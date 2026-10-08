@@ -23,6 +23,9 @@ reference:                (optional, beide Typen)
   - Reis
 prep_time: 30 min
 total_time: 45 min        (optional, nur wenn größer als prep_time)
+theme:                    (optional, beide Typen — s. u.)
+  font: Fraunces
+  accent: "#b85c38"
 ---
 ```
 
@@ -35,10 +38,21 @@ total_time: 45 min        (optional, nur wenn größer als prep_time)
     `yield` (Leiterzahl) und `yield_unit` (`g`/`ml`) statt `servings`; niemals `servings`.
 - `reference` (optional): Namen, die die Portion (Gericht) bzw. die Ergiebigkeit (Basis)
   verankern; jeder Name muss in den zusammengeführten Zutaten vorkommen.
+- `theme` (optional, beide Typen): die visuelle Gestaltung des HTML-Exports — Schriftart und
+  Palette (DESIGN.md §4.8). Setze es nur, wenn du eine klare, zum Gericht passende Idee hast;
+  sonst lass es weg (es gilt das Standard-Design). Jedes Unterfeld ist einzeln optional — schreibe
+  nur, was du bewusst setzt.
+  - `font`: genau eine Schriftart der Kurzliste: `Source Sans 3`, `Inter`, `Montserrat`,
+    `Nunito`, `Source Serif 4`, `Fraunces`, `Playfair Display`, `Bitter`,
+    `IBM Plex Sans Condensed`, `Caveat`, `IBM Plex Mono`. Wähle passend zum Charakter des
+    Gerichts — z. B. `Fraunces`/`Playfair Display` elegant, `Bitter` rustikal, `Caveat` lässig.
+  - `accent`/`paper`/`ink`/`line`: Hex-Farben `#rrggbb`, immer in Anführungszeichen
+    (`accent: "#b85c38"`) — ein `#` ohne Anführungszeichen wäre ein YAML-Kommentar. Freie
+    Farbwahl; als Orientierung: `paper` hell und `ink` dunkel (gut lesbar), `line` dezent.
 - `prep_time` (Pflicht): deutsche Anzeige, z. B. `25 min`, `1 h 30 min`; bevorzugt
   Standardwerte `1/3/5/10/15/20/30/45 min` und `1/1.5/2/3/6/12/24/48 h`.
 - Kein `ingredients`-Feld (die Zutatenliste wird aus den Schritten abgeleitet) und keine
-  weiteren Felder (`tags`, `source`, `image` …).
+  weiteren Felder (`tags`, `source`, `image` …); `theme` ist gültig (s. o.).
 
 ## Schritte
 Nach dem Frontmatter genau eine Überschrift `## Zubereitung`, dann die nummerierten
@@ -115,8 +129,8 @@ es lieber weg.
 ## Überarbeitungen
 - Nach einer gelieferten Datei kannst du Änderungen erhalten: liefere immer wieder die
   vollständige, korrigierte Datei — nie ein Diff, nie nur geänderte Zeilen.
-- Behalte `title` und `type`, sofern der Wunsch nichts anderes verlangt. Eine Überarbeitung
-  ist kein zweites Rezept.
+- Behalte `title`, `type` und ein vorhandenes `theme`, sofern der Wunsch nichts anderes
+  verlangt. Eine Überarbeitung ist kein zweites Rezept.
 
 ## Ein Rezept pro Unterhaltung
 - Pro Unterhaltung entsteht genau ein neues Rezept (Überarbeitungen zählen nicht).
