@@ -335,6 +335,62 @@ prep_time: 15 min
   });
 });
 
+describe('generateRecipeHtml — font embedding (§4.8)', () => {
+  const fraunces = parseRecipe(`---
+title: X
+type: finished_dish
+servings: 2
+theme:
+  font: Fraunces
+prep_time: 15 min
+---
+## Zubereitung
+1. x
+`);
+  const mono = parseRecipe(`---
+title: X
+type: finished_dish
+servings: 2
+theme:
+  font: IBM Plex Mono
+prep_time: 15 min
+---
+## Zubereitung
+1. x
+`);
+
+  it('embeds the theme typeface as a self-hosted WOFF2 data URI', () => {
+    const html = generateRecipeHtml(fraunces);
+    expect(html).toContain('@font-face');
+    expect(html).toContain("font-family: 'Fraunces';");
+    expect(html).toContain('data:font/woff2;base64,');
+    expect(html).toContain("format('woff2')");
+    // Self-contained: no network font URL.
+    expect(html).not.toContain('https://');
+  });
+
+  it('embeds the default typeface for a recipe without theme data', () => {
+    const html = generateRecipeHtml(WRAPS);
+    expect(html).toContain("font-family: 'Source Sans 3';");
+    expect(html).toContain('data:font/woff2;base64,');
+  });
+
+  it('declares a variable face over the two required weights', () => {
+    const html = generateRecipeHtml(fraunces);
+    expect(html).toContain('font-weight: 400 600;');
+    expect(html).toContain("font-family: 'Fraunces';");
+  });
+
+  it('embeds one face per static weight for a static family', () => {
+    const html = generateRecipeHtml(mono);
+    expect(html).toContain('font-weight: 400;');
+    expect(html).toContain('font-weight: 600;');
+    // Two @font-face rules — one per static weight — and no variable range.
+    expect(html.match(/@font-face/g)).toHaveLength(2);
+    expect(html).not.toContain('font-weight: 400 600;');
+  });
+});
+
 describe('generateRecipeHtml — photo embedding (§5.8)', () => {
   const photo: RecipePhoto = { mimeType: 'image/jpeg', base64: 'aGVsbG8=' };
 

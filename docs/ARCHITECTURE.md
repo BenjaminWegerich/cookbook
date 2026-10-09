@@ -100,6 +100,9 @@
   - a finished dish bakes the integer ladder serving counts 1–30;
   - an ingredient recipe bakes the ladder yields within ±2 decades of its written yield
     (`packages/core/src/recipe/yieldViews.ts`), the same range the meal plan accepts.
+- The theme typeface (weights 400 and 600, latin subset) is embedded as a `data:` WOFF2, so the
+  file needs no font fetch or sibling asset (`packages/core/src/recipe/embeddedFonts.ts`, generated
+  by `scripts/generate-embedded-fonts.mjs`).
 - Generated from the core logic and a recipe file, stored in Drive and regenerated automatically
   on every recipe save (updated in place, so shared links stay valid).
 - The page opens on the written size or on the size the URL asks for (`?portionen=6`,

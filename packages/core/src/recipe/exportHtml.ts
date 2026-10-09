@@ -73,6 +73,7 @@ import type { ResolvedTheme } from './theme.js';
 import { displayTimeText } from './timeValues.js';
 import { yieldViewQuantities } from './yieldViews.js';
 import type { Ingredient, Recipe, Step, Unit } from './types.js';
+import { EMBEDDED_FONTS } from './embeddedFonts.js';
 
 /** Allowed serving options of the export: integer ladder values 1–30 (§D2). */
 const SERVING_MIN = 1;
@@ -156,8 +157,9 @@ function themeCss(theme: ResolvedTheme): string {
     `  --theme-paper: ${theme.paper};\n` +
     `  --theme-ink: ${theme.ink};\n` +
     `  --theme-line: ${theme.line};\n` +
-    // The applied tokens. The font is wired by name only (system-ui fallback);
-    // self-hosted WOFF2 embedding is a follow-up rendering step (§4.8).
+    // The applied tokens. The theme font is embedded as self-hosted WOFF2
+    // `@font-face` rules (see fontFaceCss below); the system-ui stack remains
+    // the fallback for a typeface without an embedded face (§4.8).
     `  --font: var(--theme-font), system-ui, sans-serif;\n` +
     `  --paper: var(--theme-paper);\n` +
     `  --ink: var(--theme-ink);\n` +
@@ -166,6 +168,33 @@ function themeCss(theme: ResolvedTheme): string {
     `  --muted: ${muted};\n` +
     `  --on-accent: ${onAccent};\n` +
     `}`
+  );
+}
+
+/**
+ * The theme typeface's `@font-face` rules, or '' when the typeface has no
+ * embedded face (§4.8). Each face is the latin subset of the shortlist
+ * typeface (embeddedFonts.ts), inlined as a `data:` URI so the export stays
+ * self-contained: no runtime font fetch and no sibling file. Variable faces are
+ * declared once over the two weights the cooking view uses (`400 600`, §4.2);
+ * a static family (the two IBM Plex faces) declares one rule per weight.
+ */
+function fontFaceCss(theme: ResolvedTheme): string {
+  const faces = EMBEDDED_FONTS[theme.font];
+  if (faces === undefined) return '';
+  return (
+    faces
+      .map(
+        (face) =>
+          `@font-face {\n` +
+          `  font-family: '${theme.font}';\n` +
+          `  font-style: normal;\n` +
+          `  font-display: swap;\n` +
+          `  font-weight: ${face.weight};\n` +
+          `  src: url(data:font/woff2;base64,${face.base64}) format('woff2');\n` +
+          `}`,
+      )
+      .join('\n') + '\n'
   );
 }
 
@@ -891,6 +920,7 @@ export function generateRecipeHtml(
   photo?: RecipePhoto,
 ): string {
   const theme = resolveTheme(recipe.theme);
+  const fontFaces = fontFaceCss(theme);
   const views = sizeViews(recipe, links);
 
   const intro =
@@ -936,7 +966,7 @@ export function generateRecipeHtml(
     `  <meta charset="utf-8">\n` +
     `  <meta name="viewport" content="width=device-width, initial-scale=1">\n` +
     `  <title>${escapeHtml(recipe.title)}</title>\n` +
-    `  <style>\n${themeCss(theme)}\n${STYLES}\n  </style>\n` +
+    `  <style>\n${fontFaces}${themeCss(theme)}\n${STYLES}\n  </style>\n` +
     `</head>\n` +
     `<body>\n` +
     `${intro}\n${zutaten}\n${zubereitung}\n${bar}\n` +

@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_THEME, THEME_FONT_SHORTLIST, isHexColor, resolveTheme } from './theme.js';
+import { EMBEDDED_FONTS } from './embeddedFonts.js';
 
 describe('THEME_FONT_SHORTLIST', () => {
   it('holds the eleven typefaces of DESIGN §4.8, no duplicates', () => {
@@ -40,6 +41,33 @@ describe('isHexColor', () => {
     expect(isHexColor('#fff')).toBe(false);
     expect(isHexColor('#1234567')).toBe(false);
     expect(isHexColor('b85c38')).toBe(false);
+  });
+});
+
+describe('EMBEDDED_FONTS', () => {
+  it('embeds every shortlist typeface, and only those, each with non-empty WOFF2', () => {
+    // Drift guard between theme.ts and the generated embeddedFonts.ts: a new
+    // shortlist face without an embedded WOFF2 (or a stale embedded face) fails
+    // here instead of silently exporting a system font.
+    expect(Object.keys(EMBEDDED_FONTS).sort()).toEqual([...THEME_FONT_SHORTLIST].sort());
+    for (const [family, faces] of Object.entries(EMBEDDED_FONTS)) {
+      expect(faces.length, family).toBeGreaterThan(0);
+      for (const face of faces) {
+        expect(face.base64.length, family).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('gives the static IBM Plex faces one weight each and the rest a variable range', () => {
+    // The keys are guaranteed by the test above, but noUncheckedIndexedAccess
+    // still requires the non-null assertion at the call site.
+    for (const family of ['IBM Plex Mono', 'IBM Plex Sans Condensed']) {
+      expect(EMBEDDED_FONTS[family]!.map((face) => face.weight).sort()).toEqual(['400', '600']);
+    }
+    for (const family of THEME_FONT_SHORTLIST) {
+      if (family === 'IBM Plex Mono' || family === 'IBM Plex Sans Condensed') continue;
+      expect(EMBEDDED_FONTS[family]!.map((face) => face.weight)).toEqual(['400 600']);
+    }
   });
 });
 

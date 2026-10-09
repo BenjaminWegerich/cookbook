@@ -16,7 +16,8 @@
     "test": "vitest run",
     "generate:ladder": "node scripts/generate-ladder.mjs",
     "generate:additional": "node scripts/generate-additional-data.mjs",
-    "generate:shopping-route": "node scripts/generate-shopping-route.mjs"
+    "generate:shopping-route": "node scripts/generate-shopping-route.mjs",
+    "generate:fonts": "node scripts/generate-embedded-fonts.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
