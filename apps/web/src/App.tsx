@@ -991,12 +991,15 @@ function App() {
       : null;
 
   /**
-   * True while the bundled selection page is the visible layer (no editor, AI
-   * screen or overview sheet above it). It is *not* the condition for mounting
-   * it: the page stays mounted while a layer of its flow sits above it, so the
-   * checked dishes survive the detour and the flow returns to them.
+   * True while the bundled selection page is visible. It is *not* the condition
+   * for mounting it: the page stays mounted while a layer of its flow sits above
+   * it, so the checked dishes survive the detour and the flow returns to them.
+   * The overview sheet is deliberately *not* hidden here: it is a bottom sheet
+   * over its parent page (like the list), so the selection page stays visible,
+   * dimmed by the sheet's backdrop. The pantry step, the editor and the AI
+   * screen are full screens that replace it, so they do hide it.
    */
-  const shoppingVisible = shoppingOpen && !pantryOpen && !editorOpen && !aiOpen && !overviewOpen;
+  const shoppingVisible = shoppingOpen && !pantryOpen && !editorOpen && !aiOpen;
 
   /**
    * Opens the overview for a card of "Restliche Sammlung". The resolution
