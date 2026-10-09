@@ -9,8 +9,10 @@
  * `buyAmount`, `pantryReading`, `renderPantryLine`, `suggestedStocks`,
  * `renderPantryChip`):
  *
- * - the Vorrat starts on `min(need, reorder point)` — the reorder point is the
- *   amount the master data says is on the shelf after a shopping trip;
+ * - the Vorrat starts on `min(need, reorder point)` — snapped **down** to the
+ *   nearest chip for an exact shopping unit, kept as a custom ("andere") chip
+ *   otherwise — the reorder point is the amount the master data says is on the
+ *   shelf after a shopping trip;
  * - the amount to buy starts on `buyAmount` (the need minus the Vorrat, rounded
  *   **up** to whole shopping units, or to whole grams/millilitres without one),
  *   but a value typed into the "kaufen" side is used **exactly** — never
@@ -47,6 +49,15 @@
  * up); changing the "kaufen" amount back-computes the Vorrat and keeps the
  * typed amount exactly.
  *
+ * **Rows fold and unfold** (decided with the user): an ingredient whose
+ * pre-filled Vorrat already covers the need starts folded to its first line,
+ * shown entirely at the purchase's smaller step; one that still needs a
+ * purchase starts unfolded with its chips. A tap on a folded row's
+ * non-interactive area opens it (a tap on its buy quantity also opens that
+ * quantity's keyboard); a tap on an unfolded row's non-interactive area folds
+ * it again; a tap outside a row does nothing. A committed change — a chip, an
+ * "andere" value, or a buy quantity — folds its row too.
+ *
  * "Einkaufsliste schreiben" writes one line per row that currently has something
  * to buy, exactly as displayed (with the name, via core's `renderPantryLine`),
  * through App (which owns the Keep write, the closing of the flow and the
@@ -56,7 +67,7 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import {
@@ -69,6 +80,7 @@ import {
   pantryReading,
   renderPantryChip,
   renderPantryLine,
+  shoppingUnitOf,
   stockPrefill,
   suggestedStocks,
   type AdditionalUnit,
@@ -357,6 +369,14 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
   const [busy, setBusy] = useState(false);
   /** Reason the write failed, shown next to the button (null = no failure). */
   const [writeError, setWriteError] = useState<string | null>(null);
+  /**
+   * The rows currently unfolded (showing their stock chips), keyed by row. A
+   * row that still needs a purchase starts unfolded; a row whose pre-filled
+   * Vorrat already covers the need starts folded to its first line. The set
+   * only ever holds the *unfolded* keys: folding on an outside tap just empties
+   * it, so the covered rows need no per-row bookkeeping of their own.
+   */
+  const [expandedRows, setExpandedRows] = useState<ReadonlySet<string>>(() => new Set());
 
   // Load the bundle once the page is open. `cards` and `token` are fixed for its
   // lifetime (App sets the cards before opening the page and the page unmounts
@@ -367,7 +387,34 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
     let cancelled = false;
     void resolveShoppingBundle(cards, token)
       .then((resolved) => {
-        if (!cancelled) setBundle(resolved);
+        if (!cancelled) {
+          setBundle(resolved);
+          // The rows that still need a purchase start unfolded; the rows whose
+          // pre-filled Vorrat already covers the need start folded to one line.
+          setExpandedRows(
+            new Set(
+              resolved.needs
+                .filter((need) => stockPrefill(need) < need.needed)
+                .map((need) => rowKey(need.ingredient, need.baseUnit)),
+            ),
+          );
+          // An ingredient without an *exact* shopping unit keeps a reorder point
+          // that falls between two chips as its own stock, shown as a custom chip
+          // — exactly as if the user had typed it through "andere". Exact units
+          // are snapped down by core's `stockPrefill`, so they never get one.
+          const custom = new Map<string, number>();
+          for (const need of resolved.needs) {
+            const target = shoppingUnitOf(need);
+            if (target !== null && target.au.exact) continue;
+            const stock = stockPrefill(need);
+            // Covered (the need itself) or zero is a normal chip; a suggestion is
+            // already a chip too. Only an in-between value becomes a custom chip.
+            if (stock <= 0 || stock >= need.needed) continue;
+            if (suggestedStocks(need).includes(stock)) continue;
+            custom.set(rowKey(need.ingredient, need.baseUnit), stock);
+          }
+          if (custom.size > 0) setCustomStocks(custom);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
@@ -378,6 +425,26 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
       cancelled = true;
     };
   }, [cards, token]);
+
+  /** Unfolds one row (idempotent — an already-unfolded row is left alone). */
+  const expand = useCallback((key: string): void => {
+    setExpandedRows((current) => {
+      if (current.has(key)) return current;
+      const updated = new Set(current);
+      updated.add(key);
+      return updated;
+    });
+  }, []);
+
+  /** Folds one row back to its first line (idempotent). */
+  const collapse = useCallback((key: string): void => {
+    setExpandedRows((current) => {
+      if (!current.has(key)) return current;
+      const updated = new Set(current);
+      updated.delete(key);
+      return updated;
+    });
+  }, []);
 
   /**
    * The rows in the order they keep for the page's lifetime: first the
@@ -492,11 +559,14 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
   }
 
   /** One ingredient row: the need with the purchase on its right, and the stock
-   *  chips below. */
+   *  chips below (only while the row is unfolded). */
   function renderRow(entry: PantryEntry): ReactNode {
     const { need, stock, buy } = entry;
     const kaufen = pantryReading(need.ingredient, buy, need.baseUnit);
     const key = rowKey(need.ingredient, need.baseUnit);
+    // Whether the row is folded to its first line. The covered rows start
+    // folded; a folded row opens on a tap and folds again after a change.
+    const collapsed = !expandedRows.has(key);
     // The value the user typed through the "andere" keyboard (null = none yet).
     const customValue = customStocks.get(key) ?? null;
     // The custom value as a chip, labelled with the ingredient's full arrangement
@@ -515,7 +585,25 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
       }));
 
     return (
-      <div className="pantry-row" key={key}>
+      <div
+        className={collapsed ? 'pantry-row pantry-row--collapsed' : 'pantry-row'}
+        key={key}
+        onClick={(event) => {
+          // The row toggles on a tap to its non-interactive area: a folded row
+          // opens, an unfolded row folds. A folded row opens on *any* tap — the
+          // buy quantity's own onClick additionally opens its keyboard (it runs
+          // first, and both compose). An unfolded row folds only when the tap
+          // did not land on an input field or a chip (those keep their own
+          // behaviour); tapping outside the list has no handler at all.
+          const target = event.target;
+          const isControl = target instanceof Element && target.closest('button, input') !== null;
+          if (collapsed) {
+            expand(key);
+          } else if (!isControl) {
+            collapse(key);
+          }
+        }}
+      >
         {/* Line 1: what the selected dishes need together (left) and what is
             bought (right, smaller, led by a shopping-cart symbol). */}
         <div className="pantry-head">
@@ -529,22 +617,42 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
               aqEdit={kaufen.aq ?? 0}
               bqDisplay={formatBQ(buy, need.baseUnit)}
               bqEdit={buy}
-              onCommitAq={(count) => setBuy(need, count * kaufen.factor)}
-              onCommitBq={(amount) => setBuy(need, amount)}
+              onCommitAq={(count) => {
+                setBuy(need, count * kaufen.factor);
+                collapse(key);
+              }}
+              onCommitBq={(amount) => {
+                setBuy(need, amount);
+                collapse(key);
+              }}
               label={`Kaufen für ${need.ingredient}`}
             />
           </span>
         </div>
-        {/* Line 2: the stock chips (suggestions + the custom/“andere” entry). */}
-        <StockChips
-          chips={chips}
-          value={stock}
-          baseUnit={need.baseUnit}
-          customChip={customChip}
-          onChange={(next) => setStock(need, next)}
-          onCommitCustom={(value) => commitCustom(need, value)}
-          label={`Vorrat für ${need.ingredient}`}
-        />
+        {/* Line 2: the stock chips (suggestions + the custom/“andere” entry),
+            only while the row is unfolded. */}
+        {!collapsed && (
+          <StockChips
+            chips={chips}
+            value={stock}
+            baseUnit={need.baseUnit}
+            customChip={customChip}
+            // Without a shopping unit the suggestions are ladder stops, not
+            // package thresholds: the typed-value entry ("andere") must always
+            // stay reachable, so it is kept visible instead of hiding behind an
+            // overflow.
+            alwaysShowAndere={kaufen.au === null}
+            onChange={(next) => {
+              setStock(need, next);
+              collapse(key);
+            }}
+            onCommitCustom={(value) => {
+              commitCustom(need, value);
+              collapse(key);
+            }}
+            label={`Vorrat für ${need.ingredient}`}
+          />
+        )}
       </div>
     );
   }

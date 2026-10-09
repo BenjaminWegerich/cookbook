@@ -58,6 +58,13 @@ interface StockChipsProps {
    * no custom value has been entered.
    */
   customChip: StockChip | null;
+  /**
+   * Whether the "andere" chip stays visible even when every suggestion fits on
+   * one row. The parent sets this for ingredients **without** a shopping unit:
+   * there the suggestions are ladder stops rather than package thresholds, so
+   * the typed-value entry must always be reachable without an overflow first.
+   */
+  alwaysShowAndere?: boolean;
   /** Reports a suggestion chip that was tapped. */
   onChange: (stock: number) => void;
   /** Reports a value the user typed into the keyboard input (base unit). */
@@ -106,6 +113,7 @@ function StockChips({
   value,
   baseUnit,
   customChip,
+  alwaysShowAndere = false,
   onChange,
   onCommitCustom,
   label,
@@ -148,13 +156,16 @@ function StockChips({
       setVisibleCount(countFitting(rowWidth, chipWidths, editWidth));
     } else if (customShown) {
       setVisibleCount(countFitting(rowWidth, chipWidths, customWidth));
-    } else if (countFitting(rowWidth, chipWidths, 0) === chips.length) {
+    } else if (!alwaysShowAndere && countFitting(rowWidth, chipWidths, 0) === chips.length) {
       // All suggestions fit without "andere": show them all.
       setVisibleCount(chips.length);
     } else {
+      // "andere" is reserved — either because not all suggestions fit, or
+      // because it must always stay visible. The suggestions are measured
+      // against the space that remains beside it.
       setVisibleCount(countFitting(rowWidth, chipWidths, andereWidth));
     }
-  }, [chips, customChip, editing]);
+  }, [chips, customChip, editing, alwaysShowAndere]);
 
   useLayoutEffect(() => {
     measure();
@@ -218,7 +229,8 @@ function StockChips({
     shownCustomChip === null
       ? [...visibleSuggestions].sort((a, b) => a.value - b.value)
       : [...visibleSuggestions, shownCustomChip].sort((a, b) => a.value - b.value);
-  const showAndere = !editing && customChip === null && visibleCount < chips.length;
+  const showAndere =
+    !editing && customChip === null && (alwaysShowAndere || visibleCount < chips.length);
 
   return (
     <div className="stock-chips-wrap">

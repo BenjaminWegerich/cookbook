@@ -142,7 +142,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   },
   Milch: {
     bu: 'ml',
-    reorderPoint: 0,
+    reorderPoint: 100,
     entries: [
       { au: 'Becher', factor: 250, priority: 1 },
       { au: 'EL', factor: 15, priority: 2 },

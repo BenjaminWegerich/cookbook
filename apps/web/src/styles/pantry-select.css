@@ -99,6 +99,23 @@
   font-weight: 600;
 }
 
+/* ---- Collapsed rows ----------------------------------------------------- */
+
+/* A folded row keeps only its first line (the need and the purchase) and reads
+   the whole line at the purchase's smaller step, so a covered ingredient
+   collapses to one quiet summary line instead of a full picker. The purchase
+   already uses --text-sm; only the need has to shrink to match. */
+.pantry-row--collapsed .pantry-need {
+  font-size: var(--text-sm);
+}
+
+/* The folded line is one tap target: any tap on it unfolds the row. `cursor:
+   pointer` names that on a desktop screen; the buy quantity inside keeps its
+   own `cursor: text` (it opens a keyboard instead of merely unfolding). */
+.pantry-row--collapsed {
+  cursor: pointer;
+}
+
 /* The purchase: its shopping-cart symbol and the amount on one baseline, one
    step smaller than the need. It takes the leftover space, so it sits
    right-aligned whether it shares the line with the need or wraps below it. */

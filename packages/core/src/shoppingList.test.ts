@@ -171,9 +171,29 @@ describe('shoppingNeeds', () => {
 describe('stockPrefill', () => {
   it('takes the smaller of need and reorder point', () => {
     // "800 g Mehl needed, 1000 g reorder point" — the Vorrat shows 800 g, so
-    // nothing is bought (the user's own example).
+    // nothing is bought (the user's own example). The need is the top chip and
+    // is returned exactly.
     expect(stockPrefill(need({ ingredient: 'Mehl', needed: 800, reorderPoint: 1000 }))).toBe(800);
-    expect(stockPrefill(need({ ingredient: 'Mehl', needed: 1500, reorderPoint: 1000 }))).toBe(1000);
+  });
+
+  it('snaps a reorder point between two chips down to the lower chip', () => {
+    // 1500 g Mehl needed in 1000 g packs: the chips are 0 / 500 / 1500 (the
+    // stock values where the bought amount changes). A 1000 g reorder point sits
+    // between 500 and 1500, so the Vorrat starts on the lower chip, 500 g.
+    expect(stockPrefill(need({ ingredient: 'Mehl', needed: 1500, reorderPoint: 1000 }))).toBe(500);
+  });
+
+  it('keeps a reorder point between chips as-is without a shopping unit', () => {
+    // Zucker has no shopping unit (EL / TL are recipe measures): a 110 g reorder
+    // point for a 400 g need sits between the 100 g and 120 g chips and is kept,
+    // not snapped — the sheet shows it as a custom ("andere") chip.
+    expect(stockPrefill(need({ ingredient: 'Zucker', needed: 400, reorderPoint: 110 }))).toBe(110);
+  });
+
+  it('keeps a reorder point between chips as-is with an approximate shopping unit', () => {
+    // Karotten are bought per Stück, an *approximate* shopping unit: a 300 g
+    // reorder point is the stock itself, not snapped to a ladder chip.
+    expect(stockPrefill(need({ ingredient: 'Karotten', needed: 500, reorderPoint: 300 }))).toBe(300);
   });
 
   it('treats an infinite reorder point as a covered need', () => {

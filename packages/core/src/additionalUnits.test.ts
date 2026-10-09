@@ -154,7 +154,7 @@ describe('generated additional-unit master data', () => {
     // a recipe, a number = a base-unit quantity on stock after a shopping trip).
     expect(INGREDIENT_MAPPINGS.Mehl?.reorderPoint).toBe(1000);
     expect(INGREDIENT_MAPPINGS.Zucker?.reorderPoint).toBe(1000);
-    expect(INGREDIENT_MAPPINGS.Milch?.reorderPoint).toBe(0);
+    expect(INGREDIENT_MAPPINGS.Milch?.reorderPoint).toBe(100);
     // Every seed ingredient must state a reorder point (the field is mandatory).
     for (const entry of Object.values(INGREDIENT_MAPPINGS)) {
       expect(typeof entry.reorderPoint).toBe('number');

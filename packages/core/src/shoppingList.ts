@@ -14,8 +14,10 @@
  * 2. **The pantry comes first.** Every ingredient has a reorder point in the
  *    master data (docs/storage_format.md §9) — the amount that is on the shelf
  *    after a shopping trip, independent of the plan. The sheet starts the
- *    "Vorrat" on `min(need, reorder point)`, and only `need − Vorrat` is bought;
- *    a reorder point that already covers the need buys nothing.
+ *    "Vorrat" on `min(need, reorder point)` — snapped **down** to the nearest
+ *    chip for an exact shopping unit, kept as a custom chip otherwise — and
+ *    only `need − Vorrat` is bought; a reorder point that already covers the
+ *    need buys nothing.
  *
  * The amount that goes on the list is **rounded up**, not to the nearest ladder
  * rung: a shopping amount is not a stored recipe quantity, so it may sit between
@@ -244,12 +246,41 @@ function renderShoppingAmount(
 
 /**
  * The "Vorrat" the sheet starts an ingredient on: `min(need, reorder point)`
- * (decided with the user). A reorder point above the need covers it completely
- * (nothing to buy); one below it is what is assumed to be on the shelf, and the
+ * (decided with the user). A reorder point at or above the need covers it
+ * completely (nothing to buy — the need itself is the top chip and is returned
+ * exactly); one below it is what is assumed to be on the shelf, and the
  * difference is bought. A reorder point of Infinity covers every need.
+ *
+ * The one place the prefill is adjusted is an **exact** shopping unit: the
+ * reorder point is a whole number of packages, but the chips are the stock
+ * values where the bought amount changes ("need − k packages"), so a whole-pack
+ * reorder point can sit between two of them — it is snapped **down** to the
+ * lower chip. With an approximate shopping unit or none at all the reorder
+ * point is kept as-is; the sheet shows it as a custom chip ("andere") instead
+ * of snapping it to a suggestion.
  */
 export function stockPrefill(need: ShoppingNeed): number {
-  return Math.min(need.needed, Math.max(0, need.reorderPoint));
+  const needed = need.needed;
+  const reorder = Math.max(0, need.reorderPoint);
+  if (reorder >= needed) {
+    // Covered: the need is the top chip, returned exactly so a hair-thin float
+    // difference can never re-file a covered row as needing a purchase.
+    return needed;
+  }
+  const target = shoppingUnitOf(need);
+  if (target === null || !target.au.exact) {
+    // Approximate or no shopping unit: the reorder point itself is the stock.
+    return roundThousandths(reorder);
+  }
+  // Exact shopping unit: snap down to the nearest package-threshold chip.
+  const capped = roundThousandths(reorder);
+  let lower = 0;
+  for (const value of suggestedStocks(need)) {
+    if (value <= capped && value > lower) {
+      lower = value;
+    }
+  }
+  return lower;
 }
 
 /** One row of the sheet, ready to render: the need, the chosen stock, the bought amount. */
