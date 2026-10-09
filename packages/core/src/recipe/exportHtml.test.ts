@@ -1,19 +1,22 @@
 /**
- * Tests for the HTML export — the cooking view (docs/user_stories.md, decision 7).
+ * Tests for the HTML export — the cooking view (docs/user_stories.md, decision 7,
+ * docs/DESIGN.md §5.11).
  *
- * The export bakes pre-computed, *scaled* display values per serving option:
- * the master list, each step's own rows and the step prose (inline artifacts)
- * all scale with the chosen serving count; sub-recipe uses (rows, master rows
- * and artifacts) render as links when a URL for the title is provided.
+ * The export bakes pre-computed, *scaled* display values per size: the master
+ * list, the reference readout, each step's own rows and the step prose (inline
+ * artifacts) all scale with the chosen size. The page is one document with three
+ * screen states (Intro → Zutaten → Zubereitung), a fixed bottom bar and the
+ * recipe's theme applied; sub-recipe uses (rows, master rows and artifacts)
+ * carry the „Rezept" badge that opens the sub-recipe's export.
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { formatBQ, NNBSP, renderAQS } from '../additionalUnits.js';
-import { scaleAQ } from '../aqLadder.js';
+import { formatBQ, renderAQSSlash } from '../additionalUnits.js';
 import { difference, scale } from '../ladder.js';
 import { parseRecipe } from './parse.js';
 import { generateRecipeHtml } from './exportHtml.js';
+import type { RecipePhoto } from './exportHtml.js';
 import type { Recipe } from './types.js';
 
 /** A finished dish with rows, a reference and inline artifacts. */
@@ -22,6 +25,7 @@ title: Shredded Tofu Wraps
 type: finished_dish
 servings: 6
 prep_time: 20 min
+total_time: 40 min
 reference:
   - Tortillas
 ---
@@ -42,60 +46,70 @@ const LINKS: Readonly<Record<string, string>> = {
 describe('generateRecipeHtml — finished dish', () => {
   const html = generateRecipeHtml(WRAPS, LINKS);
 
+  it('renders one page with the three screen states and the bottom bar', () => {
+    expect(html).toContain('data-screen="intro"');
+    expect(html).toContain('data-screen="zutaten"');
+    expect(html).toContain('data-screen="zubereitung"');
+    expect(html).toContain('id="btn-back"');
+    expect(html).toContain('id="btn-next"');
+    // The forward/back buttons carry the directional arrows (DESIGN §4.5).
+    expect(html).toContain('<span>Zurück</span>');
+    expect(html).toContain('<span>Weiter</span>');
+  });
+
   it('embeds one pre-computed view per serving option', () => {
     expect(html).toContain('data-servings="6"');
     expect(html).toContain('data-servings="9"');
     expect(html).toContain('data-servings="2"');
+    expect(html.match(/class="check-list size-scoped/g)).toHaveLength(18);
   });
 
-  it('scales the master list and the headline for an option', () => {
+  it('scales the master list and the reference readout for an option', () => {
     const delta = difference(WRAPS.servings!, 9);
-    expect(html).toContain(`9 Personen (${renderAQS('Tortillas', scale(250, delta), 'g')})`);
-    // Master row of the scaled Joghurt.
-    expect(html).toContain(renderAQS('Joghurt', scale(400, delta), 'g'));
+    expect(html).toContain(renderAQSSlash('Tortillas', scale(250, delta), 'g'));
+    expect(html).toContain(renderAQSSlash('Joghurt', scale(400, delta), 'g'));
+    // The written size's reference readout (amounts only, muted).
+    expect(html).toContain(
+      `<p class="reference size-scoped" data-servings="6">${renderAQSSlash('Tortillas', 250, 'g')}</p>`,
+    );
   });
 
   it('renders each step with its own rows above the prose', () => {
-    expect(html).toContain('<ul class="step-ingredients">');
-    expect(html).toContain(renderAQS('Tortillas', 250, 'g'));
-    expect(html).toContain(renderAQS('Béchamelsauce', 500, 'ml'));
+    expect(html).toContain('<ul class="step-rows">');
+    expect(html).toContain(
+      `<span class="step-ingredient">${renderAQSSlash('Tortillas', 250, 'g')}</span>`,
+    );
+    expect(html).toContain(renderAQSSlash('Béchamelsauce', 500, 'ml'));
   });
 
-  it('renders inline artifacts code-styled and scaled inside the prose', () => {
+  it('renders inline artifacts scaled inside the prose, in slash form', () => {
     const delta = difference(WRAPS.servings!, 6);
     // Option 6: the {{1500 ml Wasser}} artifact renders as its display form.
-    expect(html).toContain(
-      `<code class="step-artifact">${renderAQS('Wasser', scale(1500, delta), 'ml')}</code>`,
-    );
+    expect(html).toContain(renderAQSSlash('Wasser', scale(1500, delta), 'ml'));
     // No raw artifact markers survive.
     expect(html).not.toContain('{{');
   });
 
-  it('links sub-recipe uses (rows and artifacts) when a URL is provided', () => {
+  it('links sub-recipe uses (rows and artifacts) through the „Rezept" badge', () => {
     const url = 'https://drive.example/Béchamelsauce.html';
-    // Every serving option contains master row + step row + artifact mention.
-    // Check one full serving-view block: exactly 3 links.
-    const marker = '<div class="serving-view" data-servings="6">';
-    const start = html.indexOf(marker);
-    const end = html.indexOf('<div class="serving-view"', start + 1);
-    const option6 = html.slice(start, end);
-    const occurrences = option6.split('class="sub-recipe-link"').length - 1;
-    expect(occurrences).toBe(3);
-    expect(option6).toContain(`href="${url}"`);
+    expect(html).toContain('class="badge"');
+    expect(html).toContain(`href="${url}"`);
+    // Every size carries the three uses (master row + step row + artifact).
+    expect(html.match(/class="badge"/g)).toHaveLength(54);
+    expect(html).toContain('>Rezept</a>');
   });
 
-  it('renders no sub-recipe links when no URLs are passed', () => {
+  it('renders no sub-recipe badges when no URLs are passed', () => {
     const plain = generateRecipeHtml(WRAPS);
-    expect(plain).not.toContain('class="sub-recipe-link"');
+    expect(plain).not.toContain('class="badge"');
     expect(plain).not.toContain('{{');
   });
 
   it('selects a view on load instead of showing every serving option', () => {
-    // Regression guard: the embedded script used to define `selectServing` and
-    // never call it, so the first paint stacked all 30 views. The initial call
-    // is the one fed by the URL fragment; the written size is the fallback.
+    // Regression guard: the script must call the selection on load, fed by the
+    // URL fragment, with the written size as the fallback.
     expect(html).toContain("!selectServing(params['portionen'])");
-    expect(html).toContain('selectServing(activeServing())');
+    expect(html).toContain('selectServing(activeChipValue())');
   });
 });
 
@@ -119,39 +133,36 @@ prep_time: 15 min
   const html = generateRecipeHtml(sauce);
 
   it('bakes one view per yield rung, ±2 decades around the written yield', () => {
-    expect(html.match(/class="serving-view/g) ?? []).toHaveLength(65);
-    expect(html).toContain(`data-yield="500" data-yield-label="500${NNBSP}ml"`);
+    expect(html.match(/class="check-list size-scoped/g) ?? []).toHaveLength(65);
+    expect(html).toContain(`data-yield="500" data-yield-label="${formatBQ(500, 'ml')}"`);
     // The extremes of the range: 5 ml and 50 l.
     expect(html).toContain('data-yield="5"');
-    expect(html).toContain(`data-yield="50000" data-yield-label="50${NNBSP}l"`);
+    expect(html).toContain(`data-yield="50000" data-yield-label="${formatBQ(50000, 'ml')}"`);
   });
 
   it('marks the written yield as the fallback view', () => {
-    expect(html).toContain('class="serving-view is-written" data-yield="500"');
+    expect(html).toContain('class="check-list size-scoped is-written" data-yield="500"');
   });
 
-  it('scales the master list, the headline and the reference per view', () => {
+  it('scales the master list and the reference per view', () => {
     const delta = difference(sauce.yield!, 5000); // 500 ml → 5 l
-    // The headline uses formatBQ, so the view steps ml → l at 1000.
-    expect(html).toContain(
-      `${formatBQ(5000, 'ml')} (${renderAQS('Milch', scale(300, delta), 'ml')})`,
-    );
-    expect(html).toContain(renderAQS('Butter', scale(25, delta), 'g'));
+    expect(html).toContain(renderAQSSlash('Milch', scale(300, delta), 'ml'));
+    expect(html).toContain(renderAQSSlash('Butter', scale(25, delta), 'g'));
   });
 
   it('offers the chips and the stepper, with the powers of ten plus the written size', () => {
-    expect(html).toContain('class="yield-chip active" data-yield="500"');
-    expect(html).toContain('class="yield-chip" data-yield="10000"');
+    expect(html).toContain('class="chip yield-chip active" data-yield="500"');
+    expect(html).toContain('class="chip yield-chip" data-yield="10000"');
     expect(html).toContain('class="yield-value"');
     expect(html).toContain('class="yield-step-button yield-step-down"');
     expect(html).toContain('class="yield-step-button yield-step-up"');
     // Out of the baked range, so never offered.
-    expect(html).not.toContain('class="yield-chip" data-yield="100000"');
+    expect(html).not.toContain('class="chip yield-chip" data-yield="100000"');
   });
 
   it('opens on the fragment yield and normalizes kg/l', () => {
     expect(html).toContain("params['menge']");
-    expect(html).toContain('.serving-view.is-written');
+    expect(html).toContain('.check-list.is-written[data-yield]');
     // A hand-written kg/l link finds the same view as the g/ml one.
     expect(html).toContain('amount = amount * 1000');
   });
@@ -171,24 +182,10 @@ prep_time: 5 min
   const html = generateRecipeHtml(counts);
 
   it('scales a unitless count along the AQ ladder and shows slash-form fractions', () => {
-    const delta = difference(counts.servings!, 6); // +2
-    // Inspect the option-6 view: 1/2 → 2/3, 100 → 120, 1/3 → 2/5.
-    const marker = '<div class="serving-view" data-servings="6">';
-    const start = html.indexOf(marker);
-    const end = html.indexOf('<div class="serving-view"', start + 1);
-    const option6 = html.slice(start, end);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(option6).toContain('<code class="step-artifact">2/3</code>');
-    expect(option6).toContain(`<code class="step-artifact">${scaleAQ(100, delta)}</code>`);
-    expect(option6).toContain('<code class="step-artifact">2/5</code>');
+    // Option 6: 1/2 → 2/3, 100 → 150, 1/3 → 2/5, in the prose as plain text.
+    expect(html).toContain('Mit 2/3 und 150 und 2/5 arbeiten.');
     // The stored option 4 shows the unscaled fractions.
-    const option4Start = html.indexOf('<div class="serving-view" data-servings="4">');
-    const option4 = html.slice(
-      option4Start,
-      html.indexOf('<div class="serving-view"', option4Start + 1),
-    );
-    expect(option4).toContain('<code class="step-artifact">1/2</code>');
-    expect(option4).toContain('<code class="step-artifact">1/3</code>');
+    expect(html).toContain('Mit 1/2 und 100 und 1/3 arbeiten.');
     expect(html).not.toContain('{{');
   });
 });
@@ -213,21 +210,23 @@ prep_time: 15 min
   const html = generateRecipeHtml(sauce);
 
   it('has no serving picker and keeps stored quantities', () => {
-    expect(html).not.toContain('class="serving-button"');
-    expect(html).toContain(`500${NNBSP}ml`);
-    expect(html).toContain(renderAQS('Butter', 25, 'g'));
+    expect(html).not.toContain('class="serving-chip"');
+    expect(html).toContain(formatBQ(500, 'ml'));
+    expect(html).toContain(renderAQSSlash('Butter', 25, 'g'));
   });
 
-  it('shows a reference ingredient as a parenthesized anchor behind the yield', () => {
-    // Unscaled view: the reference keeps its stored quantity, e.g.
-    // "500 ml (300 ml Milch)".
-    expect(html).toContain(`500${NNBSP}ml (${renderAQS('Milch', 300, 'ml')})`);
+  it('shows a reference ingredient as the intro readout', () => {
+    // The written view: the reference keeps its stored quantity, e.g.
+    // "300 ml Milch" under the size picker.
+    expect(html).toContain(
+      `<p class="reference size-scoped" data-yield="500">${renderAQSSlash('Milch', 300, 'ml')}</p>`,
+    );
   });
 
   it('renders rows and unscaled artifacts in the steps', () => {
-    expect(html).toContain('<ul class="step-ingredients">');
-    expect(html).toContain(renderAQS('Milch', 300, 'ml'));
-    expect(html).toContain(`<code class="step-artifact">${renderAQS('Milch', 50, 'ml')}</code>`);
+    expect(html).toContain('<ul class="step-rows">');
+    expect(html).toContain(renderAQSSlash('Milch', 300, 'ml'));
+    expect(html).toContain(renderAQSSlash('Milch', 50, 'ml'));
   });
 
   it('escapes user content', () => {
@@ -247,8 +246,8 @@ prep_time: 5 min
   });
 });
 
-describe('generateRecipeHtml — duration typography', () => {
-  it('renders meta durations with narrow no-break spaces', () => {
+describe('generateRecipeHtml — meta line typography', () => {
+  it('renders caption/value pairs with narrow no-break spaces', () => {
     const html = generateRecipeHtml(
       parseRecipe(`---
 title: Eintopf
@@ -261,8 +260,11 @@ total_time: 1 h 30 min
 1. Alles köcheln lassen.
 `),
     );
+    expect(html).toContain('<span class="caption">Arbeitszeit</span>');
+    expect(html).toContain('<span class="caption">Gesamtzeit</span>');
     // Display form: number and unit (and h–30 in compounds) are unbreakable.
-    expect(html).toContain(`<p class="meta">25${NNBSP}min · 1${NNBSP}h${NNBSP}30${NNBSP}min</p>`);
+    expect(html).toContain('25\u202fmin');
+    expect(html).toContain('1\u202fh\u202f30\u202fmin');
     // The plain ASCII storage form is never emitted into the file.
     expect(html).not.toContain('1 h 30 min');
   });
@@ -279,11 +281,11 @@ prep_time: über Nacht
 1. Gehen lassen.
 `),
     );
-    expect(html).toContain('<p class="meta">über Nacht</p>');
+    expect(html).toContain('<span class="meta-value">über Nacht</span>');
   });
 });
 
-describe('generateRecipeHtml — theme access (§4.8)', () => {
+describe('generateRecipeHtml — theme application (§4.8)', () => {
   const themed = parseRecipe(`---
 title: X
 type: finished_dish
@@ -314,5 +316,55 @@ prep_time: 15 min
     expect(html).toContain('--theme-paper: #faf5ec;');
     expect(html).toContain('--theme-ink: #2b241d;');
     expect(html).toContain('--theme-line: #e6dbc8;');
+  });
+
+  it('computes the derived colours (muted and on-accent) as solid hex', () => {
+    const html = generateRecipeHtml(WRAPS);
+    // muted = ink #2b241d blended 40% toward paper #faf5ec → #7e7870.
+    expect(html).toContain('--muted: #7e7870;');
+    // The default clay accent takes the light paper as its on-accent.
+    expect(html).toContain('--on-accent: #faf5ec;');
+    // No runtime colour math (color-mix) is emitted into the file.
+    expect(html).not.toContain('color-mix');
+  });
+
+  it('does not follow the OS dark preference (§4.1)', () => {
+    const html = generateRecipeHtml(WRAPS);
+    expect(html).toContain('color-scheme: light');
+    expect(html).not.toContain('prefers-color-scheme');
+  });
+});
+
+describe('generateRecipeHtml — photo embedding (§5.8)', () => {
+  const photo: RecipePhoto = { mimeType: 'image/jpeg', base64: 'aGVsbG8=' };
+
+  it('embeds the photo as a data URI at the top of the intro', () => {
+    const html = generateRecipeHtml(WRAPS, {}, photo);
+    expect(html).toContain('<img class="media" src="data:image/jpeg;base64,aGVsbG8=" alt="">');
+    // The media area precedes the title inside the intro screen.
+    expect(html.indexOf('<img class="media"')).toBeLessThan(html.indexOf('<h1>'));
+  });
+
+  it('embeds a PNG photo with its own mime type', () => {
+    const html = generateRecipeHtml(WRAPS, {}, { mimeType: 'image/png', base64: 'iVBORw0KGgo=' });
+    expect(html).toContain('<img class="media" src="data:image/png;base64,iVBORw0KGgo=" alt="">');
+  });
+
+  it('omits the media area when no photo is passed', () => {
+    const html = generateRecipeHtml(WRAPS);
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('class="media"');
+  });
+
+  it('omits the media area for an empty payload instead of a broken image', () => {
+    const html = generateRecipeHtml(WRAPS, {}, { mimeType: 'image/jpeg', base64: '' });
+    expect(html).not.toContain('<img');
+  });
+
+  it('styles the media area as a 4:3 landscape cover (§5.8)', () => {
+    const html = generateRecipeHtml(WRAPS, {}, photo);
+    expect(html).toContain('aspect-ratio: 4 / 3');
+    expect(html).toContain('object-fit: cover');
+    expect(html).toContain('border-radius: var(--radius-md)');
   });
 });

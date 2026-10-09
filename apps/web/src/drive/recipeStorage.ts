@@ -26,6 +26,7 @@ import {
   renameRecipeInCollection,
   serializeRecipe,
   type Recipe,
+  type RecipePhoto,
 } from '@cookbook/core';
 
 import { EXPORT_HOST_URL } from '../config';
@@ -41,7 +42,7 @@ import {
   updateFileWithContent,
   type DriveFile,
 } from './driveClient';
-import { cacheRecipePhoto, invalidateRecipePhoto } from './recipePhoto';
+import { cacheRecipePhoto, invalidateRecipePhoto, loadRecipePhoto } from './recipePhoto';
 
 /** Name of the folder that holds the collection (user-visible in Drive). */
 const RECIPE_FOLDER_NAME = 'Cookbook';
@@ -359,7 +360,8 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
     if (title === '') continue;
     links[title] = recipeExportUrl(file.id);
   }
-  const content = generateRecipeHtml(recipe, links);
+  const photo = await loadExportPhoto(token, recipe.title, files);
+  const content = generateRecipeHtml(recipe, links, photo);
   if (existing !== undefined) {
     return updateFileWithContent(token, existing.id, {
       name: fileName,
@@ -373,6 +375,44 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
     content,
     parents: [folderId],
   });
+}
+
+/**
+ * The photo to embed in the export (§5.8): the recipe's photo sibling,
+ * downloaded and base64-encoded, or `undefined` when there is none or it cannot
+ * be read — the export then omits the media area instead of a broken image. A
+ * failed download must never fail the export write (the recipe file is the
+ * source of truth); the photo simply joins the next save, like a missing export.
+ */
+async function loadExportPhoto(
+  token: string,
+  title: string,
+  files: DriveFile[],
+): Promise<RecipePhoto | undefined> {
+  const file = findPhotoIn(files, title);
+  if (file === undefined) return undefined;
+  const blob = await loadRecipePhoto(token, file.id);
+  if (blob === null) return undefined;
+  return { mimeType: photoMimeType(file.name), base64: await blobToBase64(blob) };
+}
+
+/** The MIME type of a photo sibling, derived from its extension (§2). */
+function photoMimeType(name: string): 'image/jpeg' | 'image/png' {
+  return name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+}
+
+/**
+ * Encodes a Blob's bytes as base64 (without the `data:` prefix) for embedding
+ * in the export. Converted in 32 KiB chunks so a large photo never spreads its
+ * whole byte array into `String.fromCharCode`'s argument list at once.
+ */
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
 }
 
 /**

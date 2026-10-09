@@ -119,10 +119,14 @@ function preselect(html, params) {
   if (!size) {
     return html;
   }
-  var view = '.serving-view[' + size.attribute + '="' + size.value + '"]';
+  // The class the export marks every size-scoped element with (the intro's
+  // reference readout, the Zutaten check list, the Zubereitung step wrap) —
+  // spelled out here like the parameter names above, and kept in step with
+  // packages/core/src/recipe/exportHtml.ts.
+  var view = '.size-scoped[' + size.attribute + '="' + size.value + '"]';
   var head =
     '<style id="' + PRESELECT_ID + '">' +
-    '.serving-view{display:none!important}' +
+    '.size-scoped{display:none!important}' +
     view + '{display:block!important}' +
     '</style>\n' +
     '<script>window.__COOKBOOK_PLAN_SIZE__=' +
