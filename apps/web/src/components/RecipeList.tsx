@@ -1,6 +1,9 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
+import { matchShoppingItem } from '@cookbook/core';
+
 import type { StoredRecipe } from '../drive/recipeStorage';
+import type { KeepItem } from '../keep/keepClient';
 import type { MealPlanCard } from '../keep/mealPlanCards';
 import type { KeepStatus } from '../keep/useKeep';
 import {
@@ -25,7 +28,8 @@ import RecipeThumb from './RecipeThumb';
 const SEARCH_PLACEHOLDER = 'Suchen';
 const SEARCH_LABEL = 'Rezept oder Gericht suchen';
 
-/** DOM ids of the two section captions (the headings' `aria-labelledby` targets). */
+/** DOM ids of the three captions (the headings' `aria-labelledby` targets). */
+const SHOPPING_CAPTION_ID = 'recipe-section-shopping';
 const MEALPLAN_CAPTION_ID = 'recipe-section-mealplan';
 const COLLECTION_CAPTION_ID = 'recipe-section-collection';
 
@@ -64,8 +68,9 @@ interface RecipeListProps {
   onRetryKeep: () => void;
   /**
    * Opens the bundled shopping-list selection for the meal plan (the
-   * "Einkaufsliste schreiben" button in the "Essensplan" caption row). App owns
-   * that screen, because only App holds the Keep state and the overview targets.
+   * "Einkaufsliste schreiben" button in the "Einkaufsliste" heading). App
+   * owns that screen, because only App holds the Keep state and the overview
+   * targets.
    */
   onWriteShoppingList: () => void;
   /**
@@ -76,9 +81,10 @@ interface RecipeListProps {
    */
   shoppingWritten: boolean;
   /**
-   * Opens the shopping-list sort ("Einkaufsliste sortieren", the button next to
-   * the write button). App owns that screen, because only App holds the Keep
-   * state and the Drive writes for the newly assigned stops.
+   * Opens the shopping-list sort ("sortieren", the button next to the write
+   * button under the "Einkaufsliste" caption). App owns that screen, because
+   * only App holds the Keep state and the Drive writes for the newly assigned
+   * stops.
    */
   onSortShoppingList: () => void;
   /**
@@ -90,17 +96,39 @@ interface RecipeListProps {
   /**
    * True while the current shopping list has already been sorted this session
    * (App tracks it, like `shoppingWritten`): Keep itself cannot say whether the
-   * list is in route order. The button then reads "Einkaufsliste sortiert".
+   * list is in route order. The button then reads "sortiert".
    */
   shoppingSorted: boolean;
+  /**
+   * The current shopping list's entries in Keep's display order, or null while
+   * Keep is off, connecting, loading or failed. The "Einkaufsliste" caption
+   * counts the list's own work (its unchecked lines and how many of them name no
+   * assigned stop), so it receives the list itself and not only a boolean like
+   * the sort button, whose condition is a single yes/no.
+   */
+  shoppingItems: readonly KeepItem[] | null;
 }
 
 /**
- * Home screen: one sticky search field, below it the two captioned sections of
- * the collection, each rendered as the same adaptive card grid (two columns on a
- * phone, more on wider screens) and both filtered by the one search field
- * (decided with the user):
+ * Home screen: one sticky search field, below it the "Einkaufsliste" heading and
+ * then the two captioned sections of the collection, each rendered as the same
+ * adaptive card grid (two columns on a phone, more on wider screens) and both
+ * filtered by the one search field (decided with the user):
  *
+ * - **Einkaufsliste** is the shopping list's own heading, directly below the
+ *   search field: the caption names the list on a line of its own and carries its
+ *   two actions underneath — the bundled write of the meal plan's dishes
+ *   ("Einkaufsliste schreiben") and the aisle sort ("sortieren"), both described
+ *   below. It has no body of its own: the heading *is* the section, because the
+ *   actions belong to the Keep list rather than to a set of cards, and it appears
+ *   only once that list is known — without a Keep connection there is neither a
+ *   counter nor an action, and a bare caption over nothing would be a dead end
+ *   (decided with the user). Its counter
+ *   states the list's own work — `x Einträge, davon y unbekannt`: x counts the
+ *   list's *unchecked* lines (the checked ones are done, and the aisle sort
+ *   leaves them at the bottom), y counts those unchecked lines that name no
+ *   assigned stop (core's `matchShoppingItem`), i.e. exactly the lines the sort
+ *   page has to ask about.
  * - **Essensplan** shows the non-checked entries of the Google Keep meal plan,
  *   one card per entry, in Keep's order. An entry recognized as a recipe (its
  *   text is a recipe title, plus an optional fitting size suffix) renders in
@@ -116,44 +144,58 @@ interface RecipeListProps {
  *   planned dish is read, changed and cooked from. With Keep off every recipe is
  *   "restlich", which is exactly what the section then shows.
  *
- * Each section carries its counter in its caption ("Essensplan (5 Einträge,
- * davon 2 unbekannt)", "Restliche Sammlung (8 Rezepte)"). The captions copy the
- * editor's field-caption typography (.field-label: small, semibold, muted, all
- * caps), with the counter itself set exactly like the editor's quiet
- * "(optional)" marker: normal case, italic, slightly translucent, one en space
- * after the caption word. The counter disappears while the search is active —
- * the field is focused or carries a query — because it counts the section, not
- * the result; the caption stays: it is the section's heading, and a section
- * that is empty only because of the search still has to say which section it
- * is. The body then carries the placeholder sentence.
+ * Each caption carries its counter ("Essensplan (5 Einträge, davon 2 unbekannt)",
+ * "Restliche Sammlung (8 Rezepte)", "Einkaufsliste (4 Einträge, davon 1
+ * unbekannt)"). The captions copy the editor's field-caption typography
+ * (.field-label: small, semibold, muted, all caps), with the counter itself set
+ * exactly like the editor's quiet "(optional)" marker: normal case, italic,
+ * slightly translucent, one en space after the caption word. The two card
+ * sections' counters disappear while the search is active — the field is focused
+ * or carries a query — because each counts its section, not the result; their
+ * captions stay: they are the sections' headings, and a section that is empty
+ * only because of the search still has to say which section it is. The body then
+ * carries the placeholder sentence. The "Einkaufsliste" heading follows the same
+ * reason more strictly and disappears as a whole (see the search note below).
  *
- * In the "Essensplan" caption row sits **"Einkaufsliste schreiben"** (decided
+ * Under the "Einkaufsliste" caption sits **"Einkaufsliste schreiben"** (decided
  * with the user), the entry into the bundled shopping-list selection: there the
  * recipes of the meal plan are selected, and one write adds all of their
  * ingredients at once. Bundling is the point, not only the saved clicks — two
  * recipes that each need 300 g tofu round to two 200 g blocks on their own, but
  * to three blocks when they are written together (./ShoppingListSelect). The
- * button belongs to the plan, so it lives in the plan's caption row rather than
- * in a toolbar of its own; it is a soft accent chip (clay text on a light clay
- * tint, one clay hairline, pill shape, plus symbol) — decided with the user,
- * who wanted the entry clearly more prominent than the bare text button it used
- * to be, while the filled floating action button stays the screen's one loud
- * control. The screen it opens is a mode of the meal plan, so the button only
- * appears while the plan is connected and actually carries entries.
+ * button acts on the plan, so it appears only while the plan is connected and
+ * actually carries entries; it is a soft accent chip (clay text on a light clay
+ * tint, one clay hairline, pill shape, plus symbol) — decided with the user, who
+ * wanted the entry clearly more prominent than the bare text button it used to
+ * be, while the filled floating action button stays the screen's one loud
+ * control. The heading keeps the list's name in the caption and in this button's
+ * label, so the entry into the flow reads on its own.
  *
  * Once that flow has written the list, the button reads **"Einkaufsliste
  * geschrieben"**, carries the check instead of the plus and is unavailable — for
  * as long as the meal plan is the one that was written (App tracks that in
  * memory, see the `shoppingWritten` prop).
  *
- * Search filters the cards of both sections (recipe title, complete meal-plan
- * entry text), never the captions. The two caption-row actions of the
- * "Essensplan" section and both section counters hide as soon as the search
- * field is focused or carries a query: the actions act on the whole list, not
- * on whatever the search narrows it to, and a counter that ignores the query
- * would contradict the cards below it. The whole card is the hitbox — the
- * badges are plain content inside it, never a target of their own. UI language
- * is German (see docs/CODING_CONVENTIONS.md).
+ * Next to it, in the same row under the caption, sits **"sortieren"** — the aisle
+ * sort. Its label drops the list's name, because the caption right above it
+ * already says "Einkaufsliste" (decided with the user); the write button keeps
+ * the full phrase, since it names the flow it opens. The sort acts on the
+ * shopping list itself, so it appears whenever that list carries unchecked
+ * entries, independently of whether the meal plan offers anything to write, and
+ * it reads **"sortiert"** once this session's sort ran (see the
+ * `shoppingSortable` / `shoppingSorted` props).
+ *
+ * Search filters the cards of the two card sections (recipe title, complete
+ * meal-plan entry text), never the captions. The two card sections' counters hide
+ * as soon as the search field is focused or carries a query: a counter that
+ * ignores the query would contradict the cards below it. The whole
+ * "Einkaufsliste" heading — caption, counter and both actions — disappears at the
+ * same moment: its actions act on the whole Keep list, not on whatever the search
+ * narrows the cards to, and a caption left standing over nothing but those
+ * actions would open onto a dead end, so the caption goes with them (decided with
+ * the user). The whole card is the hitbox — the badges are plain content inside
+ * it, never a target of their own. UI language is German (see
+ * docs/CODING_CONVENTIONS.md).
  */
 function RecipeList({
   recipes,
@@ -171,6 +213,7 @@ function RecipeList({
   onSortShoppingList,
   shoppingSortable,
   shoppingSorted,
+  shoppingItems,
 }: RecipeListProps) {
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -255,6 +298,33 @@ function RecipeList({
   const collectionCounter = collectionCountable
     ? `(${remainingRecipes.length} ${remainingRecipes.length === 1 ? 'Rezept' : 'Rezepte'})`
     : null;
+
+  /**
+   * The shopping list's unchecked lines — the ones the list still has to be
+   * shopped for and the only ones the aisle sort reorders (the checked ones stay
+   * at the bottom). Null while the list is not known, so the counter below can
+   * stay silent instead of claiming a zero.
+   */
+  const uncheckedShoppingItems =
+    shoppingItems === null ? null : shoppingItems.filter((item) => !item.checked);
+
+  /**
+   * The counter of the "Einkaufsliste" caption: `x Einträge, davon y unbekannt`
+   * over the unchecked lines — y is how many of them name no assigned stop
+   * (core's `matchShoppingItem` returns null), exactly the lines the sort page
+   * has to ask about. Null while Keep is off, connecting, still loading or
+   * failed: the app must not claim a zero it cannot know, the same honesty the
+   * plan counter keeps. An empty but known list reads "(0 Einträge, davon 0
+   * unbekannt)".
+   */
+  const shoppingCounter =
+    uncheckedShoppingItems === null
+      ? null
+      : `(${uncheckedShoppingItems.length} ${
+          uncheckedShoppingItems.length === 1 ? 'Eintrag' : 'Einträge'
+        }, davon ${
+          uncheckedShoppingItems.filter((item) => matchShoppingItem(item.text) === null).length
+        } unbekannt)`;
 
   /** The "Essensplan" section body: connection states, then the entry cards. */
   function renderMealPlan(): ReactNode {
@@ -435,11 +505,92 @@ function RecipeList({
         </div>
       </div>
 
-      {/* "Essensplan": the plan entries, with the bundled shopping-list entry in
-          the caption row. The row is the section's heading line: caption left,
-          the plan's one action right. It wraps on a narrow phone, so the button
-          may continue on a second line — still aligned to the section, never
-          floating over it. */}
+      {/* "Einkaufsliste": the shopping list's own heading, directly below the
+          search field and above the two card sections. The caption names the list
+          on its own line; underneath it a row carries the list's two actions —
+          the bundled write into the list ("Einkaufsliste schreiben") and the
+          aisle sort ("sortieren"). It has no body: the heading *is* the section,
+          because the actions belong to the Keep list, not to a set of cards. The
+          caption keeps the list's name, which the sort button then does not have
+          to repeat. The heading exists only while the list itself is known
+          (`shoppingItems`): without a connection there is neither a counter nor
+          an action, and a bare caption over nothing would be a dead end (decided
+          with the user). While the search is active (the field is focused or
+          carries a query) it disappears as a whole: the search narrows the card
+          sections below, and its two actions act on the whole Keep list, so
+          caption, counter and actions go together (decided with the user). */}
+      {!searchActive && shoppingItems !== null && (
+        <section className="recipe-section" aria-labelledby={SHOPPING_CAPTION_ID}>
+          <div className="recipe-section-header">
+            <h2 className="recipe-section-caption" id={SHOPPING_CAPTION_ID}>
+              Einkaufsliste
+              {shoppingCounter !== null && (
+                <span className="recipe-section-counter">{shoppingCounter}</span>
+              )}
+            </h2>
+
+            {/* The entry into the bundled shopping-list view. It only exists
+                while the plan is connected and carries entries — there is nothing
+                to select from otherwise. After the flow wrote the list, the same
+                place reports that state: the symbol becomes a check, the label
+                says so and the button is unavailable (a second write would
+                duplicate the lines, and Keep itself cannot tell the app whether
+                the list matches the plan). The label keeps the list's name, so
+                the entry reads on its own even though the caption above it
+                already names the list. */}
+            {(canWriteShoppingList || shoppingSortable) && (
+              <div className="shopping-list-actions">
+                {canWriteShoppingList && (
+                  <button
+                    type="button"
+                    className="text-button shopping-list-button"
+                    onClick={onWriteShoppingList}
+                    disabled={shoppingWritten}
+                  >
+                    {shoppingWritten ? (
+                      <CheckCircleIcon className="button-icon" />
+                    ) : (
+                      <ListPlusIcon className="button-icon" />
+                    )}
+                    <span>
+                      {shoppingWritten ? 'Einkaufsliste geschrieben' : 'Einkaufsliste schreiben'}
+                    </span>
+                  </button>
+                )}
+
+                {/* The aisle sort ("sortieren"), next to the write button. Its
+                    label drops the list's name because the caption above it says
+                    it (decided with the user). It acts on the shopping list, so
+                    it appears whenever that list carries unchecked entries —
+                    independently of whether the meal plan offers anything to
+                    write. After the sort ran, the same place reports the state: a
+                    check instead of the sort symbol and an unavailable button (a
+                    second sort is a no-op until the list changes again). */}
+                {shoppingSortable && (
+                  <button
+                    type="button"
+                    className="text-button shopping-list-button"
+                    onClick={onSortShoppingList}
+                    disabled={shoppingSorted}
+                  >
+                    {shoppingSorted ? (
+                      <CheckCircleIcon className="button-icon" />
+                    ) : (
+                      <SortIcon className="button-icon" />
+                    )}
+                    <span>{shoppingSorted ? 'sortiert' : 'sortieren'}</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* "Essensplan": the plan entries, one captioned section. The caption
+          carries the plan's counter above the cards; the shopping-list actions
+          no longer live in this row — they moved to the "Einkaufsliste" heading
+          above, where they belong to the list they act on. */}
       <section className="recipe-section" aria-labelledby={MEALPLAN_CAPTION_ID}>
         <div className="recipe-section-header">
           <h2 className="recipe-section-caption" id={MEALPLAN_CAPTION_ID}>
@@ -452,60 +603,6 @@ function RecipeList({
               <span className="recipe-section-counter">{planCounter}</span>
             )}
           </h2>
-
-          {/* The entry into the bundled shopping-list view. It only exists while
-              the plan is connected and carries entries — there is nothing to
-              select from otherwise — and hides while the search is active (the
-              field is focused or carries a query), because it acts on the whole
-              plan, not on the filtered result. After the flow wrote the list,
-              the same place reports that state: the symbol becomes a check, the
-              label says so and the button is unavailable (a second write would
-              duplicate the lines, and Keep itself cannot tell the app whether
-              the list matches the plan). */}
-          {!searchActive && canWriteShoppingList && (
-            <button
-              type="button"
-              className="text-button shopping-list-button"
-              onClick={onWriteShoppingList}
-              disabled={shoppingWritten}
-            >
-              {shoppingWritten ? (
-                <CheckCircleIcon className="button-icon" />
-              ) : (
-                <ListPlusIcon className="button-icon" />
-              )}
-              <span>
-                {shoppingWritten ? 'Einkaufsliste geschrieben' : 'Einkaufsliste schreiben'}
-              </span>
-            </button>
-          )}
-
-          {/* The aisle sort ("Einkaufsliste sortieren"), next to the write button.
-              It acts on the shopping list, so it appears whenever that list
-              carries entries — independently of whether the meal plan offers
-              anything to write — and hides while the search is active (the field
-              is focused or carries a query), because it acts on the whole list,
-              not on the filtered result. After the sort ran, the same place
-              reports the state: a check instead of the sort symbol and an
-              unavailable button (a second sort is a no-op until the list changes
-              again). */}
-          {!searchActive && shoppingSortable && (
-            <button
-              type="button"
-              className="text-button shopping-list-button"
-              onClick={onSortShoppingList}
-              disabled={shoppingSorted}
-            >
-              {shoppingSorted ? (
-                <CheckCircleIcon className="button-icon" />
-              ) : (
-                <SortIcon className="button-icon" />
-              )}
-              <span>
-                {shoppingSorted ? 'Einkaufsliste sortiert' : 'Einkaufsliste sortieren'}
-              </span>
-            </button>
-          )}
         </div>
         {renderMealPlan()}
       </section>

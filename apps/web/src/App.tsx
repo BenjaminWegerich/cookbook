@@ -935,13 +935,23 @@ function App() {
     shoppingSortedFor !== null && shoppingSortedFor === keep.state?.shopping;
 
   /**
+   * The shopping list's entries for the home screen's "Einkaufsliste" caption,
+   * or null while Keep is off, connecting, still loading or failed. The list is
+   * handed over as it is (a fresh, read-only array from the Keep state):
+   * RecipeList derives the caption's counter from it — the unchecked lines and
+   * how many of them name no assigned stop — because that counter describes the
+   * list itself, exactly like the plan counter describes the meal plan. A
+   * boolean would not carry the numbers.
+   */
+  const shoppingItems = keep.status === 'ready' ? (keep.state?.shopping.items ?? null) : null;
+
+  /**
    * True while the shopping list carries at least one unchecked entry and can be
    * sorted. The sort reorders the unchecked entries (checked ones stay at the
    * bottom), so a list of only checked entries offers nothing to sort. It is
    * independent of the write button's condition: that one needs the meal plan.
    */
-  const shoppingSortable =
-    keep.status === 'ready' && (keep.state?.shopping.items.some((item) => !item.checked) ?? false);
+  const shoppingSortable = shoppingItems?.some((item) => !item.checked) ?? false;
 
   /**
    * The meal-plan resolution for the *current* Keep state, or null while none
@@ -1523,7 +1533,7 @@ function App() {
    * line text, never by the item name the persist step writes.
    *
    * The gateway applies the order and answers the sorted list; its identity is
-   * kept as the "sortiert" marker, so the button reads "Einkaufsliste sortiert"
+   * kept as the "sortiert" marker, so the button reads "sortiert"
    * until any later list change replaces it (see `shoppingSortedFor`).
    *
    * A failure is thrown on to the page, which stays open and shows the reason
@@ -2003,6 +2013,7 @@ function App() {
               onSortShoppingList={openShoppingSort}
               shoppingSortable={shoppingSortable}
               shoppingSorted={shoppingSorted}
+              shoppingItems={shoppingItems}
             />
           )}
 

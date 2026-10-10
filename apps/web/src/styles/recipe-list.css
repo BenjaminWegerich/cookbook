@@ -10,7 +10,7 @@
 /* The screens that open with a back button and a title below it (the AI screen,
    the bundled shopping-list selection, the pantry step) build on this base row;
    the recipe list itself has no header any more — it opens with the search field
-   and its two section captions (see .recipe-section further down). */
+   and its three captions (see .recipe-section further down). */
 .app-header {
   display: flex;
   align-items: flex-start;
@@ -206,35 +206,52 @@
   color: var(--color-ink-muted);
 }
 
-/* ---- Captioned sections (Essensplan / Restliche Sammlung) --------------- */
+/* ---- Captioned sections (Einkaufsliste / Essensplan / Restliche Sammlung) -- */
 
-/* The home screen is two stacked sections of the same card grid, each opened by
-   its caption row. The vertical distance between them is one section step
-   (--space-7), the same distance the search bar keeps to the first caption. */
+/* The home screen is three stacked captions: the "Einkaufsliste" action row
+   first (a row without a body), then the two card sections of the same grid,
+   each opened by its caption row. The vertical distance between them is one
+   section step (--space-7), the same distance the search bar keeps to the first
+   caption. */
 .recipe-section + .recipe-section {
   margin-block-start: var(--space-7);
 }
 
-/* The section's heading line: the caption, and beside it the section's own
-   action ("Einkaufsliste schreiben" on "Essensplan") — not pushed to the far
-   edge of a wide screen, where it would read as detached from the caption it
-   belongs to (the reasoning the list's old toolbar followed). The row wraps on a
-   narrow phone, so the button may continue on a second line, still inside the
-   section and never floating over it. The row owns the distance to the cards
-   below; the plain text states inside a section therefore reset their own
-   paragraph margin (see .recipe-section > .recipe-search-empty). */
+/* The section's heading: the caption on a line of its own, and below it the
+   section's own actions as one row ("Einkaufsliste schreiben" and "sortieren" in
+   the "Einkaufsliste" row; decided with the user, who wanted the buttons under
+   the caption instead of beside it — beside it they had to compete with the
+   heading for the same line, and the caption never got the line to itself). The
+   heading owns the distance to the cards below; the plain text states inside a
+   section therefore reset their own paragraph margin (see .recipe-section >
+   .recipe-search-empty). */
 .recipe-section-header {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  /* The button's distance from the caption is one step wider than the row's own
-     wrap gap (decided with the user): the chip reads as its own control beside
-     the caption, not as part of the heading word. Set as column-gap only, so a
-     wrapped second line still starts at the section's left edge instead of
-     carrying an indent. */
-  column-gap: var(--space-5);
+  flex-direction: column;
+  align-items: flex-start;
+  /* The caption's distance to the actions below it: the same step the actions
+     keep to each other, so the block reads as one heading with its controls. */
+  gap: var(--space-5);
   margin-block-end: var(--space-5);
+}
+
+/* The shopping-list actions under their caption: one row of chips that wraps on
+   a narrow phone, still starting at the section's left edge on the second line.
+   No extra top margin — the heading's own gap sets the caption's distance, so a
+   row that lost its buttons leaves no stray space behind. */
+.shopping-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+/* The "Einkaufsliste" section is its caption row and nothing else, so the row's
+   own bottom margin would add to the section gap below it and push "Essensplan"
+   away by two ladder steps instead of one. In the card sections the header is
+   never the last child (its body follows), so this touches only the bodyless
+   row. */
+.recipe-section-header:last-child {
+  margin-block-end: 0;
 }
 
 /* Section caption. Same typography as the editor's field captions
@@ -271,7 +288,8 @@
 }
 
 /* "Einkaufsliste schreiben": the entry into the bundled shopping-list view of
-   the meal plan, sitting in the "Essensplan" caption row. It keeps the shared
+   the meal plan, sitting under the "Einkaufsliste" caption next to the sort
+   button (see .shopping-list-actions). It keeps the shared
    .text-button geometry (inline flex, icon + label, 14 px) but is dressed as a
    soft accent chip (decided with the user: the entry had to become more
    prominent than a bare text button): clay text on a light clay tint, one
@@ -281,7 +299,7 @@
    tint is an opaque mix of two palette tokens, like the discard bar's. The
    horizontal padding is one ladder step wider than a chip's, because the symbol
    and a two-word label sit in it; `flex: none` stops the label from rewrapping
-   before the caption row itself does. */
+   before the actions row itself does. */
 .shopping-list-button {
   flex: none;
   padding: var(--space-2) var(--space-5);

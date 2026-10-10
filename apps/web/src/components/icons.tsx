@@ -187,11 +187,11 @@ export function ListPlusIcon({ className }: IconProps) {
 }
 
 /**
- * Sort (descending lines with arrows) — the "Einkaufsliste sortieren" action:
- * the shopping list is reordered by the shopping route. The generic "sort"
- * meaning, deliberately not the pantry's list-plus (that one means "add to the
- * list"), so the two adjacent buttons in the "Essensplan" caption row stay
- * distinguishable at a glance.
+ * Sort (descending lines with arrows) — the "sortieren" action of the
+ * "Einkaufsliste" caption row: the shopping list is reordered by the shopping
+ * route. The generic "sort" meaning, deliberately not the pantry's list-plus
+ * (that one means "add to the list"), so the two adjacent buttons in the
+ * "Einkaufsliste" caption row stay distinguishable at a glance.
  */
 export function SortIcon({ className }: IconProps) {
   return (

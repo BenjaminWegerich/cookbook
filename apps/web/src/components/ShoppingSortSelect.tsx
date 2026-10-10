@@ -1,6 +1,7 @@
 /**
- * Shopping-list sort page — the full-screen page behind "Einkaufsliste
- * sortieren" on the home screen (App's `sort` layer).
+ * Shopping-list sort page — the full-screen page behind "sortieren" in the home
+ * screen's "Einkaufsliste" caption row (App's `sort` layer). The page itself
+ * still titles the task in full ("Einkaufsliste sortieren").
  *
  * The page is where the shopping list's aisle sort gets the one thing the
  * master data cannot give it: an Einkaufsort for every line that has none yet.

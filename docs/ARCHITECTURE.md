@@ -198,19 +198,24 @@
 
 Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
 
-- **Two captioned sections, no tabs.** The list is one page: the search field on top, then
-  „Essensplan“ (the non-checked Keep entries in Keep's order) and below it „Restliche Sammlung“
-  (the recipes the plan does not use — a planned dish is read and changed in the section above,
-  never twice on one screen). Both render the same card grid and the one search field filters
-  both at once. Each caption carries its counter („Essensplan (5 Einträge, davon 2 unbekannt)“,
-  „Restliche Sammlung (8 Rezepte)“) in the editor's field-caption typography; the counter
-  disappears as soon as the search field is focused or carries a query, the caption stays and the
-  body carries the placeholder sentence, so a section that is empty only because of the search
-  still says which section it is. The caption row's two actions — „Einkaufsliste schreiben“ and
-  „Einkaufsliste sortieren“ — disappear the same way, because both act on the whole list rather
-  than the filtered result. „Einkaufsliste schreiben“ sits in the „Essensplan“ caption row as a
-  quiet text button: it acts on the plan, and a filled button would compete with the floating
-  action button.
+- **Three captions, no tabs.** The list is one page: the search field on top, then the
+  „Einkaufsliste“ heading, then „Essensplan“ (the non-checked Keep entries in Keep's order) and
+  below it „Restliche Sammlung“ (the recipes the plan does not use — a planned dish is read
+  and changed in the section above, never twice on one screen). The two card sections render
+  the same card grid and the one search field filters both at once. The „Einkaufsliste“ heading
+  has no body of its own: the caption names the shopping list on its own line, with the
+  list's counter („Einkaufsliste (4 Einträge, davon 1 unbekannt)“ — the list's unchecked lines
+  and how many of them name no assigned stop) in that line and the list's two actions in a row
+  beneath it, the bundled write („Einkaufsliste schreiben“) and the aisle sort („sortieren“).
+  The card captions carry their counter („Essensplan (5 Einträge, davon 2 unbekannt)“,
+  „Restliche Sammlung (8 Rezepte)“) in the editor's field-caption typography; a card section's
+  counter disappears as soon as the search field is focused or carries a query, its caption
+  stays and the body carries the placeholder sentence, so a section that is empty only because
+  of the search still says which section it is. The whole „Einkaufsliste“ heading — caption,
+  counter and both actions — disappears the same way, because its actions act on the whole Keep
+  list rather than the filtered result. Both actions are soft accent chips (clay text on a light
+  clay tint), not filled buttons: they act on the plan and the list, and a filled button would
+  compete with the floating action button.
 - **Recognition.** An entry is a recipe when its text — without a trailing export link and
   without an optional ` (6 Portionen)`, ` (500 g)` or ` (1,5 l)` suffix — is the exact,
   case-sensitive title of a recipe file, and a stated size fits the recipe: an integer ladder
