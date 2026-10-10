@@ -980,7 +980,8 @@
 
 /* Tighter inline padding than the generic .field inputs: inside a 4.5 rem
    column the standard --space-4 gutter would leave very little room for the
-   digits themselves. */
+   digits themselves. Right-aligned because both columns hold numbers only
+   (DESIGN.md §5.3). */
 .factor-row input {
   width: 100%;
   padding: var(--space-3) var(--space-3);
@@ -990,6 +991,7 @@
   color: var(--color-ink);
   font-size: var(--text-md);
   font-family: var(--font-sans);
+  text-align: right;
 }
 
 .factor-row input:focus {

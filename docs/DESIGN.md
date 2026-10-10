@@ -578,6 +578,7 @@ field; a hint never repeats the caption.
 - A field's error text is bound to the field through `aria-describedby`, and the field is
   marked `aria-invalid` (§8).
 - An error is never colour-only: the words carry the message, the danger colour supports it.
+- A field that can only contain numbers is right-aligned; every other field stays left-aligned.
 
 *Cooking view: not applicable* (no text entry). The one input is the check-list checkbox (§5.11).
 

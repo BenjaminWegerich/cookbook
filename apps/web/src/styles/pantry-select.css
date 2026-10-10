@@ -191,7 +191,8 @@
 
 /* The open keyboard input: just wide enough for the number it edits (32 px,
    --space-8), so a short number does not leave a wide, empty field. The hard
-   max-width keeps the input from growing past that and covering its unit. */
+   max-width keeps the input from growing past that and covering its unit.
+   Right-aligned because it can only contain a number (DESIGN.md §5.3). */
 .pantry-value-input {
   width: var(--space-8);
   min-width: 0;
@@ -202,6 +203,7 @@
   border-block-end: 1px solid var(--color-accent);
   color: inherit;
   font: inherit;
+  text-align: right;
 }
 
 /* The unit an open field is typed in ("g" / "Becher"): a label, not the value —
