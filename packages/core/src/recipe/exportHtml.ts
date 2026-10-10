@@ -791,7 +791,7 @@ const STYLES = `
     line-height: var(--text-md-lh);
     color: var(--ink);
     background: var(--paper);
-    max-width: 42rem;
+    max-width: 32rem;
     margin: 0 auto;
     -webkit-font-smoothing: antialiased;
   }
@@ -877,7 +877,7 @@ const STYLES = `
   .badge svg { width: 14px; height: 14px; fill: currentColor; }
 
   /* ---- Bottom bar (fixed): back · dots · forward on every screen (§5.11) ---- */
-  .step-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 42rem;
+  .step-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 32rem;
               min-height: var(--bar-h); display: flex; align-items: center; gap: var(--space-4);
               padding: var(--space-3) var(--app-padding) calc(var(--space-3) + env(safe-area-inset-bottom));
               background: var(--paper); border-top: 1px solid var(--line); }

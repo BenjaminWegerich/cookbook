@@ -7,20 +7,9 @@
  * (docs/CODING_CONVENTIONS.md); colors and sizes reference styles/tokens.css.
  */
 
-/* The editor's form sheets are full width; the overview is a content sheet,
-   and a full-bleed photo would dominate a wide desktop viewport. It is
-   therefore capped to a comfortable reading width and centered. On phones the
-   cap is wider than the viewport, so the sheet stays edge to edge. 42 rem is
-   the layout breakpoint value used by the recipe grid, not a new token. */
-.overview-sheet {
-  max-width: 42rem;
-  margin-inline: auto;
-  /* One zero-minimum column: without it the implicit `auto` column would take
-     its minimum from the content, so one unbreakable word in a title (a URL,
-     typically) could push the sheet's content — and the hero below it — wider
-     than the sheet. Same guard as the recipe cards. */
-  grid-template-columns: minmax(0, 1fr);
-}
+/* The overview's layout (width cap, centering and the zero-minimum column) comes
+   from the shared .sheet rule in editor.css; this file only styles its content
+   and targets it through the .overview-sheet class. */
 
 /* Hero: the full sheet content width (DESIGN.md §5.8). Only a recognized
    recipe with a photo has one; an unrecognized entry's sheet and a recognized

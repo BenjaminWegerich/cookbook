@@ -10,9 +10,9 @@
  * editor's (.field / .field-label / .quantity-chips / .quantity-picker /
  * .sheet-actions / .text-button / .primary-button) and for the reference readout
  * the meal-plan overlay's own line (.meal-plan-reference). This file adds only
- * what belongs to this overlay: its own stacking layer, the content-sheet width,
- * the explanatory line and the status/error lines. All pixel values come from the
- * design ladder (docs/CODING_CONVENTIONS.md).
+ * what belongs to this overlay: its own stacking layer, the explanatory line and
+ * the status/error lines. All pixel values come from the design ladder
+ * (docs/CODING_CONVENTIONS.md).
  */
 
 /* The overlay opens from the overview sheet and never coexists with the
@@ -25,14 +25,6 @@
 
 .sheet.replace-recipe-sheet {
   z-index: 41;
-  /* Content sheet like the overview and the meal-plan overlay: a readable width
-     on desktop, edge to edge on phones. 42 rem is the layout breakpoint value
-     used by the recipe grid and the overview sheet, not a new token. */
-  max-width: 42rem;
-  margin-inline: auto;
-  /* Same zero-minimum column as the overview, for the same reason: a long
-     unbreakable title must break inside the sheet instead of widening it. */
-  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The explanatory line under the title: small and quiet, because it states the

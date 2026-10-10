@@ -24,9 +24,9 @@
     var(--space-7) + var(--fab-size) + var(--space-5) + env(safe-area-inset-bottom, 0px)
   );
   z-index: 50;
-  /* Content width like the sheets (42 rem is the app's established content
-     breakpoint), centered on wide screens. */
-  max-width: 42rem;
+  /* Content width like the sheets (32 rem is the app's established content
+     width), centered on wide screens. */
+  max-width: 32rem;
   margin-inline: auto;
   display: flex;
   align-items: center;

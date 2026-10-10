@@ -7,8 +7,8 @@
  * .quantity-chips / .quantity-picker / .sheet-actions / .text-button /
  * .outlined-button / .primary-button in editor.css and recipe-list.css). This
  * file adds only what
- * belongs to this overlay: its own stacking layer, the content-sheet width and
- * the two small text lines. All pixel values come from the design ladder
+ * belongs to this overlay: its own stacking layer and the two small text
+ * lines. All pixel values come from the design ladder
  * (docs/CODING_CONVENTIONS.md).
  */
 
@@ -23,14 +23,6 @@
 
 .sheet.meal-plan-sheet {
   z-index: 41;
-  /* Content sheet like the overview: a readable width on desktop, edge to edge
-     on phones. 42 rem is the layout breakpoint value used by the recipe grid
-     and the overview sheet, not a new token. */
-  max-width: 42rem;
-  margin-inline: auto;
-  /* Same zero-minimum column as the overview, for the same reason: a long
-     unbreakable title must break inside the sheet instead of widening it. */
-  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The reference sanity check under the size input: small and quiet, because it

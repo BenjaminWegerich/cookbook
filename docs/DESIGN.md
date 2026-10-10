@@ -354,7 +354,7 @@ A ladder number is used where one fits; the ladder does not own breakpoints. The
 screen. Floating elements add the safe-area inset at the bottom
 (`env(safe-area-inset-bottom)`).
 
-**Sheets** are capped at `42rem` and centred, so a wide viewport never stretches a photo, a
+**Sheets** are capped at `32rem` and centred, so a wide viewport never stretches a photo, a
 reading row or a form field (§5.6).
 
 **Rules**
@@ -369,7 +369,7 @@ reading row or a form field (§5.6).
 
 *Applies to: cooking view.*
 
-Phone-first, one column, `max-width: 42rem` centred, `--app-padding` gutters — the same measure
+Phone-first, one column, `max-width: 32rem` centred, `--app-padding` gutters — the same measure
 as the app's sheets. No horizontal scrolling at any viewport. The three screens (§5.11) are
 states of one page; the bottom step bar is fixed, full-bleed, and adds
 `env(safe-area-inset-bottom)`.
@@ -686,7 +686,7 @@ with its content up to 85% of the viewport height and then scrolls inside itself
 wash over the screen behind. Tapping the scrim, pressing Escape or using browser Back leaves
 the sheet. A sheet's fields are transient: dismissing it discards them without asking (§6.2).
 
-**Every sheet is a content sheet:** capped at `42rem` and centred. On a phone the cap is wider
+**Every sheet is a content sheet:** capped at `32rem` and centred. On a phone the cap is wider
 than the viewport, so the sheet stays edge to edge; on a wide screen it never stretches a
 photo, a reading row or a form field (§4.7).
 
@@ -815,7 +815,7 @@ translucency, no close button, no countdown.
 | error | error | danger | `role="alert"` | the action failed and the user must notice now |
 
 **Placement.** Fixed above the content, inset by `--app-padding`, bottom offset
-`--space-7 + --fab-size + --space-5 + safe-area-inset-bottom`, `max-width: 42rem` centred,
+`--space-7 + --fab-size + --space-5 + safe-area-inset-bottom`, `max-width: 32rem` centred,
 `z-index: 50` — above every sheet. The FAB stays reachable.
 
 **Behaviour**

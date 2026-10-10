@@ -151,7 +151,7 @@ both screen edges — a bottom card, not a full-bleed bar (decided with the user
 | --- | --- | --- |
 | Position | `fixed`, `left`/`right: --app-padding` | floats, never touches the edges |
 | Bottom | `--space-7 + --fab-size + --space-5 + safe-area-inset-bottom` | clears the FAB by the same gap the extended-FAB menu uses above it; the FAB stays reachable |
-| Width | `max-width: 42rem`, centered | the app's content width, shared with the sheets |
+| Width | `max-width: 32rem`, centered | the app's content width, shared with the sheets |
 | Stacking | `z-index: 50` | above every sheet layer (the meal-plan overlay tops out at 41): the notice reports the action that just closed those layers |
 | Padding | `--space-4 --space-5` | |
 | Gap | `--space-3` | symbol / message / action |

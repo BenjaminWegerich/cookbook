@@ -770,6 +770,16 @@
   z-index: 30;
   display: grid;
   gap: var(--space-5);
+  /* Every bottom sheet shares one content width: capped at 32 rem and centred,
+     so a wide desktop viewport never stretches a photo, a reading row or a form
+     field. On a phone the cap is wider than the viewport, so the sheet stays
+     edge to edge. 32 rem (512 px) is a ladder step (§4.3) and is the shared
+     content width of the sheets, the notice and the exported cooking view
+     (§4.7, §5.6). The zero-minimum column stops one unbreakable word (a URL,
+     typically) from pushing content wider than the sheet. */
+  max-width: 32rem;
+  margin-inline: auto;
+  grid-template-columns: minmax(0, 1fr);
   max-height: 85%;
   overflow-y: auto;
   /* One uniform 18 px inner padding (--space-6 == --app-padding) on every side —
