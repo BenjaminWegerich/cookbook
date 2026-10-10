@@ -961,28 +961,29 @@
    unit name · Menge · Priorität. Both numeric columns are fixed-width instead
    of stretching — the values are short (a factor like "7,5", a priority like
    "1"), and a full-width Menge field would dominate the row while saying
-   nothing. The heading sits directly under its caption, so it carries no extra
-   margin: the .field grid gap (--space-2) alone spaces it. */
-.factor-head {
+   nothing. The first column sizes to the widest unit name (max-content) so
+   words like "Packung" are never clipped. The three heading cells and each
+   unit's three cells are direct children of the one .factor-grid, so a single
+   grid keeps every row aligned. Column gap is --space-3, row gap --space-2
+   to reproduce the .field rhythm the separate rows previously inherited. */
+.factor-grid {
   display: grid;
-  grid-template-columns: var(--space-10) 4.5rem 4.5rem;
-  gap: var(--space-3);
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
+  grid-template-columns: max-content 4.5rem 4.5rem;
+  column-gap: var(--space-3);
+  row-gap: var(--space-2);
+  align-items: center;
 }
 
-.factor-row {
-  display: grid;
-  grid-template-columns: var(--space-10) 4.5rem 4.5rem;
-  align-items: center;
-  gap: var(--space-3);
+.factor-head-cell {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
 }
 
 /* Tighter inline padding than the generic .field inputs: inside a 4.5 rem
    column the standard --space-4 gutter would leave very little room for the
    digits themselves. Right-aligned because both columns hold numbers only
    (DESIGN.md §5.3). */
-.factor-row input {
+.factor-grid input {
   width: 100%;
   padding: var(--space-3) var(--space-3);
   background: var(--color-bg);
@@ -994,7 +995,7 @@
   text-align: right;
 }
 
-.factor-row input:focus {
+.factor-grid input:focus {
   outline: 2px solid var(--color-accent);
 }
 

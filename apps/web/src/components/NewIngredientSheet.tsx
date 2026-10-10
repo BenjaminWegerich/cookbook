@@ -479,7 +479,7 @@ function NewIngredientSheet({
         </div>
 
         <div className="field">
-          <span className="field-label">Verknüpfungen mit Zusatz-Einheiten</span>
+          <span className="field-label">Zusatz-Einheiten</span>
 
           {copyCandidates.length > 0 && (
             <>
@@ -505,15 +505,16 @@ function NewIngredientSheet({
           )}
 
           <p className="field-hint">Manuell anpassen:</p>
-          <div className="factor-head" aria-hidden="true">
-            <span />
-            <span>Menge [{bu}]</span>
-            <span>Priorität</span>
-          </div>
-          {ADDITIONAL_UNITS.map((unit) => (
-            <div className="factor-row" key={unit.name}>
-              <span className="factor-unit">{unit.name}</span>
+          <div className="factor-grid">
+            <span className="factor-head-cell" aria-hidden="true" />
+            <span className="factor-head-cell" aria-hidden="true">Menge [{bu}]</span>
+            <span className="factor-head-cell" aria-hidden="true">Priorität</span>
+            {ADDITIONAL_UNITS.flatMap((unit) => [
+              <span key={`${unit.name}:name`} className="factor-unit">
+                {unit.name}
+              </span>,
               <input
+                key={`${unit.name}:menge`}
                 type="text"
                 inputMode="decimal"
                 aria-label={`${unit.name}: Menge in ${bu}`}
@@ -522,8 +523,9 @@ function NewIngredientSheet({
                   setFactors((current) => ({ ...current, [unit.name]: event.target.value }));
                   markEdited();
                 }}
-              />
+              />,
               <input
+                key={`${unit.name}:prioritaet`}
                 type="text"
                 inputMode="numeric"
                 aria-label={`${unit.name}: Priorität`}
@@ -532,9 +534,9 @@ function NewIngredientSheet({
                   setPriorities((current) => ({ ...current, [unit.name]: event.target.value }));
                   markEdited();
                 }}
-              />
-            </div>
-          ))}
+              />,
+            ])}
+          </div>
         </div>
 
         {/* The reorder point: what is on the shelf after a shopping trip. Same
