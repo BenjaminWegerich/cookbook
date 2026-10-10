@@ -33,7 +33,8 @@
  *   "REFERENZ" (olive, outline star + ×), so every ingredient row reads the
  *   same way in both lists; every tag leads with its symbol (docs/
  *   CODING_CONVENTIONS.md, "inline badges"); only the master list carries the
- *   star toggle.
+ *   star toggle, and it is hidden while the reference role is active (the
+ *   badge's × is the way to clear it then).
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -106,7 +107,6 @@ import {
   CloseIcon,
   LinkIcon,
   NewReleasesIcon,
-  StarFilledIcon,
   StarIcon,
   TrashIcon,
   UploadIcon,
@@ -1771,10 +1771,74 @@ function RecipeEditor({
           </div>
         )}
 
-        {/* Kopfdaten — Titel, Details, Typ, Portionen/Ergiebigkeit, Zeiten und Bild.
-            Bild ist bewusst das letzte Element. */}
+        {/* Kopfdaten — Bild, Titel, Details, Typ, Portionen/Ergiebigkeit und
+            Zeiten. Das Bild steht bewusst ganz oben, vor dem Titel. */}
         <section className="editor-card" aria-label="Kopfdaten">
           <h3 className="editor-card-title">Kopfdaten</h3>
+
+          {/* Bild (§2, optional sibling file) — zuerst, vor dem Titel */}
+          <div className="field">
+            <span className="field-label">
+              Bild<span className="optional-mark">(optional)</span>
+            </span>
+            <div className="photo-row">
+              {photoUrl !== null ? (
+                <img className="photo-preview" src={photoUrl} alt="Rezeptbild" />
+              ) : (
+                <div className="photo-placeholder">Kein Bild</div>
+              )}
+              <div className="photo-actions">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  hidden
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file !== undefined) void handlePhotoFile(file);
+                    event.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <UploadIcon className="button-icon" />
+                  <span>{photoUrl !== null ? 'Ersetzen' : 'Auswählen'}</span>
+                </button>
+                {photoUrl !== null && (
+                  <button
+                    type="button"
+                    className="text-button danger-text"
+                    onClick={() => {
+                      if (!confirmRemovePhoto) {
+                        setConfirmRemovePhoto(true);
+                      } else {
+                        handleRemovePhoto();
+                      }
+                    }}
+                    onBlur={(event) => {
+                      // Clicking anywhere outside this button (the button itself
+                      // keeps focus while it is used) drops the armed "are you
+                      // sure?" — the same rule as the other confirmations.
+                      if (!event.currentTarget.contains(event.relatedTarget)) {
+                        setConfirmRemovePhoto(false);
+                      }
+                    }}
+                  >
+                    <TrashIcon className="button-icon" />
+                    <span>{confirmRemovePhoto ? 'Wirklich entfernen?' : 'Entfernen'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            {photoError !== null && (
+              <p className="field-error" role="alert">
+                {photoError}
+              </p>
+            )}
+          </div>
 
           <label className="field">
             <span className="field-label">Titel</span>
@@ -1923,70 +1987,6 @@ function RecipeEditor({
               {issue.message}
             </p>
           ))}
-
-          {/* Bild (§2, optional sibling file) — letztes Element der Kopfdaten */}
-          <div className="field">
-            <span className="field-label">
-              Bild<span className="optional-mark">(optional)</span>
-            </span>
-            <div className="photo-row">
-              {photoUrl !== null ? (
-                <img className="photo-preview" src={photoUrl} alt="Rezeptbild" />
-              ) : (
-                <div className="photo-placeholder">Kein Bild</div>
-              )}
-              <div className="photo-actions">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  hidden
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file !== undefined) void handlePhotoFile(file);
-                    event.target.value = '';
-                  }}
-                />
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <UploadIcon className="button-icon" />
-                  <span>{photoUrl !== null ? 'Ersetzen' : 'Auswählen'}</span>
-                </button>
-                {photoUrl !== null && (
-                  <button
-                    type="button"
-                    className="text-button danger-text"
-                    onClick={() => {
-                      if (!confirmRemovePhoto) {
-                        setConfirmRemovePhoto(true);
-                      } else {
-                        handleRemovePhoto();
-                      }
-                    }}
-                    onBlur={(event) => {
-                      // Clicking anywhere outside this button (the button itself
-                      // keeps focus while it is used) drops the armed "are you
-                      // sure?" — the same rule as the other confirmations.
-                      if (!event.currentTarget.contains(event.relatedTarget)) {
-                        setConfirmRemovePhoto(false);
-                      }
-                    }}
-                  >
-                    <TrashIcon className="button-icon" />
-                    <span>{confirmRemovePhoto ? 'Wirklich entfernen?' : 'Entfernen'}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-            {photoError !== null && (
-              <p className="field-error" role="alert">
-                {photoError}
-              </p>
-            )}
-          </div>
         </section>
 
         {/* Zubereitung — steps with their own ingredient lists + prose */}
@@ -2002,7 +2002,7 @@ function RecipeEditor({
             return (
               <div className="step-card" id={`editor-step-${stepIndex}`} key={stepIndex}>
                 <div className="step-head">
-                  <span className="step-number">{stepIndex + 1}.</span>
+                  <span className="step-number">Schritt {stepIndex + 1}</span>
                   <div className="step-actions">
                     <button
                       type="button"
@@ -2308,28 +2308,23 @@ function RecipeEditor({
                           </span>
                         )}
                       </span>
-                      <button
-                        type="button"
-                        className={isReference ? 'ref-toggle on' : 'ref-toggle'}
-                        aria-pressed={isReference}
-                        title={
-                          isReference ? 'Referenz-Menge entfernen' : 'Als Referenz-Menge markieren'
-                        }
-                        aria-label={
-                          isReference
-                            ? `„${ingredient.name}“ als Referenz-Menge entfernen`
-                            : `„${ingredient.name}“ als Referenz-Menge markieren`
-                        }
-                        onClick={() => toggleReference(ingredient.name)}
-                      >
-                        {/* Same symbol in both states — only the fill changes
-                            (filled = active), so the icon set stays one family. */}
-                        {isReference ? (
-                          <StarFilledIcon className="star-icon" />
-                        ) : (
+                      {/* The tappable star shows only while the ingredient is
+                          not a reference: once the role is active, the
+                          "REFERENZ" badge's × is the one way to clear it — a
+                          second toggle next to an already-active marker would
+                          be redundant. */}
+                      {!isReference && (
+                        <button
+                          type="button"
+                          className="ref-toggle"
+                          aria-pressed={false}
+                          title="Als Referenz-Menge markieren"
+                          aria-label={`„${ingredient.name}“ als Referenz-Menge markieren`}
+                          onClick={() => toggleReference(ingredient.name)}
+                        >
                           <StarIcon className="star-icon" />
-                        )}
-                      </button>
+                        </button>
+                      )}
                     </li>
                   );
                 })}
