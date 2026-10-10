@@ -695,6 +695,13 @@ const NAVIGATION_SCRIPT = `
     screens.zutaten.classList.toggle('active', node === 'zutaten');
     screens.zubereitung.classList.toggle('active', onSteps);
 
+    // The swipe animation plays for the intro and Zutaten screens too, not only
+    // the steps: the newly shown screen slides in with the motion direction.
+    if (direction) {
+      if (node === 'intro') { showStep(screens.intro, direction); }
+      else if (node === 'zutaten') { showStep(screens.zutaten, direction); }
+    }
+
     // Left button hidden on the intro (nothing precedes it); right button
     // removed on the last node (nothing follows it).
     btnBack.hidden = current === 0;
@@ -784,7 +791,7 @@ const STYLES = `
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  html, body { margin: 0; padding: 0; overflow-x: hidden; }
   body {
     font-family: var(--font);
     font-size: var(--text-md);
@@ -814,10 +821,13 @@ const STYLES = `
   .meta-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-7); margin: 0 0 var(--space-6); }
   .meta-item { display: inline-flex; align-items: baseline; gap: var(--space-2); }
   .caption { color: var(--muted); font-size: var(--text-sm); line-height: var(--text-sm-lh); font-weight: 600; text-transform: uppercase; }
-  .meta-value { font-weight: 600; font-size: var(--text-sm); line-height: var(--text-sm-lh); }
+  .meta-value { font-weight: 600; font-size: var(--text-md); line-height: var(--text-md-lh); }
   .brand { display: flex; align-items: center; gap: var(--space-2); color: var(--muted);
            font-size: var(--text-sm); line-height: var(--text-sm-lh); margin-top: auto; padding-top: var(--space-6); }
   .brand svg { width: 20px; height: 20px; }
+  /* The intro's brand footer sits right above the bottom bar (§5.11), so the
+     intro gets less bottom padding than the scrollable list screens. */
+  .screen.intro { padding-bottom: calc(var(--bar-h) + var(--space-4)); }
   .picker-caption { font-size: var(--text-sm); line-height: var(--text-sm-lh); color: var(--muted);
                     font-weight: 600; text-transform: uppercase; margin: 0 0 var(--space-2); }
   .chips { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); }
@@ -853,20 +863,31 @@ const STYLES = `
 
   /* ---- Zubereitung (steps) ---- */
   .step-title { font-size: var(--text-lg); line-height: var(--text-lg-lh); font-weight: 600; margin: 0 0 var(--space-3); }
-  .step-wrap { overflow: hidden; }
+  /* The wrap fills the space below the header and centres the step's rows and
+     prose together (§5.11). overflow:hidden clips only the slide's horizontal
+     travel; the wrap grows with its content, so a tall step still scrolls. */
+  .step-wrap { overflow: hidden; flex: 1 1 auto; display: flex; flex-direction: column;
+               justify-content: center; }
   .step { display: none; }
   .step.active { display: block; }
-  .step.slide-fwd { animation: stepFwd var(--motion-base) ease-out; }
-  .step.slide-back { animation: stepBack var(--motion-base) ease-out; }
+  .step.slide-fwd, .screen.slide-fwd { animation: stepFwd var(--motion-base) ease-out; }
+  .step.slide-back, .screen.slide-back { animation: stepBack var(--motion-base) ease-out; }
   @keyframes stepFwd { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes stepBack { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
   /* The ingredient rows and the prose read at arm's length, so both use
      --text-lg. Rows are bulleted; a plain margin separates them from the prose. */
   .step-rows { list-style: none; margin: 0 0 var(--space-6); padding: 0; }
-  .step-rows li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0;
+  .step-rows li { display: flex; align-items: center; padding: var(--space-2) 0;
                   font-size: var(--text-lg); line-height: var(--text-lg-lh); }
-  .step-rows li::before { content: "• "; color: var(--muted); }
+  /* The bullet is the font's own U+2022 glyph with one space on each side; the
+     glyph's side bearings stay untouched. white-space:pre keeps both spaces
+     visible — the default white-space:normal trims a space at a line-box edge,
+     which silently dropped the leading one (§5.11). */
+  .step-rows li::before { content: " • "; white-space: pre; color: var(--muted); }
   .step-ingredient { min-width: 0; overflow-wrap: anywhere; }
+  /* The row no longer uses flex gap (the bullet's spaces are the marker spacing),
+     so the sub-recipe badge keeps its gap from the ingredient via a margin. */
+  .step-rows li .badge { margin-left: var(--space-3); }
   .step-text { margin: 0; font-size: var(--text-lg); line-height: var(--text-lg-lh); }
 
   /* ---- Sub-recipe badge (§5.7): all-caps like the web app. ---- */
@@ -896,7 +917,7 @@ const STYLES = `
   [hidden] { display: none !important; }
 
   @media (prefers-reduced-motion: reduce) {
-    .step.slide-fwd, .step.slide-back { animation: none; }
+    .step.slide-fwd, .step.slide-back, .screen.slide-fwd, .screen.slide-back { animation: none; }
   }
 `;
 
