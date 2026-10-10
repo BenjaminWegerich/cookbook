@@ -28,7 +28,7 @@ real way back — offers one action. It is the app's confirmation layer for work
 that has already been done and has closed the screen it was done on.
 
 **The instances so far.** The first four report a meal-plan write from the recipe
-overview, the fifth the shopping list:
+overview, the fifth the shopping list, the sixth the copied recipe link:
 
 > `<Titel> (<Größe>) zum Essensplan hinzugefügt. Die Einkaufsliste bleibt unverändert.`
 > with the action **Rückgängig** („Einplanen“).
@@ -47,6 +47,10 @@ overview, the fifth the shopping list:
 > `X Zutaten für Y Rezepte zur Einkaufsliste hinzugefügt.`
 > with the action **Rückgängig** („Einkaufsliste schreiben“ on the pantry sheet
 > „Vorräte auswählen“).
+
+> `Link zu <Titel> kopiert.`
+> without an action („Link kopieren“ in the recipe overview's „Mehr“ menu; the system's own
+> share sheet next to it needs no notice).
 
 ### 1.1 When to use it — and when not
 
@@ -261,6 +265,7 @@ A named line that Keep no longer carries fails the undo instead of reporting
 | Styles | `apps/web/src/styles/snackbar.css` | card, placement, tone symbols, entrance |
 | Symbols | `apps/web/src/components/icons.tsx` | `CheckCircleIcon`, `UndoIcon` (Material Symbols Rounded from the set's own source) |
 | The notices (meal plan and shopping list) | `apps/web/src/App.tsx` | enqueues them after a successful write; wires `Rückgängig` |
+| The copy notice | `apps/web/src/components/RecipeOverview.tsx` (through the `showSnackbar` prop) + `apps/web/src/share/shareRecipe.ts` (`copyRecipeLink`) | confirms the copied recipe link, reports a clipboard that could not be filled |
 | Write + undo client | `apps/web/src/keep/keepClient.ts` (`writeMealPlan`), `apps/web/src/keep/useKeep.ts` (`planMeal`, `undoMealPlan`) | the one write shape both directions use |
 | Check + undo client | `apps/web/src/keep/keepClient.ts` (`setMealPlanChecked`), `apps/web/src/keep/useKeep.ts` (`checkMealPlan`, `uncheckMealPlan`) | ticking a dish off the plan and its undo |
 | Gateway | `apps/keep-gateway/keep_gateway/app.py`, `keep_client.py` | accepts one or several added lines, ticks/unticks lines, verifies the result |

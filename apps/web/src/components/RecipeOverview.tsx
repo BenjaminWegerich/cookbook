@@ -97,11 +97,20 @@
  *   a separate flow over several recipes at once (decided with the user), so
  *   the overview's per-recipe action must not be named "Zur Liste hinzufügen".
  * - "Mehr" (and, for an unrecognized entry, "Eintrag ersetzen") opens its
- *   actions as a small popover above the row: "Manuell bearbeiten" opens the
- *   editor and "Mit KI bearbeiten" opens the AI-edit screen. Taking a planned
- *   recipe off the plan lives in the meal-plan overlay's "Abhaken", not in
- *   this menu. The menu is closed by an outside tap, Escape and any chosen
- *   entry.
+ *   actions as a small popover above the row: "Link kopieren" and "Teilen" hand
+ *   the recipe on, "Manuell bearbeiten" opens the editor and "Mit KI bearbeiten"
+ *   opens the AI-edit screen. The two share actions lead the menu, because they
+ *   are the ones that change nothing. "Link kopieren" puts the recipe's name and
+ *   its export link on the clipboard; "Teilen" offers the same text to the
+ *   system's share sheet and exists only where the browser really has one
+ *   (`hasShareSheet`), so neither entry has to do the other's job
+ *   (../share/shareRecipe). The link is the export's own address without a size,
+ *   so it opens at the size the recipe is written in: a shared recipe is not a
+ *   planned one, and the friend scales the cooking view to their own amount.
+ *   Like "Jetzt kochen", both actions need the recipe's export file and report
+ *   it when it is missing instead of handing on a dead link. Taking a planned
+ *   recipe off the plan lives in the meal-plan overlay's "Abhaken", not in this
+ *   menu. The menu is closed by an outside tap, Escape and any chosen entry.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -120,14 +129,18 @@ import {
 
 import { readRecipe, recipeExportUrl, type StoredRecipe } from '../drive/recipeStorage';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
+import type { SnackbarMessage } from '../hooks/useSnackbar';
+import { copyRecipeLink, hasShareSheet, shareRecipe } from '../share/shareRecipe';
 import {
   CalendarAddIcon,
   CalendarEditIcon,
   CheckBoxIcon,
+  ContentCopyIcon,
   MenuBookIcon,
   MoreVertIcon,
   PencilIcon,
   RoomServiceIcon,
+  ShareIcon,
   SkilletIcon,
   SparkleIcon,
   SwapHorizIcon,
@@ -278,6 +291,16 @@ interface RecipeOverviewProps {
    * write and the re-resolved plan (see App).
    */
   livePlan: { onMealPlan: boolean; planned: PlannedAmount | null } | null;
+  /**
+   * Queues one transient notice (App's root snackbar, docs/ui_patterns.md).
+   * "Teilen" is the sheet's only action that stays on screen when it finishes —
+   * it changes nothing and asks nothing — so its outcome is reported by the
+   * app's confirmation layer instead of a line inside the sheet: the copied
+   * link is confirmed there, and a clipboard that could not be filled is an
+   * `error` notice. The other actions of this sheet end the flow and are
+   * confirmed by App itself.
+   */
+  showSnackbar: (message: SnackbarMessage) => void;
   /** Browser-back consumer handle (React 19: ref is a regular prop). */
   ref?: Ref<RecipeOverviewHandle>;
 }
@@ -305,6 +328,18 @@ type OverviewMenu = 'more' | 'replace';
 const MENU_GAP_PX = 6;
 
 /**
+ * What the sheet's three export actions say when the recipe has no HTML export
+ * file yet (a failed export write): there is nothing to cook, copy or share,
+ * and one more save creates it. One sentence for all three, because the cause
+ * and the remedy are the same either way. "Jetzt kochen", "Link kopieren" and
+ * "Teilen" keep their full-strength look and report this on the tap instead of
+ * being disabled: the missing file is not visible next to them
+ * (docs/CODING_CONVENTIONS.md, unavailable buttons).
+ */
+const MISSING_EXPORT_NOTICE =
+  'Für dieses Rezept gibt es noch keine Kochansicht. Speichere es erneut, um sie zu erzeugen.';
+
+/**
  * The overview sheet (see file header). For a recognized recipe the list entry
  * already carries title and photo, so the hero renders immediately; times and
  * description are read from the recipe file and fill in when the load finishes.
@@ -324,6 +359,7 @@ function RecipeOverview({
   onReplaceEntry,
   onRemoveFromMealPlan,
   livePlan,
+  showSnackbar,
   ref,
 }: RecipeOverviewProps) {
   /** The full recipe; null while it is being read from Drive (recipe target). */
@@ -370,6 +406,13 @@ function RecipeOverview({
 
   /** The recognized recipe, or null for an unrecognized entry. */
   const recipe = target.kind === 'recipe' ? target.recipe : null;
+  /**
+   * Whether this browser has a system share sheet at all. Read per render (the
+   * capability does not change while the page lives) and turned into the
+   * "Teilen" entry's existence: where there is none, "Link kopieren" is the
+   * whole answer. See ../share/shareRecipe and the menu below.
+   */
+  const shareSheet = hasShareSheet();
   /** File to read for the details; null for an unrecognized entry (no read). */
   const fileId = recipe?.fileId ?? null;
   /**
@@ -538,9 +581,7 @@ function RecipeOverview({
   const startCooking = (): void => {
     if (recipe === null) return;
     if (recipe.exportFileId === undefined) {
-      setNotice(
-        'Für dieses Rezept gibt es noch keine Kochansicht. Speichere es erneut, um sie zu erzeugen.',
-      );
+      setNotice(MISSING_EXPORT_NOTICE);
       return;
     }
     // The plan's promised size, when the entry states one; otherwise the
@@ -551,6 +592,84 @@ function RecipeOverview({
         ? withPlanSize(recipeExportUrl(recipe.exportFileId), planned)
         : recipeExportUrl(recipe.exportFileId);
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  /**
+   * The recipe's share text parts — its title and the link to its cooking view
+   * at the *default* quantity — or null after reporting a missing export.
+   *
+   * Deliberately the default size, not the size this sheet happens to show: a
+   * shared recipe is not a planned one, so the link carries no `portionen` /
+   * `menge` and the cooking view opens at the size the recipe is written in,
+   * where the friend picks their own amount (decided with the user). The link is
+   * the export's own address, and the export is rewritten in place on every
+   * save, so a link that was sent once keeps working and shows the current
+   * recipe. Nothing has to be read for any of that, so both actions work before
+   * the details load — like "Jetzt kochen".
+   *
+   * A recipe whose export file is missing has nothing to hand on, so the tap
+   * reports that instead of sharing a dead link: the menu entries keep their
+   * full-strength look and explain themselves, because the missing file is not
+   * visible next to them (docs/CODING_CONVENTIONS.md, unavailable buttons).
+   */
+  const shareTarget = (): { title: string; url: string } | null => {
+    if (recipe === null) return null;
+    if (recipe.exportFileId === undefined) {
+      setNotice(MISSING_EXPORT_NOTICE);
+      return null;
+    }
+    return { title: recipe.title, url: recipeExportUrl(recipe.exportFileId) };
+  };
+
+  /**
+   * "Link kopieren": closes the menu and puts the recipe's share text on the
+   * clipboard. That copy *is* the action's whole outcome, so it is confirmed by
+   * the app's notice (docs/ui_patterns.md) like every other finished action; a
+   * clipboard that could not be filled is the action's one failure and gets the
+   * error tone.
+   */
+  const copyLink = (): void => {
+    setOpenMenu(null);
+    const target = shareTarget();
+    if (target === null) return;
+    void copyRecipeLink(target.title, target.url)
+      .then(() => {
+        showSnackbar({ text: `Link zu „${target.title}“ kopiert.` });
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        showSnackbar({
+          tone: 'error',
+          text: `Der Link zu „${target.title}“ konnte nicht kopiert werden. ${message}`,
+        });
+      });
+  };
+
+  /**
+   * "Teilen": closes the menu and hands the recipe to the system's share sheet.
+   *
+   * The menu closes first, in the same gesture: `navigator.share` may only be
+   * called with the tap's transient activation, so nothing may be awaited before
+   * it (see the module). The entry exists only where the browser has a share
+   * sheet at all (`shareSheet`, decided with the user) — where it has none,
+   * "Link kopieren" above it is the whole answer, and a "Teilen" that silently
+   * copied would contradict its own label.
+   *
+   * Nothing is confirmed on success: the sheet is its own feedback. A dismissed
+   * sheet is a decision and reports nothing (the module resolves it silently);
+   * only a sheet that refused is a failure, and its notice names the other way.
+   */
+  const shareLink = (): void => {
+    setOpenMenu(null);
+    const target = shareTarget();
+    if (target === null) return;
+    void shareRecipe(target.title, target.url).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      showSnackbar({
+        tone: 'error',
+        text: `„${target.title}“ konnte nicht geteilt werden. ${message}`,
+      });
+    });
   };
 
   /**
@@ -919,6 +1038,23 @@ function RecipeOverview({
                     aria-label="Weitere Aktionen"
                     style={menuStyle}
                   >
+                    {/* The two share actions lead the menu (decided with the
+                        user): they are the entries that change nothing, and a
+                        copy works in every browser. "Link kopieren" comes
+                        first, "Teilen" appears only where the browser really
+                        has a system share sheet — a "Teilen" that copied
+                        instead would contradict its own label. See copyLink
+                        and shareLink. */}
+                    <button type="button" role="menuitem" onClick={copyLink}>
+                      <ContentCopyIcon />
+                      <span>Link kopieren</span>
+                    </button>
+                    {shareSheet && (
+                      <button type="button" role="menuitem" onClick={shareLink}>
+                        <ShareIcon />
+                        <span>Teilen</span>
+                      </button>
+                    )}
                     <button type="button" role="menuitem" onClick={openManualEdit}>
                       <PencilIcon />
                       <span>Manuell bearbeiten</span>

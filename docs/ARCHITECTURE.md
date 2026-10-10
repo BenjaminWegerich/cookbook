@@ -113,6 +113,16 @@
   there (observed in Google Keep's in-app browser). With no host configured the app falls back to
   the Drive link — fine in a desktop browser and in Chrome on Android, unusable inside Keep.
 - Friends open it in any browser and pick a size — no app, no server of our own.
+- **Sharing one recipe** is the overview's „Mehr“ menu (decided with the user): „Link kopieren“
+  puts the recipe's name and the link to its export on the clipboard, and „Teilen“ offers the
+  same text to the system's share sheet — the second entry exists only where the browser really
+  has one, so neither action has to do the other's job
+  (`apps/web/src/share/shareRecipe.ts`). The link carries no size, so a shared recipe opens at
+  the size it is written in — a shared recipe is not a planned one, and the friend scales the
+  cooking view to their own amount; the export is rewritten in place on every save, so a link
+  that was sent once stays valid and shows the current recipe. The clipboard copy is confirmed
+  by the snackbar, the system's own share sheet is its feedback. Sharing the whole collection is
+  still open (ROADMAP).
 
 ### Export host (Apps Script)
 

@@ -180,6 +180,11 @@ Two things to carry over rather than rediscover:
 
 ## Sharing (depends on: web app, storage)
 
-- [ ] Share individual recipes or the whole collection with friends (link generation and
-      collection export; the single-recipe HTML export itself is built in Phase 1 as the
-      cooking view).
+- [x] Share an individual recipe: the recipe overview's „Mehr“ menu leads with „Link kopieren“
+      and „Teilen“ — the clipboard copy in every browser, the system's share sheet only where the
+      browser has one (`apps/web/src/share/shareRecipe.ts`). Both send the recipe's name and its
+      export link without a size (the recipe's written amount, which the friend scales in the
+      cooking view), and the export is rewritten in place on every save, so a shared link stays
+      valid and current.
+- [ ] Share the whole collection with friends (link generation and collection export; the
+      single-recipe HTML export itself is built in Phase 1 as the cooking view).

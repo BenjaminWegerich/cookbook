@@ -265,6 +265,44 @@ export function LinkIcon({ className }: IconProps) {
 }
 
 /**
+ * Two stacked sheets — the "Link kopieren" entry of the recipe overview's
+ * "Mehr" menu: put the recipe's link on the clipboard. The copy glyph, not the
+ * chain link (LinkIcon = the "Rezept" tag) or the share nodes (ShareIcon = the
+ * system's share sheet), so the three never blur into one another. The source
+ * glyph is auto-mirrored in RTL layouts; the app's UI is German and LTR only, so
+ * the path is used exactly as drawn.
+ */
+export function ContentCopyIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M360,720Q327,720 303.5,696.5Q280,673 280,640L280,160Q280,127 303.5,103.5Q327,80 360,80L720,80Q753,80 776.5,103.5Q800,127 800,160L800,640Q800,673 776.5,696.5Q753,720 720,720L360,720ZM360,640L720,640Q720,640 720,640Q720,640 720,640L720,160Q720,160 720,160Q720,160 720,160L360,160Q360,160 360,160Q360,160 360,160L360,640Q360,640 360,640Q360,640 360,640ZM200,880Q167,880 143.5,856.5Q120,833 120,800L120,280Q120,263 131.5,251.5Q143,240 160,240Q177,240 188.5,251.5Q200,263 200,280L200,800Q200,800 200,800Q200,800 200,800L600,800Q617,800 628.5,811.5Q640,823 640,840Q640,857 628.5,868.5Q617,880 600,880L200,880ZM360,640Q360,640 360,640Q360,640 360,640L360,160Q360,160 360,160Q360,160 360,160L360,160Q360,160 360,160Q360,160 360,160L360,640Q360,640 360,640Q360,640 360,640L360,640Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Three linked nodes — the "Teilen" action of the recipe overview's "Mehr"
+ * menu: hand the recipe on. Sharing offers the recipe's name and a link to its
+ * HTML export to the system's share sheet, falling back to the clipboard where
+ * the browser has none (../share/shareRecipe). This is the set's own share
+ * glyph; the "Rezept" tag's chain link (LinkIcon) means something else, so the
+ * two are never swapped.
+ */
+export function ShareIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M720,880Q670,880 635,845Q600,810 600,760Q600,753 601,745.5Q602,738 604,732L322,568Q305,583 284,591.5Q263,600 240,600Q190,600 155,565Q120,530 120,480Q120,430 155,395Q190,360 240,360Q263,360 284,368.5Q305,377 322,392L604,228Q602,222 601,214.5Q600,207 600,200Q600,150 635,115Q670,80 720,80Q770,80 805,115Q840,150 840,200Q840,250 805,285Q770,320 720,320Q697,320 676,311.5Q655,303 638,288L356,452Q358,458 359,465.5Q360,473 360,480Q360,487 359,494.5Q358,502 356,508L638,672Q655,657 676,648.5Q697,640 720,640Q770,640 805,675Q840,710 840,760Q840,810 805,845Q770,880 720,880ZM720,240Q737,240 748.5,228.5Q760,217 760,200Q760,183 748.5,171.5Q737,160 720,160Q703,160 691.5,171.5Q680,183 680,200Q680,217 691.5,228.5Q703,240 720,240ZM240,520Q257,520 268.5,508.5Q280,497 280,480Q280,463 268.5,451.5Q257,440 240,440Q223,440 211.5,451.5Q200,463 200,480Q200,497 211.5,508.5Q223,520 240,520ZM720,800Q737,800 748.5,788.5Q760,777 760,760Q760,743 748.5,731.5Q737,720 720,720Q703,720 691.5,731.5Q680,743 680,760Q680,777 691.5,788.5Q703,800 720,800ZM720,200Q720,200 720,200Q720,200 720,200Q720,200 720,200Q720,200 720,200Q720,200 720,200Q720,200 720,200Q720,200 720,200Q720,200 720,200ZM240,480Q240,480 240,480Q240,480 240,480Q240,480 240,480Q240,480 240,480Q240,480 240,480Q240,480 240,480Q240,480 240,480Q240,480 240,480ZM720,760Q720,760 720,760Q720,760 720,760Q720,760 720,760Q720,760 720,760Q720,760 720,760Q720,760 720,760Q720,760 720,760Q720,760 720,760Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/**
  * Open book — the "Bestehendes Rezept auswählen" entry of the "Eintrag
  * ersetzen" menu: pick a recipe that already exists in the collection. The
  * collection is a cookbook, so the book is the destination — not a list, not a

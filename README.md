@@ -57,7 +57,11 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
 
 ### 7. Sharing recipes with friends
 
-- A simple way to share individual recipes or the whole collection with friends.
+- Share a single recipe from the recipe overview („Mehr“ → „Link kopieren“ / „Teilen“): the
+  recipe's name and the link to its HTML export go to the clipboard, or to the system's share
+  sheet where the browser has one. The link always opens the current version, because the export
+  is regenerated on every save.
+- Sharing the whole collection is still open (see [docs/ROADMAP.md](docs/ROADMAP.md)).
 
 ## Getting Started
 

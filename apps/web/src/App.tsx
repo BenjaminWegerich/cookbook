@@ -2080,6 +2080,7 @@ function App() {
             onReplaceEntry={replaceMealPlanEntry}
             onRemoveFromMealPlan={removeFromMealPlan}
             livePlan={overviewLivePlan}
+            showSnackbar={showSnackbar}
           />
         )}
 
