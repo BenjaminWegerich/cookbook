@@ -690,11 +690,11 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
   const canWrite = toBuy.length > 0 && !busy;
 
   return (
-    <main className="app pantry-select">
+    <main className="app app-narrow pantry-select">
       {/* "Zurück" on its own line at the top left, the screen title below it —
           the shared stacked header (.app-header-stacked). */}
       <header className="app-header app-header-stacked">
-        <button type="button" className="text-button" onClick={onBack}>
+        <button type="button" className="text-button back-button" onClick={onBack}>
           Zurück
         </button>
         <h1>Vorräte auswählen</h1>

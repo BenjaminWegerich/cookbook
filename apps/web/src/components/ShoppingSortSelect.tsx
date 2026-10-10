@@ -295,11 +295,11 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
   }
 
   return (
-    <main className="app sort-select">
+    <main className="app app-narrow sort-select">
       {/* "Zurück" on its own line at the top left, the screen title below it —
           the shared stacked header (.app-header-stacked). */}
       <header className="app-header app-header-stacked">
-        <button type="button" className="text-button" onClick={onClose}>
+        <button type="button" className="text-button back-button" onClick={onClose}>
           Zurück
         </button>
         <h1>Einkaufsliste sortieren</h1>

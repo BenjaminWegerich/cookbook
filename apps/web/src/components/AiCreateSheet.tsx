@@ -675,7 +675,7 @@ export default function AiCreateSheet({
   }));
 
   return (
-    <main className="app ai-screen">
+    <main className="app app-narrow ai-screen">
       <header className="app-header app-header-stacked">
         {/* Back button on its own line at the top left (editor placement), the
             screen title below it — the stack itself is .app-header-stacked
@@ -685,7 +685,7 @@ export default function AiCreateSheet({
             and still above the title, so the sticky stack carries it. */}
         <button
           type="button"
-          className="text-button"
+          className="text-button back-button"
           onClick={() => void requestLeave('button')}
           disabled={guard.armed}
         >

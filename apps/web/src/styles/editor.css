@@ -69,14 +69,11 @@
    confirmation label stays a question containing the verb). Danger ink marks
    what is at stake; the sentence stays inside one short line on a phone. */
 .leave-confirm-label {
-  /* Aligns the sentence's first letter with the „Zurück" text above it: „Zurück"
-     sits inside a .text-button whose padding (--space-2) pushes its text 6 px in
-     from the header edge, while this paragraph has no box of its own and starts
-     at the edge. A positive start margin equal to that padding nudges the
-     sentence right onto the same x — once, in the shared rule, so both headers
-     line up. */
+  /* Starts at the header edge, exactly where the flush „Zurück" label above it
+     begins — the back button drops its leading padding (.back-button, next to
+     .text-button in styles/recipe-list.css), so the question needs no
+     compensating start margin and both line up on the same x. */
   margin: 0;
-  margin-inline-start: var(--space-2);
   color: var(--color-danger);
   font-size: var(--text-sm);
   font-weight: 600;

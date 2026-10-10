@@ -81,6 +81,17 @@
   font-size: var(--text-sm);
 }
 
+/* The screen headers' „Zurück" button sits flush against the page gutter, so
+   its symmetric .text-button padding would indent the label 6 px past the title
+   and content below it — reading as a stray space in front of the word. Only
+   the leading padding is dropped; the other three sides keep the tap target,
+   and the label now lines up with the content. A modifier on .text-button
+   (components render both classes), so every other .text-button keeps its
+   padding. */
+.back-button {
+  padding-inline-start: 0;
+}
+
 /* ---- Recipe search (sticky above the list) ------------------------------ */
 
 .recipe-search {
@@ -585,6 +596,13 @@
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  /* The home screen's one piece of reading prose: cap it to the shared reading
+     width (42 rem, docs/DESIGN.md §4.7) and centre it, so the intro paragraph
+     and the connect button do not stretch across a wide desktop viewport. It
+     sits inside the list's fluid `.app`, which the recipe grid itself still
+     needs, so it is capped here rather than via the `.app-narrow` class. */
+  max-width: 42rem;
+  margin-inline: auto;
 }
 
 .login-note {

@@ -119,3 +119,18 @@ button:disabled {
   width: 100%;
   padding: var(--app-padding);
 }
+
+/* Reading/form pages (editor, AI screen, shopping selection, pantry, sort) are
+   capped to a comfortable reading measure and centred, so multi-line text stays
+   readable and the header's left/right controls never drift far apart on a wide
+   viewport. 42 rem matches the list's three-column breakpoint (docs/DESIGN.md
+   §4.7) and keeps the 18 px body text near a ~70-character line. The recipe
+   list itself stays fluid full width — it is a card grid, not reading prose —
+   so it does not carry this class. The sticky headers keep their negative
+   inline margin, which now spans the capped column (its own gutters) instead of
+   the viewport; the page background beyond the cap is the same colour, so there
+   is no seam. */
+.app-narrow {
+  max-width: 42rem;
+  margin-inline: auto;
+}

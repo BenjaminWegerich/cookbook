@@ -1599,12 +1599,12 @@ function RecipeEditor({
 
   if (loadError !== null) {
     return (
-      <main className="app">
+      <main className="app app-narrow">
         <section className="editor" aria-label="Rezept-Editor">
           <div className="editor-header">
             <button
               type="button"
-              className="text-button"
+              className="text-button back-button"
               onClick={() => void requestLeave('button')}
             >
               Zurück
@@ -1620,7 +1620,7 @@ function RecipeEditor({
 
   if (draft === null) {
     return (
-      <main className="app">
+      <main className="app app-narrow">
         <p className="loading-message" role="status">
           Rezept wird geladen …
         </p>
@@ -1713,7 +1713,7 @@ function RecipeEditor({
   const hasValidationIssues = liveIssues.length > globalIssues.length;
 
   return (
-    <main className="app">
+    <main className="app app-narrow">
       <section className="editor" aria-label="Rezept-Editor">
         <div className="editor-header">
           {/* Two rows in one sticky box: the action row („Zurück" · „Speichern")
@@ -1733,7 +1733,7 @@ function RecipeEditor({
           <div className="editor-actions">
             <button
               type="button"
-              className="text-button"
+              className="text-button back-button"
               onClick={() => void requestLeave('button')}
               disabled={guard.armed}
             >

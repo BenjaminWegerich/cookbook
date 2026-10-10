@@ -350,22 +350,30 @@ A ladder number is used where one fits; the ladder does not own breakpoints. The
 | `42rem` | 672px | the recipe list becomes three columns |
 | `74rem` | 1184px | the recipe list becomes four columns |
 
-**The page** uses the full width with `--app-padding` (18px) gutters, the same on every
-screen. Floating elements add the safe-area inset at the bottom
-(`env(safe-area-inset-bottom)`).
+**The recipe list** (the home screen) is fluid full width with `--app-padding` (18px) gutters:
+a card grid that gains columns as the viewport widens (below). Floating elements add the
+safe-area inset at the bottom (`env(safe-area-inset-bottom)`).
+
+**Reading/form pages** — the editor, the AI screen, the shopping-list selection, the pantry
+step and the sort page — are capped at `42rem` and centred, so multi-line text keeps a
+comfortable ~70-character line and the header's left/right controls never drift far apart on a
+wide viewport. `42rem` reuses the list's three-column breakpoint and is applied via the shared
+`.app-narrow` class. Sticky headers keep their negative inline margin, so a bar now spans the
+capped column (its own gutters) rather than the viewport.
 
 **Sheets** are capped at `32rem` and centred, so a wide viewport never stretches a photo, a
 reading row or a form field (§5.6).
 
 **Rules**
 
-- Layout is fluid: no fixed page width, and no horizontal scrolling at any viewport.
+- Layout is fluid within its cap: reading pages and sheets are width-capped, the recipe list
+  is full width; nothing scrolls horizontally at any viewport.
 - A breakpoint is a rem value placed where the content stops working, never a fixed device
   width; a component that only works at another width is a component problem first.
 - A grid or flex child that holds text carries `min-width: 0`, so one unbreakable word cannot
   widen its container.
-- Sticky bars span the full width including the gutters (§4.4); floating elements clear the
-  FAB by its own gap (§5.10).
+- Sticky bars span the full content column including its gutters (§4.4); floating elements
+  clear the FAB by its own gap (§5.10).
 
 *Applies to: cooking view.*
 

@@ -195,12 +195,12 @@ function ShoppingListSelect({
   }
 
   return (
-    <main className="app shopping-select">
+    <main className="app app-narrow shopping-select">
       {/* "Zurück" on its own line at the top left, the screen title below it —
           the editor's back placement, shared with the AI screen
           (.app-header-stacked in styles/recipe-list.css). */}
       <header className="app-header app-header-stacked">
-        <button type="button" className="text-button" onClick={onClose}>
+        <button type="button" className="text-button back-button" onClick={onClose}>
           Zurück
         </button>
         <h1>Gerichte vom Essensplan auswählen</h1>
