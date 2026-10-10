@@ -569,7 +569,75 @@ function onAccentColor(accent: string, ink: string, paper: string): string {
     : paper;
 }
 
-/** One colour token: a swatch (native picker) plus a #rrggbb text field. */
+/** HSV colour: hue in degrees (0–360), saturation and value in 0–1. */
+interface HsvColor {
+  h: number;
+  s: number;
+  v: number;
+}
+
+/** #rrggbb → HSV. Callers pass a resolved token, so the input is always valid. */
+function hexToHsv(hex: string): HsvColor {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let h = 0;
+  if (delta !== 0) {
+    if (max === r) h = 60 * (((g - b) / delta) % 6);
+    else if (max === g) h = 60 * ((b - r) / delta + 2);
+    else h = 60 * ((r - g) / delta + 4);
+  }
+  if (h < 0) h += 360;
+
+  const s = max === 0 ? 0 : delta / max;
+  return { h, s, v: max };
+}
+
+/** HSV → #rrggbb (rounded, 6-digit, lower-case). */
+function hsvToHex({ h, s, v }: HsvColor): string {
+  const chroma = v * s;
+  const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - chroma;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (h < 60) {
+    r = chroma;
+    g = x;
+  } else if (h < 120) {
+    r = x;
+    g = chroma;
+  } else if (h < 180) {
+    g = chroma;
+    b = x;
+  } else if (h < 240) {
+    g = x;
+    b = chroma;
+  } else if (h < 300) {
+    r = x;
+    b = chroma;
+  } else {
+    r = chroma;
+    b = x;
+  }
+
+  const channel = (value: number): string =>
+    Math.round((value + m) * 255)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${channel(r)}${channel(g)}${channel(b)}`;
+}
+
+/** Clamps a value to 0…1 (pointer/keyboard math at the edges of a surface). */
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+/** One colour token: a swatch (opens the custom picker) plus a #rrggbb field. */
 function ThemeColorField({
   label,
   value,
@@ -586,9 +654,12 @@ function ThemeColorField({
 }) {
   // The text field holds what the user is typing, which may be a partial value
   // ("#b8") that is not a valid colour yet. It is synced back to the resolved
-  // value whenever that value changes from outside (load, the swatch's picker
-  // or the "Standard" reset) and commits only on blur / Enter.
+  // value whenever that value changes from outside (load, the picker or the
+  // "Standard" reset) and commits only on blur / Enter.
   const [text, setText] = useState(value);
+  // Whether the custom picker is expanded below the row. A plain toggle — the
+  // hex field beside it stays the precise/keyboard entry point.
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     setText(value);
   }, [value]);
@@ -611,7 +682,10 @@ function ThemeColorField({
   return (
     <div className="field">
       <div className="theme-color-head">
-        <span className="field-label">{label}</span>
+        <span className="field-label">
+          {label}
+          <span className="optional-mark">(optional)</span>
+        </span>
         {overridden && (
           <button type="button" className="text-button" onClick={() => onChange(undefined)}>
             Standard
@@ -619,23 +693,15 @@ function ThemeColorField({
         )}
       </div>
       <div className="theme-color-row">
-        <label
+        <button
+          type="button"
           className="theme-swatch"
           style={{ backgroundColor: value }}
           title={`${label} auswählen`}
-        >
-          <input
-            type="color"
-            className="theme-color-input"
-            value={value}
-            onChange={(event) => {
-              const hex = event.target.value.toLowerCase();
-              onChange(hex);
-              setText(hex);
-            }}
-            aria-label={`${label} auswählen`}
-          />
-        </label>
+          aria-label={`${label} auswählen`}
+          aria-expanded={open}
+          onClick={() => setOpen((wasOpen) => !wasOpen)}
+        />
         <input
           type="text"
           className="theme-hex-input"
@@ -655,6 +721,193 @@ function ThemeColorField({
           autoCorrect="off"
         />
       </div>
+      {open && (
+        <ThemeColorPicker
+          value={value}
+          label={label}
+          onChange={(hex) => {
+            onChange(hex);
+            setText(hex);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Custom colour picker ("benutzerdefiniert" only, no preset suggestions): the
+ * saturation/value plane plus a hue strip. Reports every change as a #rrggbb so
+ * the parent keeps one source of truth (the resolved hex).
+ */
+function ThemeColorPicker({
+  value,
+  label,
+  onChange,
+}: {
+  value: string;
+  label: string;
+  onChange: (hex: string) => void;
+}) {
+  const { h, s, v } = hexToHsv(value);
+  return (
+    <div className="theme-color-picker" role="group" aria-label={`${label} (benutzerdefiniert)`}>
+      <SaturationValueArea
+        hue={h}
+        s={s}
+        v={v}
+        color={value}
+        label={label}
+        onChange={(nextS, nextV) => onChange(hsvToHex({ h, s: nextS, v: nextV }))}
+      />
+      <HueSlider
+        hue={h}
+        label={label}
+        onChange={(nextH) => onChange(hsvToHex({ h: nextH, s, v }))}
+      />
+    </div>
+  );
+}
+
+/**
+ * The saturation/value plane: x = saturation (left → right), y = value
+ * (bottom → top). The base hue is set inline; the white/black gradients in the
+ * CSS paint the plane over it. Dragging (or the arrow keys) reports s/v.
+ */
+function SaturationValueArea({
+  hue,
+  s,
+  v,
+  color,
+  label,
+  onChange,
+}: {
+  hue: number;
+  s: number;
+  v: number;
+  /** The current resolved colour, shown inside the thumb ring. */
+  color: string;
+  label: string;
+  onChange: (s: number, v: number) => void;
+}) {
+  const areaRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const pick = (clientX: number, clientY: number): void => {
+    const area = areaRef.current;
+    if (area === null) return;
+    const rect = area.getBoundingClientRect();
+    onChange(
+      clamp01((clientX - rect.left) / rect.width),
+      1 - clamp01((clientY - rect.top) / rect.height),
+    );
+  };
+
+  return (
+    <div
+      ref={areaRef}
+      className="theme-sv-area"
+      style={{ backgroundColor: `hsl(${hue}, 100%, 50%)` }}
+      role="slider"
+      tabIndex={0}
+      aria-label={`${label}: Sättigung und Helligkeit`}
+      aria-valuetext={`Sättigung ${Math.round(s * 100)} %, Helligkeit ${Math.round(v * 100)} %`}
+      onPointerDown={(event) => {
+        draggingRef.current = true;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        pick(event.clientX, event.clientY);
+      }}
+      onPointerMove={(event) => {
+        if (draggingRef.current) pick(event.clientX, event.clientY);
+      }}
+      onPointerUp={() => {
+        draggingRef.current = false;
+      }}
+      onKeyDown={(event) => {
+        const step = 0.01;
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          onChange(clamp01(s - step), v);
+        } else if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          onChange(clamp01(s + step), v);
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          onChange(s, clamp01(v + step));
+        } else if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          onChange(s, clamp01(v - step));
+        }
+      }}
+    >
+      <span
+        className="theme-sv-thumb"
+        style={{
+          left: `${s * 100}%`,
+          top: `${(1 - v) * 100}%`,
+          backgroundColor: color,
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * The hue strip (0–360° left → right). The rainbow is a fixed CSS gradient;
+ * only the thumb moves. Dragging (or Left/Right) reports the hue.
+ */
+function HueSlider({
+  hue,
+  label,
+  onChange,
+}: {
+  hue: number;
+  label: string;
+  onChange: (hue: number) => void;
+}) {
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const pick = (clientX: number): void => {
+    const slider = sliderRef.current;
+    if (slider === null) return;
+    const rect = slider.getBoundingClientRect();
+    onChange(clamp01((clientX - rect.left) / rect.width) * 360);
+  };
+
+  return (
+    <div
+      ref={sliderRef}
+      className="theme-hue-slider"
+      role="slider"
+      tabIndex={0}
+      aria-label={`${label}: Farbton`}
+      aria-valuetext={`${Math.round(hue)}°`}
+      onPointerDown={(event) => {
+        draggingRef.current = true;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        pick(event.clientX);
+      }}
+      onPointerMove={(event) => {
+        if (draggingRef.current) pick(event.clientX);
+      }}
+      onPointerUp={() => {
+        draggingRef.current = false;
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          onChange((hue - 1 + 360) % 360);
+        } else if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          onChange((hue + 1) % 360);
+        }
+      }}
+    >
+      <span
+        className="theme-hue-thumb"
+        style={{ left: `${(hue / 360) * 100}%`, backgroundColor: `hsl(${hue}, 100%, 50%)` }}
+      />
     </div>
   );
 }
@@ -690,45 +943,18 @@ function ThemeEditor({
   return (
     <>
       <div className="field">
-        <span className="field-label">Vorschau</span>
-        <div
-          className="theme-preview"
-          style={{
-            backgroundColor: resolved.paper,
-            color: resolved.ink,
-            fontFamily: fontStack,
-          }}
-        >
-          <span className="theme-preview-kicker" style={{ fontFamily: fontStack }}>
-            {resolved.font}
-          </span>
-          <span className="theme-preview-title" style={{ fontFamily: fontStack }}>
-            {title.trim() !== '' ? title.trim() : 'Rezepttitel'}
-          </span>
-          <span className="theme-preview-line" style={{ backgroundColor: resolved.line }} />
-          <span className="theme-preview-body" style={{ fontFamily: fontStack }}>
-            Zutaten vorbereiten, Schritt für Schritt.
-          </span>
-          <span
-            className="theme-preview-accent"
-            style={{ backgroundColor: resolved.accent, color: onAccent }}
-          >
-            Akzent
-          </span>
-        </div>
-      </div>
-
-      <div className="field">
-        <span className="field-label">Schriftart</span>
+        <span className="field-label">
+          Schriftart<span className="optional-mark">(optional)</span>
+        </span>
         <div className="theme-font-chips" role="group" aria-label="Schriftart">
           <button
             type="button"
             className={resolved.font === DEFAULT_THEME.font ? 'chip chip-active' : 'chip'}
             style={{ fontFamily: themeFontStack(DEFAULT_THEME.font) }}
             onClick={() => patch({ font: undefined })}
-            title="Standard-Schriftart (Source Sans 3)"
+            title="Standard-Schriftart"
           >
-            Standard
+            Source Sans 3
           </button>
           {THEME_FONT_SHORTLIST.filter((font) => font !== DEFAULT_THEME.font).map((font) => (
             <button
@@ -768,6 +994,32 @@ function ThemeEditor({
         overridden={colorIsOverridden('line')}
         onChange={(hex) => patch({ line: hex })}
       />
+
+      <div className="field">
+        <span className="field-label">Vorschau</span>
+        <div
+          className="theme-preview"
+          style={{
+            backgroundColor: resolved.paper,
+            color: resolved.ink,
+            fontFamily: fontStack,
+          }}
+        >
+          <span className="theme-preview-title" style={{ fontFamily: fontStack }}>
+            {title.trim() !== '' ? title.trim() : 'Rezepttitel'}
+          </span>
+          <span className="theme-preview-line" style={{ backgroundColor: resolved.line }} />
+          <span className="theme-preview-body" style={{ fontFamily: fontStack }}>
+            Zutaten vorbereiten, Schritt für Schritt.
+          </span>
+          <span
+            className="theme-preview-accent"
+            style={{ backgroundColor: resolved.accent, color: onAccent }}
+          >
+            Akzent
+          </span>
+        </div>
+      </div>
     </>
   );
 }
@@ -2333,13 +2585,13 @@ function RecipeEditor({
           )}
         </section>
 
-        {/* Thema — the recipe's visual skin for the export (DESIGN §4.8);
+        {/* Design — the recipe's visual skin for the export (DESIGN §4.8);
             every token is optional and falls back to the default independently. */}
-        <section className="editor-card" aria-label="Thema">
-          <h3 className="editor-card-title">Thema</h3>
+        <section className="editor-card" aria-label="Design">
+          <h3 className="editor-card-title">Design</h3>
           <p className="field-hint">
-            Aussehen der Export-Ansicht (Kochansicht). Jedes Feld ist optional und fällt einzeln
-            auf den Standard zurück.
+            Aussehen der Kochansicht anpassen. Alle Felder sind optional und fallen einzeln auf den
+            Standard zurück.
           </p>
           <ThemeEditor
             title={draft.title}

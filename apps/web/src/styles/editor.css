@@ -1134,7 +1134,7 @@
   margin-block-start: 0;
 }
 
-/* ---- Theme editor (Thema) ---------------------------------------------- */
+/* ---- Design editor (recipe theme, DESIGN §4.8) --------------------------- */
 
 /* Live preview: the five tokens as one compact card — paper background, ink
    text, the line divider and an accent pill, all in the chosen typeface. Its
@@ -1146,13 +1146,6 @@
   padding: var(--space-6);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-}
-
-.theme-preview-kicker {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  text-transform: uppercase;
-  opacity: 0.85;
 }
 
 .theme-preview-title {
@@ -1176,9 +1169,9 @@
   font-weight: 600;
 }
 
-/* Typeface chips: one per shortlist face (plus "Standard"), each rendered in
-   its own font via the inline font-family. The larger text size shows the
-   typeface's character better than the default chip caption. */
+/* Typeface chips: one per shortlist face — the default "Source Sans 3" first —
+   each rendered in its own font via the inline font-family. The larger text
+   size shows the typeface's character better than the default chip caption. */
 .theme-font-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1210,31 +1203,80 @@
   gap: var(--space-3);
 }
 
-/* The swatch is a <label> whose background shows the colour; the transparent
-   native colour input fills it, so tapping anywhere on the swatch opens the
-   picker without a scripted click. */
+/* The swatch is a button whose background shows the colour; tapping it toggles
+   the inline custom picker below the row (only "benutzerdefiniert", no preset
+   suggestions). Button chrome is reset so the square reads as a swatch. */
 .theme-swatch {
-  position: relative;
   flex: none;
-  display: grid;
-  place-items: center;
   width: var(--space-9);
   height: var(--space-9);
+  padding: 0;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   cursor: pointer;
-  overflow: hidden;
 }
 
-.theme-color-input {
-  position: absolute;
-  inset: 0;
+/* Custom colour picker. Width caps at 14 rem (224 px — the same rem ladder the
+   sheets' 32 rem content cap is built on) so the square stays a picker, not a
+   poster, on a wide desktop card. */
+.theme-color-picker {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 14rem;
+}
+
+/* Saturation/value plane: x = saturation (white → pure hue), y = value
+   (pure → black). The base hue is set inline; these two gradients paint the
+   plane over it. */
+.theme-sv-area {
+  position: relative;
+  aspect-ratio: 1;
   width: 100%;
-  height: 100%;
-  padding: 0;
-  border: none;
-  opacity: 0;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  cursor: crosshair;
+  touch-action: none;
+  background-image:
+    linear-gradient(to right, #ffffff, rgba(255, 255, 255, 0)),
+    linear-gradient(to top, #000000, rgba(0, 0, 0, 0));
+}
+
+/* Hue strip (0–360° left → right). The rainbow is a fixed gradient; only the
+   thumb position moves. */
+.theme-hue-slider {
+  position: relative;
+  height: var(--space-6);
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  touch-action: none;
+  background-image: linear-gradient(
+    to right,
+    #ff0000 0%,
+    #ffff00 17%,
+    #00ff00 33%,
+    #00ffff 50%,
+    #0000ff 67%,
+    #ff00ff 83%,
+    #ff0000 100%
+  );
+}
+
+/* One shared thumb: a ring around the current colour so the marker reads on
+   any background. `pointer-events: none` keeps the pointer on the surface. */
+.theme-sv-thumb,
+.theme-hue-thumb {
+  position: absolute;
+  width: var(--space-5);
+  height: var(--space-5);
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(43, 36, 29, 0.35);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.theme-hue-thumb {
+  top: 50%;
 }
 
 .theme-hex-input {
