@@ -47,7 +47,11 @@
    margin + the app padding as its own) is the shared treatment of every sticky
    bar: it covers the screen gutters, so content scrolling up cannot peek around
    the bar's edge (docs/CODING_CONVENTIONS.md, "Surfaces are flat, filled and
-   opaque"). */
+   opaque"). Once stuck, the bar's opaque background must extend a step below the
+   title too — otherwise the first line of content slides up flush against the
+   title's baseline. The `padding-block-end` below is that step; its matching
+   negative bottom margin cancels it in the resting layout, so the screen's own
+   grid gap alone still sets the spacing to the content below. */
 .app-header-stacked {
   position: sticky;
   top: 0;
@@ -56,9 +60,10 @@
   align-items: flex-start;
   justify-content: flex-start;
   gap: var(--space-6);
-  margin-block-end: 0;
+  margin-block-end: calc(-1 * var(--space-5));
   margin-inline: calc(-1 * var(--app-padding));
   padding-inline: var(--app-padding);
+  padding-block-end: var(--space-5);
   background: var(--color-bg);
 }
 
