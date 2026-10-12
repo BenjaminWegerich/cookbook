@@ -7,9 +7,16 @@
  * 1. the *need and the purchase* — left the need (its plain base form: the name
  *    and the exact amount), right the amount to buy behind a shopping-cart
  *    symbol, one step smaller than the need;
- * 2. the *stock chips* — one row of suggestions, with the overflow hidden
- *    behind the "andere" chip; a custom (typed) value shows as a chip with an
- *    edit symbol.
+ * 2. the *stock chips* — one row of suggestions led by a shelf symbol, with the
+ *    overflow hidden behind the "andere" chip; a custom (typed) value shows as
+ *    a chip with an edit symbol, and the chip that selects the whole need
+ *    carries a leading check and reads olive.
+ *
+ * A folded row keeps only its first line, which then reads the *on-stock*
+ * amount behind a shelf symbol (the "Vorrat") and the *bought* amount behind
+ * the cart symbol; a zero on either side reads as an em dash instead of a
+ * zero-quantity arrangement, and when everything is on stock the on-stock
+ * amount gives way to an olive check badge.
  *
  * The layout is the same on every screen (no breakpoint). The previous discrete
  * slider, the symbol-led stock/purchase line and the boxed value fields are
@@ -41,6 +48,36 @@
    headings use, never the browser's default bold. */
 .pantry-select-intro strong {
   font-weight: 600;
+}
+
+/* One "symbol + word" item of the intro legend (shelf = auf Vorrat, check =
+   alles auf Vorrat, cart = kaufen): the symbol and its word on one line. The
+   items are separated by em spaces in the markup (like the one after the
+   instruction), not by a margin. The legend aligns on the word's baseline, so
+   it reads as part of the sentence instead of floating above it. */
+.pantry-intro-legend {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+/* The three legend items travel together as one unbreakable block: a line break
+   may move the whole legend to the next line, but it never splits the symbols
+   apart or a word inside an explanation. */
+.pantry-intro-legend-group {
+  white-space: nowrap;
+}
+
+/* The legend's symbol, sized to the caption text and muted like it. `align-self:
+   center` sits it on the text's optical centre and keeps it out of the baseline,
+   so the word — not the glyph — decides where the legend sits. */
+.pantry-intro-icon {
+  display: block;
+  flex: none;
+  align-self: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  color: var(--color-ink-muted);
 }
 
 .pantry-empty,
@@ -116,6 +153,23 @@
   cursor: pointer;
 }
 
+/* In a folded row the Vorrat starts the right-aligned group (its own auto
+   margin below), so the "kaufen" amount that follows it must not pull away. */
+.pantry-row--collapsed .pantry-buy {
+  margin-inline-start: 0;
+}
+
+/* The folded summary can carry a box-only part (the olive check badge) that has
+   no text baseline, so its parts centre on one line instead of baseline-aligning.
+   All collapsed text shares one step, so centring matches baseline alignment for
+   the text and only moves the symbols and the badge onto the text's centre. The
+   gap is dropped too: the Vorrat is pushed right by its own auto margin, and the
+   Vorrat–kaufen separation is the em space the markup renders, not a flex gap. */
+.pantry-row--collapsed .pantry-head {
+  align-items: center;
+  gap: 0;
+}
+
 /* The purchase: its shopping-cart symbol and the amount on one baseline, one
    step smaller than the need. It takes the leftover space, so it sits
    right-aligned whether it shares the line with the need or wraps below it. */
@@ -125,6 +179,51 @@
   gap: var(--space-1);
   margin-inline-start: auto;
   font-size: var(--text-sm);
+}
+
+/* The on-stock amount of a folded row: the "Vorrat" counterpart of .pantry-buy
+   — the shelf symbol and the amount on one baseline, one step smaller than the
+   need. It carries the auto margin, so it starts the folded row's right-aligned
+   group (the "kaufen" amount follows it with its own margin reset above). */
+.pantry-stock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin-inline-start: auto;
+  font-size: var(--text-sm);
+}
+
+/* The shelf symbol that leads the on-stock amount and the chip row: 14 px,
+   muted, centred on the text like the cart symbol it pairs with. */
+.pantry-stock-icon {
+  display: block;
+  flex: none;
+  align-self: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  color: var(--color-ink-muted);
+}
+
+/* The folded row's "everything on stock" badge: an olive pill with just a
+   check, taking the place of the on-stock quantity. The same olive + pill shape
+   as the reference badge (.tag-reference), but icon-only. `align-self: center`
+   sits it on the text's optical centre, like the symbols beside it. */
+.pantry-complete-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  background: var(--color-olive);
+  border-radius: var(--radius-sm);
+  color: var(--color-on-accent);
+  align-self: center;
+}
+
+/* The badge's check, sized to the caption step. */
+.pantry-complete-badge-icon {
+  display: block;
+  width: var(--space-5);
+  height: var(--space-5);
 }
 
 /* The shopping-cart symbol that leads the amount (it replaced the "Kaufen:"
@@ -146,6 +245,17 @@
    weight of a value. */
 .pantry-buy .pantry-amount {
   font-size: var(--text-sm);
+}
+
+/* The on-stock amount shares the caption's smaller step, like the purchase. */
+.pantry-stock .pantry-amount {
+  font-size: var(--text-sm);
+}
+
+/* The em dash that stands in for a zero quantity ("nothing on stock" / "nothing
+   to buy"): quiet and muted, so an absence reads as an absence, not a value. */
+.pantry-dash {
+  color: var(--color-ink-muted);
 }
 
 /* One amount as plain text: the count field, the unit's name and the
@@ -189,6 +299,17 @@
   gap: var(--space-2);
 }
 
+/* The buy amount's open input gets breathing room on both sides: the fixed
+   32 px field is wider than the number it edits, so a short, right-aligned
+   number leaves its underline running under the text before it, and its right
+   edge sits against the text after it. This margin only exists while editing
+   (the wrapper is rendered only then), and it matches the gap the base amount
+   already has before its unit. Scoped to the amount, so the chip row's "andere"
+   input — which measures its own width — is left alone. */
+.pantry-amount .pantry-value-edit {
+  margin-inline: var(--space-2);
+}
+
 /* The open keyboard input: just wide enough for the number it edits (32 px,
    --space-8), so a short number does not leave a wide, empty field. The hard
    max-width keeps the input from growing past that and covering its unit.
@@ -216,6 +337,21 @@
 
 /* ---- The stock chips (the row's second line) ----------------------------- */
 
+/* The unfolded row's second line: the shelf symbol leads the chip row, both on
+   one optical centre. */
+.pantry-stock-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The chip row takes the space left of the shelf symbol and clips inside it
+   (components/StockChips keeps measuring its own width for the overflow). */
+.pantry-stock-line .stock-chips-wrap {
+  flex: 1;
+}
+
 /* The visible chip row: one line, no wrap, no scroll. Chips that no longer fit
    are hidden (components/StockChips measures how many do), and the "andere"
    chip takes the last visible slot. `position: relative` anchors the off-screen
@@ -240,11 +376,36 @@
 }
 
 /* The custom value chip (the "andere" result): an active chip with an edit
-   symbol, laid out as a flex row so symbol and value share one line. */
-.stock-chips .chip-custom {
+   symbol, laid out as a flex row so symbol and value share one line. Scoped to
+   the wrapper, not the visible row: the off-screen measurement strip renders the
+   same chips and must measure the same width (a row-only `.stock-chips` selector
+   left the strip's icon chips as plain inline-blocks — the icon stacked instead
+   of sitting inline and the chip measured ~18 px too narrow, so too many chips
+   were kept). */
+.stock-chips-wrap .chip-custom {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+}
+
+/* The "whole quantity on stock" chip: olive (the completing, positive accent)
+   — outlined while idle, filled once it is the chosen stock — and a flex row so
+   its leading check and its label share one line, like .chip-custom. The wrapper
+   scope also covers the measurement strip, for the reason above. */
+.stock-chips-wrap .chip-complete {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-olive);
+  border-color: var(--color-olive);
+}
+
+/* Its selected state keeps the olive fill instead of the clay one a normal
+   chip uses, so "complete" never reads as just another amount. */
+.stock-chips-wrap .chip-complete.chip-active {
+  background: var(--color-olive);
+  border-color: var(--color-olive);
+  color: var(--color-on-accent);
 }
 
 /* The off-screen strip every chip and the "andere" chip are measured from. It
@@ -261,6 +422,13 @@
   width: max-content;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* A strip chip must never shrink, exactly like the visible row's chips: it is
+   measured to learn the natural width the visible row renders, so a shrunken
+   chip would under-report and make too many chips (and "andere") appear to fit. */
+.stock-chips-measure .chip {
+  flex: none;
 }
 
 /* ---- Forward action ------------------------------------------------------ */

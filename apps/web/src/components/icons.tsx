@@ -153,6 +153,24 @@ export function CheckBoxIcon({ className }: IconProps) {
 }
 
 /**
+ * Plain check — the "complete / done" mark. Used as the leading symbol of the
+ * pantry sheet's "whole quantity on stock" chip (components/StockChips): that
+ * chip finishes the purchase, so the check reads as "nothing left to buy". The
+ * bare glyph, deliberately not the circle (CheckCircleIcon = success notice)
+ * or the box (CheckBoxIcon = tick off a list).
+ */
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M382,606L721,267Q733,255 749,255Q765,255 777,267Q789,279 789,295.5Q789,312 777,324L410,692Q398,704 382,704Q366,704 354,692L182,520Q170,508 170.5,491.5Q171,475 183,463Q195,451 211.5,451Q228,451 240,463L382,606Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/**
  * Two opposing arrows — the "Eintrag ersetzen" action of an unrecognized
  * meal-plan entry: the free-text line is swapped for a real recipe. The generic
  * "replace / swap" meaning, deliberately neither the pencil of editing nor the
@@ -575,6 +593,23 @@ export function ShoppingCartIcon({ className }: IconProps) {
     <svg className={className} {...ICON_PROPS}>
       <path
         d="M280,880Q247,880 223.5,856.5Q200,833 200,800Q200,767 223.5,743.5Q247,720 280,720Q313,720 336.5,743.5Q360,767 360,800Q360,833 336.5,856.5Q313,880 280,880ZM680,880Q647,880 623.5,856.5Q600,833 600,800Q600,767 623.5,743.5Q647,720 680,720Q713,720 736.5,743.5Q760,767 760,800Q760,833 736.5,856.5Q713,880 680,880ZM246,240L342,440L622,440Q622,440 622,440Q622,440 622,440L732,240Q732,240 732,240Q732,240 732,240L246,240ZM208,160L798,160Q821,160 833,180.5Q845,201 834,222L692,478Q681,498 662.5,509Q644,520 622,520L324,520L280,600Q280,600 280,600Q280,600 280,600L720,600Q737,600 748.5,611.5Q760,623 760,640Q760,657 748.5,668.5Q737,680 720,680L280,680Q235,680 212,640.5Q189,601 210,562L264,464L120,160L80,160Q63,160 51.5,148.5Q40,137 40,120Q40,103 51.5,91.5Q63,80 80,80L145,80Q156,80 166,86Q176,92 181,103L208,160ZM342,440L342,440L622,440Q622,440 622,440Q622,440 622,440L622,440L342,440Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Shelves — the "Vorrat" (on-stock) symbol of the pantry sheet. It leads the
+ * stock quantity on a folded row and the stock chips on an unfolded row, as the
+ * counterpart of the shopping-cart symbol that leads the "kaufen" amount: cart
+ * = what is bought, shelf = what is already at home.
+ */
+export function ShelfIcon({ className }: IconProps) {
+  return (
+    <svg className={className} {...ICON_PROPS}>
+      <path
+        d="M160,920Q143,920 131.5,908.5Q120,897 120,880L120,80Q120,63 131.5,51.5Q143,40 160,40Q177,40 188.5,51.5Q200,63 200,80L200,120L760,120L760,80Q760,63 771.5,51.5Q783,40 800,40Q817,40 828.5,51.5Q840,63 840,80L840,880Q840,897 828.5,908.5Q817,920 800,920Q783,920 771.5,908.5Q760,897 760,880L760,840L200,840L200,880Q200,897 188.5,908.5Q177,920 160,920ZM200,440L280,440L280,320Q280,303 291.5,291.5Q303,280 320,280L480,280Q497,280 508.5,291.5Q520,303 520,320L520,440L760,440L760,200L200,200L200,440ZM200,760L440,760L440,640Q440,623 451.5,611.5Q463,600 480,600L640,600Q657,600 668.5,611.5Q680,623 680,640L680,760L760,760L760,520L200,520L200,760ZM360,440L440,440L440,360L360,360L360,440ZM520,760L600,760L600,680L520,680L520,760ZM360,440L360,440L440,440L440,440L360,440ZM520,760L520,760L600,760L600,760L520,760Z"
         fill="currentColor"
       />
     </svg>

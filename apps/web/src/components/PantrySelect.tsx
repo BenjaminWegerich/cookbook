@@ -35,11 +35,13 @@
  * 2. the *stock chips*: one row of the stock values where the bought amount
  *    changes — the package thresholds for a shopping unit, ladder steps
  *    otherwise (core's `suggestedStocks`) — labelled with both units (core's
- *    `renderPantryChip`) and shown in increasing order. Only as many chips as
- *    fit on one row are shown; the rest hide behind the "andere" chip, which
- *    opens the keyboard on the Vorrat's base-quantity field. A typed value that
- *    is no suggestion then shows as an additional chip with an edit symbol
- *    (components/StockChips).
+ *    `renderPantryChip`), led by a shelf symbol and shown in increasing order.
+ *    The chip that covers the whole need carries a leading check and reads
+ *    olive. Only as many
+ *    chips as fit on one row are shown; the rest hide behind the "andere" chip,
+ *    which opens the keyboard on the Vorrat's base-quantity field. A typed
+ *    value that is no suggestion then shows as an additional chip with an edit
+ *    symbol (components/StockChips).
  *
  * **Both quantities of the purchase line are tappable** (the count and the
  * grams/millilitres): each opens a keyboard, written as plain text rather than
@@ -52,8 +54,12 @@
  * **Rows fold and unfold** (decided with the user): an ingredient whose
  * pre-filled Vorrat already covers the need starts folded to its first line,
  * shown entirely at the purchase's smaller step; one that still needs a
- * purchase starts unfolded with its chips. A tap on a folded row's
- * non-interactive area opens it (a tap on its buy quantity also opens that
+ * purchase starts unfolded with its chips. A folded row's first line reads the
+ * on-stock amount behind a shelf symbol and the bought amount behind the cart
+ * symbol (a zero on either side reads as an em dash); when everything is on
+ * stock, the on-stock amount gives way to an olive check badge. A tap on a
+ * folded row's non-interactive area opens it (a tap on its buy quantity also
+ * opens that
  * quantity's keyboard); a tap on an unfolded row's non-interactive area folds
  * it again; a tap outside a row does nothing. A committed change — a chip, an
  * "andere" value, or a buy quantity — folds its row too.
@@ -89,7 +95,7 @@ import {
 
 import { resolveShoppingBundle, type ShoppingBundle } from '../keep/shoppingBundle';
 import type { MealPlanCard } from '../keep/mealPlanCards';
-import { ShoppingCartIcon } from './icons';
+import { CheckIcon, ShelfIcon, ShoppingCartIcon } from './icons';
 import StockChips, { type StockChip } from './StockChips';
 import { parseInput, roundThousandths } from './pantryInput';
 
@@ -582,7 +588,38 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
       .map((value) => ({
         value,
         label: renderPantryChip(need.ingredient, value, need.baseUnit),
+        // The largest suggestion (core rounds the need to the thousandth) means
+        // "I have the whole quantity on stock" — mark it complete so StockChips
+        // leads that chip with a check. `value > 0` keeps the degenerate
+        // zero-need row (whose only chip is "0") from reading as complete.
+        complete: value === roundThousandths(need.needed) && value > 0,
       }));
+
+    // The "kaufen" side: the tappable amount while there is something to buy,
+    // and a quiet em dash otherwise ("nothing to buy"). Built once and shared
+    // by the folded and the unfolded row, so a zero buy reads the same in both.
+    const buyContent =
+      buy > 0 ? (
+        <TappableAmount
+          au={kaufen.au}
+          baseUnit={need.baseUnit}
+          aqDisplay={kaufen.aq === null ? null : formatPantryAq(kaufen.aq)}
+          aqEdit={kaufen.aq ?? 0}
+          bqDisplay={formatBQ(buy, need.baseUnit)}
+          bqEdit={buy}
+          onCommitAq={(count) => {
+            setBuy(need, count * kaufen.factor);
+            collapse(key);
+          }}
+          onCommitBq={(amount) => {
+            setBuy(need, amount);
+            collapse(key);
+          }}
+          label={`Kaufen für ${need.ingredient}`}
+        />
+      ) : (
+        <span className="pantry-dash">—</span>
+      );
 
     return (
       <div
@@ -604,54 +641,64 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
           }
         }}
       >
-        {/* Line 1: what the selected dishes need together (left) and what is
-            bought (right, smaller, led by a shopping-cart symbol). */}
+        {/* Line 1: what the selected dishes need together (left), and on its
+            right the two quantities — the on-stock amount (folded rows only,
+            led by a shelf symbol) and the bought amount (led by a shopping-cart
+            symbol). A zero quantity reads as an em dash. */}
         <div className="pantry-head">
           <div className="pantry-need">{needText(need)}</div>
+          {collapsed && (
+            <span className="pantry-stock">
+              <ShelfIcon className="pantry-stock-icon" />
+              {buy === 0 ? (
+                // Everything is on stock: the quantity gives way to an olive
+                // check badge, the one unmistakable "nothing to buy" marker.
+                <span className="pantry-complete-badge" role="img" aria-label="Alles auf Vorrat">
+                  <CheckIcon className="pantry-complete-badge-icon" />
+                </span>
+              ) : stock > 0 ? (
+                <span className="pantry-amount">
+                  {renderPantryChip(need.ingredient, stock, need.baseUnit)}
+                </span>
+              ) : (
+                <span className="pantry-dash">—</span>
+              )}
+            </span>
+          )}
+          {/* The folded summary separates the Vorrat from the kaufen amount with
+              an em space (matching the intro's legend separators). */}
+          {collapsed && '\u2003'}
           <span className="pantry-buy">
             <ShoppingCartIcon className="pantry-buy-icon" />
-            <TappableAmount
-              au={kaufen.au}
-              baseUnit={need.baseUnit}
-              aqDisplay={kaufen.aq === null ? null : formatPantryAq(kaufen.aq)}
-              aqEdit={kaufen.aq ?? 0}
-              bqDisplay={formatBQ(buy, need.baseUnit)}
-              bqEdit={buy}
-              onCommitAq={(count) => {
-                setBuy(need, count * kaufen.factor);
-                collapse(key);
-              }}
-              onCommitBq={(amount) => {
-                setBuy(need, amount);
-                collapse(key);
-              }}
-              label={`Kaufen für ${need.ingredient}`}
-            />
+            {buyContent}
           </span>
         </div>
         {/* Line 2: the stock chips (suggestions + the custom/“andere” entry),
-            only while the row is unfolded. */}
+            led by the shelf symbol, only while the row is unfolded. */}
         {!collapsed && (
-          <StockChips
-            chips={chips}
-            value={stock}
-            baseUnit={need.baseUnit}
-            customChip={customChip}
-            // Without a shopping unit the suggestions are ladder stops, not
-            // package thresholds: the typed-value entry ("andere") must always
-            // stay reachable, so it is kept visible instead of hiding behind an
-            // overflow.
-            alwaysShowAndere={kaufen.au === null}
-            onChange={(next) => {
-              setStock(need, next);
-              collapse(key);
-            }}
-            onCommitCustom={(value) => {
-              commitCustom(need, value);
-              collapse(key);
-            }}
-            label={`Vorrat für ${need.ingredient}`}
-          />
+          <div className="pantry-stock-line">
+            <ShelfIcon className="pantry-stock-icon" />
+            <StockChips
+              chips={chips}
+              value={stock}
+              baseUnit={need.baseUnit}
+              customChip={customChip}
+              // Without a shopping unit the suggestions are ladder stops, not
+              // package thresholds: the typed-value entry ("andere") must always
+              // stay reachable, so it is kept visible instead of hiding behind an
+              // overflow.
+              alwaysShowAndere={kaufen.au === null}
+              onChange={(next) => {
+                setStock(need, next);
+                collapse(key);
+              }}
+              onCommitCustom={(value) => {
+                commitCustom(need, value);
+                collapse(key);
+              }}
+              label={`Vorrat für ${need.ingredient}`}
+            />
+          </div>
         )}
       </div>
     );
@@ -700,11 +747,28 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
         <h1>Vorräte auswählen</h1>
       </header>
 
-      {/* The instruction under the title: pick a stock of at least this amount
-          (the chips), or type the amount to buy directly. */}
+      {/* The instruction under the title: the pick-a-stock rule, then — after an
+          em space — the legend of the three symbols (shelf = on stock, check =
+          everything on stock, cart = buy). */}
       <p className="pantry-select-intro">
         Wähle die Menge, die <strong>mindestens</strong> auf Vorrat ist, oder gib direkt die zu
-        kaufende Menge ein.
+        kaufende Menge ein.{'\u2003'}
+        <span className="pantry-intro-legend-group">
+          <span className="pantry-intro-legend">
+            <ShelfIcon className="pantry-intro-icon" />
+            auf Vorrat
+          </span>
+          {'\u2003'}
+          <span className="pantry-intro-legend">
+            <CheckIcon className="pantry-intro-icon" />
+            alles auf Vorrat
+          </span>
+          {'\u2003'}
+          <span className="pantry-intro-legend">
+            <ShoppingCartIcon className="pantry-intro-icon" />
+            kaufen
+          </span>
+        </span>
       </p>
 
       {renderList()}

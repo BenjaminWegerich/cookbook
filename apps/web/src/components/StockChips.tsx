@@ -31,13 +31,19 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 
 import { formatDecimal } from '@cookbook/core';
 
-import { MoreVertIcon, PencilIcon } from './icons';
+import { CheckIcon, MoreVertIcon, PencilIcon } from './icons';
 import { parseInput, roundThousandths } from './pantryInput';
 
 /** One suggested stock value and its label ("1 Becher (400 g)", "600 g", "0"). */
 export interface StockChip {
   readonly value: number;
   readonly label: string;
+  /**
+   * True when this chip selects the whole need (nothing left to buy): the
+   * "I have the entire quantity on stock" option. The chip is rendered with a
+   * leading check symbol so that completing option is findable at a glance.
+   */
+  readonly complete?: boolean;
 }
 
 interface StockChipsProps {
@@ -104,6 +110,21 @@ function countFitting(
 }
 
 /**
+ * The className of a suggestion chip: the shared `.chip` look plus the two
+ * optional variants — `chip-active` (the chosen value) and `chip-complete`
+ * (the whole-need option, laid out as a flex row so its leading check and its
+ * label share one line). Both the visible row and the measurement strip build
+ * every chip through this one helper, so a chip's measured width can never
+ * drift from its rendered width.
+ */
+function suggestionChipClass(chip: StockChip, selected: boolean): string {
+  const parts = ['chip'];
+  if (selected) parts.push('chip-active');
+  if (chip.complete) parts.push('chip-complete');
+  return parts.join(' ');
+}
+
+/**
  * The stock picker of one row (see the file header): the suggestion chips, the
  * custom value chip, the "andere" chip and the keyboard input, with the one-row
  * clipping measured against the row width.
@@ -131,6 +152,13 @@ function StockChips({
    *  (the unit must share the reserved space, or the row's hidden overflow
    *  would clip it). */
   const editRef = useRef<HTMLSpanElement>(null);
+  /**
+   * How many suggestion chips were visible when the keyboard was opened. The
+   * open input is narrower than the chip it replaced ("andere" or the custom
+   * chip), so measuring against it alone would let extra chips slide in; this
+   * caps the count at the pre-edit value while the keyboard is open.
+   */
+  const preEditCountRef = useRef(0);
 
   /** The custom chip, hidden while its keyboard is open. */
   const shownCustomChip: StockChip | null = editing ? null : customChip;
@@ -143,38 +171,55 @@ function StockChips({
     if (row === null || strip === null) {
       return;
     }
-    const rowWidth = row.clientWidth;
+    // Read fractional widths (getBoundingClientRect) rather than the integer
+    // offsetWidth/clientWidth: with the page capped to a fixed width the row and
+    // its chips often meet exactly, and the per-chip sub-pixel rounding of the
+    // integer reads would let the last chip ("andere") overflow and get clipped.
+    const rowWidth = row.getBoundingClientRect().width;
     const chipWidths = Array.from(strip.querySelectorAll<HTMLElement>('[data-chip]')).map(
-      (el) => el.offsetWidth,
+      (el) => el.getBoundingClientRect().width,
     );
-    const customWidth = strip.querySelector<HTMLElement>('[data-custom]')?.offsetWidth ?? 0;
-    const andereWidth = strip.querySelector<HTMLElement>('[data-andere]')?.offsetWidth ?? 0;
-    const editWidth = editRef.current?.offsetWidth ?? 0;
+    const customWidth =
+      strip.querySelector<HTMLElement>('[data-custom]')?.getBoundingClientRect().width ?? 0;
+    const andereWidth =
+      strip.querySelector<HTMLElement>('[data-andere]')?.getBoundingClientRect().width ?? 0;
+    const editWidth = editRef.current?.getBoundingClientRect().width ?? 0;
     const customShown = !editing && customChip !== null;
 
+    let nextCount: number;
     if (editing) {
-      setVisibleCount(countFitting(rowWidth, chipWidths, editWidth));
+      // Fit against the open input, but never beyond the chips that were
+      // visible before it opened — its narrower width must not reveal more.
+      nextCount = Math.min(countFitting(rowWidth, chipWidths, editWidth), preEditCountRef.current);
     } else if (customShown) {
-      setVisibleCount(countFitting(rowWidth, chipWidths, customWidth));
+      nextCount = countFitting(rowWidth, chipWidths, customWidth);
     } else if (!alwaysShowAndere && countFitting(rowWidth, chipWidths, 0) === chips.length) {
       // All suggestions fit without "andere": show them all.
-      setVisibleCount(chips.length);
+      nextCount = chips.length;
     } else {
       // "andere" is reserved — either because not all suggestions fit, or
       // because it must always stay visible. The suggestions are measured
       // against the space that remains beside it.
-      setVisibleCount(countFitting(rowWidth, chipWidths, andereWidth));
+      nextCount = countFitting(rowWidth, chipWidths, andereWidth);
     }
+    setVisibleCount(nextCount);
   }, [chips, customChip, editing, alwaysShowAndere]);
 
   useLayoutEffect(() => {
     measure();
     const row = rowRef.current;
-    if (row === null) {
+    const strip = stripRef.current;
+    if (row === null || strip === null) {
       return;
     }
+    // Observe both the visible row (its available width changes with the page
+    // cap / viewport) and the measurement strip (its natural width changes when
+    // the bundled font loads and widens the chips). The font-load case would
+    // otherwise be missed: the row's width stays fixed while the chip widths
+    // grow, so a row-only observer never fires and the pre-font count lingers.
     const observer = new ResizeObserver(measure);
     observer.observe(row);
+    observer.observe(strip);
     return () => observer.disconnect();
   }, [measure]);
 
@@ -198,6 +243,9 @@ function StockChips({
 
   /** Opens the keyboard, pre-filled with the current stock. */
   function beginEdit(): void {
+    // Remember the chips that were visible before the keyboard opened, so the
+    // narrower input cannot reveal chips that were hidden behind "andere".
+    preEditCountRef.current = visibleCount;
     setEditing(true);
     setDraft(formatDecimal(roundThousandths(value)));
   }
@@ -251,10 +299,11 @@ function StockChips({
             <button
               key={chip.value}
               type="button"
-              className={chip.value === value ? 'chip chip-active' : 'chip'}
+              className={suggestionChipClass(chip, chip.value === value)}
               onClick={() => onChange(chip.value)}
             >
-              {chip.label}
+              {chip.complete && <CheckIcon className="chip-icon" />}
+              {chip.complete ? <span>{chip.label}</span> : chip.label}
             </button>
           ),
         )}
@@ -298,8 +347,15 @@ function StockChips({
           layout. Non-interactive and screen-reader hidden. */}
       <div className="stock-chips-measure" ref={stripRef} aria-hidden="true">
         {chips.map((chip) => (
-          <button key={chip.value} type="button" tabIndex={-1} data-chip className="chip">
-            {chip.label}
+          <button
+            key={chip.value}
+            type="button"
+            tabIndex={-1}
+            data-chip
+            className={suggestionChipClass(chip, false)}
+          >
+            {chip.complete && <CheckIcon className="chip-icon" />}
+            {chip.complete ? <span>{chip.label}</span> : chip.label}
           </button>
         ))}
         {shownCustomChip !== null && (
