@@ -311,8 +311,10 @@ Icons are inline SVG (no icon font, no runtime fetch), drawn on the Material Sym
 family's grid, weight 400, `fill="currentColor"` — the same family as the web app. The export
 uses these symbols: the sub-recipe badge's link glyph beside its visible „Rezept" label, the
 back/forward arrows on every navigation button (left = back, right = forward), and the Cookbook
-brand mark (menu book 2) beside „Erstellt mit Cookbook". The check-list checkbox is a native
-`<input type="checkbox">` styled with the theme, never a hand-drawn glyph.
+brand mark (menu book 2) beside „Erstellt mit Cookbook". The −/+ stepper's two buttons are the
+family's `remove` and `add` drawings, like the web app's stepper; a font character (`−`, `+`, `×`)
+is never used in place of a symbol. The check-list checkbox is a native `<input type="checkbox">`
+styled with the theme, never a hand-drawn glyph.
 
 ### 4.6 Motion
 
@@ -582,8 +584,9 @@ exclusive modes (Typ, Einheit, KI-Modus), never for a longer list.
 *Applies to: cooking view.*
 
 The intro's size picker is a wrapping row of chips (pill radius, hairline border, `--text-sm`);
-the active size is accent fill with `on-accent`. An ingredient recipe adds the −/+ stepper
-beside the chips, exactly as today. The picker lives only on the intro screen.
+the active size is accent fill with `on-accent`. Each chip keeps that compact pill and takes a hit
+area of at least 42px, as in the app. An ingredient recipe adds the −/+ stepper beside the chips,
+exactly as today. The picker lives only on the intro screen.
 
 ### 5.3 Form fields, labels and validation
 
@@ -984,6 +987,54 @@ checkmarks.
 
 ### 6.1 Leaving a screen: place vs. change
 
+*Applies to: web app.*
+
+**Every screen above the recipe list offers exactly one way out, and that way out names which
+kind of leaving it is.** A **place** is a level the user navigated to; a **change** is asked
+*over* a screen that stays where it is. A screen carries exactly one of the two: they are two
+different kinds of leaving, never two variants of one control. The recipe list is the root
+layer — it is neither, and it has no exit. *decided with the user*
+
+**A place exits with „Zurück".** It is the borderless text button (§5.1) on its own line at the
+top left, above the title (`.app-header-stacked`, §5.5). A place replaces the previous screen,
+and the app remembers it — its scroll key, its draft — so leaving returns to that previous
+level. A place has no second, cancel-shaped exit: its own forward action („Speichern",
+„Einkaufsliste schreiben") stands alone at the bottom right. *decided with the user*
+
+**A change exits with „Abbrechen".** It is a sheet under a scrim, over the screen it belongs to
+(§5.6): closing throws the pending input away and reveals that screen untouched. Its exit is the
+first button of the bottom action row, directly left of the primary button (§5.1). *decided with
+the user*
+
+**The decision test — the first "yes" wins:**
+
+| Step | Question | Answer |
+| --- | --- | --- |
+| 1 | Does a screen stay underneath, unchanged and at its own scroll position, under a scrim? | a **change** → „Abbrechen" beside the primary |
+| 2 | Is this a step with a place of its own in the flow, which the app remembers and can show again? | a **place** → „Zurück" top left |
+| 3 | Is the exit only dropping a question that is pending inside a place? | „Abbrechen" — the same label, with no navigation |
+
+**One-liner.** *Does leaving mean "go back" or "never mind"? Go back → „Zurück" top left. Never
+mind → „Abbrechen" next to the commit.*
+
+**A flow step that writes is still a place.** The editor, the AI screen and the two shopping
+steps all write something, and all four still say „Zurück": leaving them *is* the flow's cancel,
+and a second „Abbrechen" would duplicate it. Their bottom-right button is the step's next or its
+commit, not one answer of a paired abort, so it stands alone. *decided with the user*
+
+**The one exception is a question pending inside a place.** „Rezept löschen" drops its armed
+question in place (§6.4), and that answer takes the transactional label „Abbrechen" without ever
+leaving the level. A place shows „Abbrechen" for no other reason.
+
+**Position carries the meaning, so the two never swap.** The top left is where "one level up"
+lives: a control there never discards a form, or navigation and a write decision become
+indistinguishable. The bottom row is where the decision about the pending change lives, so
+cancel and commit share it, in the order no | yes. A „Zurück" inside a sheet, or an
+„Abbrechen" that only goes back, is the drift this pattern prevents.
+
+*Cooking view: not applicable — the export has no changes; its one back direction is specified
+in §6.6.*
+
 ### 6.2 Browser Back, Escape and the exit guard
 
 *Applies to: web app.*
@@ -1182,7 +1233,9 @@ verbless „Zurück" and „Weiter". Its other strings: the step title „Schrit
 Numbers and units are joined by the narrow no-break space. Quantities show proper fractions
 in the slash form — `1/2`, `2/5`, `1 1/4` — never the web app's vulgar-fraction glyphs: the
 slash form keeps full-size digits for arm's-length reading and asks no fraction glyphs of the
-theme font. A mixed number joins its integer and fraction with the narrow no-break space.
+theme font. A mixed number joins its integer and fraction with the narrow no-break space. A badge
+or a symbol that sits inside a sentence keeps one space on each side of it, so a screen reader
+never reads it and the neighbouring word as one word.
 
 ## 8. Accessibility
 

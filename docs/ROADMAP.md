@@ -26,20 +26,11 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 
 ### Design system: follow-ups from the DESIGN.md compliance pass
 
-- [ ] Finish the cooking view against docs/DESIGN.md. The export still carries values the web
-      app has moved past: `packages/core/src/recipe/theme.ts`'s default accent (still `#b85c38`,
-      while §4.1 and §4.8 now say `#ad5632`), its assertion in `exportHtml.test.ts`, the two
-      committed sample exports (`sample-bechamel.html`, `sample-wraps.html`), the heading line
-      heights (§4.2: `--leading-lg` 28px, `--leading-xl` 36px) and the per-optical-size icon
-      drawings (§4.5).
-- [ ] Write DESIGN.md §6.1 ("Leaving a screen: place vs. change"). The rule lives only in
-      ui_patterns.md §2 today, while §6.2 already refers to §6.1.
-- [ ] Decide the Prettier question. `npm run format` rewrites recipe data (`examples/*.md`) and
-      core code (`packages/core/src/*`) alongside `apps/web/src/ai/geminiClient.ts`,
-      `apps/export-host/Code.gs`, the sample exports and `spike/cooking-view-prototype.html`;
-      either take them in one formatting-only commit or narrow Prettier's scope.
-- [ ] Clear the seven pre-existing oxlint warnings in `apps/web/src` (React hook dependency
-      arrays).
+- [ ] Give the export's symbols the drawing of the size they render at (DESIGN §4.5): the 14px
+      „Rezept" link and the 18px bar arrows currently use the 24px drawings; the
+      `_20px.xml` drawings belong there. The embedded typefaces' glyph coverage is also
+      unverified (no tooling in the repo decodes a WOFF2 `cmap`), and DESIGN.md §6.2 carries a
+      heading with no rule under it.
 
 ## Web app — Phase 3: AI-assisted create/edit (depends on: Phase 2)
 
@@ -77,7 +68,7 @@ are built (the two captioned sections, recognition, the Google sign-in, the over
 card forms,
 „Zum Essensplan hinzufügen“, which links the entry at the recipe's cooking view through the
 deployed export host, „Umplanen“ with its size change, and „Abhaken“, which ticks
-the entry off and can be undone). „Jetzt kochen“ opens the recipe's HTML export in a new tab,
+the entry off and can be undone). „Kochen“ opens the recipe's HTML export in a new tab,
 at the size the plan states when the dish is planned — otherwise at the recipe's written default
 size; the „Eintrag ersetzen“ menu is built (an unrecognized entry can be replaced by an existing
 recipe 1:1 with an undo notice, or turned into a new recipe through the prefilled editor or AI
@@ -143,7 +134,7 @@ below is building, not investigating: the frontend and the actual features.
    can be viewed, edited and scaled from the plan; an unrecognized entry gets a destination
    of its own there („Eintrag ersetzen“ / „Abhaken“). „Einplanen“ performs the
    write, „Umplanen“ changes the size and „Abhaken“ ticks the entry off (step 4);
-   „Jetzt kochen“ opens the recipe's HTML export in a new tab, at the size the plan states when
+   „Kochen“ opens the recipe's HTML export in a new tab, at the size the plan states when
    the dish is planned and otherwise at the recipe's written default size; the „Eintrag
    ersetzen“ menu is built:
    `ReplaceRecipeSheet` replaces the entry 1:1 with a chosen recipe and size (undo notice), and
