@@ -1,5 +1,5 @@
 /**
- * HTML export generator — the cooking view (docs/user_stories.md, decision 7,
+ * HTML export generator — the cooking view (docs/ARCHITECTURE.md, "HTML share export",
  * docs/DESIGN.md §5.11).
  *
  * Produces a self-contained HTML file for a recipe with *pre-computed* display

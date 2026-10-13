@@ -81,12 +81,11 @@ loadable state.
 
 ## Documentation
 
-- [docs/user_stories.md](docs/user_stories.md) — user stories, non-functional requirements, and open questions (basis for the tech-stack decision)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — planned components, dependencies, and design decisions
+- [docs/recipe_structure.md](docs/recipe_structure.md) — the recipe's logical model (fields, rules)
 - [docs/CODING_CONVENTIONS.md](docs/CODING_CONVENTIONS.md) — binding style guidelines
 - [docs/ROADMAP.md](docs/ROADMAP.md) — open tasks and how they relate
 - [docs/storage_format.md](docs/storage_format.md) — canonical recipe file format (Markdown + YAML)
 - [docs/quantity_scaling.md](docs/quantity_scaling.md) — how quantities change when a recipe is scaled (ladder logic)
 - [docs/additional_quantity_specifications.md](docs/additional_quantity_specifications.md) — how quantities are displayed (base + additional units)
-- [docs/recipe_structure.md](docs/recipe_structure.md) — recipe structure
 - [docs/ui_patterns.md](docs/ui_patterns.md) — reusable UI patterns (the snackbar)

@@ -175,8 +175,6 @@ frontend and the actual features.
    and so is the shopping list ([x] — „Einkaufsliste schreiben“ writes the chosen recipes'
    ingredients via `POST /keep/shopping`, with the pantry step and an undo).
    Still open: the linked Zutaten-Rezepte in that list.
-6. **Then** the intelligent filtering from the Integrations section (exclude always-in-stock,
-   query may-be-in-stock), which builds on the same gateway.
 
 Two things to carry over rather than rediscover:
 - **Writes must be non-destructive.** The spike proved this is achievable — a write/delete
@@ -191,8 +189,6 @@ Two things to carry over rather than rediscover:
 
 ## Integrations (depends on: web app, storage)
 
-- [ ] Intelligent shopping-list filtering: exclude always-in-stock ingredients, query
-      may-be-in-stock ingredients.
 - [ ] Gemini for Home: speech-optimized preparation of recipe steps for read-aloud.
 
 ## Sharing (depends on: web app, storage)

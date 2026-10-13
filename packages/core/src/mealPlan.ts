@@ -42,8 +42,8 @@
  * Together the number and its unit must form a size that *fits* the recipe:
  *
  * - a finished dish takes a serving count, and that count must be one of the
- *   ladder's integer standard numbers 1–30 (docs/user_stories.md D2 — the same
- *   options the exported cooking view offers);
+ *   ladder's integer standard numbers 1–30 (docs/recipe_structure.md, "Servings" — the
+ *   same options the exported cooking view offers);
  * - an ingredient recipe takes a yield as a ladder value in the recipe's own
  *   family unit: `g` / `kg` for a `g` yield, `ml` / `l` for an `ml` yield
  *   (docs/storage_format.md §3), and inside the range the export actually bakes

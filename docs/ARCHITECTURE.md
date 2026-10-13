@@ -175,8 +175,8 @@
   (135 shopping + 248 meal-plan items) takes under a second anyway, and dropping the cache
   removes the ephemeral-filesystem problem entirely.
 - Isolated behind a clean HTTP boundary, with its own Google auth and secret handling. The web
-  app degrades to "Keep features off" when no gateway is reachable (N5 in
-  [user_stories.md](user_stories.md)).
+  app degrades to "Keep features off" when no gateway is reachable (see "Frontend integration"
+  below).
 - **Endpoint authentication: the user's Google sign-in.** The app signs in with Google Identity
   Services for the identity scopes only (`openid email`), requested with incremental
   authorization switched off (`include_granted_scopes: false`) — Google's default returns every

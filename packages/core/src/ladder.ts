@@ -203,7 +203,7 @@ export function difference(from: number, to: number): number {
  *
  * Used for the serving options of the HTML export: the allowed serving counts
  * are the integer standard numbers 1–30, i.e. 18 options
- * (docs/user_stories.md, decision 7 / D2).
+ * (docs/recipe_structure.md, "Servings").
  */
 export function integerLadderValues(min: number, max: number): number[] {
   const result: number[] = [];

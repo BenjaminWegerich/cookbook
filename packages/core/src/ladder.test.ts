@@ -172,7 +172,7 @@ describe('ladder closedness (docs/quantity_scaling.md §3)', () => {
 });
 
 describe('integerLadderValues', () => {
-  it('returns the 18 serving options 1–30 (user_stories.md D2)', () => {
+  it('returns the 18 serving options 1–30 (recipe_structure.md, "Servings")', () => {
     expect(integerLadderValues(1, 30)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 22, 25, 28, 30,
     ]);

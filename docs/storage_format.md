@@ -1,7 +1,7 @@
 # Recipe Storage Format (Markdown + YAML)
 
-> **Status:** Decided as the canonical recipe format (see [user_stories.md](user_stories.md),
-> decision 8). This document specifies the physical encoding of a recipe file.
+> **Status:** Decided as the canonical recipe format. This document specifies the physical
+> encoding of a recipe file.
 > [recipe_structure.md](recipe_structure.md) remains the authoritative logical model
 > (fields, rules, examples); this document defines how that model is written to disk.
 
@@ -404,5 +404,5 @@ items are placed, and Keep's sort ids.
   ladder values, and how scaling consumes the stored base quantities.
 - [additional_quantity_specifications.md](additional_quantity_specifications.md) —
   what is *not* stored here (additional units are computed at display time).
-- [user_stories.md](user_stories.md) — decision 8 (format choice) and the sharing
-  format (HTML export derives from these files).
+- [recipe_structure.md](recipe_structure.md) — the authoritative logical model these files
+  encode, and the sharing format (HTML export derives from these files).

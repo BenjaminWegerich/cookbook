@@ -1,7 +1,7 @@
 """Typed failures for the gateway, each mapping onto one HTTP status and machine code.
 
 The frontend has to distinguish three very different situations before it can degrade
-gracefully ("Keep features off", N5 in docs/user_stories.md):
+gracefully ("Keep features off", see docs/ARCHITECTURE.md, "Keep gateway"):
 
     * the gateway is not configured / not reachable at all,
     * the caller is not allowed to use it,

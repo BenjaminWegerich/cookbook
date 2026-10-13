@@ -1,5 +1,5 @@
 /**
- * Tests for the HTML export — the cooking view (docs/user_stories.md, decision 7,
+ * Tests for the HTML export — the cooking view (docs/ARCHITECTURE.md, "HTML share export",
  * docs/DESIGN.md §5.11).
  *
  * The export bakes pre-computed, *scaled* display values per size: the master
