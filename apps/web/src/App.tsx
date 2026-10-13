@@ -1134,6 +1134,15 @@ function App() {
   const shortenExportUrl = keep.shortenExportUrl;
 
   /**
+   * The shortener the recipe overview prefetches its share links through, or null while Keep is
+   * not connected (`ready`). Only a connected Keep holds the identity token the gateway's
+   * `/shorten` route asks for — and a prefetch happens without the user having asked for
+   * anything yet, so it must never be the thing that starts a Google sign-in. Together with the
+   * shortener being off, the share text then keeps the long export URL.
+   */
+  const shareShortener = keep.status === 'ready' ? shortenExportUrl : null;
+
+  /**
    * Builds the Keep line for one chosen size: the recipe's export link, shortened when the
    * gateway can do it, otherwise the long URL exactly as before.
    *
@@ -2075,6 +2084,7 @@ function App() {
           <RecipeOverview
             ref={overviewHandleRef}
             token={token}
+            shortenExportUrl={shareShortener}
             recipes={recipes ?? []}
             target={activeOverviewTarget}
             onClose={closeOverview}

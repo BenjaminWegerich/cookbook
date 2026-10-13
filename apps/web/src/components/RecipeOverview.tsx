@@ -106,7 +106,10 @@
  *   (`hasShareSheet`), so neither entry has to do the other's job
  *   (../share/shareRecipe). The link is the export's own address without a size,
  *   so it opens at the size the recipe is written in: a shared recipe is not a
- *   planned one, and the friend scales the cooking view to their own amount.
+ *   planned one, and the friend scales the cooking view to their own amount. The
+ *   link is shortened through the gateway like a meal-plan line: it is requested
+ *   when "Mehr" opens, so the tap itself never waits (`prefetchShortLink`), and
+ *   stays long where the shortener cannot answer (`cachedShortLink`).
  *   Like "Jetzt kochen", both actions need the recipe's export file and report
  *   it when it is missing instead of handing on a dead link. Taking a planned
  *   recipe off the plan lives in the meal-plan overlay's "Abhaken", not in this
@@ -130,7 +133,14 @@ import {
 import { readRecipe, recipeExportUrl, type StoredRecipe } from '../drive/recipeStorage';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import type { SnackbarMessage } from '../hooks/useSnackbar';
-import { copyRecipeLink, hasShareSheet, shareRecipe } from '../share/shareRecipe';
+import {
+  cachedShortLink,
+  copyRecipeLink,
+  hasShareSheet,
+  prefetchShortLink,
+  shareRecipe,
+  type ShortenExportUrl,
+} from '../share/shareRecipe';
 import {
   CalendarAddIcon,
   CalendarEditIcon,
@@ -222,6 +232,20 @@ export type RecipeOverviewTarget =
 interface RecipeOverviewProps {
   /** Drive access token, needed to read the recipe and download its photo. */
   token: string;
+  /**
+   * Asks the gateway for the short link of one export URL, or answers null when
+   * shortening is off, unreachable or refused (../keep/useKeep.ts). App passes
+   * the Keep hook's function — the same one that shortens meal-plan lines — so
+   * both write the same kind of link, and null while Keep is not connected:
+   * without a Keep sign-in there is no gateway token, and a prefetch must never
+   * start a Google sign-in the user did not ask for.
+   *
+   * The sheet only *prefetches* through this (when "Mehr" opens) and reads the
+   * result at the tap: neither share action may wait for a link
+   * (../share/shareRecipe). A null function or a null answer is not a failure —
+   * the long export URL is handed on instead.
+   */
+  shortenExportUrl: ShortenExportUrl | null;
   /**
    * Every recipe of the collection. The unrecognized variant's replace overlay
    * searches it to offer an existing recipe; the other variants never read it.
@@ -347,6 +371,7 @@ const MISSING_EXPORT_NOTICE =
  */
 function RecipeOverview({
   token,
+  shortenExportUrl,
   recipes,
   target,
   onClose,
@@ -519,9 +544,29 @@ function RecipeOverview({
     };
   }, [openMenu]);
 
-  /** Opens the given menu, or closes it when it is already the open one. */
+  /**
+   * Requests the short link of this recipe's export URL for the share actions
+   * (see ../share/shareRecipe). Nothing happens for an unrecognized entry, for a
+   * recipe without an export file — there is no link to shorten — and while App
+   * passes no shortener (Keep not connected, see the prop).
+   */
+  const prefetchShareLink = (): void => {
+    if (recipe === null || recipe.exportFileId === undefined || shortenExportUrl === null) return;
+    prefetchShortLink(recipeExportUrl(recipe.exportFileId), shortenExportUrl);
+  };
+
+  /**
+   * Opens the given menu, or closes it when it is already the open one.
+   *
+   * Opening "Mehr" also starts the recipe's short link: the two share actions
+   * are the only entries that hand a link on, and they must not wait for it
+   * (../share/shareRecipe). The time the user spends reading the menu is the
+   * buffer, so the tap on an entry finds the link ready.
+   */
   const toggleMenu = (kind: OverviewMenu): void => {
-    setOpenMenu((open) => (open === kind ? null : kind));
+    const opening = openMenu !== kind;
+    setOpenMenu(opening ? kind : null);
+    if (opening && kind === 'more') prefetchShareLink();
   };
 
   // Position the fixed popover at its trigger and keep it glued there. It runs
@@ -607,6 +652,11 @@ function RecipeOverview({
    * recipe. Nothing has to be read for any of that, so both actions work before
    * the details load — like "Jetzt kochen".
    *
+   * The URL is the session's short link for that export where there is one —
+   * requested when "Mehr" opened (`prefetchShareLink`) — and the export's own
+   * long URL otherwise. The tap never waits for a link, because it must keep its
+   * activation for the share sheet or the clipboard (../share/shareRecipe).
+   *
    * A recipe whose export file is missing has nothing to hand on, so the tap
    * reports that instead of sharing a dead link: the menu entries keep their
    * full-strength look and explain themselves, because the missing file is not
@@ -618,7 +668,8 @@ function RecipeOverview({
       setNotice(MISSING_EXPORT_NOTICE);
       return null;
     }
-    return { title: recipe.title, url: recipeExportUrl(recipe.exportFileId) };
+    const exportUrl = recipeExportUrl(recipe.exportFileId);
+    return { title: recipe.title, url: cachedShortLink(exportUrl) ?? exportUrl };
   };
 
   /**

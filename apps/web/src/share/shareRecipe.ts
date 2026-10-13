@@ -9,13 +9,21 @@
  * built by one function.
  *
  * What is sent is the recipe's name and the link to its HTML export, separated
- * by ": " — `Kürbissuppe: https://<host>?f=<fileId>`. That is the shape a
+ * by ": " — `Kürbissuppe: https://tinyurl.com/k7f2qa`. That is the shape a
  * meal-plan line uses (`<Titel>: <URL>`, packages/core/src/mealPlan.ts), only
  * without a size: sharing asks for the recipe itself, so the link carries
  * neither `portionen` nor `menge` and the cooking view opens at the size the
  * recipe is written in. The link points at the export file, which every save
  * rewrites in place (same Drive file id, ../drive/recipeStorage.ts), so one
  * shared link stays valid and always shows the current version of the recipe.
+ *
+ * The link is the *short* one wherever the gateway can make it — the same
+ * TinyURL route a meal-plan line takes (../keep/useKeep.ts, `shortenExportUrl`)
+ * — and the long export URL otherwise. Because that link has to be fetched and
+ * neither tap may wait for it (the share sheet needs the tap's transient
+ * activation, and a clipboard write belongs to the same gesture), the overview
+ * requests it when its "Mehr" menu opens (`prefetchShortLink`) and hands over
+ * whatever the session holds at the tap (`cachedShortLink`).
  */
 
 /**
@@ -29,6 +37,65 @@
  */
 export function hasShareSheet(): boolean {
   return typeof navigator.share === 'function';
+}
+
+/**
+ * The gateway call the share actions shorten through: the short link for one
+ * export URL, or null when shortening is off, unreachable or refused
+ * (../keep/useKeep.ts, `shortenExportUrl` — the same function that shortens
+ * meal-plan lines). The overview takes it as a prop, because only App holds the
+ * Keep hook.
+ */
+export type ShortenExportUrl = (target: string) => Promise<string | null>;
+
+/**
+ * The short links this session already knows, keyed by the long export URL they
+ * were made for, plus the requests still running so a second prefetch joins the
+ * first instead of paying for a second link.
+ *
+ * Module state on purpose: the overview sheet unmounts on every close, but a
+ * short link is permanent and belongs to the export URL, not to one opening of
+ * one sheet — the second share of the same recipe must hand over the same link.
+ * The map therefore lives as long as the page does.
+ */
+const shortLinks = new Map<string, string>();
+const pendingShortLinks = new Map<string, Promise<void>>();
+
+/**
+ * Asks the gateway for the short link of one export URL, for a later
+ * `cachedShortLink`. Returns nothing and never rejects: its caller is a tap
+ * that must not be held up, and the long URL is always a usable answer.
+ *
+ * Only a successful answer is remembered. A shortener that was off or
+ * unreachable is therefore retried on the next prefetch instead of being
+ * remembered as "this recipe has no short link".
+ */
+export function prefetchShortLink(target: string, shorten: ShortenExportUrl): void {
+  if (shortLinks.has(target) || pendingShortLinks.has(target)) return;
+  const request = shorten(target)
+    .then((short) => {
+      // null means "no link this time": the caller falls back to `target`, and
+      // the next prefetch asks again.
+      if (short !== null) shortLinks.set(target, short);
+    })
+    .catch(() => {
+      // Unreachable today (useKeep's `shortenExportUrl` swallows every failure),
+      // but a prefetch belongs to no tap, so it must never surface as an
+      // unhandled rejection.
+    })
+    .finally(() => {
+      pendingShortLinks.delete(target);
+    });
+  pendingShortLinks.set(target, request);
+}
+
+/**
+ * The short link for one export URL as this session knows it, or null while
+ * there is none — nothing requested yet, the request still running, or the
+ * gateway could not shorten. A caller hands the long URL on in that case.
+ */
+export function cachedShortLink(target: string): string | null {
+  return shortLinks.get(target) ?? null;
 }
 
 /**

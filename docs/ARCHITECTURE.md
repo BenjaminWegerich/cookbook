@@ -117,7 +117,11 @@
   puts the recipe's name and the link to its export on the clipboard, and „Teilen“ offers the
   same text to the system's share sheet — the second entry exists only where the browser really
   has one, so neither action has to do the other's job
-  (`apps/web/src/share/shareRecipe.ts`). The link carries no size, so a shared recipe opens at
+  (`apps/web/src/share/shareRecipe.ts`). The link is the short one wherever the gateway can make
+  it — the same TinyURL route a meal-plan line takes — and the long export URL otherwise; it is
+  requested when „Mehr“ opens (`prefetchShortLink`) and read at the tap (`cachedShortLink`),
+  because neither action may wait for it: the share sheet needs the tap's activation and the
+  clipboard write belongs to the same gesture. The link carries no size, so a shared recipe opens at
   the size it is written in — a shared recipe is not a planned one, and the friend scales the
   cooking view to their own amount; the export is rewritten in place on every save, so a link
   that was sent once stays valid and shows the current recipe. The clipboard copy is confirmed

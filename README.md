@@ -59,8 +59,11 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
 
 - Share a single recipe from the recipe overview („Mehr“ → „Link kopieren“ / „Teilen“): the
   recipe's name and the link to its HTML export go to the clipboard, or to the system's share
-  sheet where the browser has one. The link always opens the current version, because the export
-  is regenerated on every save.
+  sheet where the browser has one. The link is shortened through the Keep gateway (TinyURL)
+  wherever that is connected and reachable — the same route a meal-plan entry takes — and stays
+  the long export URL otherwise; it is fetched while the „Mehr“ menu is open, so neither action
+  has to wait. The link always opens the current version, because the export is regenerated on
+  every save.
 - Sharing the whole collection is still open (see [docs/ROADMAP.md](docs/ROADMAP.md)).
 
 ## Getting Started
