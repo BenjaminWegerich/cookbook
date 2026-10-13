@@ -221,6 +221,11 @@ function ShoppingListSelect({
           ingredients to shop for, and its pantry page would be empty. */}
       {cards !== null && cards.length > 0 && (
         <div className="shopping-select-actions">
+          {/* The cause of the row's unavailable forward action, next to the
+              button that cannot run (§5.1). */}
+          {checkedCards().length === 0 && (
+            <p className="action-note">Wähle mindestens ein Gericht aus.</p>
+          )}
           <button
             type="button"
             className="primary-button"

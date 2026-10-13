@@ -15,7 +15,7 @@
 /* ---- Key entry card (N6: pasted per session, never stored) -------------- */
 
 .ai-key-card {
-  max-width: 560px;
+  max-width: 32rem; /* the app's shared content width (§4.7) */
 }
 
 .ai-key-card input {
@@ -61,8 +61,9 @@
    bubble kinds look like they pointed in different directions, which reads as
    noise in a transcript that is a plain question/answer exchange. */
 .ai-bubble {
+  min-width: 0;
   max-width: 92%;
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-4); /* the 18px/10px pair (§4.4) */
   border-radius: var(--radius-lg);
   font-size: var(--text-md);
   line-height: var(--leading-md);
@@ -106,10 +107,10 @@
   padding-top: var(--space-2);
 }
 
-/* Fixed-height entry fields: the row counts are set in the component
-   (6 lines for the first prompt, 3 lines for the source field and for every
-   follow-up answer). The height must not be changeable by the user, hence
-   resize: none — longer text scrolls vertically inside the field. */
+/* Entry fields that grow with their content (§5.3): the height is set from the
+   content in the component, so the field never scrolls inside itself, and the
+   user cannot resize it (resize: none). 74 px is the established floor of a
+   description text area; the caption's strip is added on top of it. */
 .ai-composer textarea {
   width: 100%;
   padding: var(--space-3) var(--space-4);
@@ -121,8 +122,8 @@
   font-size: var(--text-md);
   line-height: var(--leading-md);
   resize: none;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
+  min-height: 74px;
 }
 
 .ai-composer textarea::placeholder {

@@ -49,7 +49,14 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import type { KeyboardEvent, Ref } from 'react';
 
 import { NNBSP, allIngredientMappings, integerLadderValues, serializeRecipe } from '@cookbook/core';
@@ -162,6 +169,31 @@ function FieldHint() {
       Enter: neue Zeile{EN_SPACE}·{EN_SPACE}Strg + Enter: Senden
     </span>
   );
+}
+
+/**
+ * Grows a composer text area to its content, so the field never scrolls inside
+ * itself (docs/DESIGN.md §5.3). The height is re-synced on every value change,
+ * the CSS min-height keeps the empty field at its starting size, and the user
+ * cannot resize it (resize: none). The floor is dropped for the measurement, so
+ * scrollHeight reflects only the text — the same measurement AutoGrowTextarea
+ * performs for the editor's fields.
+ */
+function useGrowingTextarea(value: string) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+    const previousMinHeight = element.style.minHeight;
+    element.style.minHeight = '0px';
+    element.style.height = '0px';
+    const borderY =
+      parseFloat(getComputedStyle(element).borderTopWidth) +
+      parseFloat(getComputedStyle(element).borderBottomWidth);
+    element.style.height = `${element.scrollHeight + borderY}px`;
+    element.style.minHeight = previousMinHeight;
+  }, [value]);
+  return ref;
 }
 
 /**
@@ -361,6 +393,10 @@ export default function AiCreateSheet({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [description, setDescription] = useState(initialPrompt ?? '');
   const [source, setSource] = useState('');
+  /** The prompt and the source field grow with their content (§5.3). One ref
+   *  serves the prompt: the reply field reuses it once a conversation started. */
+  const draftFieldRef = useGrowingTextarea(description);
+  const sourceFieldRef = useGrowingTextarea(source);
   /**
    * Recipe specifications below the source field (editor parity): the Typ
    * toggle, the type-dependent Portionen / Ergiebigkeit input, and the
@@ -830,12 +866,11 @@ export default function AiCreateSheet({
               >
                 {conversationStarted || isEdit ? (
                   // Follow-up answer or change request (and the single prompt
-                  // field of the edit screen): the first turn keeps the tall
-                  // six-line height, later turns the fixed three-line one,
-                  // scrolling vertically inside the field.
+                  // field of the edit screen): one field that grows with its
+                  // content (§5.3), never a fixed height that scrolls.
                   <div className="ai-field">
                     <textarea
-                      rows={conversationStarted ? 3 : 6}
+                      ref={draftFieldRef}
                       value={description}
                       placeholder={promptPlaceholder}
                       onChange={(event) => setDescription(event.target.value)}
@@ -844,20 +879,20 @@ export default function AiCreateSheet({
                   </div>
                 ) : (
                   <>
-                    {/* First prompt (description): fixed six-line height. */}
+                    {/* First prompt (description): the same floor, grown to fit. */}
                     <div className="ai-field">
                       <textarea
-                        rows={6}
+                        ref={draftFieldRef}
                         value={description}
                         placeholder={promptPlaceholder}
                         onChange={(event) => setDescription(event.target.value)}
                       />
                       <FieldHint />
                     </div>
-                    {/* Optional pasted source text: fixed three-line height. */}
+                    {/* Optional pasted source text: grows the same way. */}
                     <div className="ai-field">
                       <textarea
-                        rows={3}
+                        ref={sourceFieldRef}
                         value={source}
                         placeholder="Quelltext von einer Webseite einfügen (optional) …"
                         onChange={(event) => setSource(event.target.value)}

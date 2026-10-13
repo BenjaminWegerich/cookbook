@@ -85,7 +85,7 @@
 .editor-card {
   display: grid;
   gap: var(--space-5);
-  padding: var(--space-6);
+  padding: var(--space-4); /* the 18px/10px pair (§4.4) */
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
@@ -116,6 +116,7 @@
    margin-block-start: var(--space-1) adds a little extra air above the caption
    on top of the parent container's own gap rhythm. */
 .field-label {
+  min-width: 0;
   margin-block-start: var(--space-1);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
@@ -132,12 +133,12 @@
 .optional-mark {
   font-weight: 400;
   font-style: italic;
-  opacity: 0.85;
   text-transform: none;
   margin-inline-start: 0.5em; /* En space (U+2002 width) before the marker */
 }
 
 .field-hint {
+  min-width: 0;
   /* margin: 0 — a hint is a plain paragraph inside a .field (grid, space-2
      gap): the browser-default paragraph margins do not collapse in grid and
      would inflate the gap after the caption/above the next control beyond the
@@ -411,8 +412,8 @@
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   padding: 0;
   background: none;
   border: none;
@@ -439,8 +440,8 @@
    without a class rule, see components/icons.tsx). */
 .artifact-remove svg {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 
 /* ---- Validation feedback ------------------------------------------------ */
@@ -860,8 +861,8 @@
 .checkbox-field input {
   margin-block-start: var(--space-1);
   accent-color: var(--color-accent);
-  width: 24px;
-  height: 24px;
+  width: var(--icon-size);
+  height: var(--icon-size);
 }
 
 .checkbox-field small {
@@ -877,6 +878,21 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
+}
+
+/* A quiet line that explains why a row's primary action is unavailable, so the
+   cause is visible next to the button (§5.1). It is the row's first item: in a
+   sheet's flex row it takes the free space and sits at the left end while the
+   answers stay right-aligned, and in a grid row the container aligns it. */
+.action-note {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.sheet-actions > .action-note {
+  margin-inline-end: auto;
 }
 
 /* The lead action of a sheet action row is pulled to the bottom-left corner,

@@ -300,6 +300,10 @@ function MealPlanSheet({
         )}
 
         <div className="sheet-actions">
+          {/* The cause of the row's unavailable confirm, next to the button that
+              cannot run (§5.1): in replan mode "Menge ändern" needs a size that
+              differs from the one the plan states. */}
+          {!busy && !canConfirm && <p className="action-note">Wähle eine andere Menge.</p>}
           {/* "Abhaken" (replan only): takes the dish off the plan. It sits
               first in the row, in the bottom-left corner (the shared
               .sheet-actions .sheet-actions-lead rule pulls it there), next to

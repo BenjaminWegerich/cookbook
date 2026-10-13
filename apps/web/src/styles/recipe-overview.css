@@ -78,6 +78,7 @@
 }
 
 .overview-meta dt {
+  min-width: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
@@ -86,6 +87,7 @@
 }
 
 .overview-meta dd {
+  min-width: 0;
   margin: 0;
   font-weight: 600;
 }
@@ -247,7 +249,7 @@
    An outside tap closes it (document listener in the component), so no
    backdrop layer is needed. */
 .overview-menu {
-  z-index: 41;
+  z-index: 31; /* above its sheet (30), below the second scrim (§5.6) */
   display: grid;
   gap: var(--space-1);
   padding: var(--space-2);

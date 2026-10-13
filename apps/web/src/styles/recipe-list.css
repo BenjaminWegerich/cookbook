@@ -103,7 +103,7 @@
 .recipe-search {
   position: sticky;
   top: var(--app-padding);
-  z-index: 1;
+  z-index: 10; /* a sticky bar (§5.6) */
   /* Full-bleed surface: the negative inline margin + the app padding as its own
      makes the bar paint edge to edge. A bar that sticks over scrolling content
      must cover its whole footprint, screen gutters included — otherwise the
@@ -159,9 +159,8 @@
     calc(var(--space-6) + var(--icon-size) + var(--space-3));
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-bg);
   color: var(--color-ink);
-  box-shadow: var(--shadow-sm);
   /* Hide the native webkit search cancel button — we render our own clear
      button inside the search wrapper. */
   -webkit-appearance: none;
@@ -277,7 +276,6 @@
   margin-inline-start: 0.5em;
   font-style: italic;
   font-weight: 400;
-  opacity: 0.85;
   text-transform: none;
 }
 
@@ -568,7 +566,7 @@
   gap: var(--space-3);
   height: var(--fab-size);
   padding: 0 var(--space-6);
-  border-radius: calc(var(--radius-lg) * 2); /* pill ends = half the height */
+  border-radius: 100px; /* pill — a menu pill, not a rounded rectangle (§5.10) */
   background: var(--color-accent);
   color: var(--color-on-accent);
   font-size: var(--text-md);
@@ -590,7 +588,7 @@
 .login-panel {
   display: grid;
   gap: var(--space-5);
-  padding: var(--space-8);
+  padding: var(--space-4); /* the 18px/10px pair (§4.4) */
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
@@ -650,7 +648,7 @@
   display: grid;
   justify-items: start;
   gap: var(--space-4);
-  padding: var(--space-6);
+  padding: var(--space-4); /* the 18px/10px pair (§4.4) */
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);

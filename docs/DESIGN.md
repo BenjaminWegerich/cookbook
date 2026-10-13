@@ -380,6 +380,9 @@ reading row or a form field (§5.6).
 
 - Layout is fluid within its cap: reading pages and sheets are width-capped, the recipe list
   is full width; nothing scrolls horizontally at any viewport.
+- A caption that names a keyboard shortcut appears only where a pointer and a keyboard exist,
+  and only there does it reserve its strip: an input-capability difference, not a second
+  arrangement. *decided with the user*
 - A breakpoint is a rem value placed where the content stops working, never a fixed device
   width; a component that only works at another width is a component problem first.
 - A grid or flex child that holds text carries `min-width: 0`, so one unbreakable word cannot
@@ -600,13 +603,15 @@ field; a hint never repeats the caption.
 
 | Place | Look | When |
 | --- | --- | --- |
-| Banner | surface fill, danger border, danger text, a bulleted list, `role="alert"` | at the top of the form after a failed save |
+| Banner | surface fill, danger border, danger text, a bulleted list, `role="alert"` | at the top of a form with several fields after a failed save |
 | Field error | `--text-sm` danger text under the field, `role="alert"` | next to the exact field |
 
 **Rules**
 
 - A save attempt runs every check, shows the banner and moves focus and scroll to the first
   problem; the primary button stays enabled so it can explain itself (§5.1).
+- A form whose only problem is one field reports it at that field alone; the banner is for a
+  form with several problems, or for one that belongs to no field. *decided with the user*
 - Every message is German, names the problem and says what to do; it never only says that
   something is wrong.
 - A field's error text is bound to the field through `aria-describedby`, and the field is
@@ -732,6 +737,7 @@ photo, a reading row or a form field (§4.7).
 | 10 | a sticky header |
 | 20 | the first scrim |
 | 30 | the first sheet, the FAB and its create menu |
+| 31 | a popover that escapes its sheet's clip (the overview's overflow menu) |
 | 40 / 41 | a second scrim and the sheet that opens over the first one (meal-plan overlay, „Eintrag ersetzen") |
 | 50 | the transient notice (§5.9) |
 
