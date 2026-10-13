@@ -9,7 +9,7 @@ idempotent, so they are also the update path. To see the live state without re-d
 ```sh
 gcloud run services list --region europe-west3   # keep-gateway (the service)
 gcloud secrets list                              # keep-master-token-cloud, tinyurl-api-token
-gcloud run jobs list --region europe-west3       # keep-gate2-probe (durability sampler), keep-mint
+gcloud run jobs list --region europe-west3       # keep-gate2-probe, keep-mint
 gcloud functions describe stop-billing --region europe-west3   # the spend guardrail
 gcloud scheduler jobs list --location europe-west3             # keep-gate2-probe-6h
 ```
@@ -216,6 +216,21 @@ Two rules are encoded in the mint and must not be relaxed:
    credential for the main account.
 
 While the credential is dead the app keeps working; only the Keep features disappear (N5).
+
+## Is the master token still alive?
+
+`keep-gate2-probe-6h` runs the `keep-gate2-probe` job every 6 hours. Each run does a cold sync
+with `keep-master-token-cloud:latest` — the same secret the gateway reads — and prints one JSON
+record (`outcome`: `ok`, `rejected`, `blocked`, `network` or `error`). Read the history per
+execution, because the record spans several log lines:
+
+```sh
+gcloud logging read 'resource.labels.job_name="keep-gate2-probe" AND logName:"run.googleapis.com%2Fstdout"' \
+  --limit 5000 --format=json --freshness=90d
+```
+
+Anything other than `ok` means the credential died: `./deploy/cloud-run/mint-token.sh`.
+Checked 2026-10-13: 81 consecutive `ok` runs (19 d 22 h) on the version minted 2026-09-23T19:52:35.
 
 ## The alert
 

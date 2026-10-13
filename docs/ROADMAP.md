@@ -93,8 +93,6 @@ endpoint from Google Cloud's network (`BadAuthentication`), while a token minted
 Run and then used there works immediately. What Google binds is where the token was created,
 not where it is used.
 
-- [ ] Confirm durability: the 6-hourly sampler is running, but a first success is not a token
-      that survives weeks. Watch the log for `rejected` before treating the setup as settled.
 - [x] Add a dish to the meal plan (the "Essensplan" list in Google Keep): the app writes the
       entry with its chosen size and a link to the recipe's HTML export — the size is a query
       parameter on the export host, so the cooking view opens on it — and replaces the entries
@@ -131,33 +129,27 @@ not where it is used.
 ### Next steps, in order
 
 The feasibility work is finished and the gateway is built, deployed and guarded; everything
-below is building, not investigating. Step 1 keeps an eye on the foundation; the rest is the
-frontend and the actual features.
+below is building, not investigating: the frontend and the actual features.
 
-1. **Confirm durability before building on it.** The gateway is worthless if the token dies
-   after a week. Check the sampler's log — `keep-gate2-probe-6h` runs every 6 hours and records
-   one JSON line per run. Anything other than `ok` means stop and fix the token path first.
-   Verify with:
-   `gcloud logging read 'resource.labels.job_name="keep-gate2-probe"' --limit 200 --format='value(textPayload)' --freshness=7d`
-2. [x] **Frontend integration with graceful degradation** (N5): the app probes the gateway,
+1. [x] **Frontend integration with graceful degradation** (N5): the app probes the gateway,
    signs in with Google automatically after the login (memory only, reopenable from the
    „Essensplan“ section) and keeps working unchanged when the gateway is missing or unreachable.
    The meal-plan view is built and agreed with Ben: the „Essensplan“ section above „Restliche
    Sammlung“, recognition of meal-plan entries (`packages/core/src/mealPlan.ts`) and the
    „Unbekannt“ badge. The gateway URL is the build variable
    `VITE_KEEP_GATEWAY_URL` (repository variable for the Pages build).
-3. [x] **Meal-plan recipe overview**: a recognized plan card opens the overview with the
+2. [x] **Meal-plan recipe overview**: a recognized plan card opens the overview with the
    entry's planned size (servings/yield) shown first in its caption/value row, so the dish
    can be viewed, edited and scaled from the plan; an unrecognized entry gets a destination
    of its own there („Eintrag ersetzen“ / „Abhaken“). „Einplanen“ performs the
-   write, „Umplanen“ changes the size and „Abhaken“ ticks the entry off (step 5);
+   write, „Umplanen“ changes the size and „Abhaken“ ticks the entry off (step 4);
    „Jetzt kochen“ opens the recipe's HTML export in a new tab, at the size the plan states when
    the dish is planned and otherwise at the recipe's written default size; the „Eintrag
    ersetzen“ menu is built:
    `ReplaceRecipeSheet` replaces the entry 1:1 with a chosen recipe and size (undo notice), and
    the two create entries open the editor or the AI screen prefilled with the entry's complete
    text and return to the entry's overview.
-4. **Shopping route master data** — a prerequisite for aisle sorting: a route file
+3. **Shopping route master data** — a prerequisite for aisle sorting: a route file
    (`einkaufsweg.csv`, `Store;Section`, walking order) plus an assignment file
    (`einkaufs-zuordnung.csv`, `Item;Store;Section`, covering ingredients and non-ingredients).
    Format in [storage_format.md](storage_format.md) §10. The data is built and editable: the
@@ -166,7 +158,7 @@ frontend and the actual features.
    (`apps/web/src/drive/shoppingRouteMasterData.ts`); the create sheet asks for the stop in the
    new „Einkauf“ field (store chips + section search). The aisle sort and its entry point for
    items that are not ingredients are built on this data (see the `[x]` sort task above).
-5. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
+4. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
    (the size is a query parameter on the export host), replacing the entries recognized as the
    same recipe; the gateway changes as little as possible and verifies the result), and so is
@@ -198,6 +190,8 @@ Two things to carry over rather than rediscover:
       browser has one (`apps/web/src/share/shareRecipe.ts`). Both send the recipe's name and its
       export link without a size (the recipe's written amount, which the friend scales in the
       cooking view), and the export is rewritten in place on every save, so a shared link stays
-      valid and current.
+      valid and current. The link is shortened through the gateway like a meal-plan entry —
+      requested when „Mehr“ opens so the tap never waits — and stays the long export URL where
+      the shortener cannot answer (Keep not connected, shortening off, gateway unreachable).
 - [ ] Share the whole collection with friends (link generation and collection export; the
       single-recipe HTML export itself is built in Phase 1 as the cooking view).
