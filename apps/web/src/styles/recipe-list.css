@@ -72,8 +72,10 @@
 }
 
 /* Small quiet text buttons (editor headers: Zurück / Abbrechen / …). They lay
-   their content out inline, so a symbol + label pair (photo "Auswählen",
-   danger "Entfernen") centers on one line without extra markup. */
+   their content out inline, so a symbol + label pair centers on one line
+   without extra markup. The editor's photo row does not use this variant: its
+   two actions are peers, so they take the action-button geometry
+   (.outlined-button and .danger-button, see editor.css). */
 .text-button {
   display: inline-flex;
   align-items: center;

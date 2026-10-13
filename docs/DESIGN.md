@@ -481,7 +481,7 @@ A typeface joins the shortlist only when it meets every requirement:
 | --- | --- | --- |
 | Primary | accent fill, `--color-on-accent` label | the one forward action of a screen or sheet („Speichern") |
 | Danger | danger fill, `--color-on-accent` label | a destructive action („Rezept löschen", „Entfernen") |
-| Outlined | surface fill, hairline border, ink label | secondary actions in a row („Einplanen", „Mehr") |
+| Outlined | surface fill, hairline border, ink label | secondary actions in a row („Einplanen", „Mehr", photo „Auswählen" / „Ersetzen") *decided with the user* |
 | Text | no fill, no border, muted label | navigation („Zurück") and quiet answers („Abbrechen", „Rückgängig") |
 | Add | surface fill, olive border, olive label | a creation action inside a card or list („Schritt hinzufügen", „Zutat hinzufügen", „Zutat anlegen") |
 
@@ -491,6 +491,12 @@ A typeface joins the shortlist only when it meets every requirement:
 button's geometry. An icon-only button keeps the geometry of its variant, carries an
 `aria-label`, and — where it is a −/+ stepper — keeps a circular box of `--control-height`.
 *decided with the user*
+
+**Outlined and danger share one geometry.** The two differ only in colour: the danger button
+is the outlined button with the danger fill and no hairline (its border is `none`, not a
+differently coloured one). Action rows in a card use both together where the actions are
+peers of equal weight — the editor's photo row pairs „Auswählen" / „Ersetzen" (outlined) with
+„Entfernen" (danger) as two equally prominent buttons of one size. *decided with the user*
 
 **States**
 
@@ -506,7 +512,9 @@ button's geometry. An icon-only button keeps the geometry of its variant, carrie
 the primary last. A danger button leaves that order and sits at the left end of the row. A
 page has no cancel in its row — its navigation exit is „Zurück" at the top left (§6.1). The
 order governs the bottom row that answers a decision; a row of peer actions inside a sheet's
-content places its own order.
+content places its own order. A row of peer actions in a screen's content does the same, and
+may pair an outlined button with a danger button of the same geometry; only the accent-filled
+primary stays unique per decision.
 
 **Rules**
 

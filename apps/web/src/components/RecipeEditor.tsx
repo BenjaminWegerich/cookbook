@@ -2087,9 +2087,14 @@ function RecipeEditor({
                     event.target.value = '';
                   }}
                 />
+                {/* Auswählen/Ersetzen wears the action-button geometry of
+                    „Entfernen“ beside it (outlined instead of filled) — the
+                    photo row's two actions are peers, so the quiet text-button
+                    look would have read as a mere aside (decided with the
+                    user). */}
                 <button
                   type="button"
-                  className="text-button"
+                  className="outlined-button"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <UploadIcon className="button-icon" optical={20} />
