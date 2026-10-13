@@ -1604,7 +1604,7 @@ function App() {
             : 'Einkaufsliste sortiert.',
       });
     },
-    [token, sortItems, appendShoppingAssignments, sortShopping, setNav, showSnackbar],
+    [token, sortItems, sortShopping, setNav, showSnackbar],
   );
 
   /**

@@ -20,7 +20,7 @@
  * offset.
  */
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 
 import { CLOSE_ICON_SVG } from './icons';
 import {
@@ -164,8 +164,12 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
   /** Insert position whose artifact should receive the caret after the next render. */
   const caretAfterRef = useRef<{ at: number } | null>(null);
 
-  /** Renders the segments into the DOM (text nodes + artifact spans). */
-  const renderSegments = (): void => {
+  /**
+   * Renders the segments into the DOM (text nodes + artifact spans). Memoized on
+   * `value` alone: the effect below re-renders only when the value changed from
+   * outside, and a stable identity keeps it from running on every render.
+   */
+  const renderSegments = useCallback((): void => {
     const div = divRef.current;
     if (div === null) return;
     div.innerHTML = '';
@@ -222,7 +226,7 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         placeCaretAfter(target);
       }
     }
-  };
+  }, [value]);
 
   // Initial render; re-render only when the value changed externally (the DOM
   // is authoritative while the user types — re-rendering would lose the caret).
@@ -231,7 +235,7 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
     if (div !== null && serializeDom(div) !== value) {
       renderSegments();
     }
-  }, [value]);
+  }, [value, renderSegments]);
 
   useImperativeHandle(
     ref,

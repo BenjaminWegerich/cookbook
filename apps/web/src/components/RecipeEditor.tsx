@@ -655,14 +655,18 @@ function ThemeColorField({
   // The text field holds what the user is typing, which may be a partial value
   // ("#b8") that is not a valid colour yet. It is synced back to the resolved
   // value whenever that value changes from outside (load, the picker or the
-  // "Standard" reset) and commits only on blur / Enter.
+  // "Standard" reset) and commits only on blur / Enter. The sync is a render-time
+  // state adjustment (React's documented pattern for state that a changed prop
+  // invalidates), so the field never paints one frame with the stale text.
   const [text, setText] = useState(value);
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setText(value);
+  }
   // Whether the custom picker is expanded below the row. A plain toggle — the
   // hex field beside it stays the precise/keyboard entry point.
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    setText(value);
-  }, [value]);
 
   const commit = (): void => {
     const trimmed = text.trim().toLowerCase();
@@ -1233,10 +1237,14 @@ function RecipeEditor({
   // Any change cancels the "Schritt entfernen?" confirmation: an armed confirm
   // must never outlive the state it refers to — reordering or removing steps
   // shifts the armed step index. (The discard confirmation is invalidated by
-  // the exit guard's work signature instead; see useLeaveGuard.)
-  useEffect(() => {
+  // the exit guard's work signature instead; see useLeaveGuard.) The comparison
+  // runs during render, exactly like the guard's own invalidation: the question
+  // is gone in the same commit as the edit, never a render later.
+  const [confirmDraft, setConfirmDraft] = useState(draft);
+  if (confirmDraft !== draft) {
+    setConfirmDraft(draft);
     setPendingConfirm(null);
-  }, [draft]);
+  }
 
   /**
    * Shared exit guard (useLeaveGuard): owns the armed discard question for
@@ -1263,21 +1271,36 @@ function RecipeEditor({
     onClose();
   }, [guard, onClose]);
 
-  // Gesamtzeit must be larger than Vorbereitungszeit: clear it when it isn't.
-  useEffect(() => {
-    if (draft === null || draft.total_time === undefined || draft.total_time === '') return;
+  // Gesamtzeit must be larger than Vorbereitungszeit: a total time that is not
+  // larger is dropped the moment the prep time changes. The check is a
+  // render-time adjustment keyed on the previous prep time (React's "store
+  // information from previous renders" pattern), like the guard's own
+  // invalidation: it catches a typed prep time *and* a freshly loaded draft, and
+  // the invalid pair is never painted. `null` means "no previous render yet", so
+  // the first render checks too. Clearing from the field's own onChange handler
+  // would miss the loaded draft; an effect would paint the invalid state once.
+  const [lastPrepTime, setLastPrepTime] = useState<string | null>(null);
+  if (draft !== null && draft.prep_time !== lastPrepTime) {
+    setLastPrepTime(draft.prep_time);
     const prep = parseTimeValue(draft.prep_time);
-    const total = parseTimeValue(draft.total_time);
+    const total =
+      draft.total_time === undefined || draft.total_time === ''
+        ? null
+        : parseTimeValue(draft.total_time);
     if (prep !== null && total !== null && total <= prep) {
-      updateDraft((current) => ({ ...current, total_time: undefined }));
+      setDraft({ ...draft, total_time: undefined });
     }
-  }, [draft?.prep_time]);
+  }
 
   /** The normalized recipe — what is written to Drive (derived list, §4). */
   const saved = useMemo(() => (draft === null ? null : normalizeRecipe(draft)), [draft]);
 
-  /** The derived master list: exactly the rows that will be saved. */
-  const computedIngredients = saved?.ingredients ?? [];
+  /**
+   * The derived master list: exactly the rows that will be saved. Memoized, so
+   * the reference is stable for the memos that depend on it (the `?? []` would
+   * otherwise hand out a fresh array on every render).
+   */
+  const computedIngredients = useMemo(() => saved?.ingredients ?? [], [saved]);
 
   /** Ingredient recipes of the collection, offered in the sheet's name
    *  autofill (title + yield, so a sub-recipe is picked like an ingredient). */
