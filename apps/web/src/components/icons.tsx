@@ -280,7 +280,7 @@ function Glyph({
   );
 }
 
-/** Skillet — the "Jetzt kochen" action. */
+/** Skillet — the "Kochen" action. */
 export function SkilletIcon({ className, optical }: IconProps) {
   return <Glyph name="skillet" className={className} optical={optical} />;
 }

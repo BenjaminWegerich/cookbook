@@ -7,7 +7,7 @@
  * block and their action row:
  *
  * 1. **Known recipe, not on the meal plan** — the unchanged base case: photo,
- *    title, description, times, and one action row with "Jetzt kochen"
+ *    title, description, times, and one action row with "Kochen"
  *    (primary, growing), "Einplanen" and "Mehr". "Einplanen" opens the
  *    meal-plan overlay (./MealPlanSheet), which asks for the size to cook.
  * 2. **Known recipe on the meal plan** — the same details, plus the size the
@@ -49,7 +49,7 @@
  *    recipe ("Rezept manuell schreiben") or the AI-create screen as the first
  *    request ("Rezept mit KI schreiben") — and App returns to this overview when
  *    that site closes, so the sheet is where the user started and where a
- *    just-created recipe now shows up in the recognized style. "Jetzt kochen" and
+ *    just-created recipe now shows up in the recognized style. "Kochen" and
  *    the "Mehr" menu do not exist here: there is nothing to cook or edit yet.
  *
  * The three variants are modelled as one `RecipeOverviewTarget` union: a
@@ -69,10 +69,10 @@
  *   selection shows). A dish that is not on the plan shows no "Geplant" value
  *   at all, and an unrecognized entry shows the size it states (it has no
  *   written size to fall back to);
- * - one action row: "Jetzt kochen" (skillet) is the primary action, growing to
+ * - one action row: "Kochen" (skillet) is the primary action, growing to
  *   fill the row so it is as wide as possible, next to "Einplanen"/"Umplanen"
  *   (calendar with plus / with pencil) and the "Mehr" button (vertical three
- *   dots), which stay only as wide as their labels need. "Jetzt kochen" opens
+ *   dots), which stay only as wide as their labels need. "Kochen" opens
  *   the recipe's HTML export in a new tab — at the plan's size when the dish is
  *   planned at one, otherwise at the export's own default (the written size);
  *   see `startCooking`. The unrecognized entry's three "Eintrag ersetzen"
@@ -110,7 +110,7 @@
  *   link is shortened through the gateway like a meal-plan line: it is requested
  *   when "Mehr" opens, so the tap itself never waits (`prefetchShortLink`), and
  *   stays long where the shortener cannot answer (`cachedShortLink`).
- *   Like "Jetzt kochen", both actions need the recipe's export file and report
+ *   Like "Kochen", both actions need the recipe's export file and report
  *   it when it is missing instead of handing on a dead link. Taking a planned
  *   recipe off the plan lives in the meal-plan overlay's "Abhaken", not in this
  *   menu. The menu is closed by an outside tap, Escape and any chosen entry.
@@ -355,7 +355,7 @@ const MENU_GAP_PX = 6;
  * What the sheet's three export actions say when the recipe has no HTML export
  * file yet (a failed export write): there is nothing to cook, copy or share,
  * and one more save creates it. One sentence for all three, because the cause
- * and the remedy are the same either way. "Jetzt kochen", "Link kopieren" and
+ * and the remedy are the same either way. "Kochen", "Link kopieren" and
  * "Teilen" keep their full-strength look and report this on the tap instead of
  * being disabled: the missing file is not visible next to them
  * (docs/CODING_CONVENTIONS.md, unavailable buttons).
@@ -604,7 +604,7 @@ function RecipeOverview({
   }, [openMenu]);
 
   /**
-   * "Jetzt kochen": opens the recipe's pre-computed HTML export — its cooking
+   * "Kochen": opens the recipe's pre-computed HTML export — its cooking
    * view — in a new tab. The size rides in the URL exactly like it does on a
    * meal-plan link (core's `withPlanSize`): a dish that is on the plan opens at
    * the size the entry states, so the cooking view is the amount that was
@@ -650,7 +650,7 @@ function RecipeOverview({
    * the export's own address, and the export is rewritten in place on every
    * save, so a link that was sent once keeps working and shows the current
    * recipe. Nothing has to be read for any of that, so both actions work before
-   * the details load — like "Jetzt kochen".
+   * the details load — like "Kochen".
    *
    * The URL is the session's short link for that export where there is one —
    * requested when "Mehr" opened (`prefetchShareLink`) — and the export's own
@@ -812,7 +812,7 @@ function RecipeOverview({
   /**
    * The unrecognized entry's link, and the domain the "Link" value shows for it,
    * or null. Only this variant names a link: a recipe card's link is the meal
-   * plan's business (the "Jetzt kochen" action), while an unrecognized entry has
+   * plan's business (the "Kochen" action), while an unrecognized entry has
    * nothing to cook, so the line's own link is the one fact about it that can be
    * followed.
    */
@@ -929,7 +929,7 @@ function RecipeOverview({
                 <div className="overview-meta-item">
                   <dt>Link</dt>
                   <dd>
-                    {/* A new tab, like "Jetzt kochen": the Drive access token is
+                    {/* A new tab, like "Kochen": the Drive access token is
                         memory-only, so navigating this tab away would demand a
                         fresh Google sign-in on return. */}
                     <a
@@ -1034,7 +1034,7 @@ function RecipeOverview({
             <>
               <button type="button" className="overview-action is-primary" onClick={startCooking}>
                 <SkilletIcon optical={20} />
-                <span>Jetzt kochen</span>
+                <span>Kochen</span>
               </button>
               {onMealPlan ? (
                 // "Umplanen" opens the same overlay in its replan mode: the size

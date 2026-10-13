@@ -127,14 +127,16 @@
 
 /* ---- Actions ------------------------------------------------------------- */
 
-/* One row, each item symbol + text. Decided with the user: "Jetzt kochen" is the
+/* One row, each item symbol + text. Decided with the user: "Kochen" is the
    sheet's one primary action and grows into every free pixel (`flex: 1 1 auto`),
    so it is as wide as possible; "Einplanen" and the "Mehr" overflow button keep
    their content width (`flex: 0 0 auto`) — they are only as wide as their labels
    need. This replaces the earlier stacked layout: back then "Zur Liste
    hinzufügen" was long enough that an even split wrapped it to two lines on a
    narrow phone, so the primary owned a row of its own. With the shorter
-   "Einplanen" label all three fit on one line again, and letting only the primary
+   "Einplanen" label — and the primary's label shortened from "Jetzt kochen" to
+   "Kochen" for the same reason — all three fit on one narrow phone line, and
+   letting only the primary
    grow gives the primary its emphasis without stretching the secondary labels
    (the old even split put a stretched label on ~30-57 px of air per side while
    the content-sized "Mehr" had only its own padding — two different cushions on
@@ -178,7 +180,7 @@
   font-weight: 600;
 }
 
-/* The primary action (Jetzt kochen): accent fill, white label and symbol, and the
+/* The primary action (Kochen): accent fill, white label and symbol, and the
    row's only growing item. `flex: 1 1 auto` lets it absorb every free pixel left
    over by the content-sized "Einplanen"/"Mehr" buttons, so it is as wide as
    possible; being the only shrinkable item, it also gives width back first when
@@ -218,7 +220,7 @@
 
 /* The "Eintrag ersetzen" wrapper is that row's primary action, so it grows like
    the primary button itself (the button inside fills the grid area) — the same
-   emphasis the known row gives "Jetzt kochen". Its popover anchors to this
+   emphasis the known row gives "Kochen". Its popover anchors to this
    wrapper, so the menu still sits directly above its trigger. The trigger
    deliberately carries no marker (decided with the user): this sheet marks menus
    with the three-dot glyph, and the label names an outcome that needs a choice,
