@@ -28,6 +28,13 @@ interface AutoGrowTextareaProps {
   enterKeyHint?: 'next' | 'done';
   /** Wired to the <textarea> (validation scroll/focus targets). */
   id?: string;
+  /**
+   * The id of this field's error text, so a screen reader reads the error
+   * together with the field (docs/DESIGN.md §5.3).
+   */
+  describedBy?: string;
+  /** Marks the field invalid while its error text is on screen (§5.3). */
+  invalid?: boolean;
 }
 
 /**
@@ -37,7 +44,7 @@ interface AutoGrowTextareaProps {
  */
 const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
   function AutoGrowTextarea(
-    { value, onChange, onEnter, tall = false, enterKeyHint = 'next', id },
+    { value, onChange, onEnter, tall = false, enterKeyHint = 'next', id, describedBy, invalid },
     ref,
   ) {
     const nodeRef = useRef<HTMLTextAreaElement | null>(null);
@@ -111,6 +118,8 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
       <textarea
         ref={setRef}
         id={id}
+        aria-describedby={describedBy}
+        aria-invalid={invalid}
         className={tall ? 'grow-tall' : undefined}
         value={value}
         enterKeyHint={enterKeyHint}

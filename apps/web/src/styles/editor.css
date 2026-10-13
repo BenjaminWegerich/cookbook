@@ -468,6 +468,14 @@
   line-height: var(--leading-sm);
 }
 
+/* A field's error messages as one block, so the control can name them with a
+   single `aria-describedby` (§5.3). The block repeats the grid gap it stands in
+   for, so grouping the messages does not change the form's rhythm. */
+.field-errors {
+  display: grid;
+  gap: var(--space-5);
+}
+
 /* ---- Photo -------------------------------------------------------------- */
 
 .photo-row {

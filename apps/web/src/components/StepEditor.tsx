@@ -142,6 +142,13 @@ interface StepEditorProps {
   /** Runs on Enter instead of inserting a line break (advance to the next
    *  step's text field; steps never contain line breaks, §5). */
   onEnterNext?: () => void;
+  /**
+   * The id of this field's error text, so a screen reader reads the error
+   * together with the step (docs/DESIGN.md §5.3).
+   */
+  describedBy?: string;
+  /** Marks the step invalid while its error text is on screen (§5.3). */
+  invalid?: boolean;
 }
 
 /**
@@ -150,7 +157,7 @@ interface StepEditorProps {
  * externally (artifact insert/remove).
  */
 const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEditor(
-  { value, onChange, onArtifactEdit, onEnterNext },
+  { value, onChange, onArtifactEdit, onEnterNext, describedBy, invalid },
   ref,
 ) {
   const divRef = useRef<HTMLDivElement | null>(null);
@@ -300,6 +307,8 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         suppressContentEditableWarning
         role="textbox"
         aria-multiline="true"
+        aria-describedby={describedBy}
+        aria-invalid={invalid}
         onInput={handleInput}
         onClick={handleClick}
         onKeyDown={(event) => {

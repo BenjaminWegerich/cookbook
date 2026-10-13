@@ -324,6 +324,9 @@ function IngredientSheet({
           </span>
           <input
             type="text"
+            id="ingredient-name"
+            aria-describedby={error !== null ? 'ingredient-name-error' : undefined}
+            aria-invalid={error !== null}
             value={name}
             onChange={(event) => {
               setName(event.target.value);
@@ -366,9 +369,11 @@ function IngredientSheet({
             live "Neue Zutat anlegen" block above carries no error text; the
             message appears only after a failed confirm, once. */}
         {error !== null && (
-          <p className="field-error" role="alert">
-            {error}
-          </p>
+          <div className="field-errors" id="ingredient-name-error">
+            <p className="field-error" role="alert">
+              {error}
+            </p>
+          </div>
         )}
 
         {inlineMode && trimmedName === '' && (

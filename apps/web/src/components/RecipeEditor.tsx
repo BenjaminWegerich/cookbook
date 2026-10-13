@@ -2029,7 +2029,13 @@ function RecipeEditor({
           <h3 className="editor-card-title">Kopfdaten</h3>
 
           {/* Bild (§2, optional sibling file) — zuerst, vor dem Titel */}
-          <div className="field">
+          <div
+            className="field"
+            id="editor-field-photo"
+            role="group"
+            aria-describedby={photoError !== null ? 'editor-error-photo' : undefined}
+            aria-invalid={photoError !== null}
+          >
             <span className="field-label">
               Bild<span className="optional-mark">(optional)</span>
             </span>
@@ -2086,9 +2092,11 @@ function RecipeEditor({
               </div>
             </div>
             {photoError !== null && (
-              <p className="field-error" role="alert">
-                {photoError}
-              </p>
+              <div className="field-errors" id="editor-error-photo">
+                <p className="field-error" role="alert">
+                  {photoError}
+                </p>
+              </div>
             )}
           </div>
 
@@ -2097,16 +2105,22 @@ function RecipeEditor({
             <AutoGrowTextarea
               ref={titleFieldRef}
               id="editor-field-title"
+              describedBy={fieldIssue('title').length > 0 ? 'editor-error-title' : undefined}
+              invalid={fieldIssue('title').length > 0}
               value={draft.title}
               onChange={(title) => patchDraft({ title })}
               onEnter={() => focusEditorField(descriptionFieldRef.current)}
             />
           </label>
-          {fieldIssue('title').map((issue, index) => (
-            <p className="field-error" key={`title-${index}`} role="alert">
-              {issue.message}
-            </p>
-          ))}
+          {fieldIssue('title').length > 0 && (
+            <div className="field-errors" id="editor-error-title">
+              {fieldIssue('title').map((issue, index) => (
+                <p className="field-error" key={`title-${index}`} role="alert">
+                  {issue.message}
+                </p>
+              ))}
+            </div>
+          )}
 
           <label className="field">
             <span className="field-label">
@@ -2158,7 +2172,17 @@ function RecipeEditor({
           </div>
 
           {draft.type === 'finished_dish' ? (
-            <div className="field" id="editor-field-servings">
+            <div
+              className="field"
+              id="editor-field-servings"
+              role="group"
+              aria-describedby={
+                fieldIssue('servings').length > 0 || fieldIssue('yield').length > 0
+                  ? 'editor-error-target'
+                  : undefined
+              }
+              aria-invalid={fieldIssue('servings').length > 0}
+            >
               <span className="field-label">Portionen</span>
               <div className="quantity-chips" role="group" aria-label="Portionen">
                 {SERVING_OPTIONS.map((option) => (
@@ -2175,7 +2199,17 @@ function RecipeEditor({
             </div>
           ) : (
             <>
-              <div className="field" id="editor-field-yield">
+              <div
+                className="field"
+                id="editor-field-yield"
+                role="group"
+                aria-describedby={
+                  fieldIssue('yield').length > 0 || fieldIssue('yield_unit').length > 0
+                    ? 'editor-error-target'
+                    : undefined
+                }
+                aria-invalid={fieldIssue('yield').length > 0 || fieldIssue('yield_unit').length > 0}
+              >
                 <span className="field-label">Menge</span>
                 <div className="segmented" role="group" aria-label="Einheit der Menge">
                   <button
@@ -2201,28 +2235,53 @@ function RecipeEditor({
               </div>
             </>
           )}
-          {fieldIssue('servings')
-            .concat(fieldIssue('yield'), fieldIssue('yield_unit'))
-            .map((issue, index) => (
-              <p className="field-error" key={`target-${index}`} role="alert">
-                {issue.message}
-              </p>
-            ))}
+          {fieldIssue('servings').concat(fieldIssue('yield'), fieldIssue('yield_unit')).length >
+            0 && (
+            <div className="field-errors" id="editor-error-target">
+              {fieldIssue('servings')
+                .concat(fieldIssue('yield'), fieldIssue('yield_unit'))
+                .map((issue, index) => (
+                  <p className="field-error" key={`target-${index}`} role="alert">
+                    {issue.message}
+                  </p>
+                ))}
+            </div>
+          )}
 
-          <div className="field" id="editor-field-prep_time">
+          <div
+            className="field"
+            id="editor-field-prep_time"
+            role="group"
+            aria-describedby={
+              fieldIssue('prep_time').length > 0 ? 'editor-error-prep_time' : undefined
+            }
+            aria-invalid={fieldIssue('prep_time').length > 0}
+          >
             <span className="field-label">Arbeitszeit</span>
             <TimeChips
               value={draft.prep_time}
               onChange={(label) => patchDraft({ prep_time: label })}
             />
           </div>
-          {fieldIssue('prep_time').map((issue, index) => (
-            <p className="field-error" key={`prep-${index}`} role="alert">
-              {issue.message}
-            </p>
-          ))}
+          {fieldIssue('prep_time').length > 0 && (
+            <div className="field-errors" id="editor-error-prep_time">
+              {fieldIssue('prep_time').map((issue, index) => (
+                <p className="field-error" key={`prep-${index}`} role="alert">
+                  {issue.message}
+                </p>
+              ))}
+            </div>
+          )}
 
-          <div className="field" id="editor-field-total_time">
+          <div
+            className="field"
+            id="editor-field-total_time"
+            role="group"
+            aria-describedby={
+              fieldIssue('total_time').length > 0 ? 'editor-error-total_time' : undefined
+            }
+            aria-invalid={fieldIssue('total_time').length > 0}
+          >
             <span className="field-label">
               Gesamtzeit<span className="optional-mark">(optional)</span>
             </span>
@@ -2234,11 +2293,15 @@ function RecipeEditor({
               onChange={(label) => patchDraft({ total_time: label })}
             />
           </div>
-          {fieldIssue('total_time').map((issue, index) => (
-            <p className="field-error" key={`total-${index}`} role="alert">
-              {issue.message}
-            </p>
-          ))}
+          {fieldIssue('total_time').length > 0 && (
+            <div className="field-errors" id="editor-error-total_time">
+              {fieldIssue('total_time').map((issue, index) => (
+                <p className="field-error" key={`total-${index}`} role="alert">
+                  {issue.message}
+                </p>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Zubereitung — steps with their own ingredient lists + prose */}
@@ -2429,6 +2492,10 @@ function RecipeEditor({
                     stepEditorRefs.current[stepIndex] = element;
                   }}
                   value={step.text}
+                  describedBy={
+                    stepIssues(stepIndex).length > 0 ? `editor-error-step-${stepIndex}` : undefined
+                  }
+                  invalid={stepIssues(stepIndex).length > 0}
                   onChange={(next) =>
                     updateStep(stepIndex, (current) => ({ ...current, text: next }))
                   }
@@ -2445,11 +2512,15 @@ function RecipeEditor({
                     }
                   }}
                 />
-                {stepIssues(stepIndex).map((issue, index) => (
-                  <p className="field-error" key={`step-${stepIndex}-${index}`} role="alert">
-                    {issue.message}
-                  </p>
-                ))}
+                {stepIssues(stepIndex).length > 0 && (
+                  <div className="field-errors" id={`editor-error-step-${stepIndex}`}>
+                    {stepIssues(stepIndex).map((issue, index) => (
+                      <p className="field-error" key={`step-${stepIndex}-${index}`} role="alert">
+                        {issue.message}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 {stepIndex === 0 &&
                   sectionIssues('body').map((issue, index) => (
                     <p className="field-error" key={`body-${index}`} role="alert">
