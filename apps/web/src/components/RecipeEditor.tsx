@@ -96,7 +96,7 @@ import IngredientSheet, {
   type IngredientSheetMode,
   type SheetResult,
 } from './IngredientSheet';
-import LeaveConfirmBar from './LeaveConfirmBar';
+import LeaveConfirmSheet from './LeaveConfirmSheet';
 import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientSheet';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityPicker from './QuantityPicker';
@@ -1075,15 +1075,17 @@ function RecipeEditor({
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  /** Two-step confirmations for deleting / photo removal. The "Änderungen
-   *  verwerfen?" step is not state here: it belongs to the shared exit guard
-   *  below, which every exit trigger (button, Escape, browser Back) goes
-   *  through. */
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  /** Two-step "Wirklich entfernen?" before the queued photo removal (§2). */
-  const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
-  /** The armed "Schritt wirklich entfernen?" row (index of the step to remove). */
-  const [confirmRemoveStep, setConfirmRemoveStep] = useState<number | null>(null);
+  /**
+   * The destructive action the confirmation sheet is asking about, if any:
+   * deleting the recipe, removing the photo or removing one step. §6.4: an
+   * irreversible action asks first, and the question is the same sheet the
+   * discard question uses (§6.2). The discard question itself is not state here:
+   * it belongs to the shared exit guard below, which every exit trigger
+   * (button, Escape, browser Back) goes through.
+   */
+  const [pendingConfirm, setPendingConfirm] = useState<
+    { kind: 'delete' } | { kind: 'photo' } | { kind: 'step'; stepIndex: number } | null
+  >(null);
 
   /** Focuses a Kopf text field with the caret at the end (Enter = next). */
   const focusEditorField = (field: HTMLTextAreaElement | null): void => {
@@ -1233,7 +1235,7 @@ function RecipeEditor({
   // shifts the armed step index. (The discard confirmation is invalidated by
   // the exit guard's work signature instead; see useLeaveGuard.)
   useEffect(() => {
-    setConfirmRemoveStep(null);
+    setPendingConfirm(null);
   }, [draft]);
 
   /**
@@ -1243,8 +1245,8 @@ function RecipeEditor({
    * content plus the queued photo change, so any edit disarms a standing
    * confirmation. Reset whenever a modal opens or closes: dismissing the
    * ingredient sheet is "keep working", and must not leave a stale discard arm
-   * behind. The question itself renders as LeaveConfirmBar inside the sticky
-   * header (see the render below).
+   * behind. The question itself renders as LeaveConfirmSheet over the screen
+   * (see the render below).
    */
   const guard = useLeaveGuard({
     workSignature: `${draft === null ? '' : JSON.stringify(normalizeRecipe(draft))}\u0000${photoChange === null ? '' : photoChange.kind}`,
@@ -1554,7 +1556,7 @@ function RecipeEditor({
    *  or an empty step's immediate tap). Called only when the step being removed is
    *  the one the armed state refers to. */
   const removeStep = (stepIndex: number): void => {
-    setConfirmRemoveStep(null);
+    setPendingConfirm(null);
     updateDraft((current) => ({
       ...current,
       steps: current.steps.filter((_, i) => i !== stepIndex),
@@ -1573,14 +1575,12 @@ function RecipeEditor({
     if (draft === null) return;
     const step = draft.steps[stepIndex];
     if (step === undefined) return;
-    if (confirmRemoveStep === stepIndex) {
-      removeStep(stepIndex);
-      return;
-    }
     const hasContent = step.text.trim() !== '' || step.ingredients.length > 0;
     if (hasContent) {
-      setConfirmRemoveStep(stepIndex);
+      // An irreversible removal asks through the shared question sheet (§6.4).
+      setPendingConfirm({ kind: 'step', stepIndex });
     } else {
+      // An empty step has nothing to lose, so it goes without asking (§6.4).
       removeStep(stepIndex);
     }
   };
@@ -1746,6 +1746,12 @@ function RecipeEditor({
    */
   const requestLeave = useCallback(
     (reason: LeaveReason): boolean => {
+      if (pendingConfirm !== null) {
+        // The confirmation sheet is the topmost layer: the same trigger closes
+        // it, and closing it is „Abbrechen" (§6.2) — never the action.
+        setPendingConfirm(null);
+        return true;
+      }
       if (saving) {
         // A Drive write is in flight — do not unmount the editor mid-save
         // (a late error would be reported into a dead component).
@@ -1762,7 +1768,16 @@ function RecipeEditor({
       }
       return guard.request(reason, executeLeave);
     },
-    [saving, createSheet, sheet, guard, executeLeave, handleCreateClose, handleCloseSheet],
+    [
+      pendingConfirm,
+      saving,
+      createSheet,
+      sheet,
+      guard,
+      executeLeave,
+      handleCreateClose,
+      handleCloseSheet,
+    ],
   );
 
   // Escape is the keyboard equivalent of the browser Back button and follows
@@ -1797,7 +1812,7 @@ function RecipeEditor({
   const showPhotoUrl = (blob: Blob): void => {
     // A new preview invalidates an armed "Wirklich entfernen?" — it would
     // otherwise target the previous image on the next tap.
-    setConfirmRemovePhoto(false);
+    setPendingConfirm(null);
     if (photoUrlRef.current !== null) URL.revokeObjectURL(photoUrlRef.current);
     const url = URL.createObjectURL(blob);
     photoUrlRef.current = url;
@@ -1846,6 +1861,46 @@ function RecipeEditor({
   useImperativeHandle(ref, () => ({
     notifyBack: (): boolean => requestLeave('browser-back'),
   }));
+
+  /**
+   * The confirmation sheet's content (docs/DESIGN.md §6.2 and §6.4). One sheet
+   * serves both the exit guard's discard question and every irreversible action
+   * in the editor, so a confirmation always looks the same and is always
+   * answered the same way.
+   */
+  const confirmOpen = guard.armed || pendingConfirm !== null;
+  const confirmQuestion = guard.armed
+    ? 'Änderungen am Rezept verwerfen?'
+    : pendingConfirm?.kind === 'delete'
+      ? `„${target?.title ?? ''}“ wirklich löschen?`
+      : pendingConfirm?.kind === 'photo'
+        ? 'Bild wirklich entfernen?'
+        : 'Schritt wirklich entfernen?';
+  const confirmDetail = guard.armed
+    ? 'Die Änderungen am Rezept gehen verloren.'
+    : pendingConfirm?.kind === 'delete'
+      ? 'Das Rezept wird dauerhaft gelöscht.'
+      : pendingConfirm?.kind === 'photo'
+        ? 'Das Bild wird aus dem Rezept entfernt.'
+        : 'Der Schritt und seine Zutatenliste gehen verloren.';
+  const confirmLabel = guard.armed
+    ? 'Verwerfen'
+    : pendingConfirm?.kind === 'delete'
+      ? 'Rezept löschen'
+      : 'Entfernen';
+
+  /** The sheet's confirmed answer: it leaves for real, or runs the pending action. */
+  const runConfirm = (): void => {
+    if (guard.armed) {
+      guard.confirm(executeLeave);
+      return;
+    }
+    const pending = pendingConfirm;
+    setPendingConfirm(null);
+    if (pending?.kind === 'delete') void handleDelete();
+    else if (pending?.kind === 'photo') handleRemovePhoto();
+    else if (pending?.kind === 'step') removeStep(pending.stepIndex);
+  };
 
   // ---- Render -------------------------------------------------------------
 
@@ -1968,26 +2023,15 @@ function RecipeEditor({
     <main className="app app-narrow">
       <section className="editor" aria-label="Rezept-Editor">
         <div className="editor-header">
-          {/* Two rows in one sticky box: the action row („Zurück" · „Speichern")
-              and, while the guard is armed, the discard question on one line
-              below it (LeaveConfirmBar) — so the question is on screen whatever
-              the scroll position, and „Speichern" keeps its corner. On a wide
-              screen the question aligns under „Zurück" and the two answers under
-              „Speichern", which is what makes the line read as part of the
-              header rather than as an overlay.
-
-              The action row's two labels never change. „Zurück" is navigation
-              and is the one trigger that must not answer the question, so it is
-              disabled while the bar offers the two real answers: Back, swipe and
-              the button all reach the same armed state, and only „Abbrechen" /
-              „Verwerfen" resolve it. Disabling is allowed here because the cause
-              (the two answers) is visible right below the button. */}
+          {/* One row: „Zurück" · „Speichern". Neither label ever changes:
+              „Zurück" is navigation, and the discard question is a sheet over
+              the screen (LeaveConfirmSheet, docs/DESIGN.md §6.2) — a layer, not
+              a line in this header. */}
           <div className="editor-actions">
             <button
               type="button"
               className="text-button back-button"
               onClick={() => void requestLeave('button')}
-              disabled={guard.armed}
             >
               Zurück
             </button>
@@ -2001,13 +2045,6 @@ function RecipeEditor({
               {saving ? 'Speichert …' : 'Speichern'}
             </button>
           </div>
-          {guard.armed && (
-            <LeaveConfirmBar
-              question="Änderungen am Rezept verwerfen?"
-              onKeep={guard.reset}
-              onDiscard={executeLeave}
-            />
-          )}
         </div>
 
         {(hasValidationIssues || globalIssues.length > 0) && (
@@ -2069,24 +2106,10 @@ function RecipeEditor({
                   <button
                     type="button"
                     className="danger-button"
-                    onClick={() => {
-                      if (!confirmRemovePhoto) {
-                        setConfirmRemovePhoto(true);
-                      } else {
-                        handleRemovePhoto();
-                      }
-                    }}
-                    onBlur={(event) => {
-                      // Clicking anywhere outside this button (the button itself
-                      // keeps focus while it is used) drops the armed "are you
-                      // sure?" — the same rule as the other confirmations.
-                      if (!event.currentTarget.contains(event.relatedTarget)) {
-                        setConfirmRemovePhoto(false);
-                      }
-                    }}
+                    onClick={() => setPendingConfirm({ kind: 'photo' })}
                   >
                     <TrashIcon className="button-icon" optical={20} />
-                    <span>{confirmRemovePhoto ? 'Wirklich entfernen?' : 'Entfernen'}</span>
+                    <span>Entfernen</span>
                   </button>
                 )}
               </div>
@@ -2355,32 +2378,14 @@ function RecipeEditor({
                     >
                       <ArrowDownIcon className="button-icon" optical={20} />
                     </button>
-                    {confirmRemoveStep === stepIndex ? (
-                      <button
-                        type="button"
-                        className="text-button danger-text step-confirm-remove"
-                        onClick={() => removeStep(stepIndex)}
-                        onBlur={(event) => {
-                          // Clicking anywhere outside drops the armed question
-                          // (same rule as the photo removal and the delete).
-                          if (!event.currentTarget.contains(event.relatedTarget)) {
-                            setConfirmRemoveStep(null);
-                          }
-                        }}
-                        aria-label="Schritt wirklich entfernen?"
-                      >
-                        Wirklich entfernen?
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="icon-button danger-text"
-                        onClick={() => toggleRemoveStep(stepIndex)}
-                        aria-label="Schritt entfernen"
-                      >
-                        <CloseIcon className="button-icon" optical={20} />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="icon-button danger-text"
+                      onClick={() => toggleRemoveStep(stepIndex)}
+                      aria-label="Schritt entfernen"
+                    >
+                      <CloseIcon className="button-icon" optical={20} />
+                    </button>
                   </div>
                 </div>
 
@@ -2677,37 +2682,12 @@ function RecipeEditor({
             <button
               type="button"
               className="danger-button"
-              onClick={() => {
-                if (!confirmDelete) {
-                  setConfirmDelete(true);
-                } else {
-                  void handleDelete();
-                }
-              }}
-              onBlur={(event) => {
-                // Clicking anywhere outside drops the armed question, so a
-                // "are you sure?" never lingers over the form.
-                if (!event.currentTarget.contains(event.relatedTarget)) {
-                  setConfirmDelete(false);
-                }
-              }}
+              onClick={() => setPendingConfirm({ kind: 'delete' })}
               disabled={saving}
             >
               <TrashIcon className="button-icon" optical={20} />
-              <span>
-                {confirmDelete ? `„${target.title}“ wirklich löschen?` : 'Rezept löschen'}
-              </span>
+              <span>Rezept löschen</span>
             </button>
-            {confirmDelete && (
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => setConfirmDelete(false)}
-                disabled={saving}
-              >
-                Abbrechen
-              </button>
-            )}
           </section>
         )}
       </section>
@@ -2748,6 +2728,18 @@ function RecipeEditor({
           }
           onEdited={() => setCreateError(null)}
           onClose={handleCreateClose}
+        />
+      )}
+      {confirmOpen && (
+        <LeaveConfirmSheet
+          question={confirmQuestion}
+          detail={confirmDetail}
+          confirmLabel={confirmLabel}
+          onCancel={() => {
+            setPendingConfirm(null);
+            guard.reset();
+          }}
+          onConfirm={runConfirm}
         />
       )}
     </main>

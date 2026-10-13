@@ -978,6 +978,38 @@ checkmarks.
 
 ### 6.2 Browser Back, Escape and the exit guard
 
+*Applies to: web app.*
+
+**A place with unsaved work asks before it is left, and the question is a sheet.** The first exit
+trigger — the header's „Zurück", Escape, the browser or device Back button, a swipe — opens the
+question as an ordinary bottom sheet (§5.6); it never leaves. The question is a *change* over the
+screen, so its answers are a sheet's answers (§6.1).
+
+**One question, whichever control asked.** Every trigger runs through the screen's one exit guard
+(`useLeaveGuard`), so the question looks and behaves the same on all four, and only the guard's
+own confirmed exit leaves the screen.
+
+**The sheet says what is lost.** Its head is the question — „Änderungen am Rezept verwerfen?",
+„Änderungen am Entwurf verwerfen?" — with one muted line under it naming the work that would go;
+its row is „Verwerfen" (danger, at the left end) and „Abbrechen" (§5.1). The danger button leaves.
+
+**Closing the sheet is not leaving.** Escape, a scrim tap and the browser Back button close the
+topmost layer, as they do everywhere else (§5.6): they answer „Abbrechen". „Verwerfen" is the only
+control that discards — a second Back therefore dismisses the question instead of spending it.
+*decided with the user*
+
+**The question never outlives its work.** It belongs to the exact work state it was armed for: any
+change to that work, or closing the sheet, drops it, so a confirmation can never be spent on
+content it was not asked about.
+
+**„Zurück" keeps its label and stays reachable.** Navigation and a write decision remain separate
+controls (§6.1); the scrim is what guarantees that only the sheet's answers can discard.
+*decided with the user*
+
+**Leaving the document is the browser's own question.** A reload, a closed tab or a navigation away
+cannot reach the guard, so the browser's `beforeunload` dialog is registered only while work would
+be lost, and only until the app's own answer is given.
+
 ### 6.3 Loading, empty and error states
 
 **Explanatory text only where the empty state needs explaining.** A missing list, field or
@@ -1216,6 +1248,7 @@ The cooking view (`.html`) has its own inventory, written below.
 | „Zum Essensplan hinzufügen" / „Menge ändern" | `MealPlanSheet` | change | „Abbrechen" |
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
 | Ingredient sheet / new ingredient | `IngredientSheet`, `NewIngredientSheet` | change | „Abbrechen" |
+| „Änderungen verwerfen?" | `LeaveConfirmSheet` (over the editor and the AI screen) | change | „Abbrechen", scrim, Escape, Back |
 | Snackbar | `Snackbar` (app root) | transient, never a layer | none |
 
 The cooking view has its own inventory: one page, three states — **Intro** (scaling, meta,

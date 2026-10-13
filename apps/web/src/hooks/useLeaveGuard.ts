@@ -14,17 +14,17 @@
  * 1. An armed confirmation belongs to the exact work state it was armed for
  *    (`workSignature`). The moment that signature changes — typing, a new
  *    message, a cleared draft — the arm is gone and the armed question
- *    (LeaveConfirmBar) disappears again. This is deliberately *not* an effect:
+ *    (the question, §6.2) disappears again. This is deliberately *not* an effect:
  *    the arm must be honest in the same render that shows the changed work.
  * 2. A modal's own fields are transient. Dismissing a modal (backdrop tap,
  *    Escape, its cancel button) means "keep working", so the screen below must
  *    clear its armed confirmation via `reset()` when it opens or closes a
  *    modal instead of letting the arm outlive the state it referred to.
  *
- * The armed question itself is rendered by `LeaveConfirmBar`, inside the
- * screen's sticky header. Keeping it out of the „Zurück" button is what makes it
- * visible on every trigger: the button only ever guaranteed that the *button*
- * was on screen, while the question it had turned into could be scrolled away.
+ * The armed question itself is rendered by `LeaveConfirmSheet` as a bottom sheet
+ * over the screen (docs/DESIGN.md §6.2). Keeping it out of the „Zurück" button is
+ * what makes the trigger interchangeable: every trigger opens or closes the same
+ * question, and only the question's own „Verwerfen" leaves.
  *
  * The hook also guards the one exit that is *not* a navigation inside the app:
  * a reload (F5), closing the tab or window, or a real navigation away. Those
@@ -46,16 +46,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export type LeaveReason = 'button' | 'backdrop' | 'escape' | 'browser-back';
 
 export interface LeaveGuard {
-  /** True while the two-step exit confirmation is armed for the current work. */
+  /** True while the discard question is on screen (docs/DESIGN.md §6.2). */
   armed: boolean;
   /**
-   * Asks to leave the screen. The first call arms the confirmation and returns
-   * true (the caller stays; LeaveConfirmBar now offers „Abbrechen" / „Verwerfen");
-   * the confirmed second call runs `onLeave` and returns false. Without unsaved
-   * work it runs `onLeave` immediately.
+   * Asks to leave the screen. The first call opens the question and returns true
+   * (the caller stays); a call while the question is already open closes it —
+   * that is what Escape, the scrim and the browser Back button do — and returns
+   * true as well. Without unsaved work it runs `onLeave` at once and returns
+   * false.
    */
   request: (reason: LeaveReason, onLeave: () => void) => boolean;
-  /** Disarms the confirmation (a modal was opened or dismissed). */
+  /**
+   * The confirmed exit: the question's own „Verwerfen" (§6.2). It is the only
+   * call that leaves the screen while work would be lost.
+   */
+  confirm: (onLeave: () => void) => void;
+  /** Closes the question without leaving (a modal was opened or dismissed). */
   reset: () => void;
 }
 
@@ -96,14 +102,20 @@ export function useLeaveGuard({ workSignature, needsConfirm }: LeaveGuardOptions
 
   const request = useCallback(
     (reason: LeaveReason, onLeave: () => void): boolean => {
-      // `reason` documents the call site; every trigger shares this two-step
-      // behaviour (the armed question is answered by LeaveConfirmBar).
+      // `reason` documents the call site; every trigger opens or closes the same
+      // question (LeaveConfirmSheet).
       void reason;
-      if (!needsConfirm || armed) {
+      if (armed) {
+        // The question is already on screen: this trigger closes it, it never
+        // spends it. Escape, the scrim and the browser Back button all answer
+        // „Abbrechen" (§6.2); only the sheet's own „Verwerfen" leaves.
         setArmedSignature(null);
-        // Leaving for real (no work to lose, or the question just confirmed):
-        // disarm the reload dialog below, even if this unmount's effect cleanup
-        // has not run yet when the browser fires it.
+        return true;
+      }
+      if (!needsConfirm) {
+        // Leaving for real (no work to lose): disarm the reload dialog below,
+        // even if this unmount's effect cleanup has not run yet when the browser
+        // fires it.
         leavingRef.current = true;
         onLeave();
         return false;
@@ -113,6 +125,16 @@ export function useLeaveGuard({ workSignature, needsConfirm }: LeaveGuardOptions
     },
     [armed, needsConfirm, workSignature],
   );
+
+  /**
+   * The confirmed exit. `leavingRef` is set before the hop so the browser's own
+   * dialog does not ask the same question a second time.
+   */
+  const confirm = useCallback((onLeave: () => void): void => {
+    setArmedSignature(null);
+    leavingRef.current = true;
+    onLeave();
+  }, []);
 
   // Reload / close / navigation away while work would be lost. Registered only
   // while that is true, as recommended (a standing listener would also keep the
@@ -134,7 +156,7 @@ export function useLeaveGuard({ workSignature, needsConfirm }: LeaveGuardOptions
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [needsConfirm]);
 
-  return { armed, request, reset };
+  return { armed, request, confirm, reset };
 }
 
 /**

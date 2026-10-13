@@ -614,7 +614,8 @@ function App() {
   // screen. A screen with internal layers can consume the pop itself: both the
   // editor and the AI-create sheet route it through their shared exit guard
   // (useLeaveGuard) — topmost overlay first, then the armed discard question
-  // (LeaveConfirmBar), which the sticky header keeps on screen. The device's
+  // (LeaveConfirmSheet, docs/DESIGN.md §6.2), which sits as a sheet over the
+  // screen. The device's
   // swipe-back gesture arrives as the same popstate, so it gets the identical
   // guard.
   //

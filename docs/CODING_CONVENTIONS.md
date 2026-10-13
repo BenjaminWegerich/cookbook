@@ -173,11 +173,11 @@
     closes a transient layer, so a standing confirmation can never be spent by an unrelated
     trigger. Modal form fields are themselves transient — dismissing a modal discards them
     without asking; the screen's committed draft is the unit that gets a confirmation.
-  - The armed question is rendered by `LeaveConfirmBar` inside the screen's **sticky** header
-    (`position: sticky` on `.app-header-stacked` and `.editor-header`), so it is on screen
-    whatever the scroll position; it never depends on the element that triggered it being
-    visible. The header's „Zurück" keeps its label and is disabled while the question stands
-    (the cause is right below it), so exactly one control discards.
+  - The armed question is rendered by `LeaveConfirmSheet` as a bottom sheet over the screen
+    (docs/DESIGN.md §6.2), so it is on screen whatever the scroll position; it never depends on
+    the element that triggered it being visible. „Zurück" keeps its label and stays usable: the
+    scrim already stops anything but the sheet's own answers from discarding, and only
+    „Verwerfen" leaves.
   - The hook also guards the exits that are *not* navigation: a reload (F5), closing the tab or
     window, or a real navigation away. It registers a `beforeunload` listener only while work
     would be lost and removes it again — a permanently attached listener would keep the page out

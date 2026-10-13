@@ -77,7 +77,7 @@ import type { StoredRecipe } from '../drive/recipeStorage';
 import { listRecipes, readRecipe } from '../drive/recipeStorage';
 import { loadRecipeGuidelines } from '../drive/personalRules';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
-import LeaveConfirmBar from './LeaveConfirmBar';
+import LeaveConfirmSheet from './LeaveConfirmSheet';
 import QuantityPicker from './QuantityPicker';
 import { EyeIcon } from './icons';
 
@@ -673,8 +673,8 @@ export default function AiCreateSheet({
    * Fingerprint of the started work (content and shape, not just presence): the
    * shared exit guard binds the armed discard confirmation to it, so any later
    * change — typing, a new message, a new or cleared draft — invalidates the
-   * arm during render instead of surviving it. The armed question (the
-   * LeaveConfirmBar under the title) therefore disappears exactly when the work
+   * arm during render instead of surviving it. The armed question (the sheet over
+   * the screen) therefore disappears exactly when the work
    * it threatened is gone (see useLeaveGuard).
    */
   const guard = useLeaveGuard({
@@ -694,17 +694,19 @@ export default function AiCreateSheet({
     [guard, executeLeave],
   );
 
-  // Escape is the keyboard equivalent of the browser Back button: it arms the
-  // same two-step confirmation instead of leaving the screen. Off while the
-  // editor covers this sheet (see AiCreateSheetProps.visible).
+  // Escape is the keyboard equivalent of the browser Back button: it opens the
+  // same discard question — and closes it again while it is open — instead of
+  // leaving the screen. Off while the editor covers this sheet (see
+  // AiCreateSheetProps.visible).
   useEscapeTrigger(() => void requestLeave('escape'), visible);
 
   /**
    * Browser-back consumer (see AiCreateSheetHandle and App): started work arms
-   * the discard question through the shared guard (the same two-step
-   * confirmation as the header button and Escape, rendered by LeaveConfirmBar
-   * between the button and the title), so neither the browser / device Back
-   * button nor the swipe-back gesture silently drops the conversation.
+   * the discard question through the shared guard (the same confirmation as the
+   * header button and Escape, rendered by LeaveConfirmSheet over the screen), so
+   * neither the browser / device Back button nor the swipe-back gesture silently
+   * drops the conversation. Back while the question is open closes it —
+   * „Abbrechen" — and never discards (§6.2).
    */
   useImperativeHandle(ref, () => ({
     notifyBack: (): boolean => requestLeave('browser-back'),
@@ -716,24 +718,16 @@ export default function AiCreateSheet({
         {/* Back button on its own line at the top left (editor placement), the
             screen title below it — the stack itself is .app-header-stacked
             (styles/recipe-list.css), shared with the shopping-list selection.
-            While the guard is armed, the discard question (LeaveConfirmBar)
-            takes the line between the two: directly under the button that asked,
-            and still above the title, so the sticky stack carries it. */}
+            The header carries nothing but „Zurück" and the title: the discard
+            question is a sheet over the screen (LeaveConfirmSheet, §6.2), never
+            a line in here. */}
         <button
           type="button"
           className="text-button back-button"
           onClick={() => void requestLeave('button')}
-          disabled={guard.armed}
         >
           Zurück
         </button>
-        {guard.armed && (
-          <LeaveConfirmBar
-            question="Änderungen am Entwurf verwerfen?"
-            onKeep={guard.reset}
-            onDiscard={executeLeave}
-          />
-        )}
         <h1>{isEdit ? 'Rezept mit KI bearbeiten' : 'Rezept mit KI schreiben'}</h1>
       </header>
 
@@ -1050,6 +1044,15 @@ export default function AiCreateSheet({
             </>
           )}
         </>
+      )}
+      {guard.armed && (
+        <LeaveConfirmSheet
+          question="Änderungen am Entwurf verwerfen?"
+          detail="Der Entwurf und der Gesprächsverlauf gehen verloren."
+          confirmLabel="Verwerfen"
+          onCancel={guard.reset}
+          onConfirm={() => guard.confirm(executeLeave)}
+        />
       )}
     </main>
   );

@@ -159,7 +159,9 @@
     calc(var(--space-6) + var(--icon-size) + var(--space-3));
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-bg);
+  /* The outlined button's surface fill, without its shadow: the field stands on
+     the page-coloured bar, so the fill is what separates it from the bar. */
+  background: var(--color-surface);
   color: var(--color-ink);
   /* Hide the native webkit search cancel button — we render our own clear
      button inside the search wrapper. */
