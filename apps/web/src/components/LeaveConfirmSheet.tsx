@@ -12,6 +12,9 @@
  * the no | yes order and sits at the left end (`.sheet-actions .danger-button`
  * pulls it there), with the quiet „Abbrechen" beside the right edge.
  *
+ * The question is the whole message (decided with the user): the sheet carries no
+ * explanatory line under it, so the head is the title alone.
+ *
  * Closing the sheet is not answering it: the scrim, Escape and the browser Back
  * button all call `onCancel`, and only `onConfirm` performs the action. The
  * caller owns both — this component is only the look and the row.
@@ -22,8 +25,6 @@
 interface LeaveConfirmSheetProps {
   /** The question, as the sheet's head („Änderungen am Rezept verwerfen?"). */
   question: string;
-  /** One muted line naming what would be lost, under the question. */
-  detail: string;
   /** The danger answer's label: the action in the infinitive („Verwerfen"). */
   confirmLabel: string;
   /** Dismisses the question and keeps working („Abbrechen", scrim, Escape, Back). */
@@ -34,7 +35,6 @@ interface LeaveConfirmSheetProps {
 
 export default function LeaveConfirmSheet({
   question,
-  detail,
   confirmLabel,
   onCancel,
   onConfirm,
@@ -45,7 +45,6 @@ export default function LeaveConfirmSheet({
       <div className="sheet" role="dialog" aria-modal="true" aria-label={question}>
         <div className="sheet-head">
           <h2 className="sheet-title">{question}</h2>
-          <p className="sheet-subtitle">{detail}</p>
         </div>
         <div className="sheet-actions">
           <button type="button" className="danger-button" onClick={onConfirm}>

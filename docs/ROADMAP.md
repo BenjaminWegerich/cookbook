@@ -24,6 +24,23 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
       `zutaten-umrechnungen.csv`; the repo CSVs are the seed that initializes those files
       on first use.
 
+### Design system: follow-ups from the DESIGN.md compliance pass
+
+- [ ] Finish the cooking view against docs/DESIGN.md. The export still carries values the web
+      app has moved past: `packages/core/src/recipe/theme.ts`'s default accent (still `#b85c38`,
+      while §4.1 and §4.8 now say `#ad5632`), its assertion in `exportHtml.test.ts`, the two
+      committed sample exports (`sample-bechamel.html`, `sample-wraps.html`), the heading line
+      heights (§4.2: `--leading-lg` 28px, `--leading-xl` 36px) and the per-optical-size icon
+      drawings (§4.5).
+- [ ] Write DESIGN.md §6.1 ("Leaving a screen: place vs. change"). The rule lives only in
+      ui_patterns.md §2 today, while §6.2 already refers to §6.1.
+- [ ] Decide the Prettier question. `npm run format` rewrites recipe data (`examples/*.md`) and
+      core code (`packages/core/src/*`) alongside `apps/web/src/ai/geminiClient.ts`,
+      `apps/export-host/Code.gs`, the sample exports and `spike/cooking-view-prototype.html`;
+      either take them in one formatting-only commit or narrow Prettier's scope.
+- [ ] Clear the seven pre-existing oxlint warnings in `apps/web/src` (React hook dependency
+      arrays).
+
 ## Web app — Phase 3: AI-assisted create/edit (depends on: Phase 2)
 
 - [x] Provider-agnostic AI abstraction — provider decision: Google Gemini, called browser-direct

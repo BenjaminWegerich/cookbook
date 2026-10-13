@@ -1048,7 +1048,6 @@ export default function AiCreateSheet({
       {guard.armed && (
         <LeaveConfirmSheet
           question="Änderungen am Entwurf verwerfen?"
-          detail="Der Entwurf und der Gesprächsverlauf gehen verloren."
           confirmLabel="Verwerfen"
           onCancel={guard.reset}
           onConfirm={() => guard.confirm(executeLeave)}

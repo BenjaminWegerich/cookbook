@@ -1876,13 +1876,6 @@ function RecipeEditor({
       : pendingConfirm?.kind === 'photo'
         ? 'Bild wirklich entfernen?'
         : 'Schritt wirklich entfernen?';
-  const confirmDetail = guard.armed
-    ? 'Die Änderungen am Rezept gehen verloren.'
-    : pendingConfirm?.kind === 'delete'
-      ? 'Das Rezept wird dauerhaft gelöscht.'
-      : pendingConfirm?.kind === 'photo'
-        ? 'Das Bild wird aus dem Rezept entfernt.'
-        : 'Der Schritt und seine Zutatenliste gehen verloren.';
   const confirmLabel = guard.armed
     ? 'Verwerfen'
     : pendingConfirm?.kind === 'delete'
@@ -2733,7 +2726,6 @@ function RecipeEditor({
       {confirmOpen && (
         <LeaveConfirmSheet
           question={confirmQuestion}
-          detail={confirmDetail}
           confirmLabel={confirmLabel}
           onCancel={() => {
             setPendingConfirm(null);

@@ -372,10 +372,10 @@ reason a place may show „Abbrechen" at all.
 | While armed | keeps its label and stays usable; the question is a sheet over the screen | unchanged (a sheet never arms) |
 
 The armed question of a place is a bottom sheet (`LeaveConfirmSheet`): the question as
-its head, one muted line naming what would be lost, and one row answering it —
-„Verwerfen" (filled danger, at the left end) and „Abbrechen" (quiet). A sheet carries no
-navigation, so both answers sit together, exactly as they do in every other change
-(§2.2).
+its head, and one row answering it — „Verwerfen" (filled danger, at the left end) and
+„Abbrechen" (quiet). The question is the whole message; the sheet carries no second
+line. A sheet carries no navigation, so both answers sit together, exactly as they do
+in every other change (§2.2).
 
 The top left is where "one level up" lives: a button there must never mean "discard
 this form", or navigation and a write decision become indistinguishable. The bottom
