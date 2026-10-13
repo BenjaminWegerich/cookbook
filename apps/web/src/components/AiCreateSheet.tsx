@@ -909,11 +909,7 @@ export default function AiCreateSheet({
                       ) : (
                         <div className="field ai-yield">
                           <span className="field-label">Menge</span>
-                          <div
-                            className="segmented"
-                            role="group"
-                            aria-label="Einheit der Menge"
-                          >
+                          <div className="segmented" role="group" aria-label="Einheit der Menge">
                             <button
                               type="button"
                               className={yieldUnit !== 'ml' ? 'segmented-active' : ''}

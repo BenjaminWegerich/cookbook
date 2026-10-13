@@ -2062,7 +2062,7 @@ function RecipeEditor({
                 {photoUrl !== null && (
                   <button
                     type="button"
-                    className="text-button danger-text"
+                    className="danger-button"
                     onClick={() => {
                       if (!confirmRemovePhoto) {
                         setConfirmRemovePhoto(true);
@@ -2417,7 +2417,7 @@ function RecipeEditor({
                 <div className="step-add-row">
                   <button
                     type="button"
-                    className="add-ingredient"
+                    className="add-button"
                     onClick={() => openSheet({ kind: 'row-add', stepIndex })}
                   >
                     + Zutat zur Liste hinzufügen
@@ -2458,7 +2458,7 @@ function RecipeEditor({
                   ))}
                 <button
                   type="button"
-                  className="add-ingredient"
+                  className="add-button"
                   onClick={() =>
                     openSheet({
                       kind: 'inline',
@@ -2477,7 +2477,7 @@ function RecipeEditor({
           {/* + Schritt hinzufügen — adds a new empty step after the last one. */}
           <button
             type="button"
-            className="add-step"
+            className="add-button"
             onClick={() =>
               updateDraft((current) => ({
                 ...current,

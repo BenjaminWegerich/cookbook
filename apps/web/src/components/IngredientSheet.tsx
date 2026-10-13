@@ -336,7 +336,7 @@ function IngredientSheet({
           <ul className="suggestions">
             {suggestions.map((candidate) => (
               <li key={candidate}>
-                <button type="button" onClick={() => adoptSuggestion(candidate)}>
+                <button type="button" className="chip" onClick={() => adoptSuggestion(candidate)}>
                   {candidate}
                   {recipeTitles.has(candidate) && (
                     <span className="ingredient-tag tag-recipe">
@@ -353,7 +353,7 @@ function IngredientSheet({
           <div className="not-in-master">
             <button
               type="button"
-              className="create-ingredient-button"
+              className="add-button"
               onClick={() => onCreateNewIngredient(trimmedName, pickerQuantity)}
             >
               <PlusIcon className="button-icon" />

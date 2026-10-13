@@ -42,6 +42,7 @@
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* The one emphasised word of the instruction: the same semibold weight the
@@ -133,6 +134,7 @@
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: var(--text-md);
+  line-height: var(--leading-md);
   font-weight: 600;
 }
 
@@ -144,6 +146,7 @@
    already uses --text-sm; only the need has to shrink to match. */
 .pantry-row--collapsed .pantry-need {
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* The folded line is one tap target: any tap on it unfolds the row. `cursor:
@@ -179,6 +182,7 @@
   gap: var(--space-1);
   margin-inline-start: auto;
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* The on-stock amount of a folded row: the "Vorrat" counterpart of .pantry-buy
@@ -191,6 +195,7 @@
   gap: var(--space-1);
   margin-inline-start: auto;
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* The shelf symbol that leads the on-stock amount and the chip row: 14 px,
@@ -245,11 +250,13 @@
    weight of a value. */
 .pantry-buy .pantry-amount {
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* The on-stock amount shares the caption's smaller step, like the purchase. */
 .pantry-stock .pantry-amount {
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* The em dash that stands in for a zero quantity ("nothing on stock" / "nothing
@@ -269,6 +276,7 @@
   flex-wrap: wrap;
   min-width: 0;
   font-size: var(--text-md);
+  line-height: var(--leading-md);
   font-weight: 600;
 }
 
@@ -333,6 +341,7 @@
   flex: none;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* ---- The stock chips (the row's second line) ----------------------------- */
@@ -364,7 +373,10 @@
 .stock-chips {
   display: flex;
   flex-wrap: nowrap;
-  gap: var(--space-2);
+  /* The chip row gap (§5.2): each chip carries 5 px of hit-area ring, so the gap
+     must be at least twice that or two hit areas would overlap. Mirrored by
+     CHIP_GAP in components/StockChips.tsx. */
+  gap: var(--space-4);
   overflow: hidden;
   min-width: 0;
 }
@@ -445,6 +457,7 @@
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
   text-align: end;
 }
 
@@ -452,5 +465,6 @@
   margin: 0;
   color: var(--color-danger);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
   text-align: end;
 }

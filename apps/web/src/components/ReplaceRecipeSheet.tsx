@@ -377,7 +377,7 @@ function ReplaceRecipeSheet({
           <ul className="suggestions">
             {suggestions.map((recipe) => (
               <li key={recipe.fileId}>
-                <button type="button" onClick={() => adoptSuggestion(recipe)}>
+                <button type="button" className="chip" onClick={() => adoptSuggestion(recipe)}>
                   {recipe.title}
                 </button>
               </li>

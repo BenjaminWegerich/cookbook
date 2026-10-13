@@ -23,6 +23,7 @@
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 .shopping-select-empty {
@@ -115,7 +116,7 @@
   overflow-wrap: anywhere;
   font-size: var(--text-md);
   font-weight: 600;
-  line-height: 1.3;
+  line-height: var(--leading-md);
 }
 
 /* The size the plan entry states, next to the title: muted and one step
@@ -127,6 +128,7 @@
   margin-inline-start: auto;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* ---- Forward action ------------------------------------------------------ */

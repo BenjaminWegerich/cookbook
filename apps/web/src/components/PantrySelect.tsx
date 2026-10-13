@@ -555,7 +555,9 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
   async function handleWrite(): Promise<void> {
     setBusy(true);
     setWriteError(null);
-    const lines = toBuy.map((entry) => renderPantryLine(entry.need.ingredient, entry.buy, entry.need.baseUnit));
+    const lines = toBuy.map((entry) =>
+      renderPantryLine(entry.need.ingredient, entry.buy, entry.need.baseUnit),
+    );
     try {
       await onWrite(lines, bundle?.recipes ?? 0);
     } catch (err) {
@@ -580,7 +582,10 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
     const customChip: StockChip | null =
       customValue === null
         ? null
-        : { value: customValue, label: renderPantryChip(need.ingredient, customValue, need.baseUnit) };
+        : {
+            value: customValue,
+            label: renderPantryChip(need.ingredient, customValue, need.baseUnit),
+          };
     // The suggested stock values as chips, each labelled with both units. The
     // custom value is left out so it never duplicates the edit chip below.
     const chips: StockChip[] = suggestedStocks(need)

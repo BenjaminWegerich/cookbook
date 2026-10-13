@@ -79,8 +79,9 @@ interface StockChipsProps {
   label: string;
 }
 
-/** The gap between two chips (space-2, mirrored in pantry-select.css). */
-const CHIP_GAP = 6;
+/** The gap between two chips (space-4, mirrored in pantry-select.css). It has to
+ *  clear two 5 px hit-area rings, so neighbouring chips never overlap. */
+const CHIP_GAP = 10;
 
 /**
  * How many leading chips (in keep-priority order) fit beside one reserved

@@ -84,6 +84,7 @@
   padding: var(--space-2);
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* The screen headers' „Zurück" button sits flush against the page gutter, so
@@ -265,6 +266,7 @@
 .recipe-section-caption {
   margin: 0;
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
   font-weight: 600;
   color: var(--color-ink-muted);
   text-transform: uppercase;
@@ -290,29 +292,6 @@
 .recipe-section > .recipe-search-empty,
 .recipe-section > .loading-message {
   margin-block: 0;
-}
-
-/* "Einkaufsliste schreiben": the entry into the bundled shopping-list view of
-   the meal plan, sitting under the "Einkaufsliste" caption next to the sort
-   button (see .shopping-list-actions). It keeps the shared
-   .text-button geometry (inline flex, icon + label, 14 px) but is dressed as a
-   soft accent chip (decided with the user: the entry had to become more
-   prominent than a bare text button): clay text on a light clay tint, one
-   clay hairline and the pill radius the editor's chips already use. Prominent
-   enough to be read as the section's button at a glance, yet quieter than the
-   filled floating action button, which stays the screen's one loud control; the
-   tint is an opaque mix of two palette tokens, like the discard bar's. The
-   horizontal padding is one ladder step wider than a chip's, because the symbol
-   and a two-word label sit in it; `flex: none` stops the label from rewrapping
-   before the actions row itself does. */
-.shopping-list-button {
-  flex: none;
-  padding: var(--space-2) var(--space-5);
-  border: 1px solid var(--color-accent);
-  border-radius: 100px; /* pill — structural exception, as on .chip */
-  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
-  color: var(--color-accent);
-  font-weight: 600;
 }
 
 /* ---- Recipe list -------------------------------------------------------- */
@@ -400,7 +379,7 @@
   padding: var(--space-4) 0 0;
   font-size: var(--text-md);
   font-weight: 600;
-  line-height: 1.3;
+  line-height: var(--leading-md);
 }
 
 /* The title text: at most three lines, then an ellipsis. `min-width: 0` lets
@@ -434,7 +413,7 @@
   color: var(--color-on-accent);
   font-size: var(--text-sm);
   font-weight: 600;
-  line-height: 1.3;
+  line-height: var(--leading-sm);
   text-transform: uppercase;
 }
 
@@ -597,6 +576,7 @@
   background: var(--color-accent);
   color: var(--color-on-accent);
   font-size: var(--text-md);
+  line-height: var(--leading-md);
   font-weight: 600;
   white-space: nowrap;
   box-shadow: var(--shadow-md);
@@ -631,12 +611,14 @@
 .login-note {
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* Transient status while the sign-in popup is being opened. */
 .login-status {
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* Failed user-driven sign-in attempt (e.g. popup blocked) — shown on the login
@@ -647,6 +629,7 @@
   border-radius: var(--radius-md);
   color: var(--color-danger);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 .empty-state {
@@ -685,6 +668,7 @@
 .plan-connect-note {
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 .error-message {
@@ -705,6 +689,7 @@
   border-radius: var(--radius-md);
   color: var(--color-danger);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* ---- Editor placeholder (replaced by the editor task) ------------------- */

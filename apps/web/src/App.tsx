@@ -48,7 +48,12 @@ import { listRecipes, recipeExportUrl, type StoredRecipe } from './drive/recipeS
 import { useEscapeTrigger } from './hooks/useLeaveGuard';
 import { useScrollMemory } from './hooks/useScrollMemory';
 import { useSnackbar } from './hooks/useSnackbar';
-import { keepErrorMessage, type KeepChecklist, type KeepItem, type KeepState } from './keep/keepClient';
+import {
+  keepErrorMessage,
+  type KeepChecklist,
+  type KeepItem,
+  type KeepState,
+} from './keep/keepClient';
 import { resolveMealPlan, type MealPlanCard, type MealPlanResolution } from './keep/mealPlanCards';
 import { useKeep } from './keep/useKeep';
 import './styles/ai-create.css';
@@ -931,8 +936,7 @@ function App() {
    * an identity check against `shoppingSortedFor`, which any shopping-list
    * change invalidates on its own (see the state's own comment).
    */
-  const shoppingSorted =
-    shoppingSortedFor !== null && shoppingSortedFor === keep.state?.shopping;
+  const shoppingSorted = shoppingSortedFor !== null && shoppingSortedFor === keep.state?.shopping;
 
   /**
    * The shopping list's entries for the home screen's "Einkaufsliste" caption,
@@ -1545,7 +1549,9 @@ function App() {
     async (resolutions: ReadonlyMap<string, ShoppingStop | 'ignore'>): Promise<void> => {
       const activeToken = token;
       if (activeToken === null) {
-        throw new Error('Nicht mit Google Drive verbunden — der Einkaufsort kann nicht gespeichert werden.');
+        throw new Error(
+          'Nicht mit Google Drive verbunden — der Einkaufsort kann nicht gespeichert werden.',
+        );
       }
 
       // The snapshot the page was opened with, in Keep's display order.
@@ -1969,7 +1975,7 @@ function App() {
                 Deine Rezepte liegen als Markdown-Dateien in einem „Cookbook“-Ordner in deinem
                 Google Drive.
               </p>
-              <button type="button" onClick={() => void handleConnect()}>
+              <button type="button" className="primary-button" onClick={() => void handleConnect()}>
                 Mit Google verbinden
               </button>
               {connecting && (

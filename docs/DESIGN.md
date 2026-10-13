@@ -118,18 +118,22 @@ tokens are the only source — no raw colour appears in the export's styles.
 
 **Four sizes, each with a fixed line height** — every value a ladder step (§4.3):
 
-| Token | Size | Line height | Role |
-| --- | --- | --- | --- |
-| `--text-xl` | 32px | 42px | screen title (`h1`) |
-| `--text-lg` | 24px | 32px | card and section titles (`h2`) |
-| `--text-md` | 18px | 24px | body text, the base size (`h3` and everything unmarked) |
-| `--text-sm` | 14px | 18px | captions, meta, transient notices |
+| Size token | Line-height token | Size | Line height | Role |
+| --- | --- | --- | --- | --- |
+| `--text-xl` | `--leading-xl` | 32px | 36px | screen title (`h1`) |
+| `--text-lg` | `--leading-lg` | 24px | 28px | card and section titles (`h2`) |
+| `--text-md` | `--leading-md` | 18px | 24px | body text, the base size (`h3` and everything unmarked) |
+| `--text-sm` | `--leading-sm` | 14px | 18px | captions, meta, transient notices |
 
 **Rules**
 
 - Body text is 18px on 24px. There is no 16px in the ladder and no smaller body size.
 - Titles and emphasis are weight 600, body text is weight 400. No other weight.
-- Size and line height are one pair: a text style never takes one without the other.
+- Size and line height are one pair: a text style never takes one without the other, and each comes from the token of its own step.
+- A line height is a token, never a ratio: no `line-height: 1.5` or `1.3` exists in the interface.
+- Only text takes a line height. A box that centres a symbol — an icon-only control, a media tile — sets none.
+- One exception: a value chip drawn inside running prose (the editor's step artifacts) sets
+  `line-height: 1`, so it never opens the prose line more than its own box. *decided with the user*
 - A size is chosen by the text's role, never by how much room is left.
 
 *Applies to: cooking view.*
@@ -139,12 +143,12 @@ no runtime font fetch. The default typeface is Source Sans 3.
 
 **Four sizes**, each with its fixed line height, every value a ladder step:
 
-| Token | Size | Line height | Role |
-| --- | --- | --- | --- |
-| `--text-xl` | 32px | 42px | the intro title (`h1`) |
-| `--text-lg` | 24px | 32px | the Zutaten heading, the step title, step prose, step ingredients, check-list rows |
-| `--text-md` | 18px | 24px | the bottom-bar buttons — the base size |
-| `--text-sm` | 14px | 18px | captions (the recipe-title caption, the size-picker caption), meta |
+| Size token | Line-height token | Size | Line height | Role |
+| --- | --- | --- | --- | --- |
+| `--text-xl` | `--leading-xl` | 32px | 36px | the intro title (`h1`) |
+| `--text-lg` | `--leading-lg` | 24px | 28px | the Zutaten heading, the step title, step prose, step ingredients, check-list rows |
+| `--text-md` | `--leading-md` | 18px | 24px | the bottom-bar buttons — the base size |
+| `--text-sm` | `--leading-sm` | 14px | 18px | captions (the recipe-title caption, the size-picker caption), meta |
 
 Titles and captions are weight 600, body text weight 400. Step prose, its ingredient rows and
 the check-list read at arm's length and use `--text-lg`; the step title „Schritt x von y" shares
@@ -194,6 +198,7 @@ interface.
 - A heading takes more space above than below.
 - Screen gutters are `--app-padding` (18px), the same on every screen.
 - Inline icons are `--icon-size` (24px), the floating action button `--fab-size` (56px).
+- An action button is at least `--control-height` (42px) tall, so a change of leading can never shrink a target below thumb reach.
 - A second-priority step gets a `--space-*` token only when a repeated need appears, not in
   advance.
 
@@ -460,7 +465,7 @@ A typeface joins the shortlist only when it meets every requirement:
 
 *Applies to: web app.*
 
-**Four button variants, each with one job:**
+**Five button variants, each with one job:**
 
 | Variant | Look | Used for |
 | --- | --- | --- |
@@ -468,11 +473,14 @@ A typeface joins the shortlist only when it meets every requirement:
 | Danger | danger fill, `--color-on-accent` label | a destructive action („Rezept löschen", „Entfernen") |
 | Outlined | surface fill, hairline border, ink label | secondary actions in a row („Einplanen", „Mehr") |
 | Text | no fill, no border, muted label | navigation („Zurück") and quiet answers („Abbrechen", „Rückgängig") |
+| Add | surface fill, olive border, olive label | a creation action inside a card or list („Schritt hinzufügen", „Zutat hinzufügen", „Zutat anlegen") |
 
 **Geometry.** Action buttons: `--radius-md`, padding `--space-3` / `--space-6`, label
 `--text-md` weight 600, `--space-2` gap to an 18px symbol (`--icon-md`). Text buttons:
-`--radius-sm`, padding `--space-2`, label `--text-sm`. Icon-only buttons keep the geometry of
-their variant and carry an `aria-label`.
+`--radius-sm`, padding `--space-2`, label `--text-sm`. An Add button takes the outlined
+button's geometry. An icon-only button keeps the geometry of its variant, carries an
+`aria-label`, and — where it is a −/+ stepper — keeps a circular box of `--control-height`.
+*decided with the user*
 
 **States**
 
@@ -486,13 +494,17 @@ their variant and carry an `aria-label`.
 
 **Action rows.** A sheet ends in one bottom row: answers right-aligned in the order no | yes,
 the primary last. A danger button leaves that order and sits at the left end of the row. A
-page has no cancel in its row — its navigation exit is „Zurück" at the top left (§6.1).
+page has no cancel in its row — its navigation exit is „Zurück" at the top left (§6.1). The
+order governs the bottom row that answers a decision; a row of peer actions inside a sheet's
+content places its own order.
 
 **Rules**
 
 - One primary action per decision; a row never shows two accent-filled buttons.
-- Every action button is at least 42px tall, so a change of leading can never shrink a target
-  below thumb reach.
+- Add is the only olive button, and it only creates: it never decides between things that already exist.
+- A compact icon-only control inside a card row may keep a box smaller than `--control-height` — the step head's 32px ↑ ↓ ✕ — as long as a ring beyond the box brings its hit area to `--control-height` and the row's gap is wide enough that two hit areas never overlap. *decided with the user*
+- Every action button is at least `--control-height` (42px) tall, so a change of leading can never
+  shrink a target below thumb reach.
 - A chip is not a button variant: it stays compact and takes its own hit area (§5.2).
 - Never disable a button for a reason that is not visible next to it; run the check on press
   and show the problem instead (§5.3).
@@ -512,8 +524,15 @@ where it is hidden.
 
 *Applies to: web app.*
 
-**A chip is one value in a wrapping row.** Look: pill (`100px` radius), `--color-bg` fill,
-hairline border, `--text-sm` label. A row of chips wraps and never scrolls sideways.
+**A chip is one value in a row of alternatives.** Look: pill (`100px` radius), `--color-bg`
+fill, hairline border, `--text-sm` label. A chip that previews a typeface is the one
+exception: it renders at `--text-md`, because the larger size is what shows the typeface.
+*decided with the user*
+
+**A chip row wraps, and it is never a scroll container.** A row whose chips are an ordered
+ladder of amounts — the pantry sheet's stock chips — fits itself to one line instead: it
+measures its own width, keeps the leading chips that fit beside one reserved slot, and hides
+the rest behind that slot. *decided with the user*
 
 | State | Look | Meaning |
 | --- | --- | --- |
@@ -978,7 +997,8 @@ action can be undone, not by how large it is.
 **The look**
 
 - A destructive button is the danger fill with `--color-on-accent` label, the primary button's
-  geometry (§5.1); a destructive menu entry is danger text on the surface.
+  geometry (§5.1). A destructive control with no room for a label — a menu entry, an icon-only
+  ✕ in a list row — is danger ink on the surface instead. *decided with the user*
 - Danger never decorates: the colour appears only on an action that really removes data, never
   on a quiet answer. „Abbrechen" is always a text button.
 
@@ -1208,7 +1228,7 @@ that file.
 | §4.5 Iconography | `apps/web/src/components/icons.tsx` |
 | §4.6 Motion | `apps/web/src/index.css` (global press/focus rules), the component stylesheets |
 | §4.7 Layout | `apps/web/src/index.css`, `apps/web/src/styles/recipe-list.css` |
-| §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.text-button`, `.sheet-actions`) |
+| §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.outlined-button`, `.text-button`, `.add-button`, `.sheet-actions`) |
 | §5.2 Chips and segmented controls | `apps/web/src/styles/editor.css`, `apps/web/src/components/quantityChips.ts` |
 | §5.3 Form fields | `apps/web/src/styles/editor.css` (`.field`, `.field-label`, `.field-error`) |
 | §5.4 Cards and list items | `apps/web/src/styles/recipe-list.css`, `apps/web/src/components/RecipeList.tsx` |

@@ -22,6 +22,7 @@
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 .sort-empty {
@@ -60,6 +61,7 @@
 .sort-entry-text {
   margin: 0;
   font-size: var(--text-md);
+  line-height: var(--leading-md);
   font-weight: 600;
 }
 
@@ -70,6 +72,7 @@
   gap: var(--space-2);
   margin: 0;
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* The ignore toggle: a chip, right after the picker. When active it wears the
@@ -83,6 +86,7 @@
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* ---- Forward action ------------------------------------------------------ */
@@ -99,6 +103,7 @@
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
   text-align: end;
 }
 
@@ -106,5 +111,6 @@
   margin: 0;
   color: var(--color-danger);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
   text-align: end;
 }

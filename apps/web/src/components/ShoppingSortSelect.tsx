@@ -113,7 +113,13 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
     if (ignored.has(entry.text)) return true;
     if (storesOfRoute.length === 0) return false;
     const store = stores.get(entry.text);
-    return chosenStop(store, store === undefined ? [] : shoppingSections(store), sections.get(entry.text) ?? '') !== null;
+    return (
+      chosenStop(
+        store,
+        store === undefined ? [] : shoppingSections(store),
+        sections.get(entry.text) ?? '',
+      ) !== null
+    );
   });
 
   /** True while the snapshot holds at least one unchecked line to sort. */
@@ -174,7 +180,11 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
         continue;
       }
       const store = stores.get(entry.text);
-      const stop = chosenStop(store, store === undefined ? [] : shoppingSections(store), sections.get(entry.text) ?? '');
+      const stop = chosenStop(
+        store,
+        store === undefined ? [] : shoppingSections(store),
+        sections.get(entry.text) ?? '',
+      );
       if (stop !== null) {
         resolutions.set(entry.text, stop);
       }
@@ -199,8 +209,7 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
     if (storesOfRoute.length === 0) {
       return (
         <p className="field-hint">
-          Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — dieser Eintrag kann nur ignoriert
-          werden.
+          Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — dieser Eintrag kann nur ignoriert werden.
         </p>
       );
     }
@@ -209,7 +218,9 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
     const section = (sections.get(entry.text) ?? '').trim();
     const suggestions = sectionOptions.includes(section)
       ? []
-      : sectionOptions.filter((candidate) => candidate.toLowerCase().includes(section.toLowerCase()));
+      : sectionOptions.filter((candidate) =>
+          candidate.toLowerCase().includes(section.toLowerCase()),
+        );
     return (
       <>
         <div className="store-chips" role="group" aria-label={`Markt für ${entry.item}`}>
@@ -240,7 +251,11 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
               <ul className="suggestions">
                 {suggestions.map((candidate) => (
                   <li key={candidate}>
-                    <button type="button" onClick={() => typeSection(entry.text, candidate)}>
+                    <button
+                      type="button"
+                      className="chip"
+                      onClick={() => typeSection(entry.text, candidate)}
+                    >
                       {candidate}
                     </button>
                   </li>
@@ -290,9 +305,7 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
         </p>
       );
     }
-    return (
-      <ul className="sort-list">{unresolved.map((entry) => renderEntry(entry))}</ul>
-    );
+    return <ul className="sort-list">{unresolved.map((entry) => renderEntry(entry))}</ul>;
   }
 
   return (
@@ -307,8 +320,8 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
       </header>
 
       <p className="sort-intro">
-        Einträge ohne Einkaufsort werden hier zugeordnet. Einträge, die du ignorierst, kommen an
-        den Anfang der Liste; alle anderen werden nach dem Einkaufsweg sortiert.
+        Einträge ohne Einkaufsort werden hier zugeordnet. Einträge, die du ignorierst, kommen an den
+        Anfang der Liste; alle anderen werden nach dem Einkaufsweg sortiert.
       </p>
 
       {renderList()}
@@ -328,7 +341,10 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
           {busy ? 'Wird sortiert …' : 'Einkaufsliste sortieren'}
         </button>
         {(error !== null || !complete) && (
-          <p className={error !== null ? 'sort-action-error' : 'sort-action-note'} role={error !== null ? 'alert' : 'status'}>
+          <p
+            className={error !== null ? 'sort-action-error' : 'sort-action-note'}
+            role={error !== null ? 'alert' : 'status'}
+          >
             {error ?? 'Bitte jeden Eintrag zuordnen oder ignorieren.'}
           </p>
         )}

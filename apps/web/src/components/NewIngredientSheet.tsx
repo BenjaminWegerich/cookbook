@@ -494,7 +494,7 @@ function NewIngredientSheet({
                 <ul className="suggestions">
                   {copySuggestions.map((candidate) => (
                     <li key={candidate}>
-                      <button type="button" onClick={() => adoptCopy(candidate)}>
+                      <button type="button" className="chip" onClick={() => adoptCopy(candidate)}>
                         {candidate}
                       </button>
                     </li>
@@ -507,8 +507,12 @@ function NewIngredientSheet({
           <p className="field-hint">Manuell anpassen:</p>
           <div className="factor-grid">
             <span className="factor-head-cell" aria-hidden="true" />
-            <span className="factor-head-cell" aria-hidden="true">Menge [{bu}]</span>
-            <span className="factor-head-cell" aria-hidden="true">Priorität</span>
+            <span className="factor-head-cell" aria-hidden="true">
+              Menge [{bu}]
+            </span>
+            <span className="factor-head-cell" aria-hidden="true">
+              Priorität
+            </span>
             {ADDITIONAL_UNITS.flatMap((unit) => [
               <span key={`${unit.name}:name`} className="factor-unit">
                 {unit.name}
@@ -616,7 +620,11 @@ function NewIngredientSheet({
                     <ul className="suggestions">
                       {sectionSuggestions.map((candidate) => (
                         <li key={candidate}>
-                          <button type="button" onClick={() => adoptSection(candidate)}>
+                          <button
+                            type="button"
+                            className="chip"
+                            onClick={() => adoptSection(candidate)}
+                          >
                             {candidate}
                           </button>
                         </li>

@@ -33,6 +33,7 @@
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* The "nothing matches" line of the search: the shared empty-search look, with
@@ -48,6 +49,7 @@
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 /* A failed read of the picked recipe or a failed write: the reason sits next to
@@ -60,4 +62,5 @@
   border-radius: var(--radius-md);
   color: var(--color-danger);
   font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }

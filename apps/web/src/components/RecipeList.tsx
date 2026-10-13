@@ -543,7 +543,7 @@ function RecipeList({
                 {canWriteShoppingList && (
                   <button
                     type="button"
-                    className="text-button shopping-list-button"
+                    className="outlined-button"
                     onClick={onWriteShoppingList}
                     disabled={shoppingWritten}
                   >
@@ -569,7 +569,7 @@ function RecipeList({
                 {shoppingSortable && (
                   <button
                     type="button"
-                    className="text-button shopping-list-button"
+                    className="outlined-button"
                     onClick={onSortShoppingList}
                     disabled={shoppingSorted}
                   >

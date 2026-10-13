@@ -306,7 +306,12 @@ function MealPlanSheet({
               "Abbrechen" and "Menge ändern". Like "Abbrechen" it is unavailable
               while a write runs, so the two writes cannot interleave. */}
           {isReplan && (
-            <button type="button" className="outlined-button sheet-actions-lead" onClick={onRemove} disabled={busy}>
+            <button
+              type="button"
+              className="outlined-button sheet-actions-lead"
+              onClick={onRemove}
+              disabled={busy}
+            >
               <CheckBoxIcon className="button-icon" />
               <span>Abhaken</span>
             </button>

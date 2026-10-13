@@ -49,6 +49,17 @@
   --text-lg: 24px; /* card / section titles */
   --text-xl: 32px; /* screen title */
 
+  /* Each size has exactly one line height (docs/DESIGN.md §4.2): a text style
+     sets both of its step, and nothing in the interface sets a line-height
+     ratio. A box that centres a symbol sets neither (see index.css). */
+  --leading-sm: 18px;
+  --leading-md: 24px;
+  /* The two heading sizes take a second-priority ladder step (§4.3): the
+     preferred step below them is 1.0 leading — too tight for a title — and the
+     one above leaves a title visibly loose (decided with the user). */
+  --leading-lg: 28px;
+  --leading-xl: 36px;
+
   /* ---- Spacing ladder --------------------------------------------------- */
   --space-1: 4px;
   --space-2: 6px;
@@ -72,13 +83,25 @@
   --radius-xl: 32px;
 
   /* ---- Elevation (warm, low-contrast shadows) --------------------------- */
-  --shadow-sm: 0 3px 8px rgba(43, 36, 29, 0.06);
+  --shadow-sm: 0 3px 10px rgba(43, 36, 29, 0.06);
   --shadow-md: 0 6px 18px rgba(43, 36, 29, 0.08);
+
+  /* ---- Motion (docs/DESIGN.md §4.6) -------------------------------------- */
+  /* Feedback, not decoration: two durations, one easing curve (`ease-out`).
+     `fast` fades a press highlight out after release; `base` carries entrances
+     and state changes — the create menu rising, the notice sliding in, the
+     FAB's plus turning into an ×. Every animation is disabled under
+     `prefers-reduced-motion: reduce`. */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
 
   /* ---- Layout constants -------------------------------------------------- */
   --app-padding: 18px; /* screen gutters */
+  --control-height: 42px; /* the minimum height of an action button (§5.1) */
   --fab-size: 56px; /* floating action button */
-  --icon-size: 24px; /* inline icons */
+  --icon-size: 24px; /* standalone symbols, list rows */
+  --icon-md: 18px; /* a symbol inside a button, next to its label */
+  --icon-sm: 14px; /* a symbol inside a chip, tag or badge */
 
   /* ---- Media placeholder palette ----------------------------------------- */
   /* Warm, deterministic background colors for recipe thumbnails without a
