@@ -168,10 +168,6 @@
   appearance: none;
 }
 
-.recipe-search-input:focus-visible {
-  outline-offset: 0;
-}
-
 .recipe-search-input::-webkit-search-cancel-button,
 .recipe-search-input::-webkit-search-decoration {
   -webkit-appearance: none;
@@ -512,7 +508,7 @@
 
 /* The plus rotates into an × while the create menu is open. */
 .fab .fab-icon {
-  transition: transform 180ms ease-out;
+  transition: transform var(--motion-base) ease-out;
 }
 
 .fab-active .fab-icon {
@@ -552,7 +548,7 @@
   display: grid;
   gap: var(--space-3);
   justify-items: end;
-  animation: fab-menu-in 180ms ease-out;
+  animation: fab-menu-in var(--motion-base) ease-out;
 }
 
 @keyframes fab-menu-in {

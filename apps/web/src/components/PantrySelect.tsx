@@ -651,15 +651,33 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
             led by a shelf symbol) and the bought amount (led by a shopping-cart
             symbol). A zero quantity reads as an em dash. */}
         <div className="pantry-head">
-          <div className="pantry-need">{needText(need)}</div>
+          {/* The need is the row's toggle and therefore a real button (§8), so a
+              keyboard user can open and close the row. The row's own tap handler
+              stays for the rest of the line, which is why this one stops the
+              event: without that, a tap on the text would toggle twice. */}
+          <button
+            type="button"
+            className="pantry-need"
+            aria-expanded={!collapsed}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (collapsed) {
+                expand(key);
+              } else {
+                collapse(key);
+              }
+            }}
+          >
+            {needText(need)}
+          </button>
           {collapsed && (
             <span className="pantry-stock">
-              <ShelfIcon className="pantry-stock-icon" />
+              <ShelfIcon className="pantry-stock-icon" optical={20} />
               {buy === 0 ? (
                 // Everything is on stock: the quantity gives way to an olive
                 // check badge, the one unmistakable "nothing to buy" marker.
                 <span className="pantry-complete-badge" role="img" aria-label="Alles auf Vorrat">
-                  <CheckIcon className="pantry-complete-badge-icon" />
+                  <CheckIcon className="pantry-complete-badge-icon" optical={20} />
                 </span>
               ) : stock > 0 ? (
                 <span className="pantry-amount">
@@ -674,7 +692,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
               an em space (matching the intro's legend separators). */}
           {collapsed && '\u2003'}
           <span className="pantry-buy">
-            <ShoppingCartIcon className="pantry-buy-icon" />
+            <ShoppingCartIcon className="pantry-buy-icon" optical={20} />
             {buyContent}
           </span>
         </div>
@@ -682,7 +700,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
             led by the shelf symbol, only while the row is unfolded. */}
         {!collapsed && (
           <div className="pantry-stock-line">
-            <ShelfIcon className="pantry-stock-icon" />
+            <ShelfIcon className="pantry-stock-icon" optical={20} />
             <StockChips
               chips={chips}
               value={stock}
@@ -760,17 +778,17 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
         kaufende Menge ein.{'\u2003'}
         <span className="pantry-intro-legend-group">
           <span className="pantry-intro-legend">
-            <ShelfIcon className="pantry-intro-icon" />
+            <ShelfIcon className="pantry-intro-icon" optical={20} />
             auf Vorrat
           </span>
           {'\u2003'}
           <span className="pantry-intro-legend">
-            <CheckIcon className="pantry-intro-icon" />
+            <CheckIcon className="pantry-intro-icon" optical={20} />
             alles auf Vorrat
           </span>
           {'\u2003'}
           <span className="pantry-intro-legend">
-            <ShoppingCartIcon className="pantry-intro-icon" />
+            <ShoppingCartIcon className="pantry-intro-icon" optical={20} />
             kaufen
           </span>
         </span>

@@ -548,9 +548,9 @@ function RecipeList({
                     disabled={shoppingWritten}
                   >
                     {shoppingWritten ? (
-                      <CheckCircleIcon className="button-icon" />
+                      <CheckCircleIcon className="button-icon" optical={20} />
                     ) : (
-                      <ListPlusIcon className="button-icon" />
+                      <ListPlusIcon className="button-icon" optical={20} />
                     )}
                     <span>
                       {shoppingWritten ? 'Einkaufsliste geschrieben' : 'Einkaufsliste schreiben'}
@@ -574,9 +574,9 @@ function RecipeList({
                     disabled={shoppingSorted}
                   >
                     {shoppingSorted ? (
-                      <CheckCircleIcon className="button-icon" />
+                      <CheckCircleIcon className="button-icon" optical={20} />
                     ) : (
-                      <SortIcon className="button-icon" />
+                      <SortIcon className="button-icon" optical={20} />
                     )}
                     <span>{shoppingSorted ? 'sortiert' : 'sortieren'}</span>
                   </button>

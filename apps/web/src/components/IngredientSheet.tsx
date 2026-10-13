@@ -340,7 +340,7 @@ function IngredientSheet({
                   {candidate}
                   {recipeTitles.has(candidate) && (
                     <span className="ingredient-tag tag-recipe">
-                      <LinkIcon className="tag-icon" />
+                      <LinkIcon className="tag-icon" optical={20} />
                       <span>Rezept</span>
                     </span>
                   )}
@@ -356,7 +356,7 @@ function IngredientSheet({
               className="add-button"
               onClick={() => onCreateNewIngredient(trimmedName, pickerQuantity)}
             >
-              <PlusIcon className="button-icon" />
+              <PlusIcon className="button-icon" optical={20} />
               <span>Neue Zutat anlegen</span>
             </button>
           </div>
@@ -424,7 +424,7 @@ function IngredientSheet({
               className="danger-button"
               onClick={() => onConfirm(initial!, 'remove')}
             >
-              <TrashIcon className="button-icon" />
+              <TrashIcon className="button-icon" optical={20} />
               <span>Entfernen</span>
             </button>
           )}

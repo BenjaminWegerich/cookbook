@@ -813,7 +813,7 @@ export default function AiCreateSheet({
                         onOpenDraft(draft);
                       }}
                     >
-                      <EyeIcon className="button-icon" />
+                      <EyeIcon className="button-icon" optical={20} />
                       <span>Entwurf überprüfen</span>
                     </button>
                   </div>

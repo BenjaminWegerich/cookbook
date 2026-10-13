@@ -863,7 +863,7 @@ function RecipeOverview({
               {target.kind === 'unknown' && (
                 <div className="overview-meta-badge">
                   <span className="recipe-badge recipe-badge-unknown">
-                    <RoomServiceIcon className="recipe-badge-icon" />
+                    <RoomServiceIcon className="recipe-badge-icon" optical={20} />
                     <span>Unbekannt</span>
                   </span>
                 </div>
@@ -944,7 +944,7 @@ function RecipeOverview({
                   aria-expanded={openMenu === 'replace'}
                   onClick={() => toggleMenu('replace')}
                 >
-                  <SwapHorizIcon />
+                  <SwapHorizIcon optical={20} />
                   <span>Eintrag ersetzen</span>
                 </button>
 
@@ -956,15 +956,15 @@ function RecipeOverview({
                     style={menuStyle}
                   >
                     <button type="button" role="menuitem" onClick={openReplace}>
-                      <MenuBookIcon />
+                      <MenuBookIcon optical={20} />
                       <span>Bestehendes Rezept auswählen</span>
                     </button>
                     <button type="button" role="menuitem" onClick={createManually}>
-                      <PencilIcon />
+                      <PencilIcon optical={20} />
                       <span>Rezept manuell schreiben</span>
                     </button>
                     <button type="button" role="menuitem" onClick={createWithAi}>
-                      <SparkleIcon />
+                      <SparkleIcon optical={20} />
                       <span>Rezept mit KI schreiben</span>
                     </button>
                   </div>
@@ -975,14 +975,14 @@ function RecipeOverview({
                   (decided with the user): the entry's complete Keep line is
                   ticked off (not deleted) and the flow closes back to the list. */}
               <button type="button" className="overview-action" onClick={removeFromPlan}>
-                <CheckBoxIcon />
+                <CheckBoxIcon optical={20} />
                 <span>Abhaken</span>
               </button>
             </>
           ) : (
             <>
               <button type="button" className="overview-action is-primary" onClick={startCooking}>
-                <SkilletIcon />
+                <SkilletIcon optical={20} />
                 <span>Jetzt kochen</span>
               </button>
               {onMealPlan ? (
@@ -999,7 +999,7 @@ function RecipeOverview({
                   onClick={() => setPlanOpen(true)}
                   disabled={details === null}
                 >
-                  <CalendarEditIcon />
+                  <CalendarEditIcon optical={20} />
                   <span>Umplanen</span>
                 </button>
               ) : (
@@ -1015,7 +1015,7 @@ function RecipeOverview({
                   onClick={() => setPlanOpen(true)}
                   disabled={details === null}
                 >
-                  <CalendarAddIcon />
+                  <CalendarAddIcon optical={20} />
                   <span>Einplanen</span>
                 </button>
               )}
@@ -1027,7 +1027,7 @@ function RecipeOverview({
                   aria-expanded={openMenu === 'more'}
                   onClick={() => toggleMenu('more')}
                 >
-                  <MoreVertIcon />
+                  <MoreVertIcon optical={20} />
                   <span>Mehr</span>
                 </button>
 
@@ -1046,21 +1046,21 @@ function RecipeOverview({
                         instead would contradict its own label. See copyLink
                         and shareLink. */}
                     <button type="button" role="menuitem" onClick={copyLink}>
-                      <ContentCopyIcon />
+                      <ContentCopyIcon optical={20} />
                       <span>Link kopieren</span>
                     </button>
                     {shareSheet && (
                       <button type="button" role="menuitem" onClick={shareLink}>
-                        <ShareIcon />
+                        <ShareIcon optical={20} />
                         <span>Teilen</span>
                       </button>
                     )}
                     <button type="button" role="menuitem" onClick={openManualEdit}>
-                      <PencilIcon />
+                      <PencilIcon optical={20} />
                       <span>Manuell bearbeiten</span>
                     </button>
                     <button type="button" role="menuitem" onClick={openAiEdit}>
-                      <SparkleIcon />
+                      <SparkleIcon optical={20} />
                       <span>Mit KI bearbeiten</span>
                     </button>
                   </div>

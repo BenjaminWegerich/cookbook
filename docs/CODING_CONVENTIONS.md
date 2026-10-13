@@ -45,7 +45,9 @@
   and icon comes from Material Symbols — the new Material Design Symbols set
   (`symbols/.../materialsymbolsrounded/` in `google/material-design-icons`), never the older
   Material Icons set, never a hand-drawn or third-party glyph. All share one style (Rounded),
-  one 24 dp / 960-unit grid and the same **weight 400** (grade 0, optical size 24); a state
+  one 960-unit grid and the same **weight 400** (grade 0); the **optical size follows the
+  rendered size** — the 20px drawing at 14 or 18px, the 24px drawing for a standalone symbol,
+  the 40px drawing above 24px (docs/DESIGN.md §4.5) — and a state
   difference is shown by colour or by the same symbol's fill, never by a different weight or
   style. Single source: `apps/web/src/components/icons.tsx` (import from there, never inline
   an `<svg>`). Font characters (`+`, `−`, `×`) are never used in place of a symbol: wherever a

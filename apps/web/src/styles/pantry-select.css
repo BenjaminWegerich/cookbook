@@ -133,6 +133,10 @@
 .pantry-need {
   min-width: 0;
   overflow-wrap: anywhere;
+  /* The need is a <button> (the row's keyboard-reachable toggle, §8): a button
+     centres its text by default, and the base reset in index.css already removes
+     the chrome. */
+  text-align: start;
   font-size: var(--text-md);
   line-height: var(--leading-md);
   font-weight: 600;

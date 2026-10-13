@@ -312,7 +312,7 @@ function MealPlanSheet({
               onClick={onRemove}
               disabled={busy}
             >
-              <CheckBoxIcon className="button-icon" />
+              <CheckBoxIcon className="button-icon" optical={20} />
               <span>Abhaken</span>
             </button>
           )}

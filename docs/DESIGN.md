@@ -83,11 +83,11 @@ components reference tokens, never a raw value.
 | `--color-ink` | `#2b241d` | primary text |
 | `--color-ink-muted` | `#6e6255` | secondary text, captions, meta |
 | `--color-line` | `#e6dbc8` | hairlines, dividers, borders |
-| `--color-accent` | `#b85c38` | clay: primary action, active state, selection |
-| `--color-olive` | `#6b7a4a` | herb: secondary accent — selected and secondary states, media grounds, success tone |
+| `--color-accent` | `#ad5632` | clay: primary action, active state, selection |
+| `--color-olive` | `#63723f` | herb: secondary accent — selected and secondary states, media grounds, success tone |
 | `--color-danger` | `#a63b2c` | destructive actions and errors |
 | `--color-on-accent` | `#fffcf6` | text on accent surfaces |
-| `--placeholder-0` … `--placeholder-3` | `#b85c38`, `#6b7a4a`, `#c08a3e`, `#8a6d4f` | deterministic placeholder grounds (§5.8), each with a `-fg` partner for its symbol |
+| `--placeholder-0` … `--placeholder-3` | `#ad5632`, `#63723f`, `#b8813a`, `#8a6d4f` | deterministic placeholder grounds (§5.8), each with a `-fg` partner for its symbol |
 
 **Rules**
 
@@ -100,6 +100,13 @@ components reference tokens, never a raw value.
   is danger plus its symbol or an explicit sentence.
 - Every accent surface takes `--color-on-accent` as its text colour.
 - Placeholder colours are derived from the recipe title, not chosen per render (§5.8).
+- The picker draws its own colours: the theme colour picker's saturation/value plane, its hue
+  rainbow and its thumb ring are the control's own drawing, not interface colour, and they
+  are the one place a raw colour, a gradient or a black/white literal may appear.
+  *decided with the user*
+- Two colours live outside the stylesheet because they are not a component's colour: the app
+  icon's own clay and paper (`apps/web/public/favicon.svg`) and the browser-chrome colour in
+  `apps/web/index.html`. Neither follows the tokens.
 
 *Applies to: cooking view.*
 
@@ -402,7 +409,7 @@ theme independently:
 | Token | Default (the app palette) | Role |
 | --- | --- | --- |
 | `font` | Source Sans 3 | the one typeface of the export |
-| `accent` | `#b85c38` (clay) | active state, the forward actions, the sub-recipe badge, links |
+| `accent` | `#ad5632` (clay) | active state, the forward actions, the sub-recipe badge, links |
 | `paper` | `#faf5ec` | page background |
 | `ink` | `#2b241d` | primary text |
 | `line` | `#e6dbc8` | hairlines, borders, dividers |
@@ -1230,7 +1237,7 @@ that file.
 | §4.7 Layout | `apps/web/src/index.css`, `apps/web/src/styles/recipe-list.css` |
 | §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.outlined-button`, `.text-button`, `.add-button`, `.sheet-actions`) |
 | §5.2 Chips and segmented controls | `apps/web/src/styles/editor.css`, `apps/web/src/components/quantityChips.ts` |
-| §5.3 Form fields | `apps/web/src/styles/editor.css` (`.field`, `.field-label`, `.field-error`) |
+| §5.3 Form fields | `apps/web/src/styles/editor.css` (`.field`, `.field-label`, `.field-error`), `apps/web/src/index.css` (the shared text-field focus outline) |
 | §5.4 Cards and list items | `apps/web/src/styles/recipe-list.css`, `apps/web/src/components/RecipeList.tsx` |
 | §5.5 Headers and sticky bars | `apps/web/src/styles/recipe-list.css` (`.app-header`, `.app-header-stacked`) |
 | §5.6 Sheets | `apps/web/src/styles/editor.css` (`.sheet`, `.sheet-backdrop`, `.sheet-actions`) |

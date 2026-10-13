@@ -182,7 +182,7 @@ function ShoppingListSelect({
                 )}
                 {recipe === null && (
                   <span className="recipe-badge recipe-badge-unknown">
-                    <RoomServiceIcon className="recipe-badge-icon" />
+                    <RoomServiceIcon className="recipe-badge-icon" optical={20} />
                     <span>Unbekannt</span>
                   </span>
                 )}

@@ -507,7 +507,7 @@ function TimeChips({
           onClick={() => onChange('')}
           title="Gewählte Zeit entfernen"
         >
-          <CloseIcon className="chip-icon" />
+          <CloseIcon className="chip-icon" optical={20} />
           <span>Entfernen</span>
         </button>
       )}
@@ -2056,7 +2056,7 @@ function RecipeEditor({
                   className="text-button"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <UploadIcon className="button-icon" />
+                  <UploadIcon className="button-icon" optical={20} />
                   <span>{photoUrl !== null ? 'Ersetzen' : 'Auswählen'}</span>
                 </button>
                 {photoUrl !== null && (
@@ -2079,7 +2079,7 @@ function RecipeEditor({
                       }
                     }}
                   >
-                    <TrashIcon className="button-icon" />
+                    <TrashIcon className="button-icon" optical={20} />
                     <span>{confirmRemovePhoto ? 'Wirklich entfernen?' : 'Entfernen'}</span>
                   </button>
                 )}
@@ -2272,7 +2272,7 @@ function RecipeEditor({
                       }
                       aria-label="Schritt nach oben"
                     >
-                      <ArrowUpIcon className="button-icon" />
+                      <ArrowUpIcon className="button-icon" optical={20} />
                     </button>
                     <button
                       type="button"
@@ -2290,7 +2290,7 @@ function RecipeEditor({
                       }
                       aria-label="Schritt nach unten"
                     >
-                      <ArrowDownIcon className="button-icon" />
+                      <ArrowDownIcon className="button-icon" optical={20} />
                     </button>
                     {confirmRemoveStep === stepIndex ? (
                       <button
@@ -2315,7 +2315,7 @@ function RecipeEditor({
                         onClick={() => toggleRemoveStep(stepIndex)}
                         aria-label="Schritt entfernen"
                       >
-                        <CloseIcon className="button-icon" />
+                        <CloseIcon className="button-icon" optical={20} />
                       </button>
                     )}
                   </div>
@@ -2350,7 +2350,7 @@ function RecipeEditor({
                                 )}
                                 {isNewName && (
                                   <span className="ingredient-tag tag-new">
-                                    <NewReleasesIcon className="tag-icon" />
+                                    <NewReleasesIcon className="tag-icon" optical={20} />
                                     <span>Neu</span>
                                   </span>
                                 )}
@@ -2367,7 +2367,7 @@ function RecipeEditor({
                                     }}
                                     title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
                                   >
-                                    <LinkIcon className="tag-icon" />
+                                    <LinkIcon className="tag-icon" optical={20} />
                                     <span>Rezept</span>
                                   </button>
                                 )}
@@ -2400,7 +2400,7 @@ function RecipeEditor({
                                 }
                                 aria-label={`${ingredient.name} aus dem Schritt entfernen`}
                               >
-                                <CloseIcon className="button-icon" />
+                                <CloseIcon className="button-icon" optical={20} />
                               </button>
                             </div>
                           </li>
@@ -2521,7 +2521,7 @@ function RecipeEditor({
                         {safeRenderAQS(ingredient.name, ingredient.quantity, ingredient.unit)}
                         {isNewName && (
                           <span className="ingredient-tag tag-new">
-                            <NewReleasesIcon className="tag-icon" />
+                            <NewReleasesIcon className="tag-icon" optical={20} />
                             <span>Neu</span>
                           </span>
                         )}
@@ -2538,13 +2538,13 @@ function RecipeEditor({
                             }}
                             title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
                           >
-                            <LinkIcon className="tag-icon" />
+                            <LinkIcon className="tag-icon" optical={20} />
                             <span>Rezept</span>
                           </button>
                         )}
                         {isReference && (
                           <span className="ingredient-tag tag-reference">
-                            <StarIcon className="tag-icon" />
+                            <StarIcon className="tag-icon" optical={20} />
                             <span>Referenz</span>
                             {/* The × mirrors the star toggle: it drops the
                                 reference role (star unfills, badge vanishes). */}
@@ -2555,7 +2555,7 @@ function RecipeEditor({
                               aria-label={`„${ingredient.name}“ als Referenz-Menge entfernen`}
                               title="Referenz-Menge entfernen"
                             >
-                              <CloseIcon className="tag-remove-icon" />
+                              <CloseIcon className="tag-remove-icon" optical={20} />
                             </button>
                           </span>
                         )}
@@ -2622,7 +2622,7 @@ function RecipeEditor({
               }}
               disabled={saving}
             >
-              <TrashIcon className="button-icon" />
+              <TrashIcon className="button-icon" optical={20} />
               <span>
                 {confirmDelete ? `„${target.title}“ wirklich löschen?` : 'Rezept löschen'}
               </span>

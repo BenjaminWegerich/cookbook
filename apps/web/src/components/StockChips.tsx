@@ -293,7 +293,7 @@ function StockChips({
               onClick={beginEdit}
               title="Eigenen Wert bearbeiten"
             >
-              <PencilIcon className="chip-icon" />
+              <PencilIcon className="chip-icon" optical={20} />
               <span>{chip.label}</span>
             </button>
           ) : (
@@ -303,7 +303,7 @@ function StockChips({
               className={suggestionChipClass(chip, chip.value === value)}
               onClick={() => onChange(chip.value)}
             >
-              {chip.complete && <CheckIcon className="chip-icon" />}
+              {chip.complete && <CheckIcon className="chip-icon" optical={20} />}
               {chip.complete ? <span>{chip.label}</span> : chip.label}
             </button>
           ),
@@ -315,7 +315,7 @@ function StockChips({
             onClick={beginEdit}
             title="Anderen Wert eintippen"
           >
-            <MoreVertIcon className="chip-icon" />
+            <MoreVertIcon className="chip-icon" optical={20} />
             <span>andere</span>
           </button>
         )}
@@ -355,18 +355,18 @@ function StockChips({
             data-chip
             className={suggestionChipClass(chip, false)}
           >
-            {chip.complete && <CheckIcon className="chip-icon" />}
+            {chip.complete && <CheckIcon className="chip-icon" optical={20} />}
             {chip.complete ? <span>{chip.label}</span> : chip.label}
           </button>
         ))}
         {shownCustomChip !== null && (
           <button type="button" tabIndex={-1} data-custom className="chip chip-active chip-custom">
-            <PencilIcon className="chip-icon" />
+            <PencilIcon className="chip-icon" optical={20} />
             <span>{shownCustomChip.label}</span>
           </button>
         )}
         <button type="button" tabIndex={-1} data-andere className="chip chip-clear">
-          <MoreVertIcon className="chip-icon" />
+          <MoreVertIcon className="chip-icon" optical={20} />
           <span>andere</span>
         </button>
       </div>

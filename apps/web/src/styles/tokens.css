@@ -21,8 +21,8 @@
   --color-ink: #2b241d; /* primary text */
   --color-ink-muted: #6e6255; /* secondary text */
   --color-line: #e6dbc8; /* hairlines / dividers */
-  --color-accent: #b85c38; /* primary clay/terracotta */
-  --color-olive: #6b7a4a; /* secondary "herb" accent */
+  --color-accent: #ad5632; /* primary clay/terracotta */
+  --color-olive: #63723f; /* secondary "herb" accent */
   --color-danger: #a63b2c; /* delete / errors */
   --color-on-accent: #fffcf6; /* text on accent surfaces */
 
@@ -106,12 +106,14 @@
   /* ---- Media placeholder palette ----------------------------------------- */
   /* Warm, deterministic background colors for recipe thumbnails without a
      photo (§2). The room-service placeholder symbol is rendered in the
-     matching -fg color. */
-  --placeholder-0: #b85c38; /* clay */
+     matching -fg color. The first two follow the accent and olive tokens, so
+     the palette keeps one clay and one olive; every pair clears the 3:1 floor
+     for the symbol it carries. */
+  --placeholder-0: #ad5632; /* clay */
   --placeholder-0-fg: #fffcf6;
-  --placeholder-1: #6b7a4a; /* olive */
+  --placeholder-1: #63723f; /* olive */
   --placeholder-1-fg: #fffcf6;
-  --placeholder-2: #c08a3e; /* ochre */
+  --placeholder-2: #b8813a; /* ochre */
   --placeholder-2-fg: #fffcf6;
   --placeholder-3: #8a6d4f; /* walnut */
   --placeholder-3-fg: #fffcf6;

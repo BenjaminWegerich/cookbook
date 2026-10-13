@@ -1211,7 +1211,7 @@ function App() {
         action: {
           label: 'Rückgängig',
           busyLabel: 'Wird rückgängig gemacht …',
-          icon: <UndoIcon className="button-icon" />,
+          icon: <UndoIcon className="button-icon" optical={20} />,
           run: async (): Promise<void> => {
             try {
               await undoMealPlan(entryText, replace);
@@ -1275,7 +1275,7 @@ function App() {
         action: {
           label: 'Rückgängig',
           busyLabel: 'Wird rückgängig gemacht …',
-          icon: <UndoIcon className="button-icon" />,
+          icon: <UndoIcon className="button-icon" optical={20} />,
           run: async (): Promise<void> => {
             try {
               await undoMealPlan(entryText, replace);
@@ -1343,7 +1343,7 @@ function App() {
         action: {
           label: 'Rückgängig',
           busyLabel: 'Wird rückgängig gemacht …',
-          icon: <UndoIcon className="button-icon" />,
+          icon: <UndoIcon className="button-icon" optical={20} />,
           run: async (): Promise<void> => {
             try {
               await undoMealPlan(entryText, [replacedText]);
@@ -1430,7 +1430,7 @@ function App() {
         action: {
           label: 'Rückgängig',
           busyLabel: 'Wird rückgängig gemacht …',
-          icon: <UndoIcon className="button-icon" />,
+          icon: <UndoIcon className="button-icon" optical={20} />,
           run: async (): Promise<void> => {
             try {
               // Ticking the lines back on is the exact inverse of the removal, so
@@ -1501,7 +1501,7 @@ function App() {
         action: {
           label: 'Rückgängig',
           busyLabel: 'Wird rückgängig gemacht …',
-          icon: <UndoIcon className="button-icon" />,
+          icon: <UndoIcon className="button-icon" optical={20} />,
           run: async (): Promise<void> => {
             try {
               await writeShopping([], lines);
@@ -2027,7 +2027,7 @@ function App() {
             <button
               type="button"
               className={createMenuOpen ? 'fab fab-active' : 'fab'}
-              aria-label={createMenuOpen ? 'Menü schließen' : 'Neues Rezept'}
+              aria-label={createMenuOpen ? 'Menü schließen' : 'Rezept schreiben'}
               aria-expanded={createMenuOpen}
               onClick={() => setNav(createMenuOpen ? null : 'menu')}
             >

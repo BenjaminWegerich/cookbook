@@ -177,13 +177,6 @@
   min-height: 74px;
 }
 
-.field input[type='text']:focus,
-.field textarea:focus,
-.step-card textarea:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-}
-
 /* Segmented control (Typ, Einheit). */
 .segmented {
   display: inline-grid;
@@ -1012,10 +1005,6 @@
   text-align: right;
 }
 
-.factor-grid input:focus {
-  outline: 2px solid var(--color-accent);
-}
-
 .factor-unit {
   font-weight: 600;
 }
@@ -1109,8 +1098,8 @@
 
 .tag-remove-icon {
   display: block;
-  width: var(--space-4);
-  height: var(--space-4);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 /* The whole step-row (minus the right-side ✕ / verknüpft actions) is one big
@@ -1309,9 +1298,4 @@
   font-size: var(--text-md);
   line-height: var(--leading-md);
   font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
-}
-
-.theme-hex-input:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
 }

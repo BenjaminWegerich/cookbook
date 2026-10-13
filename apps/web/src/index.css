@@ -109,10 +109,35 @@ button:disabled {
   cursor: default;
 }
 
-/* Visible, warm focus ring for keyboard users. */
+/* Visible, warm focus ring for keyboard users — solid accent, because §4.4
+   reserves translucency for the press wash, the scrims and the shadows. */
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline: 3px solid var(--color-accent);
   outline-offset: 3px;
+}
+
+/* A focused text field or text area shows its own solid accent outline on every
+   focus — not only for keyboard users — so the caret's position is always
+   visible (§5.3). It is 2 px rather than the keyboard ring's 3 px, and it hugs
+   the control; every text control in the app gets the same look from here, so
+   no component stylesheet carries a focus outline of its own. */
+input:not([type='checkbox']):focus,
+textarea:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* Every animation is off under `prefers-reduced-motion: reduce` (§4.6). The
+   durations collapse to nothing rather than being removed, so the end state of
+   every transition stays visible. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* App shell: phone-first, fluid full width — the same responsive layout

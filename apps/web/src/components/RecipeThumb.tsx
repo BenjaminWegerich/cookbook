@@ -112,7 +112,7 @@ function RecipeThumb({ recipe, token }: RecipeThumbProps) {
   };
   return (
     <span className="recipe-thumb" style={style} aria-hidden="true">
-      <RoomServiceIcon className="recipe-thumb-icon" />
+      <RoomServiceIcon className="recipe-thumb-icon" optical={40} />
     </span>
   );
 }
