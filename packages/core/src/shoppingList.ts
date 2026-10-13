@@ -51,7 +51,15 @@ import {
 import { aqToNumber, isAQValue } from './aqLadder.js';
 import { NUMBER_SCHEMES, type AdditionalUnit } from './additionalUnitsData.js';
 import { mappingsFor } from './ingredientRegistry.js';
-import { difference, pos, roundedBQ, rungAbove, rungAtOrAbove, rungBelow, scale } from './ladder.js';
+import {
+  difference,
+  pos,
+  roundedBQ,
+  rungAbove,
+  rungAtOrAbove,
+  rungBelow,
+  scale,
+} from './ladder.js';
 import { convertYieldUnit, writtenPlannedAmount, type PlannedAmount } from './planLink.js';
 import type { Ingredient, Recipe } from './recipe/types.js';
 
@@ -535,7 +543,7 @@ export function suggestedStocks(need: ShoppingNeed): readonly number[] {
   for (const offset of SUGGESTED_MANTISSA_X) {
     // The largest rung with this mantissa at or below `below`: step xBelow back
     // by its remainder mod 16, so the result shares the offset's decade slot.
-    const remainder = ((xBelow - offset) % 16 + 16) % 16;
+    const remainder = (((xBelow - offset) % 16) + 16) % 16;
     values.push(roundThousandths(roundedBQ(xBelow - remainder)));
   }
   return values;

@@ -41,23 +41,20 @@ function toGeminiContents(messages: readonly AiMessage[]): {
     .join('\n\n');
   const contents = messages
     .filter((message) => message.role !== 'system')
-    .reduce<Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>>(
-      (acc, message) => {
-        const role = (message.role === 'assistant' ? 'model' : 'user') as 'user' | 'model';
-        // Coalesce adjacent turns of the same role: Gemini's generateContent
-        // requires strictly alternating user/model turns and rejects
-        // consecutive same-role entries with a 400 (relevant for the
-        // multi-turn repair-loop histories of Phase 3).
-        const last = acc[acc.length - 1];
-        if (last !== undefined && last.role === role) {
-          last.parts.push({ text: message.content });
-        } else {
-          acc.push({ role, parts: [{ text: message.content }] });
-        }
-        return acc;
-      },
-      [],
-    );
+    .reduce<Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>>((acc, message) => {
+      const role = (message.role === 'assistant' ? 'model' : 'user') as 'user' | 'model';
+      // Coalesce adjacent turns of the same role: Gemini's generateContent
+      // requires strictly alternating user/model turns and rejects
+      // consecutive same-role entries with a 400 (relevant for the
+      // multi-turn repair-loop histories of Phase 3).
+      const last = acc[acc.length - 1];
+      if (last !== undefined && last.role === role) {
+        last.parts.push({ text: message.content });
+      } else {
+        acc.push({ role, parts: [{ text: message.content }] });
+      }
+      return acc;
+    }, []);
   return {
     systemInstruction: system === '' ? undefined : system,
     contents,
@@ -105,14 +102,16 @@ export function createGeminiClient(options: GeminiClientOptions): AiClient {
         const detail = await response.text().catch(() => '');
         throw new Error(`Gemini API ${response.status}: ${detail || 'unbekannter Fehler'}`);
       }
-      const data = await response.json().catch(() => {
+      const data = (await response.json().catch(() => {
         throw new Error('Gemini API: Die Antwort konnte nicht gelesen werden.');
-      }) as {
+      })) as {
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
         promptFeedback?: { blockReason?: string };
       };
       if (data.promptFeedback?.blockReason !== undefined) {
-        throw new Error(`Gemini: Die Anfrage wurde blockiert (${data.promptFeedback.blockReason}).`);
+        throw new Error(
+          `Gemini: Die Anfrage wurde blockiert (${data.promptFeedback.blockReason}).`,
+        );
       }
       const parts = data.candidates?.[0]?.content?.parts ?? [];
       const text = parts

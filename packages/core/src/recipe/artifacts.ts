@@ -58,7 +58,8 @@ export interface ArtifactSpan {
 }
 
 /** One segment of the step text: plain prose or a validated artifact. */
-export type TextSegment = { type: 'text'; value: string } | { type: 'artifact'; artifact: TextArtifact };
+export type TextSegment =
+  { type: 'text'; value: string } | { type: 'artifact'; artifact: TextArtifact };
 
 /**
  * Any `{{ … }}` block (candidates for artifacts; the rest of a malformed block

@@ -78,9 +78,7 @@ describe('renameRecipeInCollection', () => {
       'Käsesauce',
     ]);
     // Inline artifact renamed in the prose.
-    expect(parent.steps[0]!.text).toBe(
-      'Tortillas füllen, {{200 ml Käsesauce}} dazureichen.',
-    );
+    expect(parent.steps[0]!.text).toBe('Tortillas füllen, {{200 ml Käsesauce}} dazureichen.');
     // The reference list entry followed the renamed ingredient.
     expect(parent.reference).toEqual(['Käsesauce']);
     // The derived master list is recomputed from the renamed rows.
@@ -114,7 +112,11 @@ prep_time: 5 min
   });
 
   it('leaves recipes without the old title unchanged', () => {
-    const { updated } = renameRecipeInCollection([BECHAMEL, WRAPS, PASTA], 'Béchamelsauce', 'Käsesauce');
+    const { updated } = renameRecipeInCollection(
+      [BECHAMEL, WRAPS, PASTA],
+      'Béchamelsauce',
+      'Käsesauce',
+    );
     expect(updated.some((recipe) => recipe.title === 'Spaghetti')).toBe(false);
   });
 
@@ -129,21 +131,23 @@ prep_time: 10 min
 1. - 200 g Spaghetti
    Spaghetti mit Ei braten.
 `);
-    const { updated } = renameRecipeInCollection(
-      [PASTA, usesName],
-      'Spaghetti',
-      'Linguine',
-    );
+    const { updated } = renameRecipeInCollection([PASTA, usesName], 'Spaghetti', 'Linguine');
     expect(updated).toHaveLength(0);
   });
 
   it('returns the target unchanged for an identical title', () => {
-    const { renamed, updated } = renameRecipeInCollection([BECHAMEL, WRAPS], 'Béchamelsauce', 'Béchamelsauce');
+    const { renamed, updated } = renameRecipeInCollection(
+      [BECHAMEL, WRAPS],
+      'Béchamelsauce',
+      'Béchamelsauce',
+    );
     expect(renamed.title).toBe('Béchamelsauce');
     expect(updated).toHaveLength(0);
   });
 
   it('throws when the old title is not in the collection', () => {
-    expect(() => renameRecipeInCollection([BECHAMEL], 'Fehlt', 'Neu')).toThrow(/not in the collection/);
+    expect(() => renameRecipeInCollection([BECHAMEL], 'Fehlt', 'Neu')).toThrow(
+      /not in the collection/,
+    );
   });
 });

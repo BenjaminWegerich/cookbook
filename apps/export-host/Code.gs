@@ -125,9 +125,12 @@ function preselect(html, params) {
   // packages/core/src/recipe/exportHtml.ts.
   var view = '.size-scoped[' + size.attribute + '="' + size.value + '"]';
   var head =
-    '<style id="' + PRESELECT_ID + '">' +
+    '<style id="' +
+    PRESELECT_ID +
+    '">' +
     '.size-scoped{display:none!important}' +
-    view + '{display:block!important}' +
+    view +
+    '{display:block!important}' +
     '</style>\n' +
     '<script>window.__COOKBOOK_PLAN_SIZE__=' +
     JSON.stringify(size.query) +
@@ -195,7 +198,7 @@ function errorPage(message) {
       '<body style="font-family: system-ui, sans-serif; padding: 1rem">' +
       '<p role="alert">Die Kochansicht konnte nicht geladen werden. ' +
       escapeHtml(message) +
-      '</p></body></html>'
+      '</p></body></html>',
   ).setTitle('Cookbook');
 }
 
@@ -206,8 +209,5 @@ function errorPage(message) {
  * @return {string} the escaped text.
  */
 function escapeHtml(text) {
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

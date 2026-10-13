@@ -1,3 +1,18 @@
+# Untracked scratch output — never part of the review surface
+.audit/
+
+# The feasibility spike is an exploration, not product source: it keeps its own
+# shape (prototype HTML, findings prose, Python tooling, and a locally installed
+# gcloud SDK under .tools/ that Prettier cannot parse and that would abort a run)
+spike/
+
+# Generated artifacts and canonical data — their generator or serializer owns the
+# formatting. The sample exports are written byte-for-byte by
+# packages/core/scripts/generate-sample-exports.mjs, and the example recipes are
+# recipe data rather than source.
+sample-*.html
+examples/
+
 # User-crafted prose documents — kept out of Prettier's scope
 README.md
 docs/

@@ -7,7 +7,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ShoppingAssignments, ShoppingRoute } from './shoppingRouteCsv.js';
-import { resetShoppingRoute, setShoppingAssignments, setShoppingRoute } from './shoppingRouteRegistry.js';
+import {
+  resetShoppingRoute,
+  setShoppingAssignments,
+  setShoppingRoute,
+} from './shoppingRouteRegistry.js';
 import {
   analyzeShoppingList,
   matchShoppingItem,

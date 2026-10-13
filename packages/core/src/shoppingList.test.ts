@@ -193,7 +193,9 @@ describe('stockPrefill', () => {
   it('keeps a reorder point between chips as-is with an approximate shopping unit', () => {
     // Karotten are bought per Stück, an *approximate* shopping unit: a 300 g
     // reorder point is the stock itself, not snapped to a ladder chip.
-    expect(stockPrefill(need({ ingredient: 'Karotten', needed: 500, reorderPoint: 300 }))).toBe(300);
+    expect(stockPrefill(need({ ingredient: 'Karotten', needed: 500, reorderPoint: 300 }))).toBe(
+      300,
+    );
   });
 
   it('treats an infinite reorder point as a covered need', () => {
@@ -420,7 +422,7 @@ describe('stockPool', () => {
   });
 });
 
-describe('suggestedStocks (the stock chips\' suggested values)', () => {
+describe("suggestedStocks (the stock chips' suggested values)", () => {
   it('offers the thresholds where the bought amount changes for a shopping unit', () => {
     // 600 g of yoghurt in 400 g Becher: below 200 g two Becher, from 200 g one,
     // from 600 g none — so 0, 200 and 600 are the only relevant stock values.

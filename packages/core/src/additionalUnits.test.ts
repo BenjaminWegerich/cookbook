@@ -555,9 +555,7 @@ describe('pantryReading (the pantry sheet’s nearest-ladder reading)', () => {
     // overrule them.
     const reading = pantryReading('Joghurt', 550, 'g');
     expect(reading.aq).toBe(1.5);
-    expect(renderPantryAmount('Joghurt', 550, 'g')).toBe(
-      `1${NNBSP}½${NNBSP}Becher (550${NNBSP}g)`,
-    );
+    expect(renderPantryAmount('Joghurt', 550, 'g')).toBe(`1${NNBSP}½${NNBSP}Becher (550${NNBSP}g)`);
   });
 
   it('counts whole pieces for an approximate shopping unit', () => {

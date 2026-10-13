@@ -153,8 +153,8 @@ export function serializeRecipe(recipe: Recipe): string {
   const frontMatter = stringify(buildFrontMatter(recipe), { indent: 2 });
   const stepLines = recipe.steps.map((step, index) => {
     const number = index + 1;
-    const rows = step.ingredients.map((ingredient) =>
-      `   - ${rowToText(ingredient.name, ingredient.quantity, ingredient.unit)}`,
+    const rows = step.ingredients.map(
+      (ingredient) => `   - ${rowToText(ingredient.name, ingredient.quantity, ingredient.unit)}`,
     );
     if (rows.length === 0) {
       return `${number}. ${step.text}`;

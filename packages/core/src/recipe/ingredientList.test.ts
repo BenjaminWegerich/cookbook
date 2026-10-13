@@ -95,6 +95,8 @@ describe('deriveIngredients', () => {
       { ingredients: [], text: 'Nudeln in {{1500 ml Wasser}} kochen.' },
       { ingredients: [{ name: 'Nudeln', quantity: 500, unit: 'g' }], text: 'Würzen.' },
     ];
-    expect(deriveIngredients(withArtifacts)).toEqual([{ name: 'Nudeln', quantity: 500, unit: 'g' }]);
+    expect(deriveIngredients(withArtifacts)).toEqual([
+      { name: 'Nudeln', quantity: 500, unit: 'g' },
+    ]);
   });
 });

@@ -159,8 +159,6 @@ describe('artifact text helpers', () => {
       'Salz & Pfeffer, dann {{100 g}} Mehl',
       (artifact) => `<code>${escapeHtml(String(artifact.quantity))}</code>`,
     );
-    expect(rendered).toBe(
-      'Salz &amp; Pfeffer, dann <code>100</code> Mehl',
-    );
+    expect(rendered).toBe('Salz &amp; Pfeffer, dann <code>100</code> Mehl');
   });
 });

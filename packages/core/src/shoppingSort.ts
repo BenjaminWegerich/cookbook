@@ -29,7 +29,11 @@
  */
 
 import { masterIngredientNames } from './additionalUnits.js';
-import { allShoppingAssignments, allShoppingStops, shoppingStopFor } from './shoppingRouteRegistry.js';
+import {
+  allShoppingAssignments,
+  allShoppingStops,
+  shoppingStopFor,
+} from './shoppingRouteRegistry.js';
 import type { ShoppingStop } from './shoppingRouteCsv.js';
 
 /** One shopping-list entry as the sort flow sees it (the gateway's KeepItem shape). */
@@ -144,7 +148,11 @@ export function shoppingItemName(text: string): string {
  * data and which it must ask the user about.
  */
 export function analyzeShoppingList(lines: readonly ShoppingListLine[]): ShoppingSortLine[] {
-  return lines.map((line) => ({ text: line.text, checked: line.checked, item: matchShoppingItem(line.text) }));
+  return lines.map((line) => ({
+    text: line.text,
+    checked: line.checked,
+    item: matchShoppingItem(line.text),
+  }));
 }
 
 /** Canonical key of a stop (the pair is the key, docs/storage_format.md §10). */
