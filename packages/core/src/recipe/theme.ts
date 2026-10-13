@@ -41,7 +41,7 @@ export const THEME_FONT_SHORTLIST: readonly string[] = [
 /** The default theme: the web app's palette and typeface (DESIGN §4.8). */
 export const DEFAULT_THEME: Required<RecipeTheme> = {
   font: 'Source Sans 3',
-  accent: '#b85c38', // clay — active state, forward actions, links
+  accent: '#ad5632', // clay — active state, forward actions, links
   paper: '#faf5ec', // page background
   ink: '#2b241d', // primary text
   line: '#e6dbc8', // hairlines, borders, dividers

@@ -97,6 +97,11 @@ describe('generateRecipeHtml — finished dish', () => {
     // Every size carries the three uses (master row + step row + artifact).
     expect(html.match(/class="badge"/g)).toHaveLength(54);
     expect(html).toContain('>Rezept</a>');
+    // The badge in running prose keeps a narrow no-break space from the word
+    // before it, so a screen reader never reads them as one word (§7).
+    expect(html).toContain('Béchamelsauce <a class="badge"');
+    // The step row separates the two with a margin instead, so it takes no space.
+    expect(html).toContain('Béchamelsauce</span><a class="badge"');
   });
 
   it('renders no sub-recipe badges when no URLs are passed', () => {
@@ -312,7 +317,7 @@ prep_time: 15 min
   it('uses the default theme for a recipe without theme data', () => {
     const html = generateRecipeHtml(WRAPS);
     expect(html).toContain("--theme-font: 'Source Sans 3';");
-    expect(html).toContain('--theme-accent: #b85c38;');
+    expect(html).toContain('--theme-accent: #ad5632;');
     expect(html).toContain('--theme-paper: #faf5ec;');
     expect(html).toContain('--theme-ink: #2b241d;');
     expect(html).toContain('--theme-line: #e6dbc8;');

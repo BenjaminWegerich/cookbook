@@ -263,7 +263,7 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   list: a planned recipe's „Abhaken“ (in its „Umplanen“ overlay) and an unrecognized
   entry's own „Abhaken“ button both check the entry off. The sheet renders the
   *live* plan App derives from the current resolution, so its „Geplant“ value and its travel
-  action follow the plan while it is open. „Jetzt kochen“ opens the
+  action follow the plan while it is open. „Kochen“ opens the
   recipe's HTML export in a new tab, at the size the plan states when the dish is planned and
   otherwise at the recipe's written default size; a missing export file is reported instead of
   opening a dead link. An unrecognized entry's „Eintrag ersetzen“ menu is built in all three

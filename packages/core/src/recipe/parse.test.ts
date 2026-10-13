@@ -337,7 +337,7 @@ type: finished_dish
 servings: 2
 theme:
   font: Fraunces
-  accent: "#b85c38"
+  accent: "#ad5632"
   paper: "#faf5ec"
   ink: "#2b241d"
   line: "#e6dbc8"
@@ -348,7 +348,7 @@ prep_time: 25 min
 `);
     expect(full.theme).toEqual({
       font: 'Fraunces',
-      accent: '#b85c38',
+      accent: '#ad5632',
       paper: '#faf5ec',
       ink: '#2b241d',
       line: '#e6dbc8',

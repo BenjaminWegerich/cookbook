@@ -21,7 +21,7 @@ describe('DEFAULT_THEME', () => {
   it('is the web app palette and typeface of DESIGN §4.8', () => {
     expect(DEFAULT_THEME).toEqual({
       font: 'Source Sans 3',
-      accent: '#b85c38',
+      accent: '#ad5632',
       paper: '#faf5ec',
       ink: '#2b241d',
       line: '#e6dbc8',
@@ -31,7 +31,7 @@ describe('DEFAULT_THEME', () => {
 
 describe('isHexColor', () => {
   it('accepts canonical 6-digit hex, case-insensitively', () => {
-    expect(isHexColor('#b85c38')).toBe(true);
+    expect(isHexColor('#ad5632')).toBe(true);
     expect(isHexColor('#B85C38')).toBe(true);
     expect(isHexColor('#123abc')).toBe(true);
   });

@@ -112,7 +112,7 @@ describe('serializeRecipe', () => {
       makeDish({
         theme: {
           font: 'Fraunces',
-          accent: '#b85c38',
+          accent: '#ad5632',
           paper: '#faf5ec',
           ink: '#2b241d',
           line: '#e6dbc8',
@@ -127,7 +127,7 @@ describe('serializeRecipe', () => {
         'total_time: 40 min\n' +
         'theme:\n' +
         '  font: Fraunces\n' +
-        '  accent: "#b85c38"\n' +
+        '  accent: "#ad5632"\n' +
         '  paper: "#faf5ec"\n' +
         '  ink: "#2b241d"\n' +
         '  line: "#e6dbc8"\n',

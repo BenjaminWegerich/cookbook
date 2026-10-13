@@ -219,6 +219,16 @@ const FORWARD_ARROW_SVG =
   '<svg viewBox="0 0 960 960" width="18" height="18" aria-hidden="true" focusable="false">' +
   '<path d="M647,520L200,520Q183,520 171.5,508.5Q160,497 160,480Q160,463 171.5,451.5Q183,440 200,440L647,440L451,244Q439,232 439.5,216Q440,200 452,188Q464,177 480,176.5Q496,176 508,188L772,452Q778,458 780.5,465Q783,472 783,480Q783,488 780.5,495Q778,502 772,508L508,772Q497,783 480.5,783Q464,783 452,772Q440,760 440,743.5Q440,727 452,715L647,520Z" fill="currentColor"/></svg>';
 
+/** Minus of the yield stepper's „Menge verringern" button (Material `remove`). */
+const STEP_DOWN_SVG =
+  '<svg viewBox="0 0 960 960" aria-hidden="true" focusable="false">' +
+  '<path d="M240,520Q223,520 211.5,508.5Q200,497 200,480Q200,463 211.5,451.5Q223,440 240,440L720,440Q737,440 748.5,451.5Q760,463 760,480Q760,497 748.5,508.5Q737,520 720,520L240,520Z" fill="currentColor"/></svg>';
+
+/** Plus of the yield stepper's „Menge erhöhen" button (Material `add`). */
+const STEP_UP_SVG =
+  '<svg viewBox="0 0 960 960" aria-hidden="true" focusable="false">' +
+  '<path d="M440,520L240,520Q223,520 211.5,508.5Q200,497 200,480Q200,463 211.5,451.5Q223,440 240,440L440,440L440,240Q440,223 451.5,211.5Q463,200 480,200Q497,200 508.5,211.5Q520,223 520,240L520,440L720,440Q737,440 748.5,451.5Q760,463 760,480Q760,497 748.5,508.5Q737,520 720,520L520,520L520,720Q520,737 508.5,748.5Q497,760 480,760Q463,760 451.5,748.5Q440,737 440,720L440,520Z" fill="currentColor"/></svg>';
+
 /** Chain link of the sub-recipe „Rezept" badge. */
 const LINK_ICON_SVG =
   '<svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false">' +
@@ -359,7 +369,11 @@ function renderStep(
         ? scaleAQ(artifact.quantity, deltaX)
         : scale(artifact.quantity, deltaX);
     const badge = artifact.name !== undefined ? subRecipeBadge(links[artifact.name]) : '';
-    return `${displayText(artifact.name, bq, artifact.unit)}${badge}`;
+    const text = displayText(artifact.name, bq, artifact.unit);
+    // A narrow no-break space in front of the badge only: without it a screen
+    // reader reads the badge and the ingredient as one word; without a badge the
+    // mention stays a plain word in the sentence (§7).
+    return badge === '' ? text : `${text}\u202f${badge}`;
   });
   return (
     `  <div class="step" data-step="${n}">\n` +
@@ -385,13 +399,15 @@ function renderStepWrap(
 function renderServingPicker(recipe: Recipe): string {
   const buttons = integerLadderValues(SERVING_MIN, SERVING_MAX)
     .map((servings) => {
-      const active = servings === recipe.servings ? ' active' : '';
-      return `<button type="button" class="chip serving-chip${active}" data-servings="${servings}">${servings}</button>`;
+      const active = servings === recipe.servings;
+      // A chip is one value of an exclusive set, so it is a radio: the checked
+      // chip is the only tab stop and arrow keys move the choice (§5.2, §8).
+      return `<button type="button" role="radio" aria-checked="${active}" tabindex="${active ? '0' : '-1'}" class="chip serving-chip${active ? ' active' : ''}" data-servings="${servings}">${servings}</button>`;
     })
     .join('\n    ');
   return (
     `  <p class="picker-caption">Portionen</p>\n` +
-    `  <div class="chips" role="group" aria-label="Portionen wählen">\n    ${buttons}\n  </div>\n`
+    `  <div class="chips" role="radiogroup" aria-label="Portionen wählen">\n    ${buttons}\n  </div>\n`
   );
 }
 
@@ -416,20 +432,21 @@ function renderYieldPicker(recipe: Recipe, quantities: readonly number[]): strin
   chipValues.sort((a, b) => a - b);
   const chips = chipValues
     .map((quantity) => {
-      const active = quantity === written ? ' active' : '';
+      const active = quantity === written;
+      // Radio semantics, as in the serving picker above (§5.2, §8).
       return (
-        `<button type="button" class="chip yield-chip${active}" data-yield="${formatLinkQuantity(quantity)}">` +
+        `<button type="button" role="radio" aria-checked="${active}" tabindex="${active ? '0' : '-1'}" class="chip yield-chip${active ? ' active' : ''}" data-yield="${formatLinkQuantity(quantity)}">` +
         `${escapeHtml(formatBQ(quantity, unit))}</button>`
       );
     })
     .join('\n    ');
   return (
     `  <p class="picker-caption">Menge</p>\n` +
-    `  <div class="chips" role="group" aria-label="Menge wählen">\n    ${chips}\n  </div>\n` +
+    `  <div class="chips" role="radiogroup" aria-label="Menge wählen">\n    ${chips}\n  </div>\n` +
     `  <div class="yield-row">\n` +
-    `    <button type="button" class="yield-step-button yield-step-down" aria-label="Menge um eine Stufe verringern">−</button>\n` +
+    `    <button type="button" class="yield-step-button yield-step-down" aria-label="Menge um eine Stufe verringern">${STEP_DOWN_SVG}</button>\n` +
     `    <span class="yield-value">${escapeHtml(formatBQ(written, unit))}</span>\n` +
-    `    <button type="button" class="yield-step-button yield-step-up" aria-label="Menge um eine Stufe erhöhen">+</button>\n` +
+    `    <button type="button" class="yield-step-button yield-step-up" aria-label="Menge um eine Stufe erhöhen">${STEP_UP_SVG}</button>\n` +
     `  </div>\n`
   );
 }
@@ -561,15 +578,46 @@ const NAVIGATION_SCRIPT = `
   var isServing = servingChips.length > 0;
   var sizeKey = isServing ? 'data-servings' : 'data-yield';
   var sizeEls = Array.prototype.slice.call(document.querySelectorAll('.size-scoped'));
+  var currentSize = null;
 
   function toggleSize(value) {
+    // A tap on the chosen size is not a change; only a real change is one.
+    var changed = currentSize !== null && currentSize !== value;
+    currentSize = value;
+    // Checks are purely local and belong to the size they were made for, so a
+    // size change discards them (§5.11, §6.6).
+    if (changed) {
+      document.querySelectorAll('.check-list input[type="checkbox"]').forEach(function (box) {
+        box.checked = false;
+      });
+    }
     sizeEls.forEach(function (el) { el.hidden = el.getAttribute(sizeKey) !== value; });
   }
   function setActiveChip(value) {
     (isServing ? servingChips : yieldChips).forEach(function (btn) {
-      btn.classList.toggle('active', btn.getAttribute(sizeKey) === value);
+      var isActive = btn.getAttribute(sizeKey) === value;
+      btn.classList.toggle('active', isActive);
+      // Radio state: checked + a single tab stop, so the group is announced (§8).
+      btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+      btn.setAttribute('tabindex', isActive ? '0' : '-1');
     });
   }
+  // Arrow keys move the choice inside a size radiogroup (WAI-ARIA radio pattern).
+  function onChipKeydown(e) {
+    var step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1
+      : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (step === 0) { return; }
+    var chips = isServing ? servingChips : yieldChips;
+    var index = Array.prototype.indexOf.call(chips, e.currentTarget);
+    var next = chips[index + step];
+    if (next === undefined) { return; }
+    e.preventDefault();
+    next.focus();
+    next.click();
+  }
+  (isServing ? servingChips : yieldChips).forEach(function (btn) {
+    btn.addEventListener('keydown', onChipKeydown);
+  });
   function activeChipValue() {
     var active = document.querySelector('.chip.active');
     return active === null ? null : active.getAttribute(sizeKey);
@@ -721,12 +769,41 @@ const NAVIGATION_SCRIPT = `
     }
   }
 
-  function forward() { if (current < nodes.length - 1) { go(current + 1, 'forward', true); } }
-  function back() { if (current > 0) { go(current - 1, 'back', true); } }
-  function go(index, direction, push) {
+  // The visit trail: one history entry per visited node, keyed by its index in
+  // this list. The bar buttons, Escape and a swipe move along the trail instead
+  // of pushing a duplicate entry, so browser Back and Forward always move one
+  // node in the flow's direction, whichever control asked (§6.6).
+  var trail = [0];
+  var trailIndex = 0;
+
+  function pushEntry(index) {
+    var direction = index > trailIndex ? 'forward' : 'back';
+    trailIndex = index;
+    if (trailIndex === trail.length - 1) { trail.push(index); } else { trail[trailIndex] = index; }
+    // The history entry is written before the render, so a render that throws
+    // cannot leave the flow and the browser's history disagreeing.
+    try { history.pushState({ node: nodes[index], trailIndex: trailIndex }, ''); } catch (e) { /* file:// */ }
     current = index;
     render(direction);
-    if (push) { history.pushState({ node: nodes[index] }, ''); }
+  }
+
+  function forward() { if (current < nodes.length - 1) { go(current + 1, 'forward'); } }
+  function back() { if (current > 0) { go(current - 1, 'back'); } }
+  // A step back that has already been visited is a traversal: the browser's own
+  // Forward returns to it, and no second entry for the same node is created.
+  function go(index, direction) {
+    var known = trail.indexOf(index);
+    if (trailIndex < trail.length - 1) {
+      try {
+        if (known !== -1 && known > trailIndex) {
+          history.forward();
+          return;
+        }
+      } catch (e) { /* file:// */ }
+    } else if (known !== -1 && known < trailIndex) {
+      try { history.back(); return; } catch (e) { /* file:// */ }
+    }
+    pushEntry(index);
   }
 
   btnBack.addEventListener('click', back);
@@ -735,11 +812,20 @@ const NAVIGATION_SCRIPT = `
   // Escape = one node back (§6.6).
   window.addEventListener('keydown', function (e) { if (e.key === 'Escape') { back(); } });
 
-  // Browser Back/Forward (history is mirrored into the node list).
+  // Browser Back/Forward: the node of the entry being reached is rendered, and
+  // the trail pointer follows, so the next in-page action reuses the forward
+  // entries instead of growing the history (§6.6).
   window.addEventListener('popstate', function (e) {
-    var node = e.state && e.state.node;
-    var i = node ? nodes.indexOf(node) : 0;
-    current = i < 0 ? 0 : i;
+    var state = e.state;
+    if (state && typeof state.trailIndex === 'number') {
+      trailIndex = state.trailIndex;
+      trail[trailIndex] = state.node;
+    } else {
+      trailIndex = 0;
+      trail[0] = 0;
+    }
+    current = state && state.node ? nodes.indexOf(state.node) : 0;
+    if (current < 0) { current = 0; }
     render();
   });
 
@@ -765,7 +851,7 @@ const NAVIGATION_SCRIPT = `
   });
 
   // Initial state (no history entry yet; replace so Back does not reload).
-  history.replaceState({ node: nodes[0] }, '');
+  try { history.replaceState({ node: nodes[0], trailIndex: 0 }, ''); } catch (e) { /* file:// */ }
   render();
 })();
 `;
@@ -778,14 +864,15 @@ const STYLES = `
 
   /* Ladder tokens (DESIGN §4.2–4.3). */
   :root {
-    --text-xl: 32px; --text-xl-lh: 42px;
-    --text-lg: 24px; --text-lg-lh: 32px;
-    --text-md: 18px; --text-md-lh: 24px;
-    --text-sm: 14px; --text-sm-lh: 18px;
+    --text-xl: 32px; --leading-xl: 36px;
+    --text-lg: 24px; --leading-lg: 28px;
+    --text-md: 18px; --leading-md: 24px;
+    --text-sm: 14px; --leading-sm: 18px;
     --space-1: 4px; --space-2: 6px; --space-3: 8px; --space-4: 10px; --space-5: 14px;
     --space-6: 18px; --space-7: 24px; --space-8: 32px; --space-9: 42px; --space-10: 56px;
     --radius-sm: 6px; --radius-md: 10px; --radius-lg: 18px;
     --app-padding: 18px;
+    --icon-size: 24px;
     --motion-base: 180ms;
     --bar-h: 74px; /* fixed bottom bar height (ladder value) */
   }
@@ -795,7 +882,7 @@ const STYLES = `
   body {
     font-family: var(--font);
     font-size: var(--text-md);
-    line-height: var(--text-md-lh);
+    line-height: var(--leading-md);
     color: var(--ink);
     background: var(--paper);
     max-width: 32rem;
@@ -805,7 +892,8 @@ const STYLES = `
 
   /* ---- Screens: one page, three states (§5.11) ---- */
   .screen { display: none; min-height: 100vh; min-height: 100dvh;
-            padding: var(--app-padding); padding-bottom: calc(var(--bar-h) + var(--space-9)); }
+            padding: var(--app-padding);
+            padding-bottom: calc(var(--bar-h) + var(--space-9) + env(safe-area-inset-bottom)); }
   .screen.active { display: flex; flex-direction: column; }
 
   /* ---- Intro ---- */
@@ -814,47 +902,58 @@ const STYLES = `
      top margin (--space-6) is the gap between the photo and the title. */
   .media { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
            border-radius: var(--radius-md); }
-  h1 { font-size: var(--text-xl); line-height: var(--text-xl-lh); margin: var(--space-6) 0 var(--space-2); }
-  .description { margin: 0 0 var(--space-6); }
+  h1 { font-size: var(--text-xl); line-height: var(--leading-xl); font-weight: 600; margin: var(--space-6) 0 var(--space-2);
+       overflow-wrap: anywhere; }
+  .description { margin: 0 0 var(--space-6); overflow-wrap: anywhere; }
   /* Times and the Cookbook brand share the recipe overview's caption/value look:
      an all-caps muted caption before a bold value (§5.11). */
   .meta-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-7); margin: 0 0 var(--space-6); }
   .meta-item { display: inline-flex; align-items: baseline; gap: var(--space-2); }
-  .caption { color: var(--muted); font-size: var(--text-sm); line-height: var(--text-sm-lh); font-weight: 600; text-transform: uppercase; }
-  .meta-value { font-weight: 600; font-size: var(--text-md); line-height: var(--text-md-lh); }
+  .caption { color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; text-transform: uppercase; }
+  .meta-value { font-weight: 600; font-size: var(--text-md); line-height: var(--leading-md); }
   .brand { display: flex; align-items: center; gap: var(--space-2); color: var(--muted);
-           font-size: var(--text-sm); line-height: var(--text-sm-lh); margin-top: auto; padding-top: var(--space-6); }
+           font-size: var(--text-sm); line-height: var(--leading-sm); margin-top: auto; padding-top: var(--space-6); }
   .brand svg { width: 20px; height: 20px; }
   /* The intro's brand footer sits right above the bottom bar (§5.11), so the
      intro gets less bottom padding than the scrollable list screens. */
-  .screen.intro { padding-bottom: calc(var(--bar-h) + var(--space-4)); }
-  .picker-caption { font-size: var(--text-sm); line-height: var(--text-sm-lh); color: var(--muted);
-                    font-weight: 600; text-transform: uppercase; margin: 0 0 var(--space-2); }
-  .chips { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); }
-  .chip { font: inherit; font-size: var(--text-sm); line-height: 1; padding: var(--space-3) var(--space-5);
-          border-radius: 100px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+  .screen.intro { padding-bottom: calc(var(--bar-h) + var(--space-4) + env(safe-area-inset-bottom)); }
+  .picker-caption { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--muted);
+                    font-weight: 600; text-transform: uppercase; margin: 0 0 var(--space-2);
+                    overflow-wrap: anywhere; }
+  /* The chip row's gap is the app's --space-4 (10px): a chip's 32px pill reaches
+     the 42px hit area through a 5px ring, so the gap must be at least twice the
+     ring or two neighbouring hit areas would overlap (§5.2). */
+  .chips { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-4); }
+  .chip { position: relative; font: inherit; font-size: var(--text-sm); line-height: var(--leading-sm); padding: var(--space-2) var(--space-5);
+          border-radius: 100px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
+  /* The visible pill stays compact (32px); the ring beyond it brings the hit area
+     to the 42px floor, as in the app (§5.2). */
+  .chip::before { content: ''; position: absolute; inset: -5px; }
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   /* Reference-ingredient readout under the size picker (amounts only, muted). */
-  .reference { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--text-sm-lh); }
+  .reference { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-sm);
+               overflow-wrap: anywhere; }
 
   /* Ingredient-recipe stepper (§5.2 "exactly as today"). */
   .yield-row { display: flex; align-items: center; gap: var(--space-3); }
-  .yield-step-button { font: inherit; font-size: var(--text-md); line-height: 1; min-width: var(--space-9);
-                       min-height: 42px; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
-                       border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+  .yield-step-button { font: inherit; font-size: var(--text-md); line-height: var(--leading-md); min-width: var(--space-9);
+                       min-height: 42px; padding: var(--space-3); border-radius: var(--radius-md);
+                       border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
+  .yield-step-button svg { width: var(--icon-size); height: var(--icon-size); fill: currentColor; }
   .yield-step-button:disabled { opacity: 0.5; cursor: default; }
   .yield-value { font-weight: 600; min-width: var(--space-10); text-align: center; }
 
   /* ---- Zutaten ---- */
-  .screen-caption { font-size: var(--text-sm); line-height: var(--text-sm-lh); font-weight: 600;
-                    text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 var(--space-6); }
-  .screen-title { font-size: var(--text-lg); line-height: var(--text-lg-lh); font-weight: 600; margin: 0 0 var(--space-3); }
+  .screen-caption { font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600;
+                    text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 var(--space-6);
+                    overflow-wrap: anywhere; }
+  .screen-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-3); }
   /* The theme's decorative divider below „Zutaten" and the step title (§5.5). */
   .divider { margin: 0 0 var(--space-4); height: 0; border-bottom: 2px solid var(--accent); width: 42px; }
   .check-list { list-style: none; margin: 0; padding: 0; }
   .check-row { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) 0;
                border-top: 1px solid var(--line);
-               font-size: var(--text-lg); line-height: var(--text-lg-lh); }
+               font-size: var(--text-lg); line-height: var(--leading-lg); }
   .check-row:first-child { border-top: none; }
   .check-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); cursor: pointer; flex: none; }
   .check-row .qty { flex: 1; min-width: 0; cursor: pointer; overflow-wrap: anywhere; }
@@ -862,7 +961,7 @@ const STYLES = `
   .check-row input:checked + .qty { color: var(--muted); }
 
   /* ---- Zubereitung (steps) ---- */
-  .step-title { font-size: var(--text-lg); line-height: var(--text-lg-lh); font-weight: 600; margin: 0 0 var(--space-3); }
+  .step-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-3); }
   /* The wrap fills the space below the header and centres the step's rows and
      prose together (§5.11). overflow:hidden clips only the slide's horizontal
      travel; the wrap grows with its content, so a tall step still scrolls. */
@@ -878,7 +977,7 @@ const STYLES = `
      --text-lg. Rows are bulleted; a plain margin separates them from the prose. */
   .step-rows { list-style: none; margin: 0 0 var(--space-6); padding: 0; }
   .step-rows li { display: flex; align-items: center; padding: var(--space-2) 0;
-                  font-size: var(--text-lg); line-height: var(--text-lg-lh); }
+                  font-size: var(--text-lg); line-height: var(--leading-lg); }
   /* The bullet is the font's own U+2022 glyph with one space on each side; the
      glyph's side bearings stay untouched. white-space:pre keeps both spaces
      visible — the default white-space:normal trims a space at a line-box edge,
@@ -888,13 +987,16 @@ const STYLES = `
   /* The row no longer uses flex gap (the bullet's spaces are the marker spacing),
      so the sub-recipe badge keeps its gap from the ingredient via a margin. */
   .step-rows li .badge { margin-left: var(--space-3); }
-  .step-text { margin: 0; font-size: var(--text-lg); line-height: var(--text-lg-lh); }
+  .step-text { margin: 0; font-size: var(--text-lg); line-height: var(--leading-lg); overflow-wrap: anywhere; }
 
   /* ---- Sub-recipe badge (§5.7): all-caps like the web app. ---- */
   .badge { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm);
-           font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1;
+           font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; line-height: var(--leading-sm);
            padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
-           background: var(--accent); color: var(--on-accent); text-decoration: none; white-space: nowrap; }
+           position: relative; background: var(--accent); color: var(--on-accent); text-decoration: none; white-space: nowrap; }
+  /* A control inside a badge gets its own 42px hit area, extended beyond the glyph
+     without disturbing the line it sits in (§5.7). */
+  .badge::after { content: ''; position: absolute; inset: -8px 0; }
   .badge svg { width: 14px; height: 14px; fill: currentColor; }
 
   /* ---- Bottom bar (fixed): back · dots · forward on every screen (§5.11) ---- */
@@ -903,13 +1005,17 @@ const STYLES = `
               padding: var(--space-3) var(--app-padding) calc(var(--space-3) + env(safe-area-inset-bottom));
               background: var(--paper); border-top: 1px solid var(--line); }
   .step-bar .btn { display: inline-flex; align-items: center; gap: var(--space-2); font: inherit; font-weight: 600;
-                   font-size: var(--text-md); min-height: 42px; min-width: 90px;
-                   padding: var(--space-3) var(--space-5); border-radius: var(--radius-md);
-                   border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+                   font-size: var(--text-md); min-height: 42px;
+                   padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+                   border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
   .step-bar .btn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
   .step-bar .btn.next { margin-left: auto; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .step-bar .btn:disabled { opacity: 0.5; cursor: default; }
-  .counter { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  /* The dots are centred, but never wider than the free interval between the two
+     buttons — a long flow compresses instead of running over them (§5.11). */
+  .counter { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+             max-width: calc(100% - 2 * (var(--app-padding) + var(--space-7) + var(--space-10) + var(--space-4)));
+             overflow: hidden; pointer-events: none; }
   .counter .dots { display: flex; justify-content: center; gap: var(--space-2); }
   .counter .dot { width: var(--space-3); height: var(--space-3); border-radius: 100%; background: var(--line); }
   .counter .dot.on { background: var(--accent); }
@@ -985,7 +1091,7 @@ export function generateRecipeHtml(
     `<html lang="de">\n` +
     `<head>\n` +
     `  <meta charset="utf-8">\n` +
-    `  <meta name="viewport" content="width=device-width, initial-scale=1">\n` +
+    `  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n` +
     `  <title>${escapeHtml(recipe.title)}</title>\n` +
     `  <style>\n${fontFaces}${themeCss(theme)}\n${STYLES}\n  </style>\n` +
     `</head>\n` +
