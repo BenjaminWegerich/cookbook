@@ -210,8 +210,13 @@ layout). The rows are written in a natural, amount-first phrase:
   2. rename the file (and its image),
   3. update every implicit use of the old title in all other recipe files — only
      `ingredient_recipe` titles are referenced this way, and only those trigger
-     updates (finished-dish titles never are).
-- The app provides a rename tool that performs all three steps.
+     updates (finished-dish titles never are),
+  4. rename the recipe's row in the ingredient master data (§9) when it has one:
+     an ingredient recipe's reorder point belongs to that row and would otherwise
+     silently stop applying, because nothing looks an entry up under a title that
+     no longer exists. A rename is rolled back as a whole when any of the four
+     steps fails.
+- The app provides a rename tool that performs all four steps.
 
 ## 7. Validation
 
@@ -321,6 +326,13 @@ shopping list is refilled once the last pack is opened, outside the app); `inf` 
 stock (realistically only water). A file written before this column existed (header
 `Ingredient;Base Unit`) still loads: its ingredients get the neutral reorder point 0, and
 the next write adds the column.
+
+An **ingredient recipe** (a sub-recipe) has its row here too, like any other ingredient. Its
+reorder point is the amount of the finished product that is on hand — cooked and kept, e.g.
+sauce in the freezer. It prefills the cooking step „Vorräte auswählen, Teil 1:
+Zutaten-Rezepte", which cooks `required − stock` of the sub-recipe (see
+[quantity_scaling.md](quantity_scaling.md) §6); an ingredient recipe that is not registered
+here simply starts from the neutral reorder point 0 and is cooked in full.
 
 New ingredients are created in the web app („Neue Zutat anlegen“) with a stock picker
 (suggested chips, stepper, live preview). When an **exact** additional unit applies, the

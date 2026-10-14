@@ -144,13 +144,24 @@
 - An ingredient recipe scaled on its own follows the same rule with its yield:
   Δx = pos(requested yield) − pos(yield).
 - A sub-recipe linked from a parent recipe (e.g. Béchamelsauce inside Lasagne):
-  1. The parent's scaled amount q′ (a ladder value) is the **required amount**;
-  2. the sub-recipe scales by Δx_sub = pos(required amount) − pos(sub-recipe yield);
-  3. its ingredients move by Δx_sub, and the resulting amounts feed the shopping list.
+  1. The parent's scaled amount q′ (a ladder value) is the **required amount**. Several
+     parents add up: it is the exact sum of their scaled uses and therefore not necessarily a
+     rung;
+  2. the shopping flow decides how much is **cooked**:
+     `cook = roundToRung(required − stock)`, with `stock = min(required, reorder point)` as the
+     prefill (the reorder point is [storage_format.md](storage_format.md) §9). The nearest rung
+     wins, ties toward the larger value; a stock that covers the requirement means `cook = 0`
+     and no ingredient of the sub-recipe is needed. The rung is what keeps the step count below
+     an integer — and it is the size the sub-recipe's own export opens at;
+  3. the sub-recipe scales by Δx_sub = pos(cook) − pos(sub-recipe yield);
+  4. its ingredients move by Δx_sub and feed the shopping list; the sub-recipes among them are
+     decided the same way, one level further down.
 - Example: Béchamelsauce yields 500 ml from 300 ml Milch. Lasagne scaled 6 → 9
   people (Δx = +3) requires 800 ml Béchamelsauce (500 ml → rung 43 → +3 → rung 46
   → 800 ml). The sub-recipe scales by Δx_sub = pos(800) − pos(500) = 46 − 43 = +3,
   so Milch moves 300 ml (rung 40) → rung 43 → **500 ml** on the shopping list.
+  With 800 ml of the sauce already on hand nothing is cooked and no milk is needed;
+  with 500 ml on hand, 300 ml are cooked and the milk stays at 300 ml.
 
 ## 7. Units and Display
 

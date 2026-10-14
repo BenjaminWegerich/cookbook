@@ -42,7 +42,7 @@ import {
   listFilesInFolder,
   updateFileWithContent,
 } from './driveClient';
-import { ensureRecipeFolder } from './recipeStorage';
+import { ensureRecipeFolder } from './cookbookFolder';
 
 /** File name of the route in the Cookbook folder (user-visible). */
 const ROUTE_FILE_NAME = 'einkaufsweg.csv';

@@ -177,6 +177,28 @@
   gap: 0;
 }
 
+/* ---- An invalidated row (cooking step, Teil 1) --------------------------- */
+
+/* The requirement of this sub-recipe moved after the user had already decided
+   its stock, so the amounts below it are no longer the ones the user looked at.
+   The row is unfolded (components/SubRecipeSelect), its surface is tinted and an
+   accent line runs along its leading edge, so it stands out from the rows that
+   are settled. The treatment ends when the row is folded again — folding a row
+   is how the user acknowledges it. */
+.pantry-row--attention {
+  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
+  box-shadow: inset var(--space-1) 0 0 var(--color-accent);
+}
+
+/* The invalidation's explanation, under the row's first line: quiet, so it
+   explains the accent instead of competing with the amounts. */
+.pantry-attention-note {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
 /* The purchase: its shopping-cart symbol and the amount on one baseline, one
    step smaller than the need. It takes the leftover space, so it sits
    right-aligned whether it shares the line with the need or wraps below it. */

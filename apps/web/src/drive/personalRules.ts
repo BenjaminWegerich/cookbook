@@ -10,7 +10,7 @@
  */
 
 import { getFileContent, listFilesInFolder } from './driveClient';
-import { ensureRecipeFolder } from './recipeStorage';
+import { ensureRecipeFolder } from './cookbookFolder';
 
 /** File name of the personal recipe guidelines in the Cookbook folder. */
 export const RECIPE_GUIDELINES_FILE_NAME = 'rezept-richtlinien.md';

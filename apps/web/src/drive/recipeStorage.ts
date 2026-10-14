@@ -13,7 +13,8 @@
  *
  * The folder is created on first use and its id is remembered in localStorage
  * (the "drive.file" scope only exposes files the app created itself, so a
- * name search alone cannot find folders from other apps).
+ * name search alone cannot find folders from other apps) — see
+ * ./cookbookFolder, which all master data shares.
  *
  * All writes go through a round-trip check (`serializeRecipe` + `parseRecipe`)
  * so a recipe that cannot be represented canonically never reaches Drive —
@@ -30,11 +31,10 @@ import {
 } from '@cookbook/core';
 
 import { EXPORT_HOST_URL } from '../config';
+import { ensureRecipeFolder } from './cookbookFolder';
 import {
   createFileWithContent,
-  createFolder,
   deleteFile,
-  findFoldersByName,
   getFile,
   getFileContent,
   listFilesInFolder,
@@ -42,10 +42,9 @@ import {
   updateFileWithContent,
   type DriveFile,
 } from './driveClient';
+import { renameIngredientMasterData } from './ingredientMasterData';
 import { cacheRecipePhoto, invalidateRecipePhoto, loadRecipePhoto } from './recipePhoto';
 
-/** Name of the folder that holds the collection (user-visible in Drive). */
-const RECIPE_FOLDER_NAME = 'Cookbook';
 /** MIME type of the recipe files. */
 const RECIPE_MIME_TYPE = 'text/markdown';
 /** File extension of a recipe file (§2: file name = title + ".md"). */
@@ -56,8 +55,6 @@ const EXPORT_MIME_TYPE = 'text/html';
 const EXPORT_EXTENSION = '.html';
 /** Allowed photo extensions (§2). */
 const IMAGE_EXTENSIONS = ['jpg', 'png'] as const;
-/** localStorage key that remembers the recipe folder id. */
-const FOLDER_ID_KEY = 'cookbook.recipeFolderId';
 
 /** The photo sibling of a recipe (§2), identified by its file. */
 export interface RecipeImage {
@@ -109,27 +106,6 @@ export function recipeExportUrl(fileId: string): string {
   return host === undefined || host === ''
     ? driveViewUrl(fileId)
     : `${host}?f=${encodeURIComponent(fileId)}`;
-}
-
-/**
- * Returns the id of the recipe folder, creating it on first use.
- * The id is remembered in localStorage; a stale id (deleted folder) is
- * detected and the folder recreated.
- */
-export async function ensureRecipeFolder(token: string): Promise<string> {
-  const stored = localStorage.getItem(FOLDER_ID_KEY);
-  if (stored !== null) {
-    try {
-      await getFile(token, stored);
-      return stored;
-    } catch {
-      // Folder was deleted or access was lost — fall through to recreation.
-    }
-  }
-  const existing = await findFoldersByName(token, RECIPE_FOLDER_NAME);
-  const folder = existing[0] ?? (await createFolder(token, RECIPE_FOLDER_NAME));
-  localStorage.setItem(FOLDER_ID_KEY, folder.id);
-  return folder.id;
 }
 
 /**
@@ -667,6 +643,16 @@ export async function saveRecipe(
           }),
         );
       }
+    }
+
+    // 6. Carry the master-data entry of the old title along. A sub-recipe's
+    //    ingredient entry holds its reorder point (docs/storage_format.md §9),
+    //    and nothing looks an entry up under a title that no longer exists —
+    //    without this step the renamed sub-recipe would silently lose it. The
+    //    rename is a no-op for a finished dish (only ingredient recipes have
+    //    such an entry) and while the built-in seed is active (no file yet).
+    if (await renameIngredientMasterData(token, current.title, recipe.title)) {
+      undoSteps.push(() => renameIngredientMasterData(token, recipe.title, current.title));
     }
   } catch (error) {
     // Best-effort rollback: revert every step that already succeeded.

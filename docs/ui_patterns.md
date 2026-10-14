@@ -45,8 +45,8 @@ overview, the fifth the shopping list, the sixth the copied recipe link:
 > unrecognized entry).
 
 > `X Zutaten für Y Rezepte zur Einkaufsliste hinzugefügt.`
-> with the action **Rückgängig** („Einkaufsliste schreiben“ on the pantry sheet
-> „Vorräte auswählen“).
+> with the action **Rückgängig** („Einkaufsliste schreiben“ on the pantry flow's second step
+> „Vorräte auswählen — Teil 2: Zutaten“).
 
 > `Link zu <Titel> kopiert.`
 > without an action („Link kopieren“ in the recipe overview's „Mehr“ menu; the system's own
@@ -321,7 +321,8 @@ top left. Never mind → „Abbrechen" next to the commit.*
 | Recipe editor, incl. every sub-recipe level | place (scroll key `editor:<level>`) | „Zurück" |
 | „Rezept mit KI schreiben / bearbeiten" | place (scroll key `ai`) | „Zurück" |
 | „Gerichte vom Essensplan auswählen" | place (flow step) | „Zurück" |
-| „Vorräte auswählen" | place (flow step) | „Zurück" |
+| „Vorräte auswählen — Teil 1: Zutaten-Rezepte" | place (flow step) | „Zurück" |
+| „Vorräte auswählen — Teil 2: Zutaten" | place (flow step) | „Zurück" (asks) |
 | Recipe overview, create menu | browsing layer over the list | none — the scrim / close button leaves it, there is no pending decision |
 | „Zum Essensplan hinzufügen" / „Menge ändern" | change (sheet) | „Abbrechen" |
 | „Eintrag ersetzen" | change (sheet) | „Abbrechen" |

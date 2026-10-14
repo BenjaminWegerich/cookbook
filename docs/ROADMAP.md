@@ -73,10 +73,11 @@ at the size the plan states when the dish is planned — otherwise at the recipe
 size; the „Eintrag ersetzen“ menu is built (an unrecognized entry can be replaced by an existing
 recipe 1:1 with an undo notice, or turned into a new recipe through the prefilled editor or AI
 screen, which return to the entry's overview). The shopping flow is built as well („Einkaufsliste
-schreiben“ selects the planned dishes, the pantry sheet „Vorräte auswählen“ sets each stock, and
-the difference goes to „Einkaufsliste“). The aisle sort is built as well („Einkaufsliste
-sortieren“ assigns unassigned items a stop or ignores them, then reorders the list). What
-remains is expanding linked Zutaten-Rezepte in the shopping list.
+schreiben“ selects the planned dishes, the cooking step „Vorräte auswählen — Teil 1:
+Zutaten-Rezepte“ decides how much of each linked Zutaten-Rezept is made, the stock step „Teil 2:
+Zutaten“ sets each bottom-level ingredient's Vorrat, and the difference goes to
+„Einkaufsliste“). The aisle sort is built as well („Einkaufsliste sortieren“ assigns unassigned
+items a stop or ignores them, then reorders the list).
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -98,13 +99,12 @@ not where it is used.
       the export's script.
 - [x] Add the scaled ingredient list of the meal plan's recipes to the shopping list
       ("Einkaufsliste"): the dishes are picked per checkbox („Einkaufsliste schreiben“), the
-      pantry sheet („Vorräte auswählen“) prefills each ingredient's stock with
-      `min(need, reorder point)`, and the difference is rounded up to whole shopping units and
-      written with `POST /keep/shopping` (undo via „Rückgängig“).
-- [ ] Expand linked Zutaten-Rezepte in that list: a sub-recipe is scaled by the ladder-rung
-      difference to its yield so its own ingredients join the list
-      (recipe_structure.md "The link means…"). Today a sub-recipe contributes one line for
-      itself.
+      linked Zutaten-Rezepte are cooked first („Vorräte auswählen — Teil 1: Zutaten-Rezepte“:
+      each sub-recipe's stock prefills with `min(required, reorder point)`, the rest is cooked,
+      snapped to the nearest ladder rung), then the stock step („Teil 2: Zutaten“) prefills each
+      bottom-level ingredient's stock with `min(need, reorder point)`, and the difference is
+      rounded up to whole shopping units and written with `POST /keep/shopping`
+      (undo via „Rückgängig“).
 - [x] Sort the shopping list by category/aisle (built on the shopping-route master data,
       storage_format.md §10): „Einkaufsliste sortieren“ lists the unchecked entries without an
       Einkaufsort, each of which is assigned a store + section (like „Neue Zutat anlegen“) or
@@ -156,8 +156,8 @@ below is building, not investigating: the frontend and the actual features.
    taking a dish off the plan ([x] — „Abhaken“ ticks the entry off in Keep via
    `POST /keep/mealplan/check` and can be undone; changing the size reuses the meal-plan write),
    and so is the shopping list ([x] — „Einkaufsliste schreiben“ writes the chosen recipes'
-   ingredients via `POST /keep/shopping`, with the pantry step and an undo).
-   Still open: the linked Zutaten-Rezepte in that list.
+   ingredients via `POST /keep/shopping`, with the pantry flow and an undo; the linked
+   Zutaten-Rezepte are cooked in „Teil 1“, so „Teil 2“ buys only the bottom level).
 
 Two things to carry over rather than rediscover:
 - **Writes must be non-destructive.** The spike proved this is achievable — a write/delete

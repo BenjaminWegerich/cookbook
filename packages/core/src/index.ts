@@ -45,6 +45,7 @@ export * from './shoppingRouteCsv.js';
 export * from './shoppingSort.js';
 export * from './shoppingRouteData.js';
 export * from './shoppingRouteRegistry.js';
+export * from './subRecipePlan.js';
 
 /** Version of the core module, kept in sync with packages/core/package.json. */
 export const VERSION = '0.1.0';

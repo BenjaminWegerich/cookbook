@@ -29,7 +29,7 @@ import AiCreateSheet, {
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import { newRecipeDraftWithTitle } from './components/recipeDrafts';
 import RecipeList from './components/RecipeList';
-import PantrySelect from './components/PantrySelect';
+import PantrySelect, { type PantrySelectHandle } from './components/PantrySelect';
 import RecipeOverview, {
   type RecipeOverviewHandle,
   type RecipeOverviewTarget,
@@ -37,6 +37,7 @@ import RecipeOverview, {
 import ShoppingListSelect from './components/ShoppingListSelect';
 import ShoppingSortSelect from './components/ShoppingSortSelect';
 import Snackbar from './components/Snackbar';
+import SubRecipeSelect from './components/SubRecipeSelect';
 import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
@@ -55,6 +56,7 @@ import {
   type KeepState,
 } from './keep/keepClient';
 import { resolveMealPlan, type MealPlanCard, type MealPlanResolution } from './keep/mealPlanCards';
+import type { ShoppingInputs } from './keep/shoppingBundle';
 import { useKeep } from './keep/useKeep';
 import './styles/ai-create.css';
 import './styles/recipe-list.css';
@@ -72,12 +74,14 @@ import './styles/snackbar.css';
  * layer and has no marker of its own). The create menu and the recipe overview
  * sheet are treated like screens here: the browser Back button closes them
  * first, then leaves the list. 'shopping' is the bundled shopping-list selection
- * (components/ShoppingListSelect) and 'pantry' the stock step that follows it
- * (components/PantrySelect): two full screens of one flow — the flow can carry
- * sheets and the editor above the selection page, so it is not simply a sibling
- * of the list (see shoppingFlowRef).
+ * (components/ShoppingListSelect), 'pantrySub' the cooking step
+ * (components/SubRecipeSelect) and 'pantry' the bottom-level stock step that
+ * performs the write (components/PantrySelect): three full screens of one flow —
+ * the flow can carry sheets and the editor above the selection page, so it is
+ * not simply a sibling of the list (see shoppingFlowRef).
  */
-type TopScreen = 'editor' | 'ai' | 'menu' | 'overview' | 'shopping' | 'pantry' | 'sort';
+type TopScreen =
+  'editor' | 'ai' | 'menu' | 'overview' | 'shopping' | 'pantrySub' | 'pantry' | 'sort';
 
 /**
  * Which AI task the sheet runs while it is the visible 'ai' screen: create a new
@@ -102,6 +106,14 @@ const LIST_MARKER = 'recipe-list';
  * and the prop keeps its identity across renders.
  */
 const NO_PLANNED_TITLES: ReadonlySet<string> = new Set();
+
+/**
+ * The stable "the collection is not loaded" list, for the same reason: the
+ * cooking step takes the collection to find sub-recipe titles, and this keeps
+ * that prop's identity across renders while the list is still null (the step
+ * resolves no sub-recipe against it, so it simply skips itself).
+ */
+const NO_RECIPES: readonly StoredRecipe[] = [];
 
 /** True when `state` belongs to one of our screen entries (history.state is a
  *  structured clone, so this must be a value check, never an identity check). */
@@ -289,19 +301,52 @@ function App() {
    */
   const shoppingFlowRef = useRef(false);
   /**
-   * The pantry step ("Vorräte auswählen", components/PantrySelect) is open: the
-   * second page of the bundled shopping flow. It is *not* kept mounted while
-   * another layer sits above it — none can be opened from it — so unlike the
-   * selection page it is simply mounted and unmounted.
+   * The two pantry steps of the bundled shopping flow ("Vorräte auswählen"):
+   * step 1 ("Teil 1: Zutaten-Rezepte", components/SubRecipeSelect) decides how
+   * much of each sub-recipe is cooked, step 2 ("Teil 2: Zutaten",
+   * components/PantrySelect) decides each bottom-level ingredient's Vorrat and
+   * performs the write. Neither is kept mounted while another layer sits above
+   * it — none can be opened from them — so unlike the selection page they are
+   * simply mounted and unmounted.
+   *
+   * The two are separate TopScreens, and step 1 keeps everything step 2 needs to
+   * itself: it hands the resolved bundle and the cooking decisions up when
+   * "Weiter" opens (`openPantryBottom`). Leaving step 2 therefore discards every
+   * amount — which is exactly what its "Zurück" asks about before it returns.
+   * Opening step 1 again re-resolves the bundle and starts from the prefills.
    */
+  const [pantrySubOpen, setPantrySubOpen] = useState(false);
   const [pantryOpen, setPantryOpen] = useState(false);
   /**
-   * The dishes the pantry step was opened for: the checked cards the selection
+   * The dishes the pantry steps were opened for: the checked cards the selection
    * page handed over. A snapshot on purpose — that page is what the user
    * confirmed, and the sheet must not change under their fingers when Keep moves
    * (an undo elsewhere re-resolves the plan).
    */
   const [pantryCards, setPantryCards] = useState<MealPlanCard[]>([]);
+  /**
+   * The bundle step 1 resolved (../keep/shoppingBundle) and the cooking
+   * decisions it collected. Together they are everything step 2 derives its
+   * bottom-level needs from, so both are handed over when "Weiter" opens. They
+   * are dropped again when the flow leaves step 2 backwards or forwards, so no
+   * stale amount can outlive the visit it belongs to.
+   */
+  const [pantryInputs, setPantryInputs] = useState<ShoppingInputs | null>(null);
+  const [pantryDecisions, setPantryDecisions] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
+  /**
+   * The same bundle as a ref, for the popstate listener: it is registered once,
+   * so it must not close over `pantryInputs` state. It is what tells Back whether
+   * the flow has a cooking step to return to (a bundle with at least one
+   * sub-recipe) or not.
+   */
+  const pantryInputsRef = useRef<ShoppingInputs | null>(null);
+  /**
+   * The imperative handle of step 2, so browser Back can arm its discard question
+   * (the page's own "Zurück" asks the same thing).
+   */
+  const pantryHandleRef = useRef<PantrySelectHandle | null>(null);
   /**
    * The shopping-list sort page ("Einkaufsliste sortieren") is open. Like the
    * pantry step it is a place of its own, mounted while it is the visible page
@@ -420,11 +465,13 @@ function App() {
         : 'ai'
       : pantryOpen
         ? 'pantry'
-        : sortOpen
-          ? 'sort'
-          : shoppingOpen
-            ? 'shopping'
-            : 'list';
+        : pantrySubOpen
+          ? 'pantrySub'
+          : sortOpen
+            ? 'sort'
+            : shoppingOpen
+              ? 'shopping'
+              : 'list';
   /** Remembers/restores the window scroll per page (see useScrollMemory). */
   const scrollMemory = useScrollMemory(visiblePageKey);
 
@@ -524,10 +571,11 @@ function App() {
       setAiOpen(next === 'ai' || (next === 'editor' && prev === 'ai'));
       setCreateMenuOpen(next === 'menu');
       setOverviewOpen(next === 'overview');
-      // The pantry step is the only layer above the selection page that is
-      // mounted fresh each time; leaving it (Back, the write) unmounts it, so
-      // the chosen stocks are gone and the next visit starts from the
-      // pre-filled Vorräte again.
+      // The two pantry steps are layers above the selection page, and each is
+      // mounted fresh every time it is opened; leaving one (Back, "Weiter", the
+      // write) unmounts it, so its amounts are gone and the next visit starts
+      // from the prefills again.
+      setPantrySubOpen(next === 'pantrySub');
       setPantryOpen(next === 'pantry');
       // The sort page is a place of its own over the list (nothing layers above
       // it), so it is mounted while it is the visible page and dropped otherwise.
@@ -707,12 +755,41 @@ function App() {
         guardCurrentEntry();
         return;
       }
-      if (top === 'pantry') {
-        // Back out of the pantry step returns to the selection page, which
+      if (top === 'pantrySub') {
+        // Back out of the cooking step returns to the selection page, which
         // stayed mounted underneath it: the flow shares one history entry, so
-        // the pop this consumed has to be replaced by the guard.
+        // the pop this consumed has to be replaced by the guard. The cooking
+        // decisions are dropped with the page — a fresh visit starts from the
+        // prefills (the same rule the write and "Weiter" follow).
         navRef.current = 'shopping';
+        setPantrySubOpen(false);
+        setPantryInputs(null);
+        pantryInputsRef.current = null;
+        setPantryDecisions(new Map());
+        guardCurrentEntry();
+        return;
+      }
+      if (top === 'pantry') {
+        // Back out of the bottom level is a step back: with a cooking step in
+        // the flow it discards every amount, so the page is asked first (its own
+        // "Zurück" arms the same question). A `true` means it took this Back —
+        // stay here and re-establish the entry the pop consumed.
+        if (pantryHandleRef.current?.notifyBack() === true) {
+          guardCurrentEntry();
+          return;
+        }
+        // Whether the flow has a cooking step to go back to — read before the
+        // bundle is dropped below.
+        const hasCookingStep =
+          pantryInputsRef.current !== null && pantryInputsRef.current.recipesByTitle.size > 0;
         setPantryOpen(false);
+        setPantryInputs(null);
+        pantryInputsRef.current = null;
+        setPantryDecisions(new Map());
+        // Onto the cooking step when the bundle has one, otherwise out to the
+        // selection page. Either way the flow's single history entry was
+        // consumed by the pop, so the guard puts one back.
+        navRef.current = hasCookingStep ? 'pantrySub' : 'shopping';
         guardCurrentEntry();
         return;
       }
@@ -1011,10 +1088,10 @@ function App() {
    * it, so the checked dishes survive the detour and the flow returns to them.
    * The overview sheet is deliberately *not* hidden here: it is a bottom sheet
    * over its parent page (like the list), so the selection page stays visible,
-   * dimmed by the sheet's backdrop. The pantry step, the editor and the AI
+   * dimmed by the sheet's backdrop. The pantry steps, the editor and the AI
    * screen are full screens that replace it, so they do hide it.
    */
-  const shoppingVisible = shoppingOpen && !pantryOpen && !editorOpen && !aiOpen;
+  const shoppingVisible = shoppingOpen && !pantryOpen && !pantrySubOpen && !editorOpen && !aiOpen;
 
   /**
    * Opens the overview for a card of "Restliche Sammlung". The resolution
@@ -1102,19 +1179,62 @@ function App() {
   }, [keep.state, setNav, scrollMemory]);
 
   /**
-   * Opens the pantry step for the dishes the selection page handed over
-   * ("Vorräte auswählen"). The page is a new instance every time it is opened
-   * (it unmounts when the flow leaves it), so its remembered scroll is dropped
-   * and it starts at the top — the same rule the editor levels follow.
+   * Opens step 1 of the pantry flow ("Vorräte auswählen — Teil 1: Zutaten-
+   * Rezepte") for the dishes the selection page handed over. Each step is a new
+   * instance every time it is opened (it unmounts when the flow leaves it), so
+   * its remembered scroll is dropped and it starts at the top — the same rule
+   * the editor levels follow.
+   *
+   * The step resolves the bundle itself; when it turns out to hold no
+   * sub-recipe, it skips itself through `openPantryBottom` and the flow lands on
+   * step 2 without a subtitle.
    */
-  const openPantry = useCallback(
+  const openPantrySub = useCallback(
     (cards: readonly MealPlanCard[]): void => {
+      scrollMemory.forget('pantrySub');
       scrollMemory.forget('pantry');
       setPantryCards([...cards]);
+      setPantryInputs(null);
+      pantryInputsRef.current = null;
+      setPantryDecisions(new Map());
+      setNav('pantrySub');
+    },
+    [setNav, scrollMemory],
+  );
+
+  /**
+   * Opens step 2 ("Teil 2: Zutaten") for the bundle step 1 resolved — the
+   * bottom level, and the only step that buys. It is also the target of step 1's
+   * automatic skip, which is why it takes the bundle instead of resolving it.
+   */
+  const openPantryBottom = useCallback(
+    (inputs: ShoppingInputs, decisions: ReadonlyMap<string, number>): void => {
+      scrollMemory.forget('pantry');
+      setPantryInputs(inputs);
+      pantryInputsRef.current = inputs;
+      setPantryDecisions(decisions);
       setNav('pantry');
     },
     [setNav, scrollMemory],
   );
+
+  /**
+   * Returns from step 2 to step 1 and discards every amount (step 2's "Zurück",
+   * after its confirmation): step 1 re-resolves the bundle and starts from its
+   * prefills, so the whole cooking decision is made again.
+   */
+  const restartPantryCooking = useCallback((): void => {
+    scrollMemory.forget('pantrySub');
+    setPantryInputs(null);
+    pantryInputsRef.current = null;
+    setPantryDecisions(new Map());
+    setNav('pantrySub');
+  }, [setNav, scrollMemory]);
+
+  /** Leaves the pantry flow for the dish selection (step 2 without a step 1). */
+  const leavePantryFlow = useCallback((): void => {
+    setNav('shopping');
+  }, [setNav]);
 
   /** Closes the overview sheet (backdrop, close button, browser Back). */
   const closeOverview = useCallback((): void => {
@@ -1502,6 +1622,9 @@ function App() {
       }
       setShoppingWrittenFor(writtenFor);
       setPantryCards([]);
+      setPantryInputs(null);
+      pantryInputsRef.current = null;
+      setPantryDecisions(new Map());
       setNav(null);
       const ingredients = lines.length;
       showSnackbar({
@@ -1888,21 +2011,41 @@ function App() {
           <ShoppingListSelect
             cards={mealPlanResolution?.cards ?? null}
             onOpenCard={openMealPlanOverview}
-            onChoosePantry={openPantry}
+            onChoosePantry={openPantrySub}
             onClose={() => setNav(null)}
           />
         </div>
       )}
 
-      {/* The pantry step ("Vorräte auswählen") — the second page of the bundled
-          shopping flow, over the selection page it follows. Nothing opens above
-          it, so it needs no hidden wrapper: it is simply mounted while it is the
-          flow's visible page. */}
-      {pantryOpen && (
-        <PantrySelect
+      {/* Step 1 of the pantry flow ("Vorräte auswählen — Teil 1: Zutaten-
+          Rezepte") — the page the selection page's forward button opens. It
+          resolves the bundle itself and hands it over when "Weiter" opens, or
+          skips this step entirely when the bundle has no sub-recipe. Nothing
+          opens above it, so it needs no hidden wrapper: it is simply mounted
+          while it is the flow's visible page. */}
+      {pantrySubOpen && (
+        <SubRecipeSelect
           cards={pantryCards}
           token={token ?? ''}
+          collection={recipes ?? NO_RECIPES}
           onBack={() => setNav('shopping')}
+          onNext={openPantryBottom}
+        />
+      )}
+
+      {/* Step 2 of the pantry flow ("Vorräte auswählen — Teil 2: Zutaten") — the
+          bottom level, and the only step that writes. It is opened either by
+          step 1's "Weiter" or by step 1's automatic skip, so the bundle is a
+          prop (App holds it) and the page itself resolves nothing. Nothing opens
+          above it, so it needs no hidden wrapper. */}
+      {pantryOpen && pantryInputs !== null && (
+        <PantrySelect
+          ref={pantryHandleRef}
+          inputs={pantryInputs}
+          decisions={pantryDecisions}
+          hasSubRecipes={pantryInputs.recipesByTitle.size > 0}
+          onLeave={leavePantryFlow}
+          onRestartCooking={restartPantryCooking}
           onWrite={writeShoppingList}
         />
       )}
@@ -1963,7 +2106,7 @@ function App() {
             </div>
           ))}
         </>
-      ) : aiOpen ? null : shoppingOpen || pantryOpen || sortOpen ? null : (
+      ) : aiOpen ? null : shoppingOpen || pantryOpen || pantrySubOpen || sortOpen ? null : (
         <main className="app">
           {/* No screen header any more (decided with the user): the search field
               alone opens the screen, and the two section captions below carry

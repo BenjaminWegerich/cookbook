@@ -71,6 +71,27 @@
   margin: 0;
 }
 
+/* The title block of a stacked header: the screen title and, where the screen
+   has one, its subtitle. The two sit close together (--space-2), while the
+   stack's own gap (--space-6) keeps the block away from "Zurück" above it. */
+.app-header-title {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* A subtitle under the screen title, naming the step where one flow has two
+   screens of the same kind ("Vorräte auswählen" as "Teil 1: Zutaten-Rezepte"
+   and "Teil 2: Zutaten"). Quiet and one step smaller — the same reading the
+   sheets' .sheet-subtitle uses — so it qualifies the title without competing
+   with it. */
+.app-header-subtitle {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: 400;
+}
+
 /* Small quiet text buttons (editor headers: Zurück / Abbrechen / …). They lay
    their content out inline, so a symbol + label pair centers on one line
    without extra markup. The editor's photo row does not use this variant: its

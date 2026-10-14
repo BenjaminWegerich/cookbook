@@ -1,13 +1,20 @@
 /**
- * Pantry sheet — the full-screen page "Vorräte auswählen" behind the selection
- * page's forward button (App's `pantry` layer).
+ * Pantry sheet, step 2 of the bundled shopping flow: the full-screen page
+ * "Vorräte auswählen — Teil 2: Zutaten" (App's `pantry` layer).
  *
- * It is the second half of the bundled shopping write. The previous page chose
- * *which dishes* are shopped for; this one decides *what is already at home*,
- * per ingredient. The rows come from `../keep/shoppingBundle` (one read per
- * selected recipe), the arithmetic from `@cookbook/core` (`stockPrefill`,
- * `buyAmount`, `pantryReading`, `renderPantryLine`, `suggestedStocks`,
- * `renderPantryChip`):
+ * It closes the bundled shopping write. The previous steps chose *which dishes*
+ * are shopped for and *how much of each sub-recipe is cooked*; this one decides
+ * *what is already at home*, per ingredient — and it is the only step that buys.
+ * Its rows are the **bottom level**: every ingredient of the selected dishes and
+ * of the sub-recipes cooked for them, without the sub-recipes themselves, which
+ * step 1 (components/SubRecipeSelect) owns.
+ *
+ * The rows and their needs are handed in by App (resolved once, see
+ * ../keep/shoppingBundle) and the page derives the needs from them on every
+ * render — the cooking decisions are part of that derivation, so an amount here
+ * can never disagree with what is really cooked. The arithmetic is
+ * `@cookbook/core`'s (`bottomLevelNeedsFor` → `stockPrefill`, `buyAmount`,
+ * `pantryReading`, `renderPantryLine`, `suggestedStocks`, `renderPantryChip`):
  *
  * - the Vorrat starts on `min(need, reorder point)` — snapped **down** to the
  *   nearest chip for an exact shopping unit, kept as a custom ("andere") chip
@@ -17,12 +24,11 @@
  *   **up** to whole shopping units, or to whole grams/millilitres without one),
  *   but a value typed into the "kaufen" side is used **exactly** — never
  *   rounded, and allowed to exceed the need (the Vorrat then reads zero);
- * - the rows are filed once, when the page opens: the ingredients the pre-filled
- *   Vorrat already covers go below the ones that still need a purchase. That
- *   filing is a snapshot — picking a chip updates its row's amounts in place
- *   instead of moving it under the user's finger — while the amounts and the
- *   write always follow the *current* values: a row with nothing to buy is not
- *   written, wherever it stands.
+ * - the rows are filed by the *pre-filled* Vorrat, the ones that still need a
+ *   purchase first. That filing is stable — picking a chip updates its row's
+ *   amounts in place instead of moving it under the user's finger — while the
+ *   amounts and the write always follow the *current* values: a row with nothing
+ *   to buy is not written, wherever it stands.
  *
  * **One ingredient is two lines** (decided with the user):
  *
@@ -62,7 +68,10 @@
  * opens that
  * quantity's keyboard); a tap on an unfolded row's non-interactive area folds
  * it again; a tap outside a row does nothing. A committed change — a chip, an
- * "andere" value, or a buy quantity — folds its row too.
+ * "andere" value, or a buy quantity — folds its row too. Only the user's own
+ * moves are stored (which rows they folded, which they opened, which value they
+ * typed); the starting shape is derived from the prefill, so the page holds no
+ * remembered defaults at all and a fresh visit always starts from the data.
  *
  * "Einkaufsliste schreiben" writes one line per row that currently has something
  * to buy, exactly as displayed (with the name, via core's `renderPantryLine`),
@@ -70,16 +79,21 @@
  * success notice with its undo). A failure is shown next to the button and
  * leaves the page as it is, so the work is not lost.
  *
+ * **"Zurück" asks before discarding** — but only when step 1 exists, since that
+ * is where the flow's amounts are entered and it starts from its prefills again
+ * afterwards (the browser Back button arms the same question, see
+ * `PantrySelectHandle`). Without a cooking step there is nothing to ask and the
+ * header's button leaves for the dish selection as it always did.
+ *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import { Fragment, useCallback, useImperativeHandle, useMemo, useState } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 import {
   buyAmount,
   formatBQ,
-  formatDecimal,
   formatPantryAq,
   needText,
   NNBSP,
@@ -93,34 +107,95 @@ import {
   type ShoppingNeed,
 } from '@cookbook/core';
 
-import { resolveShoppingBundle, type ShoppingBundle } from '../keep/shoppingBundle';
-import type { MealPlanCard } from '../keep/mealPlanCards';
+import { bottomLevelNeedsFor, type ShoppingInputs } from '../keep/shoppingBundle';
+import LeaveConfirmSheet from './LeaveConfirmSheet';
 import { CheckIcon, ShelfIcon, ShoppingCartIcon } from './icons';
 import StockChips, { type StockChip } from './StockChips';
-import { parseInput, roundThousandths } from './pantryInput';
+import TappableQuantity from './TappableQuantity';
+import { roundThousandths } from './pantryInput';
+
+/**
+ * The browser-Back consumer of this page (see App's popstate handler). The
+ * amount of work behind "Zurück" is a decision, so Back arms the same question
+ * the header's button does instead of discarding silently.
+ */
+export interface PantrySelectHandle {
+  /**
+   * Arms the discard question and reports whether the page handled the Back.
+   * False means the caller may leave: the page holds nothing to discard.
+   */
+  notifyBack: () => boolean;
+}
 
 interface PantrySelectProps {
   /**
-   * The dishes the previous page selected (the recognized meal-plan cards, in
-   * Keep's order). Fixed for the page's lifetime: this is the bundle the user
-   * confirmed there, not a live view of the plan.
+   * The resolved bundle: the selected dishes' ingredient lists scaled to the
+   * size each is cooked at, plus the recipes of every sub-recipe they reach
+   * (see ../keep/shoppingBundle). Fixed for the page's lifetime — App resolved
+   * it before opening the page, and the page unmounts when the flow leaves.
    */
-  cards: readonly MealPlanCard[];
-  /** Drive access token, needed to read the selected recipes' ingredient lists. */
-  token: string;
-  /** Leaves the page for the selection page (header "Zurück", browser Back). */
-  onBack: () => void;
+  inputs: ShoppingInputs;
+  /**
+   * The cooking decisions of the previous step ("Teil 1: Zutaten-Rezepte"): the
+   * stock chosen per sub-recipe. They enter every bottom-level need, so the
+   * amounts here are the ones the cooked sub-recipes really consume. Empty when
+   * the bundle holds no sub-recipe.
+   */
+  decisions: ReadonlyMap<string, number>;
+  /**
+   * Whether the cooking step exists at all (the bundle holds at least one
+   * sub-recipe). It decides the header's subtitle and whether "Zurück" leads to
+   * that step — and therefore whether there is anything to ask before leaving.
+   */
+  hasSubRecipes: boolean;
+  /** Leaves the flow for the dish selection (only without a cooking step). */
+  onLeave: () => void;
+  /**
+   * Discards every amount and returns to the cooking step (only with one). App
+   * drops the cooking decisions, so that step starts from its prefills again.
+   */
+  onRestartCooking: () => void;
   /**
    * Writes the given lines to the Keep shopping list and closes the whole flow.
    * Resolves on success; a failure is thrown and shown next to the button (the
    * page stays open, so the chosen stocks are not lost).
    */
   onWrite: (lines: readonly string[], recipes: number) => Promise<void>;
+  /** See PantrySelectHandle — React 19 passes `ref` as an ordinary prop. */
+  ref?: Ref<PantrySelectHandle>;
 }
 
 /** One row's identity: the ingredient name plus the unit it is needed in. */
 function rowKey(ingredient: string, baseUnit: string): string {
   return `${ingredient}\u0000${baseUnit}`;
+}
+
+/**
+ * The one stock value a row shows as its own editable chip instead of a
+ * suggestion, or null when its suggestions cover the amount: a value the user
+ * typed through "andere", or a pre-filled Vorrat that falls between two
+ * suggestions (a reorder point need not be a suggestion). An *exact* shopping
+ * unit never produces one — core's `stockPrefill` snaps it down to a package
+ * threshold.
+ *
+ * Derived from the row's data and the typed value alone, so the page never has
+ * to remember a default it computed once.
+ */
+function customStockOf(need: ShoppingNeed, typed: number | undefined): number | null {
+  if (typed !== undefined) {
+    return typed;
+  }
+  const stock = stockPrefill(need);
+  // Covered (the need itself) or zero is a normal chip; a suggestion is already
+  // a chip too. Only an in-between value becomes a custom chip.
+  if (stock <= 0 || stock >= need.needed) {
+    return null;
+  }
+  const target = shoppingUnitOf(need);
+  if (target !== null && target.au.exact) {
+    return null;
+  }
+  return suggestedStocks(need).includes(stock) ? null : stock;
 }
 
 /**
@@ -182,99 +257,6 @@ function renderArrangement(
         return <Fragment key={index}>{part}</Fragment>;
     }
   });
-}
-
-interface TappableQuantityProps {
-  /** The closed reading, written as plain text (the value it shows). */
-  display: string;
-  /** The number behind `display`: the prefill and the "unchanged" reference. */
-  editValue: number;
-  /** The unit the open input is typed in ("g" / "ml" / the shopping unit). */
-  unitName: string;
-  /**
-   * Whether the open input shows its unit beside it. The count hides it: the
-   * arrangement's <AU> already names that unit right after the input, so the
-   * label would double it. Defaults to true — a base amount's "g"/"ml" is only
-   * shown here.
-   */
-  showEditUnit?: boolean;
-  /** Reports a committed number (already clamped to ≥ 0 by the caller). */
-  onCommit: (typed: number) => void;
-  /** Accessible name of the reading, e.g. "Kaufen für Mehl". */
-  label: string;
-}
-
-/**
- * One tappable quantity (a count or a base amount): plain text when closed, an
- * inline keyboard input when tapped. Committing the unchanged value is a no-op,
- * so a tap that merely opens the keyboard can never alter the value.
- */
-function TappableQuantity({
-  display,
-  editValue,
-  unitName,
-  showEditUnit = true,
-  onCommit,
-  label,
-}: TappableQuantityProps) {
-  /** True while the keyboard is open; `draft` holds what is being typed. */
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-
-  function beginEdit(): void {
-    setEditing(true);
-    setDraft(formatDecimal(roundThousandths(editValue)));
-  }
-
-  function commitTyped(): void {
-    setEditing(false);
-    const parsed = parseInput(draft);
-    if (!Number.isFinite(parsed)) return;
-    const rounded = roundThousandths(parsed);
-    // Unchanged (within the sheet's thousandth precision): nothing to do.
-    if (rounded === roundThousandths(editValue)) return;
-    onCommit(rounded);
-  }
-
-  if (editing) {
-    return (
-      <span className="pantry-value-edit">
-        <input
-          className="pantry-value-input"
-          // The phone's number keypad, not the full keyboard. The value may carry
-          // a decimal comma, hence "decimal" rather than "numeric".
-          inputMode="decimal"
-          enterKeyHint="done"
-          autoFocus
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onFocus={(event) => event.currentTarget.select()}
-          onBlur={commitTyped}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') commitTyped();
-            if (event.key === 'Escape') setEditing(false);
-          }}
-          aria-label={`${label} in ${unitName}`}
-        />
-        {/* The field's unit while it is open: g / ml for a base amount, the
-            shopping unit's name for a count. A count hides it — that unit is
-            already the arrangement's <AU> right beside the input. The unit's
-            leading margin is the space between the number and its unit. */}
-        {showEditUnit && <span className="pantry-value-unit">{unitName}</span>}
-      </span>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className="pantry-value"
-      onClick={beginEdit}
-      aria-label={`${label} eintippen (${unitName})`}
-    >
-      {display}
-    </button>
-  );
 }
 
 interface TappableAmountProps {
@@ -349,102 +331,106 @@ function TappableAmount({
 }
 
 /**
- * The pantry page (see the file header). It owns nothing but the chosen stocks:
- * the bundle, the Keep write and the flow belong to App.
+ * The pantry page, step 2 (see the file header). It owns the chosen stocks and
+ * the buy amounts; the resolved bundle, the cooking decisions, the Keep write
+ * and the flow itself belong to App.
  */
-function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
-  /** The ingredient needs of the selected dishes, or null while they load. */
-  const [bundle, setBundle] = useState<ShoppingBundle | null>(null);
-  /** Why the bundle could not be built (a recipe file was unreadable). */
-  const [loadError, setLoadError] = useState<string | null>(null);
+function PantrySelect({
+  inputs,
+  decisions,
+  hasSubRecipes,
+  onLeave,
+  onRestartCooking,
+  onWrite,
+  ref,
+}: PantrySelectProps) {
+  /**
+   * The ingredient needs of the bottom level — the selected dishes *and* every
+   * cooked sub-recipe, summed per ingredient (core's `planSubRecipes`, through
+   * ../keep/shoppingBundle). Derived, never stored: the cooking decisions are
+   * the only input, so the page cannot show an amount the cooked sub-recipes do
+   * not really consume.
+   */
+  const needs = useMemo(() => bottomLevelNeedsFor(inputs, decisions), [inputs, decisions]);
+  /** True while the discard question is open (header "Zurück" / browser Back). */
+  const [confirmLeave, setConfirmLeave] = useState(false);
   /**
    * The stock and the amount to buy the user picked, keyed by row. Only
    * *changed* rows are stored: a row without an entry shows its pre-filled
-   * values, so a bundle that arrives late (or again) is never shadowed by a
-   * stale default.
+   * values, so a prefill is never shadowed by a stale copy of itself.
    */
   const [stocks, setStocks] = useState<ReadonlyMap<string, PantryState>>(() => new Map());
   /**
-   * The custom Vorrat value the user typed through the "andere" chip's keyboard,
-   * keyed by row. Only rows the user actually typed a value for are stored; the
-   * entry is dropped again as soon as the stock is set any other way (a
-   * suggestion chip or the "kaufen" amount).
+   * The Vorrat the user typed through the "andere" chip's keyboard, keyed by row
+   * (absent = none typed). The entry is dropped again as soon as the stock is
+   * set any other way (a suggestion chip or the "kaufen" amount). A prefill that
+   * is no chip is *not* stored here but derived (`customValueOf`), so the page
+   * holds no remembered copy of a value that comes from the data.
    */
-  const [customStocks, setCustomStocks] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const [typedStocks, setTypedStocks] = useState<ReadonlyMap<string, number>>(() => new Map());
   /** True while the write runs — the button is unavailable then. */
   const [busy, setBusy] = useState(false);
   /** Reason the write failed, shown next to the button (null = no failure). */
   const [writeError, setWriteError] = useState<string | null>(null);
   /**
-   * The rows currently unfolded (showing their stock chips), keyed by row. A
-   * row that still needs a purchase starts unfolded; a row whose pre-filled
-   * Vorrat already covers the need starts folded to its first line. The set
-   * only ever holds the *unfolded* keys: folding on an outside tap just empties
-   * it, so the covered rows need no per-row bookkeeping of their own.
+   * The two sets that decide a row's shape, and they only ever hold rows the
+   * *user* moved: `folded` are the rows they closed, `opened` the ones they
+   * opened. A row nobody touched follows its prefill — one that still needs a
+   * purchase is unfolded, one whose pre-filled Vorrat already covers the need is
+   * folded to its first line. Deriving that instead of snapshotting it when the
+   * page opens is what lets the page own no remembered defaults at all.
    */
-  const [expandedRows, setExpandedRows] = useState<ReadonlySet<string>>(() => new Set());
+  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
 
-  // Load the bundle once the page is open. `cards` and `token` are fixed for its
-  // lifetime (App sets the cards before opening the page and the page unmounts
-  // when the flow leaves), so there is no state to reset here — only the result
-  // of the request. State is updated in the promise callbacks, never
-  // synchronously, so the "no state update in an effect" rule stays satisfied.
-  useEffect(() => {
-    let cancelled = false;
-    void resolveShoppingBundle(cards, token)
-      .then((resolved) => {
-        if (!cancelled) {
-          setBundle(resolved);
-          // The rows that still need a purchase start unfolded; the rows whose
-          // pre-filled Vorrat already covers the need start folded to one line.
-          setExpandedRows(
-            new Set(
-              resolved.needs
-                .filter((need) => stockPrefill(need) < need.needed)
-                .map((need) => rowKey(need.ingredient, need.baseUnit)),
-            ),
-          );
-          // An ingredient without an *exact* shopping unit keeps a reorder point
-          // that falls between two chips as its own stock, shown as a custom chip
-          // — exactly as if the user had typed it through "andere". Exact units
-          // are snapped down by core's `stockPrefill`, so they never get one.
-          const custom = new Map<string, number>();
-          for (const need of resolved.needs) {
-            const target = shoppingUnitOf(need);
-            if (target !== null && target.au.exact) continue;
-            const stock = stockPrefill(need);
-            // Covered (the need itself) or zero is a normal chip; a suggestion is
-            // already a chip too. Only an in-between value becomes a custom chip.
-            if (stock <= 0 || stock >= need.needed) continue;
-            if (suggestedStocks(need).includes(stock)) continue;
-            custom.set(rowKey(need.ingredient, need.baseUnit), stock);
-          }
-          if (custom.size > 0) setCustomStocks(custom);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : String(err));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [cards, token]);
+  // Browser Back is a decision here, not a silent discard (see PantrySelectHandle):
+  // the popstate listener asks this page first, and only a `false` lets it leave.
+  useImperativeHandle(
+    ref,
+    () => ({
+      notifyBack: (): boolean => {
+        if (!hasSubRecipes) return false;
+        setConfirmLeave(true);
+        return true;
+      },
+    }),
+    [hasSubRecipes],
+  );
+
+  /** The header's "Zurück": with a cooking step behind it, it asks first. */
+  function requestLeave(): void {
+    if (hasSubRecipes) {
+      setConfirmLeave(true);
+    } else {
+      onLeave();
+    }
+  }
 
   /** Unfolds one row (idempotent — an already-unfolded row is left alone). */
-  const expand = useCallback((key: string): void => {
-    setExpandedRows((current) => {
+  const unfold = useCallback((key: string): void => {
+    setOpened((current) => {
       if (current.has(key)) return current;
       const updated = new Set(current);
       updated.add(key);
       return updated;
     });
+    setFolded((current) => {
+      if (!current.has(key)) return current;
+      const updated = new Set(current);
+      updated.delete(key);
+      return updated;
+    });
   }, []);
 
   /** Folds one row back to its first line (idempotent). */
-  const collapse = useCallback((key: string): void => {
-    setExpandedRows((current) => {
+  const fold = useCallback((key: string): void => {
+    setFolded((current) => {
+      if (current.has(key)) return current;
+      const updated = new Set(current);
+      updated.add(key);
+      return updated;
+    });
+    setOpened((current) => {
       if (!current.has(key)) return current;
       const updated = new Set(current);
       updated.delete(key);
@@ -456,17 +442,14 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
    * The rows in the order they keep for the page's lifetime: first the
    * ingredients whose *pre-filled* Vorrat does not cover the need, then the ones
    * it does (decided with the user: the filing is a snapshot, so no row moves
-   * while its slider is being used). Only the pre-fill decides that — it depends
+   * while its value is being used). Only the pre-fill decides that — it depends
    * on the need and the reorder point, never on the chosen stock — so the order
    * is stable across renders.
    */
-  const orderedNeeds =
-    bundle === null
-      ? []
-      : [
-          ...bundle.needs.filter((need) => stockPrefill(need) < need.needed),
-          ...bundle.needs.filter((need) => stockPrefill(need) >= need.needed),
-        ];
+  const orderedNeeds = [
+    ...needs.filter((need) => stockPrefill(need) < need.needed),
+    ...needs.filter((need) => stockPrefill(need) >= need.needed),
+  ];
 
   /**
    * The rows with the chosen stock and buy amount. The stock is rounded to the
@@ -500,7 +483,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
       });
       return updated;
     });
-    setCustomStocks((current) => {
+    setTypedStocks((current) => {
       const updated = new Map(current);
       updated.delete(key);
       return updated;
@@ -520,7 +503,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
       });
       return updated;
     });
-    setCustomStocks((current) => {
+    setTypedStocks((current) => {
       const updated = new Map(current);
       updated.delete(key);
       return updated;
@@ -540,7 +523,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
       });
       return updated;
     });
-    setCustomStocks((current) => {
+    setTypedStocks((current) => {
       const updated = new Map(current);
       updated.set(key, stock);
       return updated;
@@ -559,7 +542,7 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
       renderPantryLine(entry.need.ingredient, entry.buy, entry.need.baseUnit),
     );
     try {
-      await onWrite(lines, bundle?.recipes ?? 0);
+      await onWrite(lines, inputs.recipes);
     } catch (err) {
       setWriteError(err instanceof Error ? err.message : String(err));
       setBusy(false);
@@ -572,11 +555,15 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
     const { need, stock, buy } = entry;
     const kaufen = pantryReading(need.ingredient, buy, need.baseUnit);
     const key = rowKey(need.ingredient, need.baseUnit);
-    // Whether the row is folded to its first line. The covered rows start
-    // folded; a folded row opens on a tap and folds again after a change.
-    const collapsed = !expandedRows.has(key);
-    // The value the user typed through the "andere" keyboard (null = none yet).
-    const customValue = customStocks.get(key) ?? null;
+    // Whether the row is folded to its first line: the user's own last move
+    // wins, and a row nobody touched follows its prefill — one that still needs
+    // a purchase is unfolded, one whose pre-filled Vorrat already covers the
+    // need is folded. That derivation is why the page needs no snapshot of the
+    // filing when it opens.
+    const collapsed = !opened.has(key) && (folded.has(key) || stockPrefill(need) >= need.needed);
+    // The value the user typed through the "andere" keyboard, or a prefill that
+    // is no suggestion at all (null = the row's custom chip is not needed).
+    const customValue = customStockOf(need, typedStocks.get(key));
     // The custom value as a chip, labelled with the ingredient's full arrangement
     // (shopping unit included when one exists).
     const customChip: StockChip | null =
@@ -614,11 +601,11 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
           bqEdit={buy}
           onCommitAq={(count) => {
             setBuy(need, count * kaufen.factor);
-            collapse(key);
+            fold(key);
           }}
           onCommitBq={(amount) => {
             setBuy(need, amount);
-            collapse(key);
+            fold(key);
           }}
           label={`Kaufen für ${need.ingredient}`}
         />
@@ -640,9 +627,9 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
           const target = event.target;
           const isControl = target instanceof Element && target.closest('button, input') !== null;
           if (collapsed) {
-            expand(key);
+            unfold(key);
           } else if (!isControl) {
-            collapse(key);
+            fold(key);
           }
         }}
       >
@@ -662,9 +649,9 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
             onClick={(event) => {
               event.stopPropagation();
               if (collapsed) {
-                expand(key);
+                unfold(key);
               } else {
-                collapse(key);
+                fold(key);
               }
             }}
           >
@@ -713,11 +700,11 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
               alwaysShowAndere={kaufen.au === null}
               onChange={(next) => {
                 setStock(need, next);
-                collapse(key);
+                fold(key);
               }}
               onCommitCustom={(value) => {
                 commitCustom(need, value);
-                collapse(key);
+                fold(key);
               }}
               label={`Vorrat für ${need.ingredient}`}
             />
@@ -727,22 +714,8 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
     );
   }
 
-  /** The list, or the state the bundle is in instead. */
+  /** The list, or the state it is in instead. */
   function renderList(): ReactNode {
-    if (loadError !== null) {
-      return (
-        <p className="pantry-load-error" role="alert">
-          Die Zutaten konnten nicht geladen werden. {loadError}
-        </p>
-      );
-    }
-    if (bundle === null) {
-      return (
-        <p className="loading-message" role="status">
-          Zutaten werden geladen …
-        </p>
-      );
-    }
     if (entries.length === 0) {
       return (
         <p className="pantry-empty" role="status">
@@ -762,12 +735,17 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
   return (
     <main className="app app-narrow pantry-select">
       {/* "Zurück" on its own line at the top left, the screen title below it —
-          the shared stacked header (.app-header-stacked). */}
+          the shared stacked header (.app-header-stacked). With a cooking step
+          behind this one, the title carries its "Teil 2" subtitle, so the two
+          corners of the flow are told apart at a glance. */}
       <header className="app-header app-header-stacked">
-        <button type="button" className="text-button back-button" onClick={onBack}>
+        <button type="button" className="text-button back-button" onClick={requestLeave}>
           Zurück
         </button>
-        <h1>Vorräte auswählen</h1>
+        <div className="app-header-title">
+          <h1>Vorräte auswählen</h1>
+          {hasSubRecipes && <p className="app-header-subtitle">Teil 2: Zutaten</p>}
+        </div>
       </header>
 
       {/* The instruction under the title: the pick-a-stock rule, then — after an
@@ -821,6 +799,20 @@ function PantrySelect({ cards, token, onBack, onWrite }: PantrySelectProps) {
             </p>
           )}
         </div>
+      )}
+
+      {/* The discard question. It stands only with a cooking step behind this
+          page: that step is where the whole flow's amounts are entered, and it
+          starts from its prefills again after this answer (see the props). The
+          question's head carries the consequence, because the sheet explains
+          nothing below it (§6.2). */}
+      {confirmLeave && (
+        <LeaveConfirmSheet
+          question="Zurück zu Teil 1? Alle Mengen müssen neu eingegeben werden."
+          confirmLabel="Zurück"
+          onCancel={() => setConfirmLeave(false)}
+          onConfirm={onRestartCooking}
+        />
       )}
     </main>
   );

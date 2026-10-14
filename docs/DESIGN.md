@@ -666,6 +666,10 @@ action may sit beside it in the same row, and `--space-7` separates two sections
   line or set in a smaller size to fit.
 - A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
   muted) beneath it.
+- A row whose value changed under the user marks itself and keeps the mark until it is
+  confirmed: a tinted surface, a `--space-1` accent line along its leading edge and one muted
+  line naming the consequence (`.pantry-row--attention`, `.pantry-attention-note`). The mark is
+  a state of the row, not a badge, and it disappears with the confirmation itself.
 - An empty list is never a blank area: either it carries the established placeholder, or one
   muted German sentence when §6.3 asks for it.
 - Rows are separated by a hairline, never by a shadow or a gap in the surface.
@@ -685,6 +689,12 @@ row without one. A row is tappable as a whole to toggle the check.
 **A screen with a title opens with it** in `--text-xl` (32px) weight 600, with every default
 heading margin reset; the header's own margin sets the distance to what follows. The recipe
 list has no title: it opens with the search field and its two section captions (§5.4).
+
+**A flow with two screens of the same kind names the step in a subtitle** under the title
+(`.app-header-title` + `.app-header-subtitle`): `--text-sm`, muted, `--space-2` under the
+title — the same reading the sheets' `.sheet-subtitle` uses. It appears only where the first
+step exists: a flow that runs without it shows the bare title, never a subtitle claiming a
+step that is not there.
 
 **A header that carries a button sticks; one that carries none scrolls.** The editor, the AI
 screen, the shopping steps and the recipe selection carry „Zurück", so their header stays at
@@ -1305,7 +1315,8 @@ The cooking view (`.html`) has its own inventory, written below.
 | Recipe editor | `setNav('editor')`, `RecipeEditor` (base + each sub-recipe level) | place | „Zurück" |
 | AI create / edit | `setNav('ai')`, `AiCreateSheet` | place | „Zurück" |
 | „Einkaufsliste schreiben" | `setNav('shopping')`, `ShoppingListSelect` | place (flow step) | „Zurück" |
-| „Vorräte auswählen" | `setNav('pantry')`, `PantrySelect` | place (flow step) | „Zurück" |
+| „Vorräte auswählen — Teil 1: Zutaten-Rezepte" | `setNav('pantrySub')`, `SubRecipeSelect` | place (flow step) | „Zurück" |
+| „Vorräte auswählen — Teil 2: Zutaten" | `setNav('pantry')`, `PantrySelect` | place (flow step) | „Zurück" (asks) |
 | „Zum Essensplan hinzufügen" / „Menge ändern" | `MealPlanSheet` | change | „Abbrechen" |
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
 | Ingredient sheet / new ingredient | `IngredientSheet`, `NewIngredientSheet` | change | „Abbrechen" |
@@ -1317,9 +1328,9 @@ photo), **Zutaten** (the check list), **Zubereitung** (the steps + step bar). A 
 the same page for another recipe, opened in a new tab.
 
 **Reading the table.** A screen is named as the user meets it; the state/component column is the
-single implementation hook. The flow steps `shopping` and `pantry` are two places of one bundled
-flow: they stay mounted while a sheet, the editor or the AI screen sits above them, so the
-checked dishes survive the detour and closing returns to the same step.
+single implementation hook. The flow steps `shopping`, `pantrySub` and `pantry` are three places
+of one bundled flow: the selection page stays mounted while a sheet, the editor or the AI screen
+sits above it, so the checked dishes survive the detour and closing returns to the same step.
 
 ## 10. Implementation map
 
@@ -1338,8 +1349,8 @@ that file.
 | §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.outlined-button`, `.text-button`, `.add-button`, `.sheet-actions`) |
 | §5.2 Chips and segmented controls | `apps/web/src/styles/editor.css`, `apps/web/src/components/quantityChips.ts` |
 | §5.3 Form fields | `apps/web/src/styles/editor.css` (`.field`, `.field-label`, `.field-error`), `apps/web/src/index.css` (the shared text-field focus outline) |
-| §5.4 Cards and list items | `apps/web/src/styles/recipe-list.css`, `apps/web/src/components/RecipeList.tsx` |
-| §5.5 Headers and sticky bars | `apps/web/src/styles/recipe-list.css` (`.app-header`, `.app-header-stacked`) |
+| §5.4 Cards and list items | `apps/web/src/styles/recipe-list.css`, `apps/web/src/components/RecipeList.tsx`, `apps/web/src/styles/pantry-select.css` (`.pantry-row--attention`, `.pantry-attention-note`) |
+| §5.5 Headers and sticky bars | `apps/web/src/styles/recipe-list.css` (`.app-header`, `.app-header-stacked`, `.app-header-title`, `.app-header-subtitle`) |
 | §5.6 Sheets | `apps/web/src/styles/editor.css` (`.sheet`, `.sheet-backdrop`, `.sheet-actions`) |
 | §5.7 Badges and tags | `apps/web/src/styles/editor.css`, `apps/web/src/styles/recipe-list.css` |
 | §5.8 Media | `apps/web/src/components/RecipeThumb.tsx`, `apps/web/src/styles/recipe-list.css`, `apps/web/src/styles/recipe-overview.css` |

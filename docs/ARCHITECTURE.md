@@ -57,6 +57,13 @@
   sheet's pickers are built from (`packages/core/src/shoppingRouteRegistry.ts`), and the
   compiled seed (`packages/core/src/shoppingRouteData.ts`, generated from
   `docs/shopping_route.csv` + `docs/shopping_items.csv` via `npm run generate:shopping-route`).
+- The multi-level sub-recipe plan (`packages/core/src/subRecipePlan.ts`): which Zutaten-Rezepte
+  a bundle of dishes reaches (only `ingredient_recipe` titles are links, at any depth), their
+  topological order, and per sub-recipe the requirement (the exact sum over all parents), the
+  stock prefill `min(requirement, reorder point)`, the cooking amount
+  `roundToRung(requirement − stock)`, and the bottom-level uses of the dishes *and* the cooked
+  sub-recipes. `resolveSubRecipePlan` adds the invalidation rule: a row whose requirement moved
+  away from the acknowledged one loses its stock and marks the rows below it in turn.
 - Recipe format parsing and validation
   (see [storage_format.md](storage_format.md)).
 - No React, no DOM — a plain TypeScript module, unit-tested with Vitest.
@@ -306,8 +313,18 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   the changed list. Changing the size instead reuses the ordinary write: the new line replaces
   the old ones. Both notices name the entry (a recipe by title, an unrecognized line by its text
   without the export link) and repeat that the shopping list stays untouched.
-- **Adding ingredients is one write, and its undo takes back one instance per line.** The pantry
-  sheet („Vorräte auswählen“) builds the lines from the meal plan's recipes, already rounded up to
+- **Linked Zutaten-Rezepte are cooked, not bought.** The pantry flow is two steps
+  (`apps/web/src/components/SubRecipeSelect.tsx`, then `PantrySelect.tsx`; App's `pantrySub`
+  and `pantry` screens). Step 1 walks the sub-recipe closure
+  (`apps/web/src/keep/shoppingBundle.ts` reads every reachable `ingredient_recipe` file, and
+  reports an unreadable one instead of falling back to buying it) and asks per sub-recipe how
+  much is already made; step 2 buys only the bottom level, its needs including what the cooked
+  sub-recipes consume. Each sub-recipe's reorder point comes from the ingredient master data
+  (storage_format.md §9), and a recipe rename carries that row along
+  (`apps/web/src/drive/ingredientMasterData.ts`).
+- **Adding ingredients is one write, and its undo takes back one instance per line.** The bottom
+  level of the pantry flow („Vorräte auswählen — Teil 2: Zutaten“) builds the lines from the meal
+  plan's recipes, already rounded up to
   whole shopping units, and `POST /keep/shopping` puts them at the top of „Einkaufsliste“; the
   snackbar's „Rückgängig“ sends those same lines as `remove`. Because the same line may be on the
   list twice, `remove` takes off *one* instance per named text instead of every match — otherwise

@@ -70,8 +70,11 @@ export type FamilyUnit = 'g' | 'ml';
  * One ingredient use in the family base unit: `kg` / `l` rows (hand-written
  * files; the parser normalizes them) are converted with their ×1000, so a need
  * is always comparable and every factor in the master data applies.
+ *
+ * Exported because the multi-level plan (./subRecipePlan) reads yields and uses
+ * through the same conversion — the two must never disagree on a family unit.
  */
-function toFamilyUnit(ingredient: Ingredient): Ingredient {
+export function toFamilyUnit(ingredient: Ingredient): Ingredient {
   const unit = ingredient.unit;
   if (unit === 'g' || unit === 'ml') {
     return ingredient;
@@ -89,7 +92,7 @@ function toFamilyUnit(ingredient: Ingredient): Ingredient {
 }
 
 /** The family base unit of an ingredient use (see `toFamilyUnit`). */
-function familyUnitOf(ingredient: Ingredient): FamilyUnit {
+export function familyUnitOf(ingredient: Ingredient): FamilyUnit {
   return toFamilyUnit(ingredient).unit === 'ml' ? 'ml' : 'g';
 }
 
@@ -535,8 +538,27 @@ export function suggestedStocks(need: ShoppingNeed): readonly number[] {
     const pool = stockPool(need);
     return [0, needed, ...pool.filter((value) => value !== 0 && value !== needed)];
   }
-  // No shopping unit: 0 and the need, then one candidate per mantissa — each the
-  // largest ladder rung with that mantissa below the need — in priority order.
+  return suggestedLadderStocks(need);
+}
+
+/**
+ * The stock values a row's chips suggest **on the ladder alone**: 0 and the need
+ * first, then one candidate per mantissa — each the largest rung with that
+ * mantissa below the need — in `SUGGESTED_MANTISSA_PRIORITY` order. This is the
+ * branch `suggestedStocks` takes for an ingredient without a shopping unit.
+ *
+ * The cooking step ("Vorräte auswählen, Teil 1: Zutaten-Rezepte") uses it
+ * directly and on purpose: a sub-recipe's stock is *cooked* food, not a package
+ * on a shelf, so even a sub-recipe whose name is registered with a shopping unit
+ * offers ladder amounts and never package thresholds (./subRecipePlan).
+ */
+export function suggestedLadderStocks(need: ShoppingNeed): readonly number[] {
+  const needed = roundThousandths(need.needed);
+  if (!(needed > 0)) {
+    // A row without a need cannot cover anything; a one-value pool keeps its
+    // chips inert instead of inventing a ladder below zero.
+    return [0];
+  }
   const below = rungBelow(needed);
   const xBelow = pos(below);
   const values: number[] = [0, needed];
