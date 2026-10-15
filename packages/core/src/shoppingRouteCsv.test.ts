@@ -1,7 +1,8 @@
 /**
- * Tests for the shopping-route master data (docs/storage_format.md §10) — the
- * two CSV codecs and the consistency of the repository's seed files in
- * `docs/`, which are the built-in data used on first run.
+ * Tests for the shopping master data (docs/storage_format.md §10,
+ * docs/shopping_item_identity.md) — the three CSV codecs, their identity rules,
+ * and the consistency of the repository's seed files in `docs/`, which are the
+ * built-in data used on first run.
  */
 
 import { readFileSync } from 'node:fs';
@@ -10,14 +11,21 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
-  parseShoppingAssignmentsCsv,
+  parseShoppingItemsCsv,
   parseShoppingRouteCsv,
-  serializeShoppingAssignmentsCsv,
+  parseShoppingSynonymsCsv,
+  serializeShoppingItemsCsv,
   serializeShoppingRouteCsv,
-  type ShoppingAssignments,
+  serializeShoppingSynonymsCsv,
+  type ShoppingItems,
   type ShoppingRoute,
+  type ShoppingSynonyms,
 } from './shoppingRouteCsv.js';
-import { SEED_SHOPPING_ASSIGNMENTS, SEED_SHOPPING_ROUTE } from './shoppingRouteData.js';
+import {
+  SEED_SHOPPING_ITEMS,
+  SEED_SHOPPING_ROUTE,
+  SEED_SHOPPING_SYNONYMS,
+} from './shoppingRouteData.js';
 
 /** Repository `docs/` folder, resolved from this file's location. */
 const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../docs');
@@ -40,8 +48,8 @@ const ROUTE: ShoppingRoute = [
   { store: 'dm', section: 'Drogerie' },
 ];
 
-/** The canonical assignment (docs format) as a fixture. */
-const ASSIGNMENTS_TEXT = [
+/** The canonical item table (docs format) as a fixture. */
+const ITEMS_TEXT = [
   'Item;Store;Section',
   'Karotten;Lidl;Obst und Gemüse',
   'Joghurt;Lidl;Molkerei',
@@ -49,11 +57,19 @@ const ASSIGNMENTS_TEXT = [
   'Klopapier;dm;Drogerie',
 ].join('\n');
 
-const ASSIGNMENTS: ShoppingAssignments = {
+const ITEMS: ShoppingItems = {
   Karotten: { store: 'Lidl', section: 'Obst und Gemüse' },
   Joghurt: { store: 'Lidl', section: 'Molkerei' },
   'TK-Blaubeeren': { store: 'REWE', section: 'TK-Obst' },
   Klopapier: { store: 'dm', section: 'Drogerie' },
+};
+
+/** The canonical synonym table (docs format) as a fixture. */
+const SYNONYMS_TEXT = ['Variant;Item', 'Möhren;Karotten', 'Zewa;Klopapier'].join('\n');
+
+const SYNONYMS: ShoppingSynonyms = {
+  Möhren: 'Karotten',
+  Zewa: 'Klopapier',
 };
 
 describe('parseShoppingRouteCsv', () => {
@@ -128,9 +144,9 @@ describe('serializeShoppingRouteCsv', () => {
   });
 });
 
-describe('parseShoppingAssignmentsCsv', () => {
+describe('parseShoppingItemsCsv', () => {
   it('parses the canonical format into a name → stop lookup', () => {
-    expect(parseShoppingAssignmentsCsv(ASSIGNMENTS_TEXT, ROUTE)).toEqual(ASSIGNMENTS);
+    expect(parseShoppingItemsCsv(ITEMS_TEXT, ROUTE)).toEqual(ITEMS);
   });
 
   it('carries no order: the same rows in another order parse equal', () => {
@@ -141,127 +157,215 @@ describe('parseShoppingAssignmentsCsv', () => {
       'Karotten;Lidl;Obst und Gemüse',
       'Joghurt;Lidl;Molkerei',
     ].join('\n');
-    expect(parseShoppingAssignmentsCsv(reordered, ROUTE)).toEqual(ASSIGNMENTS);
+    expect(parseShoppingItemsCsv(reordered, ROUTE)).toEqual(ITEMS);
   });
 
   it('accepts an item name the ingredient list does not know (superset name set)', () => {
     // Klopapier, Seife and Blumen have no base unit and no reorder point, so
     // they cannot live in the ingredient master data — this file is their only
     // home, and it is deliberately not checked against the ingredient list.
-    const text = `${ASSIGNMENTS_TEXT}\nSeife;dm;Drogerie`;
-    expect(parseShoppingAssignmentsCsv(text, ROUTE).Seife).toEqual({
+    const text = `${ITEMS_TEXT}\nSeife;dm;Drogerie`;
+    expect(parseShoppingItemsCsv(text, ROUTE).Seife).toEqual({
       store: 'dm',
       section: 'Drogerie',
     });
   });
 
   it('allows several items in the same stop', () => {
-    const text = `${ASSIGNMENTS_TEXT}\nSeife;dm;Drogerie`;
-    const assignments = parseShoppingAssignmentsCsv(text, ROUTE);
-    expect(assignments.Klopapier).toEqual(assignments.Seife);
+    const text = `${ITEMS_TEXT}\nSeife;dm;Drogerie`;
+    const items = parseShoppingItemsCsv(text, ROUTE);
+    expect(items.Klopapier).toEqual(items.Seife);
   });
 
   it('tolerates CRLF, a trailing empty cell and a leading BOM', () => {
-    const sloppy = `\uFEFF${ASSIGNMENTS_TEXT.replaceAll('\n', ';\r\n')}`;
-    expect(parseShoppingAssignmentsCsv(sloppy, ROUTE)).toEqual(ASSIGNMENTS);
+    const sloppy = `\uFEFF${ITEMS_TEXT.replaceAll('\n', ';\r\n')}`;
+    expect(parseShoppingItemsCsv(sloppy, ROUTE)).toEqual(ITEMS);
   });
 
   it('throws on an empty file', () => {
-    expect(() => parseShoppingAssignmentsCsv('', ROUTE)).toThrow(/leer/);
+    expect(() => parseShoppingItemsCsv('', ROUTE)).toThrow(/leer/);
   });
 
   it('throws on an unexpected header', () => {
-    expect(() => parseShoppingAssignmentsCsv('Item;Store\nKarotten;Lidl', ROUTE)).toThrow(
-      /Kopfzeile/,
-    );
+    expect(() => parseShoppingItemsCsv('Item;Store\nKarotten;Lidl', ROUTE)).toThrow(/Kopfzeile/);
   });
 
   it('throws on a row with too many columns', () => {
-    expect(() =>
-      parseShoppingAssignmentsCsv(`${ASSIGNMENTS_TEXT}\nSeife;dm;Drogerie;extra`, ROUTE),
-    ).toThrow(/unerwartete Spaltenzahl/);
+    expect(() => parseShoppingItemsCsv(`${ITEMS_TEXT}\nSeife;dm;Drogerie;extra`, ROUTE)).toThrow(
+      /unerwartete Spaltenzahl/,
+    );
   });
 
   it('throws on an empty item, store or section cell', () => {
     expect(() =>
-      parseShoppingAssignmentsCsv(
-        ASSIGNMENTS_TEXT.replace('Klopapier;dm;Drogerie', ';dm;Drogerie'),
-        ROUTE,
-      ),
+      parseShoppingItemsCsv(ITEMS_TEXT.replace('Klopapier;dm;Drogerie', ';dm;Drogerie'), ROUTE),
     ).toThrow(/leerer Artikel, Store oder Section/);
   });
 
   it('throws on a duplicated item', () => {
-    expect(() =>
-      parseShoppingAssignmentsCsv(`${ASSIGNMENTS_TEXT}\nKlopapier;Lidl;Molkerei`, ROUTE),
-    ).toThrow(/doppelter Artikel "Klopapier"/);
+    expect(() => parseShoppingItemsCsv(`${ITEMS_TEXT}\nKlopapier;Lidl;Molkerei`, ROUTE)).toThrow(
+      /doppelter Artikel "Klopapier"/,
+    );
   });
 
-  it('throws when an assignment names a stop that is not in the route', () => {
+  it('throws when an item names a stop that is not in the route', () => {
     expect(() =>
-      parseShoppingAssignmentsCsv(
-        ASSIGNMENTS_TEXT.replace('Klopapier;dm;Drogerie', 'Klopapier;dm;Haushalt'),
+      parseShoppingItemsCsv(
+        ITEMS_TEXT.replace('Klopapier;dm;Drogerie', 'Klopapier;dm;Haushalt'),
         ROUTE,
       ),
     ).toThrow(/Einkaufsort "dm; Haushalt" für "Klopapier" steht nicht im Einkaufsweg/);
   });
-});
 
-describe('serializeShoppingAssignmentsCsv', () => {
-  it('writes the canonical format with the stop of every item', () => {
-    expect(serializeShoppingAssignmentsCsv(ASSIGNMENTS, ROUTE)).toBe(`${ASSIGNMENTS_TEXT}\n`);
-  });
-
-  it('round-trips: parse(serialize(assignments)) is the assignments', () => {
-    const text = serializeShoppingAssignmentsCsv(ASSIGNMENTS, ROUTE);
-    expect(parseShoppingAssignmentsCsv(text, ROUTE)).toEqual(ASSIGNMENTS);
-  });
-
-  it('keeps the record order it is given instead of sorting', () => {
-    // A hand-sorted spreadsheet must survive a write unchanged: the assignment
-    // file's row order carries no meaning, so the serializer never imposes one.
-    const reversed: ShoppingAssignments = Object.fromEntries(Object.entries(ASSIGNMENTS).reverse());
-    const rows = serializeShoppingAssignmentsCsv(reversed, ROUTE).split('\n').slice(1, 3);
-    expect(rows).toEqual(['Klopapier;dm;Drogerie', 'TK-Blaubeeren;REWE;TK-Obst']);
-  });
-
-  it('fails loudly when an assignment names a stop outside the route', () => {
-    const broken: ShoppingAssignments = { Seife: { store: 'dm', section: 'Haushalt' } };
-    expect(() => serializeShoppingAssignmentsCsv(broken, ROUTE)).toThrow(
-      /steht nicht im Einkaufsweg/,
+  it('rejects two item names that differ only in letter case', () => {
+    // Names are compared case-folded (docs/shopping_item_identity.md §2), so two
+    // such rows would make every line that names one of them ambiguous.
+    expect(() => parseShoppingItemsCsv(`${ITEMS_TEXT}\nkarotten;dm;Drogerie`, ROUTE)).toThrow(
+      /nur in Groß-\/Kleinschreibung/,
     );
   });
 });
 
-describe('shopping-route seed files (docs/)', () => {
+describe('serializeShoppingItemsCsv', () => {
+  it('writes the canonical format with the stop of every item', () => {
+    expect(serializeShoppingItemsCsv(ITEMS, ROUTE)).toBe(`${ITEMS_TEXT}\n`);
+  });
+
+  it('round-trips: parse(serialize(items)) is the items', () => {
+    const text = serializeShoppingItemsCsv(ITEMS, ROUTE);
+    expect(parseShoppingItemsCsv(text, ROUTE)).toEqual(ITEMS);
+  });
+
+  it('keeps the record order it is given instead of sorting', () => {
+    // A hand-sorted spreadsheet must survive a write unchanged: the item file's
+    // row order carries no meaning, so the serializer never imposes one.
+    const reversed: ShoppingItems = Object.fromEntries(Object.entries(ITEMS).reverse());
+    const rows = serializeShoppingItemsCsv(reversed, ROUTE).split('\n').slice(1, 3);
+    expect(rows).toEqual(['Klopapier;dm;Drogerie', 'TK-Blaubeeren;REWE;TK-Obst']);
+  });
+
+  it('fails loudly when an item names a stop outside the route', () => {
+    const broken: ShoppingItems = { Seife: { store: 'dm', section: 'Haushalt' } };
+    expect(() => serializeShoppingItemsCsv(broken, ROUTE)).toThrow(/steht nicht im Einkaufsweg/);
+  });
+});
+
+describe('parseShoppingSynonymsCsv', () => {
+  it('parses the canonical format into variant → item', () => {
+    expect(parseShoppingSynonymsCsv(SYNONYMS_TEXT, ITEMS)).toEqual(SYNONYMS);
+  });
+
+  it('accepts an empty table (the header alone)', () => {
+    // A synonym table starts empty and grows out of the user's real list
+    // (docs/shopping_item_identity.md §4): the header row is all it holds.
+    expect(parseShoppingSynonymsCsv('Variant;Item', ITEMS)).toEqual({});
+  });
+
+  it('tolerates CRLF, a trailing empty cell and a leading BOM', () => {
+    const sloppy = `\uFEFF${SYNONYMS_TEXT.replaceAll('\n', ';\r\n')}`;
+    expect(parseShoppingSynonymsCsv(sloppy, ITEMS)).toEqual(SYNONYMS);
+  });
+
+  it('throws on an empty file', () => {
+    expect(() => parseShoppingSynonymsCsv('', ITEMS)).toThrow(/leer/);
+  });
+
+  it('throws on an unexpected header', () => {
+    expect(() => parseShoppingSynonymsCsv('Variant;Artikel\nMöhren;Karotten', ITEMS)).toThrow(
+      /Kopfzeile/,
+    );
+  });
+
+  it('throws on an empty variant or item cell', () => {
+    expect(() => parseShoppingSynonymsCsv('Variant;Item\n;Karotten', ITEMS)).toThrow(
+      /leerer Variant oder Item/,
+    );
+  });
+
+  it('throws when a variant names an item that does not exist', () => {
+    expect(() => parseShoppingSynonymsCsv('Variant;Item\nZewa;Küchenpapier', ITEMS)).toThrow(
+      /Item "Küchenpapier" für Variant "Zewa" steht nicht in den Einkaufsartikeln/,
+    );
+  });
+
+  it('rejects a variant that would shadow an item name', () => {
+    // §5: a canonical item name must never be shadowed by a synonym — and the
+    // comparison is case-folded like the matching itself.
+    expect(() => parseShoppingSynonymsCsv('Variant;Item\nKarotten;Joghurt', ITEMS)).toThrow(
+      /ist bereits ein Artikelname/,
+    );
+    expect(() => parseShoppingSynonymsCsv('Variant;Item\nkarotten;Joghurt', ITEMS)).toThrow(
+      /ist bereits ein Artikelname/,
+    );
+  });
+
+  it('rejects two variants that differ only in letter case', () => {
+    expect(() =>
+      parseShoppingSynonymsCsv('Variant;Item\nmöhren;Karotten\nMöhren;Karotten', ITEMS),
+    ).toThrow(/nur in Groß-\/Kleinschreibung/);
+  });
+});
+
+describe('serializeShoppingSynonymsCsv', () => {
+  it('writes the canonical format with the item of every variant', () => {
+    expect(serializeShoppingSynonymsCsv(SYNONYMS, ITEMS)).toBe(`${SYNONYMS_TEXT}\n`);
+  });
+
+  it('writes an empty table as the header alone', () => {
+    expect(serializeShoppingSynonymsCsv({}, ITEMS)).toBe('Variant;Item\n');
+  });
+
+  it('round-trips: parse(serialize(synonyms)) is the synonyms', () => {
+    const text = serializeShoppingSynonymsCsv(SYNONYMS, ITEMS);
+    expect(parseShoppingSynonymsCsv(text, ITEMS)).toEqual(SYNONYMS);
+  });
+
+  it('fails loudly when a variant names an unknown item', () => {
+    const broken: ShoppingSynonyms = { Zewa: 'Küchenpapier' };
+    expect(() => serializeShoppingSynonymsCsv(broken, ITEMS)).toThrow(
+      /steht nicht in den Einkaufsartikeln/,
+    );
+  });
+});
+
+describe('shopping master-data seed files (docs/)', () => {
   /** Reads a seed file from the repository `docs/` folder. */
   const readSeed = (name: string): string => readFileSync(join(DOCS_DIR, name), 'utf8');
 
-  it('parses as a consistent pair: every assigned stop exists in the route', () => {
+  it('parses as a consistent set: every stop exists in the route', () => {
     const route = parseShoppingRouteCsv(readSeed('shopping_route.csv'));
-    const assignments = parseShoppingAssignmentsCsv(readSeed('shopping_items.csv'), route);
+    const items = parseShoppingItemsCsv(readSeed('shopping_items.csv'), route);
     expect(route.length).toBeGreaterThan(1);
-    expect(Object.keys(assignments).length).toBeGreaterThan(1);
+    expect(Object.keys(items).length).toBeGreaterThan(1);
   });
 
   it('covers items that are not recipe ingredients', () => {
-    // The whole point of the separate assignment file: Klopapier, Seife and
-    // Blumen exist in no ingredient list.
+    // The whole point of the separate item table: Klopapier, Seife and Blumen
+    // exist in no ingredient list.
     const route = parseShoppingRouteCsv(readSeed('shopping_route.csv'));
-    const assignments = parseShoppingAssignmentsCsv(readSeed('shopping_items.csv'), route);
-    expect(assignments.Klopapier).toBeDefined();
-    expect(assignments.Seife).toBeDefined();
-    expect(assignments.Blumen).toBeDefined();
+    const items = parseShoppingItemsCsv(readSeed('shopping_items.csv'), route);
+    expect(items.Klopapier).toBeDefined();
+    expect(items.Seife).toBeDefined();
+    expect(items.Blumen).toBeDefined();
+  });
+
+  it('parses the synonym seed against the item seed', () => {
+    const route = parseShoppingRouteCsv(readSeed('shopping_route.csv'));
+    const items = parseShoppingItemsCsv(readSeed('shopping_items.csv'), route);
+    expect(() => parseShoppingSynonymsCsv(readSeed('shopping_synonyms.csv'), items)).not.toThrow();
   });
 
   it('matches the generated seed module the runtime starts from', () => {
     // The compiled seed (shoppingRouteData.ts) is what the app ships; it is
-    // generated from these two CSVs. This test is the drift guard between the
+    // generated from these three CSVs. This test is the drift guard between the
     // authoritative repository files and the module — re-run
     // `npm run generate:shopping-route` when it fails.
     expect(SEED_SHOPPING_ROUTE).toEqual(parseShoppingRouteCsv(readSeed('shopping_route.csv')));
-    expect(SEED_SHOPPING_ASSIGNMENTS).toEqual(
-      parseShoppingAssignmentsCsv(readSeed('shopping_items.csv'), SEED_SHOPPING_ROUTE),
+    expect(SEED_SHOPPING_ITEMS).toEqual(
+      parseShoppingItemsCsv(readSeed('shopping_items.csv'), SEED_SHOPPING_ROUTE),
+    );
+    expect(SEED_SHOPPING_SYNONYMS).toEqual(
+      parseShoppingSynonymsCsv(readSeed('shopping_synonyms.csv'), SEED_SHOPPING_ITEMS),
     );
   });
 });

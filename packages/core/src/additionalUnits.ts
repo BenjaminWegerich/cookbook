@@ -174,6 +174,29 @@ export function formatDecimal(value: number): string {
 }
 
 /**
+ * The display step each family base unit takes at 1000 (`formatBQ`): a gram
+ * quantity reads as kilograms ("1,15 kg"), a millilitre quantity as litres.
+ * This table is the single source of the step, so the formatter and the line
+ * vocabulary (`BASE_UNIT_TOKENS`) cannot drift apart.
+ */
+const DISPLAY_STEP: Readonly<Record<string, string>> = { g: 'kg', ml: 'l' };
+
+/**
+ * The base-unit tokens the app itself writes on a shopping line: the g/ml
+ * family plus the display steps of `formatBQ` ("850 g Mehl", "1,15 kg Butter").
+ *
+ * This is half of the unit vocabulary a shopping line's decoration is undone
+ * with (docs/shopping_item_identity.md §2); the other half is the additional
+ * units flagged `Shopping Unit`. Both halves are derived, never a hand-kept
+ * copy of the whole vocabulary, so adding a unit to the master data cannot
+ * silently stop the app's own lines from resolving.
+ */
+export const BASE_UNIT_TOKENS: readonly string[] = [
+  ...Object.keys(DISPLAY_STEP),
+  ...Object.values(DISPLAY_STEP),
+];
+
+/**
  * The numeric part of `formatBQ` on its own: the base quantity with the German
  * decimal comma and the kg / l switch at 1000, but **without the unit**.
  * `formatBQ` builds on it; it exists on its own for callers that want the number
@@ -200,8 +223,8 @@ export function formatBQNumber(bq: number, bu: string): string {
  * displays in the app (§8).
  */
 export function formatBQ(bq: number, bu: string): string {
-  const unit = bu === 'g' && bq >= 1000 ? 'kg' : bu === 'ml' && bq >= 1000 ? 'l' : bu;
-  return `${formatBQNumber(bq, bu)}${NNBSP}${unit}`;
+  const step = bq >= 1000 ? DISPLAY_STEP[bu] : undefined;
+  return `${formatBQNumber(bq, bu)}${NNBSP}${step ?? bu}`;
 }
 
 /**

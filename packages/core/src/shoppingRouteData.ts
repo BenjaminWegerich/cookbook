@@ -1,10 +1,10 @@
 /**
- * AUTO-GENERATED from docs/shopping_route.csv and docs/shopping_items.csv by
- * scripts/generate-shopping-route.mjs.
+ * AUTO-GENERATED from docs/shopping_route.csv, docs/shopping_items.csv and
+ * docs/shopping_synonyms.csv by scripts/generate-shopping-route.mjs.
  * Do not edit by hand — re-run 'npm run generate:shopping-route' (packages/core) after a CSV change.
  */
 
-import type { ShoppingAssignments, ShoppingRoute } from './shoppingRouteCsv.js';
+import type { ShoppingItems, ShoppingRoute, ShoppingSynonyms } from './shoppingRouteCsv.js';
 
 /** The seed route: the stops in the order the shops are visited and the sections are walked (docs/shopping_route.csv). */
 export const SEED_SHOPPING_ROUTE: ShoppingRoute = [
@@ -19,8 +19,8 @@ export const SEED_SHOPPING_ROUTE: ShoppingRoute = [
   { store: 'Blumenladen', section: 'Blumen' },
 ];
 
-/** The seed item assignment: item name → stop (docs/shopping_items.csv); the name set is a superset of the ingredient list. */
-export const SEED_SHOPPING_ASSIGNMENTS: ShoppingAssignments = {
+/** The seed item table: item name → stop (docs/shopping_items.csv); the name set is a superset of the ingredient list. */
+export const SEED_SHOPPING_ITEMS: ShoppingItems = {
   Joghurt: { store: 'Lidl', section: 'Molkerei' },
   Butter: { store: 'Lidl', section: 'Molkerei' },
   Milch: { store: 'Lidl', section: 'Molkerei' },
@@ -38,3 +38,6 @@ export const SEED_SHOPPING_ASSIGNMENTS: ShoppingAssignments = {
   Seife: { store: 'dm', section: 'Drogerie' },
   Blumen: { store: 'Blumenladen', section: 'Blumen' },
 };
+
+/** The seed synonym table: variant text → item name (docs/shopping_synonyms.csv). */
+export const SEED_SHOPPING_SYNONYMS: ShoppingSynonyms = {};

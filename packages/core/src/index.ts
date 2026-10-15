@@ -10,13 +10,16 @@
  *   master data in docs/*.csv, compiled by scripts/generate-additional-data.mjs)
  * - the AQ ladder — the standard numbers for additional quantities and for
  *   unitless inline counts — implemented (src/aqLadder.ts)
- * - ingredient and shopping-route master data parsing — implemented
+ * - ingredient and shopping master data parsing — implemented
  *   (docs/storage_format.md §9/§10, src/ingredientCsv.ts +
- *   src/shoppingRouteCsv.ts)
- * - the shopping-route runtime registry: the current route, the item
- *   assignment and the store/section lists the pickers are built from —
+ *   src/shoppingRouteCsv.ts: route, item table and synonym table)
+ * - the shopping runtime registry: the current route, the item table, the
+ *   synonym table and the store/section lists the pickers are built from —
  *   implemented (src/shoppingRouteRegistry.ts; seed data in
  *   src/shoppingRouteData.ts, compiled by scripts/generate-shopping-route.mjs)
+ * - the shopping list's item identity at read time — deriving a line's name
+ *   field, resolving it to an item (or a variant) and suggesting similar item
+ *   names — implemented (docs/shopping_item_identity.md, src/shoppingSort.ts)
  * - recipe format parsing and validation — implemented
  *   (docs/storage_format.md, src/recipe/parse.ts + src/recipe/validate.ts)
  */

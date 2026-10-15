@@ -51,12 +51,15 @@
   `packages/core/src/aqLadder.ts`, derived from the generated ladder data. It
   backs the §6.1 rounding, the fraction typography and the scaling of unitless
   counts.
-- Shopping-route master data (see [storage_format.md](storage_format.md) §10): the two CSV
-  codecs and their serializers (`packages/core/src/shoppingRouteCsv.ts`), the runtime registry
-  holding the current route and item assignment plus the store/section lists the ingredient
-  sheet's pickers are built from (`packages/core/src/shoppingRouteRegistry.ts`), and the
-  compiled seed (`packages/core/src/shoppingRouteData.ts`, generated from
-  `docs/shopping_route.csv` + `docs/shopping_items.csv` via `npm run generate:shopping-route`).
+- Shopping master data (see [storage_format.md](storage_format.md) §10 and
+  [shopping_item_identity.md](shopping_item_identity.md)): the three CSV codecs and their
+  serializers (`packages/core/src/shoppingRouteCsv.ts`), the runtime registry holding the
+  current route, item table and synonym table plus the store/section lists the ingredient
+  sheet's pickers are built from (`packages/core/src/shoppingRouteRegistry.ts`), the compiled
+  seed (`packages/core/src/shoppingRouteData.ts`, generated from `docs/shopping_route.csv` +
+  `docs/shopping_items.csv` + `docs/shopping_synonyms.csv` via
+  `npm run generate:shopping-route`), and the read-time resolution of a Keep line to an item
+  (`packages/core/src/shoppingSort.ts`: name field, exact item/variant match, suggestions).
 - The multi-level sub-recipe plan (`packages/core/src/subRecipePlan.ts`): which Zutaten-Rezepte
   a bundle of dishes reaches (only `ingredient_recipe` titles are links, at any depth), their
   topological order, and per sub-recipe the requirement (the exact sum over all parents), the
@@ -88,17 +91,27 @@
   anlegen“), which collects name, base unit, reorder point and AU mappings, appends to both
   files and re-registers them. The split keeps ingredient-level fields (name, base unit,
   reorder point) in one row per ingredient, separate from the AU mappings.
-- Where an item is bought is a third, separate master data pair in the same Drive folder —
-  `einkaufsweg.csv` (the route: store + section per row, in walking order) and
-  `einkaufs-zuordnung.csv` (item → stop), in the canonical formats of
-  docs/shopping_route.csv + docs/shopping_items.csv (see
-  [storage_format.md](storage_format.md) §10). Its name set is a **superset of the ingredient
-  list**, so items that are not recipe ingredients at all („Klopapier“, „Seife“, „Blumen“)
-  have their place there too. The create sheet („Neue Zutat anlegen“) asks for the stop in an
-  „Einkauf“ field while it collects the other master-data fields — the store as chips, the
-  section as a searchable list of that store's sections — and writes the assignment before the
-  ingredient row: a row without an ingredient is valid (the name set is a superset), an
-  ingredient without its row is not.
+- Where an item is bought is a separate master-data set in the same Drive folder —
+  `einkaufsweg.csv` (the route: store + section per row, in walking order),
+  `einkaufs-artikel.csv` (the item table: item → store + section — the identity of everything
+  buyable and the only place a route is kept) and `einkaufs-synonyme.csv` (the synonym table:
+  variant text → item), in the canonical formats of docs/shopping_route.csv +
+  docs/shopping_items.csv + docs/shopping_synonyms.csv (see
+  [storage_format.md](storage_format.md) §10 and
+  [shopping_item_identity.md](shopping_item_identity.md)). The item table's name set is a
+  **superset of the ingredient list**, so items that are not recipe ingredients at all
+  („Klopapier“, „Seife“, „Blumen“) have their place there too, while `zutaten.csv` keeps the
+  ingredient master data without a route. The create sheet („Neue Zutat anlegen“) asks for the
+  stop in an „Einkauf“ field while it collects the other master-data fields — the store as
+  chips, the section as a searchable list of that store's sections — and writes the item row
+  before the ingredient row: a row without an ingredient is valid (the name set is a superset),
+  an ingredient without its row is not (it is then simply never bought).
+- Resolving a Keep line to an item happens at read time in core
+  (`packages/core/src/shoppingSort.ts`, [shopping_item_identity.md](shopping_item_identity.md)):
+  the line's decoration is undone to a name field, that field must equal an item name (or a
+  variant) exactly, and an unresolved line is offered similar item names on the sort page —
+  confirming one appends a synonym row, the only write that flow performs. No sort run rewrites
+  the master data or a Keep text.
 
 ### HTML share export
 
@@ -210,8 +223,9 @@
   frontend entirely — a static public bundle cannot keep a secret, and no browser can obtain a
   master token in the first place.
 - Sorting is applied server-side, never in the client: the core derives the target order from
-  the shopping-route master data (docs/storage_format.md §10 — ignored lines first, then the
-  assigned lines in walking order, then the checked-off ones), and the gateway only applies it
+  the shopping master data (docs/storage_format.md §10, docs/shopping_item_identity.md —
+  ignored lines first, then the lines with an item in walking order, then the checked-off
+  ones), and the gateway only applies it
   (`KeepClient.sort_shopping_lines`: fresh sort ids above every item, the same non-destructive
   technique and verification as the writes, not `List.sort_items`).
 
@@ -226,7 +240,7 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   the same card grid and the one search field filters both at once. The „Einkaufsliste“ heading
   has no body of its own: the caption names the shopping list on its own line, with the
   list's counter („Einkaufsliste (4 Einträge, davon 1 unbekannt)“ — the list's unchecked lines
-  and how many of them name no assigned stop) in that line and the list's two actions in a row
+  and how many of them name no item) in that line and the list's two actions in a row
   beneath it, the bundled write („Einkaufsliste schreiben“) and the aisle sort („sortieren“).
   The card captions carry their counter („Essensplan (5 Einträge, davon 2 unbekannt)“,
   „Restliche Sammlung (8 Rezepte)“) in the editor's field-caption typography; a card section's

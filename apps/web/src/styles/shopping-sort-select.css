@@ -3,7 +3,8 @@
  *
  * The full-screen page behind "Einkaufsliste sortieren"
  * (components/ShoppingSortSelect.tsx): the unchecked shopping-list lines that
- * have no Einkaufsort yet, each with the store-chips + section-search „Einkauf“
+ * name no item, each with the editable „Artikel“ field, the similar-item chips
+ * (the shared .suggestions row), the store-chips + section-search „Einkauf“
  * field and an "Ignorieren" toggle. All pixel values come from the design
  * ladder (docs/CODING_CONVENTIONS.md); colors and sizes reference the tokens in
  * styles/tokens.css.
@@ -46,7 +47,8 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* One unresolved line: its text, its item name, the picker and the toggle. */
+/* One unresolved line: its text, the „Artikel“ field, the similar-item chips,
+   the picker and the toggle. */
 .sort-entry {
   display: grid;
   gap: var(--space-3);
@@ -64,17 +66,6 @@
   font-size: var(--text-md);
   line-height: var(--leading-md);
   font-weight: 600;
-}
-
-/* The item name the sort will persist: caption + name on one quiet line. */
-.sort-entry-item {
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
 }
 
 /* The ignore toggle: a chip, right after the picker. When active it wears the

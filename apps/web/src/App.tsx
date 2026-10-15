@@ -8,8 +8,8 @@ import {
   mealPlanEntryText,
   mealPlanEntryTextWithShortLink,
   parseMealPlanText,
-  shoppingItemName,
   shoppingSortOrder,
+  shoppingStopFor,
   withPlanSize,
   type PlannedAmount,
   type Recipe,
@@ -35,14 +35,15 @@ import RecipeOverview, {
   type RecipeOverviewTarget,
 } from './components/RecipeOverview';
 import ShoppingListSelect from './components/ShoppingListSelect';
-import ShoppingSortSelect from './components/ShoppingSortSelect';
+import ShoppingSortSelect, { type SortResolution } from './components/ShoppingSortSelect';
 import Snackbar from './components/Snackbar';
 import SubRecipeSelect from './components/SubRecipeSelect';
 import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import {
-  appendShoppingAssignments,
+  appendShoppingItems,
+  appendShoppingSynonyms,
   loadShoppingRouteMasterData,
 } from './drive/shoppingRouteMasterData';
 import { listRecipes, recipeExportUrl, type StoredRecipe } from './drive/recipeStorage';
@@ -1659,17 +1660,23 @@ function App() {
 
   /**
    * Performs the shopping-list sort: the sort page hands over its decisions (per
-   * unresolved line a chosen stop or 'ignore'), and this callback does the three
-   * writes the sort needs — the new master-data rows, then the reorder — before
-   * it closes the flow back to the home screen.
+   * unresolved line a confirmed similar item, a new item with a stop, or
+   * 'ignore'), and this callback does the writes the sort needs — the new
+   * master-data rows, then the reorder — before it closes the flow back to the
+   * home screen.
    *
-   * The new stops are persisted first (a batch write to `einkaufs-zuordnung.csv`),
-   * then the target order is derived from the *pre-persist* analysis plus the
+   * Two kinds of decision write master data: a confirmed candidate appends a
+   * **synonym** row (variant → item, docs/shopping_item_identity.md §4), a chosen
+   * stop appends or corrects an **item** row under the name in the page's
+   * „Artikel“ field. Both are persisted before the reorder.
+   *
+   * The target order is derived from the *pre-persist* analysis plus the
    * decisions: core's `shoppingSortOrder` places the ignored lines at the top,
-   * the assigned ones in walking order and the checked-off ones at the bottom.
-   * Deriving from the pre-persist analysis keeps an ignored line that shares a
-   * name with a just-assigned one distinct — the decision is keyed by the exact
-   * line text, never by the item name the persist step writes.
+   * the lines with an item in walking order and the checked-off ones at the
+   * bottom. A synonym decision resolves to its item's stop, so it sorts like the
+   * item itself. Deriving from the pre-persist analysis keeps an ignored line
+   * that shares a name with a just-assigned one distinct — the decision is keyed
+   * by the exact line text, never by the item name the persist step writes.
    *
    * The gateway applies the order and answers the sorted list; its identity is
    * kept as the "sortiert" marker, so the button reads "sortiert"
@@ -1677,11 +1684,11 @@ function App() {
    *
    * A failure is thrown on to the page, which stays open and shows the reason
    * next to its button, so the decisions are not lost. There is deliberately no
-   * undo: the reorder is a pure order change and the persisted stops are master
+   * undo: the reorder is a pure order change and the persisted rows are master
    * data, not a list write to take back.
    */
   const sortShoppingList = useCallback(
-    async (resolutions: ReadonlyMap<string, ShoppingStop | 'ignore'>): Promise<void> => {
+    async (resolutions: ReadonlyMap<string, SortResolution>): Promise<void> => {
       const activeToken = token;
       if (activeToken === null) {
         throw new Error(
@@ -1694,20 +1701,35 @@ function App() {
         sortItems.map((item) => ({ text: item.text, checked: item.checked })),
       );
 
-      // Persist the newly chosen stops (the ignored lines write nothing).
-      const newAssignments: { item: string; stop: ShoppingStop }[] = [];
-      for (const [text, resolution] of resolutions) {
-        if (resolution !== 'ignore') {
-          newAssignments.push({ item: shoppingItemName(text), stop: resolution });
+      // Persist the decisions that write master data (ignored lines write
+      // nothing): new item rows and confirmed synonyms.
+      const newItems: { item: string; stop: ShoppingStop }[] = [];
+      const newSynonyms: { variant: string; item: string }[] = [];
+      for (const resolution of resolutions.values()) {
+        if (resolution === 'ignore') continue;
+        if (resolution.kind === 'synonym') {
+          newSynonyms.push({ variant: resolution.variant, item: resolution.item });
+        } else {
+          newItems.push({ item: resolution.name, stop: resolution.stop });
         }
       }
-      if (newAssignments.length > 0) {
-        await appendShoppingAssignments(activeToken, newAssignments);
+      if (newItems.length > 0) {
+        await appendShoppingItems(activeToken, newItems);
+      }
+      if (newSynonyms.length > 0) {
+        await appendShoppingSynonyms(activeToken, newSynonyms);
       }
 
       // The target order, derived before the persist so an ignored line keeps its
-      // decision even when it shares a name with a just-assigned one.
-      const order = shoppingSortOrder(analyzed, (text) => resolutions.get(text) ?? 'ignore');
+      // decision even when it shares a name with a just-assigned one. A synonym
+      // decision sorts at its item's stop — the item row it names already exists.
+      const order = shoppingSortOrder(analyzed, (text) => {
+        const resolution = resolutions.get(text);
+        if (resolution === undefined || resolution === 'ignore') return 'ignore';
+        return resolution.kind === 'item'
+          ? resolution.stop
+          : (shoppingStopFor(resolution.item) ?? 'ignore');
+      });
 
       let sorted: KeepChecklist;
       try {
@@ -1719,13 +1741,25 @@ function App() {
       setShoppingSortedFor(sorted);
       setSortItems([]);
       setNav(null);
-      const assigned = newAssignments.length;
+      // One snackbar for both kinds of master-data write, naming only what was
+      // actually written (an all-ignored sort says nothing extra).
+      const written: string[] = [];
+      if (newItems.length > 0) {
+        written.push(
+          `${newItems.length} ${
+            newItems.length === 1 ? 'Einkaufsort' : 'Einkaufsorte'
+          } gespeichert`,
+        );
+      }
+      if (newSynonyms.length > 0) {
+        written.push(
+          `${newSynonyms.length} ${newSynonyms.length === 1 ? 'Synonym' : 'Synonyme'} gemerkt`,
+        );
+      }
       showSnackbar({
         text:
-          assigned > 0
-            ? `Einkaufsliste sortiert — ${assigned} ${
-                assigned === 1 ? 'Einkaufsort gespeichert' : 'Einkaufsorte gespeichert'
-              }.`
+          written.length > 0
+            ? `Einkaufsliste sortiert — ${written.join(', ')}.`
             : 'Einkaufsliste sortiert.',
       });
     },

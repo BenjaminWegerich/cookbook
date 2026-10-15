@@ -87,7 +87,7 @@ import {
   type StoredRecipe,
 } from '../drive/recipeStorage';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
-import { appendShoppingAssignment } from '../drive/shoppingRouteMasterData';
+import { appendShoppingItem } from '../drive/shoppingRouteMasterData';
 import { loadRecipePhoto } from '../drive/recipePhoto';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
@@ -1708,7 +1708,7 @@ function RecipeEditor({
     setCreateError(null);
     try {
       if (stop !== null) {
-        await appendShoppingAssignment(token, name, stop);
+        await appendShoppingItem(token, name, stop);
       }
       await appendIngredientMasterData(token, name, bu, reorderPoint, entries);
       setCreateSheet(null);

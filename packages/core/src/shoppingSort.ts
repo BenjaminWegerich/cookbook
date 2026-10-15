@@ -1,39 +1,47 @@
 /**
- * The shopping list's aisle sort: matching a Keep line back to an item name and
- * deriving the target order from the shopping-route master data.
+ * The shopping list's identity work at read time: turning a Keep line into a
+ * **name field**, resolving that field to an item of the master data, and
+ * deriving the target order from the route (docs/shopping_item_identity.md,
+ * docs/storage_format.md §10).
  *
- * The route (docs/storage_format.md §10) orders stops — level 1 the store, level
- * 2 the section — and the assignment maps an item name to exactly one stop. The
- * sort therefore needs two things this module provides:
+ * The identity of an item is its row in the item table (einkaufs-artikel.csv),
+ * not the text of a line, so resolving a line happens here and only here — no
+ * master-data file is rewritten by a sort run (the one exception is a confirmed
+ * suggestion, which appends a synonym row, docs/shopping_item_identity.md §4).
  *
- * 1. **Matching a line to an item name.** A Keep line is the app's own display
- *    form ("2 Becher Joghurt (800 g)", "850 g Butter") or a hand-typed line
- *    ("Klopapier"). `matchShoppingItem` decides whether the line already names an
- *    assigned item: the assignment's item names are searched for a **whole-word
- *    occurrence** (case-sensitive, like the assignment itself), and the longest
- *    match wins. A line that names no assigned item has no place in the route yet.
- * 2. **Ordering the lines.** `shoppingSortOrder` turns the list into the target
- *    order the gateway applies: lines the user *ignored* first (in Keep's own
- *    order), then the assigned lines in walking order (stable within one stop),
- *    then the checked-off lines (already bought) last in Keep's own order.
+ * 1. **Derive the name field** (`shoppingNameField`): Unicode NFC, case-folded
+ *    for comparison only, whitespace collapsed, and the decoration of the app's
+ *    own line shapes undone — a trailing parenthetical and a leading quantity
+ *    together with one unit token. The unit vocabulary is derived (Shopping-Unit
+ *    flagged additional units + `BASE_UNIT_TOKENS`, never a hand-kept copy), and
+ *    the undoing is all-or-nothing: a line the app did not write keeps its text
+ *    ("1 Bund Petersilie" stays unresolved rather than losing its "1").
+ * 2. **Match the whole name field** (`matchShoppingItem`): the field must be
+ *    *exactly* an item name — not merely contain it or start with it — so
+ *    "Muffins mit Blaubeeren" never resolves to the item "Blaubeeren". Names are
+ *    compared case-folded (`shoppingNameKey`). Items win over variants.
+ * 3. **Nothing matched** → the line is unknown; `shoppingItemSuggestions` offers
+ *    similar item names, and the sort page asks the user (confirming a candidate
+ *    appends a synonym, so the same variant is never asked twice).
  *
- * The name the sort *persists* for a line that had no assignment is
- * `shoppingItemName`: first a whole-word match against the ingredient master
- * data (a recipe ingredient the app wrote knows its name there), then a
- * decoration-stripping fallback that reverses the app's two line shapes. The
- * app shows that name to the user before it writes a new assignment row.
+ * `shoppingSortOrder` then places the lines: ignored first in Keep's order, then
+ * the assigned ones in walking order (stable within one stop), then the
+ * checked-off ones last.
  *
  * Everything here is pure and framework-free; it reads the runtime registries
- * (ingredient + shopping-route) so the user's own Drive master data is what
- * decides both the matching and the order.
+ * (item/route/synonym) so the user's own Drive master data decides both the
+ * matching and the order.
  */
 
-import { masterIngredientNames } from './additionalUnits.js';
+import { ADDITIONAL_UNITS } from './additionalUnitsData.js';
+import { BASE_UNIT_TOKENS } from './additionalUnits.js';
 import {
-  allShoppingAssignments,
+  allShoppingItems,
   allShoppingStops,
+  allShoppingSynonyms,
   shoppingStopFor,
 } from './shoppingRouteRegistry.js';
+import { shoppingNameKey } from './shoppingRouteCsv.js';
 import type { ShoppingStop } from './shoppingRouteCsv.js';
 
 /** One shopping-list entry as the sort flow sees it (the gateway's KeepItem shape). */
@@ -44,106 +52,158 @@ export interface ShoppingListLine {
   readonly checked: boolean;
 }
 
-/** A line plus what the shopping-route assignment knows about it. */
+/** A line plus the item it names (its identity), or null when it names none. */
 export interface ShoppingSortLine {
   readonly text: string;
   readonly checked: boolean;
-  /** The assignment item name the line matched, or null when it has none. */
+  /** The item name the line resolved to, or null when it resolved to none. */
   readonly item: string | null;
 }
 
 /** How an unmatched line is resolved by the sort flow: a chosen stop or "ignore". */
 export type UnmatchedResolution = ShoppingStop | 'ignore';
 
-/** A character that keeps a name together as one word (letters, digits, hyphen). */
-const WORD_CHAR = /[\p{L}\p{N}-]/u;
-
-/** True when `name` occurs in `text` as a whole word (case-sensitive). */
-function containsWholeWord(text: string, name: string): boolean {
-  if (name === '') return false;
-  let from = 0;
-  for (;;) {
-    const index = text.indexOf(name, from);
-    if (index === -1) return false;
-    const before = index === 0 ? false : WORD_CHAR.test(text[index - 1]!);
-    const after = index + name.length;
-    const afterIsWord = after >= text.length ? false : WORD_CHAR.test(text[after]!);
-    if (!before && !afterIsWord) return true;
-    from = index + 1;
-  }
-}
-
 /**
- * The longest `names` entry that occurs in `text` as a whole word, or null when
- * none does — or when two distinct names of equal length both do (ambiguous:
- * the caller must not guess which one the line means).
+ * The quantity part of a line the app writes: digits, the German decimal comma,
+ * the fraction glyphs and the mixed-number notation, joined by narrow no-break
+ * spaces ("850 ", "1,15 ", "1 ¼ ", "1+1/2 "). It is deliberately generous — the
+ * unit token behind it is what makes the shape the app's own.
  */
-function longestWholeWordMatch(text: string, names: readonly string[]): string | null {
-  let best: string | null = null;
-  for (const name of names) {
-    if (!containsWholeWord(text, name)) continue;
-    if (best === null || name.length > best.length) {
-      best = name;
-    } else if (name.length === best.length && name !== best) {
-      return null;
-    }
-  }
-  return best;
+const QUANTITY_SOURCE = '[\\d.,\\u202F\\u00A0\\u00BC\\u00BD\\u00BE\\u2044\\u2150-\\u215E/+ ]+';
+
+/** Escapes a literal for use inside a regular expression. */
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 /**
- * The assignment item name a line names, or null when the line names no assigned
- * item (it has no place in the route — docs/storage_format.md §10). Matching is
- * whole-word and case-sensitive, exactly like the assignment itself; where two
- * names overlap ("Sahne" inside "Schlagsahne", "Blaubeeren" inside
- * "TK-Blaubeeren") the word boundary keeps them apart, and the longest name wins
- * when several match ("TK-Blaubeeren" before "Blaubeeren").
+ * The unit tokens a shopping line may carry: the additional units flagged
+ * `Shopping Unit` (a Becher, a Packung, a Stück) plus the base-unit tokens the
+ * app writes (`BASE_UNIT_TOKENS`). Derived from the master data and the
+ * formatter, so a change there reaches the line vocabulary automatically.
+ */
+function shoppingLineUnits(): readonly string[] {
+  const units = ADDITIONAL_UNITS.filter((unit) => unit.shoppingUnit).map((unit) => unit.name);
+  // Longest first: "kg" must be tried before... its own prefix does not exist,
+  // but "Stück" and a hypothetical "St" would otherwise depend on table order.
+  return [...units, ...BASE_UNIT_TOKENS].sort((a, b) => b.length - a.length);
+}
+
+/**
+ * A leading quantity together with the one unit token behind it — the leading
+ * half of the app's own line decoration. The token must be followed by a space
+ * or the end of the line, so a name that merely starts with a unit token
+ * ("Becherhälse") is not touched.
+ */
+const DECORATION = new RegExp(
+  `^${QUANTITY_SOURCE}(${shoppingLineUnits().map(escapeRegExp).join('|')})(?=\\s|$)`,
+  'u',
+);
+
+/** A trailing parenthetical, the second half of the app's own line decoration. */
+const TRAILING_PARENTHETICAL = /\s*\([^()]*\)\s*$/u;
+
+/**
+ * The **name field** of a Keep line: the only part of a line that can name an
+ * item (docs/shopping_item_identity.md §2). The line is normalized (Unicode NFC,
+ * whitespace collapsed, trimmed) and then the app's own decoration is undone —
+ * but only as a whole shape: a trailing parenthetical is dropped together with
+ * the leading quantity and unit token, never on its own.
+ *
+ *   - "2 Becher Joghurt (800 g)" → "Joghurt"   (shopping-unit shape)
+ *   - "850 g Butter"             → "Butter"    (base shape)
+ *   - "1,15 kg Mehl"             → "Mehl"      (the kg display step)
+ *   - "Klopapier"                → "Klopapier" (hand-written: nothing to undo)
+ *   - "1 Bund Petersilie"        → "1 Bund Petersilie" ("Bund" is no unit of
+ *     the app, so the "1" is not decoration either — the line stays unresolved
+ *     and is answered by a suggestion, which is the deliberate strictness)
+ *
+ * The returned text keeps the spelling the user wrote (only whitespace and
+ * Unicode normalization are applied); `shoppingNameKey` folds it for comparison.
+ */
+export function shoppingNameField(text: string): string {
+  const normalized = text.normalize('NFC').replace(/\s+/gu, ' ').trim();
+  const match = DECORATION.exec(normalized);
+  if (match === null) {
+    return normalized;
+  }
+  return normalized.slice(match[0].length).replace(TRAILING_PARENTHETICAL, '').trim();
+}
+
+/**
+ * The item name a line names, or null when it names no item of the master data
+ * (docs/shopping_item_identity.md §2). The name field is matched as a **whole**
+ * name: exactly equal to an item name (step 2) or to a variant (step 3), both
+ * compared case-folded. An item name wins over a variant — a variant equal to an
+ * item name is rejected at load, so the two rules can never disagree.
+ *
+ * `Muffins mit Blaubeeren` therefore matches nothing (it only *contains* an item
+ * name), and the line is answered by a suggestion instead of a guess.
  */
 export function matchShoppingItem(text: string): string | null {
-  return longestWholeWordMatch(text, Object.keys(allShoppingAssignments()));
-}
-
-/**
- * Reverses the app's own shopping-line decoration to recover the item name, or
- * returns the line unchanged when there is none to strip. The two shapes the app
- * writes (see ../shoppingList):
- *
- *   - "2 Becher Joghurt (800 g)" — a whole count of a shopping unit, the amount
- *     in parentheses; and
- *   - "850 g Butter" — the base form, amount + unit + name.
- *
- * A trailing parenthetical is dropped first, then a leading quantity and its
- * unit token (a base unit or one of the additional units the app writes). The
- * quantity spans digits, the German decimal comma and the fraction glyphs joined
- * by a narrow no-break space. Hand-written lines without that shape ("Klopapier",
- * "Wandfarbe") keep their text.
- */
-function stripShoppingDecoration(text: string): string {
-  let result = text.trim();
-  result = result.replace(/\s*\([^()]*\)\s*$/, '');
-  const quantity = /^[\d.,\u202F\u00A0\u00BC\u00BD\u00BE\u2044\u2150-\u215E\/+ ]+/u;
-  const lead = result.match(quantity);
-  if (lead !== null && lead[0].length > 0) {
-    result = result.slice(lead[0].length);
-    // One unit token directly after the quantity (never part of the name: the
-    // token must be followed by a space or the end of the line).
-    result = result.replace(/^(?:g|kg|ml|l|Becher|EL|TL|Packung|Stück)(?=\s|$)/u, '');
+  const key = shoppingNameKey(shoppingNameField(text));
+  if (key === '') {
+    return null;
   }
-  return result.trim();
+  const items = allShoppingItems();
+  for (const name of Object.keys(items)) {
+    if (shoppingNameKey(name) === key) {
+      return name;
+    }
+  }
+  const synonyms = allShoppingSynonyms();
+  for (const [variant, item] of Object.entries(synonyms)) {
+    if (shoppingNameKey(variant) === key) {
+      return item;
+    }
+  }
+  return null;
 }
 
 /**
- * The item name to persist for a line that has no assignment: first the longest
- * whole-word match against the ingredient master data (the app knows a recipe
- * ingredient's name there), else the decoration-stripping fallback.
+ * The item names offered as suggestions for a line that resolved to nothing
+ * (docs/shopping_item_identity.md §4): a guess, never applied automatically.
+ * Candidates come from the **item names** — not from the variants, or the
+ * candidate set would grow without bound — and the simple engine the user chose
+ * is containment on the case-folded names, ranked in three tiers:
+ *
+ *   1. the item name starts with the name field ("Joghurt" → "Joghurt …"),
+ *   2. the item name contains the name field somewhere ("Blaubeer" →
+ *      "TK-Blaubeeren"),
+ *   3. the name field contains the item name ("1 Bund Petersilie" → "Petersilie";
+ *      the shape the app did not undo, and the most useful case of all).
+ *
+ * Within a tier the names are alphabetical (German). Ties beyond `limit` are cut
+ * off — the page only ever shows a handful of chips.
  */
-export function shoppingItemName(text: string): string {
-  const known = longestWholeWordMatch(text, masterIngredientNames());
-  return known ?? stripShoppingDecoration(text);
+export function shoppingItemSuggestions(text: string, limit = 5): string[] {
+  const key = shoppingNameKey(shoppingNameField(text));
+  if (key === '') {
+    return [];
+  }
+  const ranked: { name: string; rank: number }[] = [];
+  for (const name of Object.keys(allShoppingItems())) {
+    const itemKey = shoppingNameKey(name);
+    let rank: number;
+    if (itemKey.startsWith(key)) {
+      rank = 0;
+    } else if (itemKey.includes(key)) {
+      rank = 1;
+    } else if (key.includes(itemKey)) {
+      rank = 2;
+    } else {
+      continue;
+    }
+    ranked.push({ name, rank });
+  }
+  return ranked
+    .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, 'de'))
+    .slice(0, Math.max(0, limit))
+    .map((entry) => entry.name);
 }
 
 /**
- * Classifies the shopping list: per line, the assignment item it names (or null).
+ * Classifies the shopping list: per line, the item it resolved to (or null).
  * This is what the sort flow reads to decide which lines already have master
  * data and which it must ask the user about.
  */
@@ -193,7 +253,7 @@ export function shoppingSortOrder(
       stop = decision;
     }
     // A stop the route does not contain (cannot happen through the app's picker,
-    // but a hand-edited assignment is read back through the parser, which guards
+    // but a hand-edited item table is read back through the parser, which guards
     // it) sorts after every known stop instead of throwing.
     assigned.push({ text: line.text, index: indexByStop.get(stopKey(stop)) ?? -1 });
   }

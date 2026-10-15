@@ -110,6 +110,25 @@ not where it is used.
       storage_format.md §10): „Einkaufsliste sortieren“ lists the unchecked entries without an
       Einkaufsort, each of which is assigned a store + section (like „Neue Zutat anlegen“) or
       ignored (placed at the top); the gateway applies the derived order and verifies it.
+- [x] Give the shopping list an item identity of its own (design in
+      [shopping_item_identity.md](shopping_item_identity.md)): the assignment file
+      is replaced by `einkaufs-artikel.csv` (`Item;Store;Section` — the identity of
+      everything buyable and the only place a route is kept) plus
+      `einkaufs-synonyme.csv` (`Variant;Item` — „Möhren“ → „Karotten“); `zutaten.csv`
+      keeps the ingredient master data without a route. Matching moved to read time:
+      normalize, undo the app's own line shape — its unit vocabulary derived from
+      the additional units flagged `Shopping Unit` plus the formatter's base-unit
+      tokens, never a hand-kept copy — then require the name field to be *exactly*
+      an item name (or a variant, compared case-folded), so „Muffins mit Blaubeeren“
+      stays unresolved instead of sorting as „Blaubeeren“. A line with no hit is
+      offered similar item names (simple containment on the item names, no fuzzy
+      engine); confirming one appends a synonym row, and the sort page's „Artikel“
+      field is editable for the new-item path — the two kinds of decision are
+      mutually exclusive, and the page does not display the silent resolution.
+      Migration reads `einkaufs-zuordnung.csv` once, writes
+      `einkaufs-artikel.csv` + the empty `einkaufs-synonyme.csv`, then deletes the
+      old file. Out of scope: an automatic similarity ("fuzzy") merge, and any
+      normalization written back into the tables.
 - [ ] Give the additional units a plural form: a unit's name is used as it stands, so a count
       above one reads „2 Packung Mehl (2 kg)“ instead of „2 Packungen Mehl (2 kg)“. Needs a
       plural column in `docs/additional_units.csv` (compiled by the generator), the substitution
@@ -141,15 +160,21 @@ below is building, not investigating: the frontend and the actual features.
    `ReplaceRecipeSheet` replaces the entry 1:1 with a chosen recipe and size (undo notice), and
    the two create entries open the editor or the AI screen prefilled with the entry's complete
    text and return to the entry's overview.
-3. **Shopping route master data** — a prerequisite for aisle sorting: a route file
-   (`einkaufsweg.csv`, `Store;Section`, walking order) plus an assignment file
-   (`einkaufs-zuordnung.csv`, `Item;Store;Section`, covering ingredients and non-ingredients).
-   Format in [storage_format.md](storage_format.md) §10. The data is built and editable: the
-   seed CSVs, the codecs and serializers in `packages/core/src/shoppingRouteCsv.ts`, the
-   runtime registry (`shoppingRouteRegistry.ts`) and the Drive pair
-   (`apps/web/src/drive/shoppingRouteMasterData.ts`); the create sheet asks for the stop in the
-   new „Einkauf“ field (store chips + section search). The aisle sort and its entry point for
-   items that are not ingredients are built on this data (see the `[x]` sort task above).
+3. **Shopping master data** — the prerequisite for aisle sorting: the route file
+   (`einkaufsweg.csv`, `Store;Section`, walking order), the item table
+   (`einkaufs-artikel.csv`, `Item;Store;Section`, covering ingredients and
+   non-ingredients) and the synonym table (`einkaufs-synonyme.csv`,
+   `Variant;Item`). Format in [storage_format.md](storage_format.md) §10, identity
+   model in [shopping_item_identity.md](shopping_item_identity.md). The data is
+   built and editable: the seed CSVs, the codecs and serializers in
+   `packages/core/src/shoppingRouteCsv.ts`, the runtime registry
+   (`shoppingRouteRegistry.ts`), the read-time resolution
+   (`packages/core/src/shoppingSort.ts`) and the Drive set
+   (`apps/web/src/drive/shoppingRouteMasterData.ts`, including the migration from
+   `einkaufs-zuordnung.csv`); the create sheet asks for the stop in the „Einkauf“
+   field (store chips + section search). The aisle sort and its entry point for
+   items that are not ingredients are built on this data (see the `[x]` sort task
+   above and the `[x]` item-identity task).
 4. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
    (the size is a query parameter on the export host), replacing the entries recognized as the

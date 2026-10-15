@@ -358,10 +358,10 @@ every ingredient through them. Dot decimals; the parser tolerates German commas 
 spreadsheet edits. The files are user data like the recipes themselves — the repo CSVs
 are only the seed.
 
-## 10. Shopping Route and Item Assignment
+## 10. Shopping Route, Item Table and Synonym Table
 
 The order in which shopping-list items are bought — and therefore the order in which they
-appear in the Google Keep „Einkaufsliste“ — comes from two master-data files in the recipe
+appear in the Google Keep „Einkaufsliste“ — comes from three master-data files in the recipe
 folder. A **stop** is the pair `(Store, Section)`: level 1 is the store, level 2 the section
 inside it.
 
@@ -373,41 +373,60 @@ inside it.
     REWE;TK-Obst
     dm;Drogerie
 
-    einkaufs-zuordnung.csv    (the assignment; row order irrelevant)
+    einkaufs-artikel.csv      (the identity of everything buyable; row order irrelevant)
     Item;Store;Section
     Karotten;Lidl;Obst und Gemüse
     Joghurt;Lidl;Molkerei
     TK-Blaubeeren;REWE;TK-Obst
     Klopapier;dm;Drogerie
 
+    einkaufs-synonyme.csv     (the meaning: variant text → item; row order irrelevant)
+    Variant;Item
+    Möhren;Karotten
+    Zewa;Klopapier
+
 The route's row order is the only ordering in this data: it is the order the shops are
 visited and the sections are walked. There is no separate store order, and a section belongs
 to exactly one store; the same section name may exist in several stores, the pair is the key.
 
-The assignment maps an item name to exactly one stop. Its name set is a **superset of the
-ingredient list**: it carries recipe ingredients and items that are not ingredients at all
-(„Klopapier“, „Seife“, „Blumen“), which have no base unit and no reorder point and therefore
-cannot live in zutaten.csv. Items are matched by exact, case-sensitive name, as recipe titles
-and ingredient names are. An item without a row here is not an error — it simply has no place
-in the route; where such an item ends up is the sort's decision, not this file's.
+The **item table** maps an item name to exactly one stop — it is the identity of everything
+that can be bought and the **only place a route is kept**, so "the same item with two
+conflicting routes" cannot exist. Its name set is a **superset of the ingredient list**: it
+carries recipe ingredients and items that are not ingredients at all („Klopapier“, „Seife“,
+„Blumen“), which have no base unit and no reorder point and therefore cannot live in
+zutaten.csv. An item without a row here is not an error — it is simply never bought; an
+ingredient without an item row is valid for exactly that reason (Wasser), and the item row is
+what makes something buyable. The **synonym table** states meaning instead: a variant text
+resolves to exactly one item and carries no route of its own. `zutaten.csv` (§9) keeps the
+ingredient master data and, like the item table, carries no route; it is a *view* of those
+items that happen to be ingredients.
 
 Validation: a stop is unique in the route and both cells are non-empty; an item name is
-unique in the assignment; every `(Store, Section)` an assignment names must exist in the
-route — a typo fails loudly at load, like a mapping for an unknown ingredient. The route
-parses into an ordered list, the assignment into a name→stop lookup. Both files follow §9's
-common CSV rules (one header row, semicolons, CRLF and one trailing empty cell tolerated,
-leading BOM stripped) and are user data like the ingredient files: the repo CSVs
-(docs/shopping_route.csv + docs/shopping_items.csv) are the seed, the Drive files are
+unique in the item table; every `(Store, Section)` an item names must exist in the route — a
+typo fails loudly at load, like a mapping for an unknown ingredient. In the synonym table a
+variant is unique, every `Item` it names must exist, and a variant equal to an item name is
+rejected — a canonical item name must never be shadowed by a synonym. All name uniqueness
+checks compare case-folded (docs/shopping_item_identity.md §2/§5). The route parses into an
+ordered list, the item table into a name→stop lookup and the synonym table into a
+variant→item lookup. All three files follow §9's common CSV rules (one header row,
+semicolons, CRLF and one trailing empty cell tolerated, leading BOM stripped) and are user
+data like the ingredient files: the repo CSVs (docs/shopping_route.csv +
+docs/shopping_items.csv + docs/shopping_synonyms.csv) are the seed, the Drive files are
 authoritative once they exist.
 
 The files are created on the first shopping assignment the user enters (the „Einkauf“ field of
 „Neue Zutat anlegen“), seeded with the built-in repo data, and are authoritative once they
-exist. That field picks the store as chips and the section from a searchable list of that
-store's sections, so a section can never be paired with the wrong store; an item that already
-has a row is overwritten — the name is the key, and the file holds exactly one stop per item.
+exist (the synonym file empty at first and growing with every confirmed suggestion). That
+field picks the store as chips and the section from a searchable list of that store's
+sections, so a section can never be paired with the wrong store; an item that already has a
+row is overwritten — the name is the key, and the file holds exactly one stop per item. The
+item table was called `einkaufs-zuordnung.csv` before the item identity existed; the app reads
+that file once, writes its rows unchanged into `einkaufs-artikel.csv`, creates the synonym
+file next to it and deletes the old file afterwards.
 
-Deliberately not in this data: how a Keep line is matched to an item name, where unassigned
-items are placed, and Keep's sort ids.
+Deliberately not in this data: how a Keep line is matched to an item name (that is read-time
+work, docs/shopping_item_identity.md §2), where unassigned items are placed, and Keep's sort
+ids.
 
 ## 11. Relationship to Other Documents
 

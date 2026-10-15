@@ -1,19 +1,21 @@
 /**
  * Tests for the shopping-route runtime registry (docs/storage_format.md §10):
  * the seed it starts from, the derived store/section lists the new-ingredient
- * sheet's pickers are built from, and the assignment lookup used later by the
+ * sheet's pickers are built from, and the item/synonym lookup used later by the
  * aisle sort.
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { ShoppingAssignments, ShoppingRoute } from './shoppingRouteCsv.js';
+import type { ShoppingItems, ShoppingRoute, ShoppingSynonyms } from './shoppingRouteCsv.js';
 import {
-  allShoppingAssignments,
+  allShoppingItems,
   allShoppingStops,
+  allShoppingSynonyms,
   resetShoppingRoute,
-  setShoppingAssignments,
+  setShoppingItems,
   setShoppingRoute,
+  setShoppingSynonyms,
   shoppingSections,
   shoppingStopFor,
   shoppingStores,
@@ -29,10 +31,16 @@ const ROUTE: ShoppingRoute = [
   { store: 'Lidl', section: 'Trockensortiment' },
 ];
 
-/** The assignment fixture: one ingredient, one non-ingredient item. */
-const ASSIGNMENTS: ShoppingAssignments = {
+/** The item fixture: one ingredient, one non-ingredient item. */
+const ITEMS: ShoppingItems = {
   Joghurt: { store: 'Lidl', section: 'Molkerei' },
   Klopapier: { store: 'REWE', section: 'Obst und Gemüse' },
+};
+
+/** The synonym fixture: one variant per item. */
+const SYNONYMS: ShoppingSynonyms = {
+  Möhren: 'Karotten',
+  Zewa: 'Klopapier',
 };
 
 afterEach(() => {
@@ -45,29 +53,34 @@ describe('shopping-route registry', () => {
     expect(shoppingStopFor('Karotten')).toBeDefined();
   });
 
-  it('stores a replaced route and assignment', () => {
+  it('stores a replaced route, item table and synonym table', () => {
     setShoppingRoute(ROUTE);
-    setShoppingAssignments(ASSIGNMENTS);
+    setShoppingItems(ITEMS);
+    setShoppingSynonyms(SYNONYMS);
     expect(allShoppingStops()).toEqual(ROUTE);
-    expect(allShoppingAssignments()).toEqual(ASSIGNMENTS);
+    expect(allShoppingItems()).toEqual(ITEMS);
+    expect(allShoppingSynonyms()).toEqual(SYNONYMS);
   });
 
   it('restores the seed on reset', () => {
     const seedRoute = allShoppingStops();
-    const seedAssignments = allShoppingAssignments();
+    const seedItems = allShoppingItems();
+    const seedSynonyms = allShoppingSynonyms();
     setShoppingRoute([]);
-    setShoppingAssignments({});
+    setShoppingItems({});
+    setShoppingSynonyms({});
     resetShoppingRoute();
     expect(allShoppingStops()).toEqual(seedRoute);
-    expect(allShoppingAssignments()).toEqual(seedAssignments);
+    expect(allShoppingItems()).toEqual(seedItems);
+    expect(allShoppingSynonyms()).toEqual(seedSynonyms);
     expect(shoppingStopFor('Karotten')).toBeDefined();
   });
 
-  it('looks an item up by its exact, case-sensitive name', () => {
-    setShoppingAssignments(ASSIGNMENTS);
+  it('looks an item up by its exact name', () => {
+    setShoppingItems(ITEMS);
     expect(shoppingStopFor('Joghurt')).toEqual({ store: 'Lidl', section: 'Molkerei' });
-    // Names are matched exactly (docs/storage_format.md §10): a different
-    // spelling is simply an unassigned item, not an error.
+    // The lookup itself is exact: folding happens in the line matching
+    // (shoppingSort.ts), where a differently cased line is folded onto the name.
     expect(shoppingStopFor('joghurt')).toBeUndefined();
     expect(shoppingStopFor('Seife')).toBeUndefined();
   });
