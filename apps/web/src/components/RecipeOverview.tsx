@@ -14,8 +14,9 @@
  *    meal-plan entry states as a "Geplant" caption/value item in the existing
  *    meta row (`formatPlannedAmount` in @cookbook/core), and "Einplanen" becomes "Umplanen" with
  *    the calendar-and-pencil glyph. "Umplanen" opens the same overlay in its
- *    replan mode, which pre-selects the plan's size and changes the entry with
- *    "Menge ändern" (./MealPlanSheet). That overlay is also where the dish is
+ *    replan mode, which pre-selects the plan's size and confirms the choice with
+ *    "Übernehmen" (./MealPlanSheet) — an unchanged size closes the overlay
+ *    without a write. That overlay is also where the dish is
  *    taken off the plan: its "Abhaken" button sits first in the overlay's
  *    action row, in the bottom-left corner (decided with the user), and it
  *    *checks* the Keep line rather than deleting it.
@@ -1038,8 +1039,9 @@ function RecipeOverview({
               </button>
               {onMealPlan ? (
                 // "Umplanen" opens the same overlay in its replan mode: the size
-                // the plan states is pre-selected and "Menge ändern" replaces the
-                // entry, while "Abhaken" in that overlay takes the dish off the
+                // the plan states is pre-selected and "Übernehmen" confirms the
+                // choice — on the unchanged size it closes the overlay without a
+                // write — while "Abhaken" in that overlay takes the dish off the
                 // plan. It needs the parsed recipe just like "Einplanen" (the
                 // written size for the reference readout, the pre-selected size
                 // from the plan), so it stays unavailable until the file read
@@ -1138,7 +1140,10 @@ function RecipeOverview({
           Both modes end the flow in App on success (App closes the overview
           there, like "Zum Essensplan hinzufügen" always did), so only
           "Abbrechen" leads back to the overview. A failure rejects, the overlay
-          catches it and stays open with the reason next to its button. */}
+          catches it and stays open with the reason next to its button. One tap
+          does not reach App at all: in replan mode "Übernehmen" on the unchanged
+          size closes just the overlay, so the overview stays open and the entry
+          keeps its size. */}
       {planOpen && details !== null && target.kind === 'recipe' && (
         <MealPlanSheet
           mode={onMealPlan ? 'replan' : 'plan'}

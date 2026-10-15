@@ -34,7 +34,9 @@ overview, the fifth the shopping list, the sixth the copied recipe link:
 > with the action **Rückgängig** („Einplanen“).
 
 > `Menge für <Titel> auf dem Essensplan geändert. Die Einkaufsliste bleibt unverändert.`
-> with the action **Rückgängig** („Umplanen“ → „Menge ändern“).
+> with the action **Rückgängig** („Umplanen“ → „Übernehmen“). No notice appears when that
+> sheet's „Übernehmen“ was answered without a change: the entry keeps its size, so there is
+> nothing to report and nothing to undo.
 
 > `<Titel> vom Essensplan abgehakt. Die Einkaufsliste bleibt unverändert.`
 > with the action **Rückgängig** („Umplanen“ → „Abhaken“ on a recognized recipe, or an
@@ -324,7 +326,7 @@ top left. Never mind → „Abbrechen" next to the commit.*
 | „Vorräte auswählen — Teil 1: Zutaten-Rezepte" | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 2: Zutaten" | place (flow step) | „Zurück" (asks) |
 | Recipe overview, create menu | browsing layer over the list | none — the scrim / close button leaves it, there is no pending decision |
-| „Zum Essensplan hinzufügen" / „Menge ändern" | change (sheet) | „Abbrechen" |
+| „Zum Essensplan hinzufügen" / „Übernehmen" | change (sheet) | „Abbrechen" |
 | „Eintrag ersetzen" | change (sheet) | „Abbrechen" |
 | Ingredient sheet, new-ingredient sheet | change (sheet) | „Abbrechen" |
 | „Rezept löschen" → „… wirklich löschen?" | question pending inside a place | „Abbrechen" |

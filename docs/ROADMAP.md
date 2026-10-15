@@ -67,7 +67,8 @@ self-contained. The read-only frontend, the meal-plan recipe overview and the me
 are built (the two captioned sections, recognition, the Google sign-in, the overview's three
 card forms,
 „Zum Essensplan hinzufügen“, which links the entry at the recipe's cooking view through the
-deployed export host, „Umplanen“ with its size change, and „Abhaken“, which ticks
+deployed export host, „Umplanen“ with its size change (confirmed by „Übernehmen“, which
+writes only when the chosen size really differs), and „Abhaken“, which ticks
 the entry off and can be undone). „Kochen“ opens the recipe's HTML export in a new tab,
 at the size the plan states when the dish is planned — otherwise at the recipe's written default
 size; the „Eintrag ersetzen“ menu is built (an unrecognized entry can be replaced by an existing
@@ -133,7 +134,7 @@ below is building, not investigating: the frontend and the actual features.
    entry's planned size (servings/yield) shown first in its caption/value row, so the dish
    can be viewed, edited and scaled from the plan; an unrecognized entry gets a destination
    of its own there („Eintrag ersetzen“ / „Abhaken“). „Einplanen“ performs the
-   write, „Umplanen“ changes the size and „Abhaken“ ticks the entry off (step 4);
+   write, „Umplanen“ changes the size with „Übernehmen“ and „Abhaken“ ticks the entry off (step 4);
    „Kochen“ opens the recipe's HTML export in a new tab, at the size the plan states when
    the dish is planned and otherwise at the recipe's written default size; the „Eintrag
    ersetzen“ menu is built:

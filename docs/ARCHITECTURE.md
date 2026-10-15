@@ -266,7 +266,8 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   behind a „Link“ caption right after it, opened in a new tab. It then offers the replace/drop
   destination described above. „Einplanen“ writes the dish to the meal plan;
   „Umplanen“ opens the same overlay in a replan mode that pre-selects the plan's stated size
-  and replaces the entry with „Menge ändern“. Every carry-out action ends the flow back at the
+  and replaces the entry with „Übernehmen“ — which, answered on the unchanged size, writes
+  nothing, closes the overlay and leaves the overview open. Every carry-out action ends the flow back at the
   list: a planned recipe's „Abhaken“ (in its „Umplanen“ overlay) and an unrecognized
   entry's own „Abhaken“ button both check the entry off. The sheet renders the
   *live* plan App derives from the current resolution, so its „Geplant“ value and its travel

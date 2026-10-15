@@ -10,16 +10,17 @@
  * - **Einplanen** (`mode: 'plan'`) — "Zum Essensplan hinzufügen" writes the
  *   dish. The size starts on the size the recipe is written in (its servings /
  *   its yield).
- * - **Umplanen** (`mode: 'replan'`) — "Menge ändern" replaces the entry with
+ * - **Umplanen** (`mode: 'replan'`) — "Übernehmen" replaces the entry with
  *   one at the newly chosen size. The size starts on the size the meal-plan
  *   entry states (`previous`, decided with the user); an entry that states none
  *   falls back to the written size, exactly like "Einplanen". The button is
- *   unavailable until the size actually differs from the one the plan states
- *   (docs/CODING_CONVENTIONS.md, unavailable buttons: the selected chips/stepper
- *   right above it show the reason). The replan overlay additionally carries the
+ *   always enabled: answered on the size the plan already states, it closes the
+ *   overlay without writing, so the tap cannot fail and the row needs no hint
+ *   line (§5.1, "unavailable is only allowed for a local cause"). The replan
+ *   overlay additionally carries the
  *   "Abhaken" action (decided with the user): it sits first in the action row,
  *   in the bottom-left corner, so taking the dish off the plan lives next to
- *   "Abbrechen" and "Menge ändern" instead of behind the overview's "Mehr" menu.
+ *   "Abbrechen" and "Übernehmen" instead of behind the overview's "Mehr" menu.
  *   "Einplanen" has no such button — a dish that is not on the plan has nothing
  *   to remove.
  *
@@ -46,7 +47,7 @@
  *   ("Kürbissuppe: https://…/exec?f=…&portionen=6"). A recipe without an export
  *   file falls back to "Kürbissuppe (6 Portionen)". On failure the sheet stays
  *   open and shows the reason next to the button, while the button reports the
- *   running write ("Wird hinzugefügt …" / "Wird geändert …", the shared busy
+ *   running write ("Wird hinzugefügt …" / "Wird übernommen …", the shared busy
  *   label).
  *
  * The selectable sizes are exactly what the meal plan accepts
@@ -82,6 +83,7 @@ import {
 import { CheckBoxIcon } from './icons';
 import QuantityPicker from './QuantityPicker';
 import { safeRenderAQS } from './ingredientDisplay';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /**
  * The serving options of a finished dish: the same integer standard numbers
@@ -142,6 +144,8 @@ function MealPlanSheet({
   onRemove,
 }: MealPlanSheetProps) {
   const isDish = recipe.type === 'finished_dish';
+  /** True in the "Umplanen" form: the dish is already on the plan (see header). */
+  const isReplan = mode === 'replan';
   /** The recipe's own family unit; the meal plan only accepts a size in it. */
   const family = recipe.yield_unit === 'ml' ? 'ml' : 'g';
   /**
@@ -200,13 +204,11 @@ function MealPlanSheet({
   const deltaX = writtenSize === undefined ? 0 : difference(writtenSize, selectedSize);
 
   /**
-   * True when the chosen size differs from the one the plan states. "Menge
-   * ändern" is unavailable until it does (docs/CODING_CONVENTIONS.md): the
-   * chips/stepper above the button show the current selection, so the cause is
-   * visible right next to it. "Einplanen" always writes, so it is unaffected.
+   * True when the chosen size differs from the one the overlay opened on (in
+   * replan mode: the size the plan states). It decides whether "Übernehmen" has
+   * anything to write — not whether it can be pressed (§5.1).
    */
   const sizeChanged = isDish ? servings !== initialServings : yieldQuantity !== initialYield;
-  const canConfirm = mode === 'plan' || sizeChanged;
 
   /** The selection in the shape the write needs (and the core's formatter reads). */
   const planned: PlannedAmount = isDish
@@ -222,10 +224,10 @@ function MealPlanSheet({
     );
 
   /**
-   * Confirms the choice. The write itself belongs to App (it owns the meal-plan
-   * state, the removal list and the entry text); on success the caller closes
-   * the whole flow, so this overlay unmounts and only the failure path has state
-   * to restore.
+   * Runs the confirmation: keeps the overlay open while the write runs, and on
+   * failure shows the reason next to the buttons instead of closing. On success
+   * the caller closes the whole flow, so only the failure path has state to
+   * restore.
    */
   const handleConfirm = async (): Promise<void> => {
     setBusy(true);
@@ -238,7 +240,27 @@ function MealPlanSheet({
     }
   };
 
-  const isReplan = mode === 'replan';
+  /**
+   * The confirm button's action. In replan mode an unchanged size is a
+   * confirmation without a change: the overlay closes and the entry stays as it
+   * is — no write, no notice, and deliberately no error, so the always-enabled
+   * button never has to fail (§5.1). "Einplanen" always writes; there the
+   * pre-selected size is the recipe's written size, which is never "no choice".
+   */
+  const handleApply = (): void => {
+    if (!isReplan || sizeChanged) {
+      void handleConfirm();
+      return;
+    }
+    onClose();
+  };
+
+  // Ctrl+S is the keyboard equivalent of the confirm button ("Übernehmen" /
+  // "Zum Essensplan hinzufügen"): the overlay is only ever mounted while it is
+  // the topmost layer, so the shortcut is always enabled here. It runs the same
+  // action the button does, including the unchanged-size close (an unchanged
+  // choice is a confirmation without a change, not an error).
+  useSaveShortcut(handleApply);
 
   return (
     <>
@@ -300,14 +322,10 @@ function MealPlanSheet({
         )}
 
         <div className="sheet-actions">
-          {/* The cause of the row's unavailable confirm, next to the button that
-              cannot run (§5.1): in replan mode "Menge ändern" needs a size that
-              differs from the one the plan states. */}
-          {!busy && !canConfirm && <p className="action-note">Wähle eine andere Menge.</p>}
           {/* "Abhaken" (replan only): takes the dish off the plan. It sits
               first in the row, in the bottom-left corner (the shared
               .sheet-actions .sheet-actions-lead rule pulls it there), next to
-              "Abbrechen" and "Menge ändern". Like "Abbrechen" it is unavailable
+              "Abbrechen" and "Übernehmen". Like "Abbrechen" it is unavailable
               while a write runs, so the two writes cannot interleave. */}
           {isReplan && (
             <button
@@ -323,19 +341,22 @@ function MealPlanSheet({
           <button type="button" className="text-button" onClick={onClose} disabled={busy} autoFocus>
             Abbrechen
           </button>
+          {/* Always enabled. "Übernehmen" answers the choice: an unchanged size
+              in replan mode closes the overlay without a write (handleApply), so
+              no muted look and no hint line are needed (§5.1). */}
           <button
             type="button"
             className="primary-button"
-            onClick={() => void handleConfirm()}
-            disabled={busy || !canConfirm}
+            onClick={handleApply}
+            disabled={busy}
             aria-busy={busy}
           >
             {busy
               ? isReplan
-                ? 'Wird geändert …'
+                ? 'Wird übernommen …'
                 : 'Wird hinzugefügt …'
               : isReplan
-                ? 'Menge ändern'
+                ? 'Übernehmen'
                 : 'Zum Essensplan hinzufügen'}
           </button>
         </div>

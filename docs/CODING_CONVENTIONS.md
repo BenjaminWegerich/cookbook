@@ -190,7 +190,9 @@
   („Speichern" / „Übernehmen"): each layer that owns such a button registers its own
   `useSaveShortcut` and disables it while it is not the visible topmost layer, so exactly one
   save action reacts (the recipe editor passes `enabled: false` while an ingredient sheet is open
-  on top; the sheets are only ever mounted on top, so they stay enabled). `preventDefault`
+  on top; the sheets are only ever mounted on top, so they stay enabled). The meal-plan overlay
+  („Übernehmen") is one of those sheets, and it registers the shortcut even though it always
+  writes nothing on the unchanged size: the shortcut runs the same confirm the button does. `preventDefault`
   suppresses the browser's own "Save Page" dialog, and `event.repeat` is ignored so a held
   shortcut does not fire the write repeatedly.
 - **One pressed look for every button: the whole click area gets the same translucent ink wash.**

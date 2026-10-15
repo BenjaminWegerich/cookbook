@@ -506,7 +506,9 @@ peers of equal weight — the editor's photo row pairs „Auswählen" / „Erset
   `index.css`. No component defines its own `:active` rule. Feedback is immediate; a fade-out
   on release stays within `--motion-fast`.
 - **Unavailable:** `opacity: var(--opacity-disabled)`, no press feedback, cursor default. This
-  look is allowed only while the cause is visible next to the button.
+  look is allowed only for a cause that is visible next to the button (§8). A button whose cause
+  is not local stays fully enabled and, where a tap cannot change anything, it confirms without a
+  change instead (the replan sheet's „Übernehmen"). *decided with the user*
 - **Busy:** the unavailable look plus an ellipsis label („Speichert …") and `aria-busy="true"`.
   The ellipsis means running, never not allowed.
 
@@ -527,7 +529,9 @@ primary stays unique per decision.
   shrink a target below thumb reach.
 - A chip is not a button variant: it stays compact and takes its own hit area (§5.2).
 - Never disable a button for a reason that is not visible next to it; run the check on press
-  and show the problem instead (§5.3).
+  and show the problem instead (§5.3). Where no value changed at all, the enabled button is a
+  no-op: it closes the layer without a write and without a notice, so its tap never has to fail.
+  *decided with the user*
 - Labels follow §7: sentence case, a verb in the infinitive, the same action worded the same
   everywhere.
 
@@ -1274,8 +1278,8 @@ component sections already state, gathered here as one contract.
   is reached by Tab, and focus pauses the countdown so it cannot vanish under a keyboard user
   (§5.9).
 - A focused text field shows a solid accent outline, so the caret is visible without a pointer
-  (§5.3). A pressed look is never the only feedback, and a disabled button is never the only
-  explanation — the cause is visible next to it (§5.1).
+  (§5.3). A pressed look is never the only feedback, and a disabled button always has its cause
+  visible next to it (§5.1).
 
 **Perception**
 
@@ -1317,7 +1321,7 @@ The cooking view (`.html`) has its own inventory, written below.
 | „Einkaufsliste schreiben" | `setNav('shopping')`, `ShoppingListSelect` | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 1: Zutaten-Rezepte" | `setNav('pantrySub')`, `SubRecipeSelect` | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 2: Zutaten" | `setNav('pantry')`, `PantrySelect` | place (flow step) | „Zurück" (asks) |
-| „Zum Essensplan hinzufügen" / „Menge ändern" | `MealPlanSheet` | change | „Abbrechen" |
+| „Zum Essensplan hinzufügen" / „Übernehmen" | `MealPlanSheet` | change | „Abbrechen" |
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
 | Ingredient sheet / new ingredient | `IngredientSheet`, `NewIngredientSheet` | change | „Abbrechen" |
 | „Änderungen verwerfen?" | `LeaveConfirmSheet` (over the editor and the AI screen) | change | „Abbrechen", scrim, Escape, Back |

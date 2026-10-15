@@ -1370,7 +1370,9 @@ function App() {
   /**
    * Performs the "Umplanen" write for the open overview's recipe: replaces the
    * recipe's current entries with one at the newly chosen size. The overlay hands
-   * over the chosen size; the entry text is built here (`resolveMealPlanEntry`,
+   * over the chosen size — it never calls this for a size that equals the one the
+   * plan states, because that "Übernehmen" closes the overlay without a write
+   * (MealPlanSheet's handleApply). The entry text is built here (`resolveMealPlanEntry`,
    * like planning — an existing short link at that size is reused), and the
    * entries to replace are every line of the raw Keep plan that names the same
    * recipe (core's `mealPlanEntriesForTitle`) — the same rule the first-time plan
