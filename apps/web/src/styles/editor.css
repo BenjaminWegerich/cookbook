@@ -5,6 +5,28 @@
  * colors and sizes reference the tokens in styles/tokens.css. Layout follows
  * the agreed editor design: sticky header (Zurück · Speichern), one
  * scrolling page of cards, bottom sheet for ingredients.
+ *
+ * Nested surfaces follow one radius chain (the rule to be recorded in
+ * DESIGN.md §4.4). The radius is a property of the surface's level in the
+ * layout tree — never of its content and never a concentric fit — so two
+ * surfaces at one level always match:
+ *
+ *   card         18px radius / 10px padding  → the surfaces on it take 10px
+ *   element      10px radius /  6px padding  → the surfaces on it take  6px
+ *   element       6px radius /  4px padding
+ *
+ * A card is always a top-level surface: the card rung never nests, so a group
+ * that would have been a second card becomes its own card beside the first (the
+ * editor's steps) or a row/divider inside one. The element rung is what nests:
+ * the Design card's theme preview is 10/6, its accent sample 6. A sheet is the
+ * root of its own tree and keeps §4.4's 32px/18px pair, so a surface directly on
+ * a sheet takes 18px. Each rung is the ladder step just below twice its padding,
+ * which keeps 18/10 and a sheet's 32/18 in one family. A rows list carries no
+ * padding itself — its rows hold it, and they are not rounded.
+ *
+ * Buttons and form controls stay outside the chain: a button or text field keeps
+ * its own radius wherever it sits (action buttons and text fields --radius-md,
+ * text buttons and badges --radius-sm, chips pills, steppers circles).
  */
 
 /* ---- Screen header ------------------------------------------------------ */
@@ -48,17 +70,21 @@
 
 /* ---- Cards -------------------------------------------------------------- */
 
+/* The card rung: 18px radius with 10px padding — everything rounded that sits
+   directly on a card takes those 10px (fields, media, lists, previews). A card
+   never sits in a card (§4.4): the second level uses a divider instead. */
 .editor-card {
   display: grid;
   gap: var(--space-5);
-  padding: var(--space-4); /* the 18px/10px pair (§4.4) */
+  padding: var(--space-4); /* the card rung: 18px/10px (§4.4) */
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
 }
 
-/* Card/section titles (Kopfdaten, Zubereitung, Zutaten, …). margin: 0 clears
+/* Card/section titles (Kopfdaten, Zutaten, Design, a step head, …). margin: 0
+   clears
    the browser-default heading margins so the title follows the card's own
    padding/gap rhythm instead of adding ~24 px of unintended whitespace. */
 .editor-card-title {
@@ -315,11 +341,15 @@
 
 /* ---- Step editor (contenteditable with artifacts) -------------------------- */
 
+/* The step's prose field. A step card is a card, so the field takes the shared
+   field fill (--color-bg, §5.3) like the title and description fields; its
+   radius is the form control's own (--radius-md), which the chain never
+   changes. */
 .step-editor {
   width: 100%;
   min-height: 74px;
   padding: var(--space-3) var(--space-4);
-  background: var(--color-surface);
+  background: var(--color-bg);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   color: var(--color-ink);
@@ -412,11 +442,13 @@
 
 /* ---- Validation feedback ------------------------------------------------ */
 
+/* A page-level surface, so the card rung: 18px radius with 10px padding (it
+   carried the control radius with a padding of its own before). */
 .validation-banner {
-  padding: var(--space-5);
+  padding: var(--space-4);
   background: var(--color-surface);
   border: 1px solid var(--color-danger);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   color: var(--color-danger);
   display: grid;
   gap: var(--space-2);
@@ -454,7 +486,8 @@
 /* The editor's photo preview: 120 × 90 px, the 4:3 pairing of the common
    photographic set (DESIGN.md §5.8). An image's own pixel size sits outside the
    geometric ladder (§4.3), so this pair is not a --space-* or ladder step. The
-   box matches the stored 4:3 photo, so the preview shows it uncropped. */
+   box matches the stored 4:3 photo, so the preview shows it uncropped. As media
+   it takes the rung of the card it sits on — 10px on a card. */
 .photo-preview {
   width: 120px;
   height: 90px;
@@ -486,15 +519,16 @@
   gap: var(--space-2);
 }
 
-/* ---- Steps (Zubereitung) ------------------------------------------------ */
+/* ---- Steps (one card each) ---------------------------------------------- */
 
+/* A step is its own top-level card, beside the other cards on the page — never a
+   card inside a „Zubereitung" card (§4.4: the card rung never nests, so the
+   section that used to hold them is gone). It carries .editor-card for the card
+   look (18px radius, 10px padding, surface fill, shadow) and only tightens the
+   internal rhythm: head, ingredient list, add row and prose field sit 8px apart
+   instead of the card's 14px. */
 .step-card {
-  display: grid;
   gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--color-bg);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
 }
 
 .step-head {
@@ -548,19 +582,6 @@
   color: var(--color-danger);
 }
 
-.step-card textarea {
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  color: var(--color-ink);
-  font-size: var(--text-md);
-  font-family: var(--font-sans);
-  line-height: var(--leading-md);
-  resize: vertical;
-}
-
 /* ---- Computed ingredient list ------------------------------------------- */
 
 .empty-hint {
@@ -572,12 +593,13 @@
 /* One paper surface for the whole list, with hairline dividers between the rows
    (the same shape as the shopping-list selection page's list and the pantry
    table, decided with the user): the master list and a step's own list must read
-   as *one* list, not as a stack of individual cards. The surface carries the
-   colour the rows used to carry: `--color-bg` inside the master-list card
-   (surface), overridden to `--color-surface` inside a step card (background, see
-   .step-card below), so the list keeps its contrast against the card it sits in
-   either way. `overflow: hidden` is what lets the first and last rows meet the
-   rounded corners instead of poking past them. */
+   as *one* list, not as a stack of individual cards. Every list takes the ground
+   opposite the surface it sits on, so it always stands out: 10px radius with the
+   card's --color-bg fill on a card, 6px radius with the --color-surface fill on
+   a step card (.step-card .ingredient-list below). `overflow: hidden` is what
+   lets the first and last rows meet the rounded corners instead of poking past
+   them. The list carries no padding of its own: its rows hold it (and they are
+   not rounded), so the rung's inner radius is 0 by the same rule. */
 .ingredient-list {
   list-style: none;
   margin: 0;
@@ -797,6 +819,9 @@
   display: flex;
 }
 
+/* A sheet is the root of its own tree, so a surface directly inside it is level
+   1: 18px radius (the sheet's 18px padding hands it down) with 10px padding of
+   its own. The sheet's form controls stay at their own radius. */
 .aqs-preview {
   /* margin: 0 — like .field-hint: this paragraph often sits directly under a
      .field-label caption, and UA margins would push it far below the caption
@@ -805,7 +830,7 @@
   padding: var(--space-4);
   background: var(--color-bg);
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   font-size: var(--text-md);
   line-height: var(--leading-md);
   font-weight: 600;
@@ -996,13 +1021,7 @@
 
 /* A row of a step's own ingredient list. Same geometry as the master list row
    (.ingredient-row) so both lists read the same way. Like the master row it
-   carries no card chrome: the list around it is the one surface, and that
-   surface is the light one here — a step card sits on the page background, so
-   the list takes the opposite colour and stands out from the card. */
-.step-card .ingredient-list {
-  background: var(--color-surface);
-}
-
+   carries no card chrome: the list around it is the one surface. */
 .step-row {
   display: flex;
   align-items: center;
@@ -1115,9 +1134,9 @@
 }
 
 /* "+ Zutat zur Liste hinzufügen" (step-add-row): the pill hugs the ingredient
-   rows above it (only the card's own grid gap stays above), while keeping a
-   clearly larger gap to the step text field below: 8 px card gap + 10 px margin =
-   18 px (space-6). The pill reads as an extension of its list. */
+   rows above it (only the step's own grid gap stays above), while keeping a
+   clearly larger gap to the step text field below: 8 px step gap + 10 px margin
+   = 18 px (space-6). The pill reads as an extension of its list. */
 .step-add-row {
   margin-block-end: var(--space-4);
 }
@@ -1125,13 +1144,14 @@
 /* ---- Design editor (recipe theme, DESIGN §4.8) --------------------------- */
 
 /* Live preview: the five tokens as one compact card — paper background, ink
-   text, the line divider and an accent pill, all in the chosen typeface. Its
+   text, the line divider and an accent sample, all in the chosen typeface. Its
    own border stays app chrome (--color-line); the theme's line token is shown
-   by the inner divider. */
+   by the inner divider. As a surface on the Design card it takes the card rung:
+   10px radius with 6px padding, so the rounded sample inside it takes 6px. */
 .theme-preview {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-6);
+  padding: var(--space-2);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
 }
@@ -1151,10 +1171,12 @@
   line-height: var(--leading-md);
 }
 
+/* The accent sample is a rounded box on a 10px surface, so it takes that
+   surface's inner radius (6px) rather than a control's. */
 .theme-preview-accent {
   justify-self: start;
   padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   font-weight: 600;
@@ -1197,7 +1219,8 @@
 
 /* The swatch is a button whose background shows the colour; tapping it toggles
    the inline custom picker below the row (only "benutzerdefiniert", no preset
-   suggestions). Button chrome is reset so the square reads as a swatch. */
+   suggestions). Button chrome is reset so the square reads as a swatch; as a
+   button it keeps the action-button radius (--radius-md). */
 .theme-swatch {
   flex: none;
   width: var(--space-9);

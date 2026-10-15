@@ -63,7 +63,10 @@ h3 {
 /* Base control reset. A button carries no look of its own: it takes exactly one
    of the five variants in styles/editor.css (docs/DESIGN.md §5.1) — .primary-button,
    .danger-button, .outlined-button, .text-button, .add-button — or the shared .chip.
-   A button that relies on this rule for its look is a bug, not a default. */
+   A button that relies on this rule for its look is a bug, not a default.
+   Buttons keep their own radius at every nesting level (§4.4): the action
+   variants are 10px (--radius-md), the quiet text button is the 6px exception
+   (§5.1), and chips, steppers and the FAB are shapes. */
 button {
   font: inherit;
   border: 1px solid transparent;

@@ -24,7 +24,8 @@
  * - quantities are stored in the family unit g/ml; the display switches to
  *   kg/l at 1000 (chips carry base quantity AND base unit, no steppers);
  * - sections: Kopfdaten (Titel, Details, Typ, Portionen/Ergiebigkeit,
- *   Zeiten, Bild), Zubereitung, Zutaten.
+ *   Zeiten, Bild), one card per step (there is no „Zubereitung" card or heading:
+ *   the card rung never nests, §4.4), Zutaten, Design.
  * - symbols follow the app-wide icon set (see components/icons.tsx): pencil =
  *   edit, upload = choose/replace photo, trash = destructive, cross = remove,
  *   star = reference quantity, arrows = reorder.
@@ -1457,7 +1458,9 @@ function RecipeEditor({
     } else if (targetIssue.section === 'ingredients') {
       id = 'editor-master-list';
     } else if (targetIssue.section === 'body') {
-      id = 'editor-steps-section';
+      // The steps are cards of their own now, so the „+ Schritt hinzufügen"
+      // button is what answers a missing step.
+      id = 'editor-step-add';
     }
     requestAnimationFrame(() => {
       const element = document.getElementById(id);
@@ -2348,243 +2351,244 @@ function RecipeEditor({
           )}
         </section>
 
-        {/* Zubereitung — steps with their own ingredient lists + prose */}
-        <section className="editor-card" id="editor-steps-section" aria-label="Zubereitung">
-          <h3 className="editor-card-title">Zubereitung</h3>
-          {draft.steps.length === 0 &&
-            sectionIssues('body').map((issue, index) => (
-              <p className="field-error" key={`body-empty-${index}`} role="alert">
-                {issue.message}
-              </p>
-            ))}
-          {draft.steps.map((step, stepIndex) => {
-            return (
-              <div className="step-card" id={`editor-step-${stepIndex}`} key={stepIndex}>
-                <div className="step-head">
-                  <span className="step-number">Schritt {stepIndex + 1}</span>
-                  <div className="step-actions">
-                    <button
-                      type="button"
-                      className="icon-button"
-                      disabled={stepIndex === 0}
-                      onClick={() =>
-                        updateDraft((current) => {
-                          const steps = [...current.steps];
-                          [steps[stepIndex - 1], steps[stepIndex]] = [
-                            steps[stepIndex],
-                            steps[stepIndex - 1],
-                          ];
-                          return { ...current, steps };
-                        })
-                      }
-                      aria-label="Schritt nach oben"
-                    >
-                      <ArrowUpIcon className="button-icon" optical={20} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      disabled={stepIndex === draft.steps.length - 1}
-                      onClick={() =>
-                        updateDraft((current) => {
-                          const steps = [...current.steps];
-                          [steps[stepIndex + 1], steps[stepIndex]] = [
-                            steps[stepIndex],
-                            steps[stepIndex + 1],
-                          ];
-                          return { ...current, steps };
-                        })
-                      }
-                      aria-label="Schritt nach unten"
-                    >
-                      <ArrowDownIcon className="button-icon" optical={20} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button danger-text"
-                      onClick={() => toggleRemoveStep(stepIndex)}
-                      aria-label="Schritt entfernen"
-                    >
-                      <CloseIcon className="button-icon" optical={20} />
-                    </button>
-                  </div>
+        {/* The steps — one top-level card each (§4.4: the card rung never nests,
+            so a step is a card of its own beside the other cards, never a card
+            inside a „Zubereitung" card). The step head names the card. */}
+        {draft.steps.length === 0 &&
+          sectionIssues('body').map((issue, index) => (
+            <p className="field-error" key={`body-empty-${index}`} role="alert">
+              {issue.message}
+            </p>
+          ))}
+        {draft.steps.map((step, stepIndex) => {
+          return (
+            <section
+              className="editor-card step-card"
+              id={`editor-step-${stepIndex}`}
+              key={stepIndex}
+              aria-label={`Schritt ${stepIndex + 1}`}
+            >
+              <div className="step-head">
+                <span className="step-number">Schritt {stepIndex + 1}</span>
+                <div className="step-actions">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    disabled={stepIndex === 0}
+                    onClick={() =>
+                      updateDraft((current) => {
+                        const steps = [...current.steps];
+                        [steps[stepIndex - 1], steps[stepIndex]] = [
+                          steps[stepIndex],
+                          steps[stepIndex - 1],
+                        ];
+                        return { ...current, steps };
+                      })
+                    }
+                    aria-label="Schritt nach oben"
+                  >
+                    <ArrowUpIcon className="button-icon" optical={20} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    disabled={stepIndex === draft.steps.length - 1}
+                    onClick={() =>
+                      updateDraft((current) => {
+                        const steps = [...current.steps];
+                        [steps[stepIndex + 1], steps[stepIndex]] = [
+                          steps[stepIndex],
+                          steps[stepIndex + 1],
+                        ];
+                        return { ...current, steps };
+                      })
+                    }
+                    aria-label="Schritt nach unten"
+                  >
+                    <ArrowDownIcon className="button-icon" optical={20} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button danger-text"
+                    onClick={() => toggleRemoveStep(stepIndex)}
+                    aria-label="Schritt entfernen"
+                  >
+                    <CloseIcon className="button-icon" optical={20} />
+                  </button>
                 </div>
+              </div>
 
-                {/* The step's own counted ingredient list (appears above the text). */}
-                {step.ingredients.length > 0 && (
-                  <ul className="ingredient-list">
-                    {step.ingredients.map((ingredient, rowIndex) => {
-                      const jumpTarget = subRecipeTarget(ingredient.name);
-                      const isNewName = unknownUsedNames.has(ingredient.name.trim());
-                      const rowError = rowIssue(stepIndex, rowIndex);
-                      return (
-                        <Fragment key={`${stepIndex}-${rowIndex}`}>
-                          <li id={`editor-step-${stepIndex}-row-${rowIndex}`} className="step-row">
-                            <button
-                              type="button"
-                              className="ingredient-row-button"
-                              onClick={() =>
-                                openSheet({
-                                  kind: 'row-edit',
-                                  stepIndex,
-                                  rowIndex,
-                                })
-                              }
-                            >
-                              <span className="ingredient-line">
-                                {safeRenderAQS(
-                                  ingredient.name,
-                                  ingredient.quantity,
-                                  ingredient.unit,
-                                )}
-                                {isNewName && (
-                                  <span className="ingredient-tag tag-new">
-                                    <NewReleasesIcon className="tag-icon" optical={20} />
-                                    <span>Neu</span>
-                                  </span>
-                                )}
-                                {jumpTarget !== undefined && (
-                                  <button
-                                    type="button"
-                                    className="ingredient-tag tag-recipe"
-                                    onClick={(event) => {
-                                      // The row is one big button that opens the
-                                      // ingredient sheet — the badge must
-                                      // navigate without also triggering it.
-                                      event.stopPropagation();
-                                      requestJump(jumpTarget);
-                                    }}
-                                    title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
-                                  >
-                                    <LinkIcon className="tag-icon" optical={20} />
-                                    <span>Rezept</span>
-                                  </button>
-                                )}
-                              </span>
-                              {/* A hint only where it says something the row
+              {/* The step's own counted ingredient list (appears above the text). */}
+              {step.ingredients.length > 0 && (
+                <ul className="ingredient-list">
+                  {step.ingredients.map((ingredient, rowIndex) => {
+                    const jumpTarget = subRecipeTarget(ingredient.name);
+                    const isNewName = unknownUsedNames.has(ingredient.name.trim());
+                    const rowError = rowIssue(stepIndex, rowIndex);
+                    return (
+                      <Fragment key={`${stepIndex}-${rowIndex}`}>
+                        <li id={`editor-step-${stepIndex}-row-${rowIndex}`} className="step-row">
+                          <button
+                            type="button"
+                            className="ingredient-row-button"
+                            onClick={() =>
+                              openSheet({
+                                kind: 'row-edit',
+                                stepIndex,
+                                rowIndex,
+                              })
+                            }
+                          >
+                            <span className="ingredient-line">
+                              {safeRenderAQS(ingredient.name, ingredient.quantity, ingredient.unit)}
+                              {isNewName && (
+                                <span className="ingredient-tag tag-new">
+                                  <NewReleasesIcon className="tag-icon" optical={20} />
+                                  <span>Neu</span>
+                                </span>
+                              )}
+                              {jumpTarget !== undefined && (
+                                <button
+                                  type="button"
+                                  className="ingredient-tag tag-recipe"
+                                  onClick={(event) => {
+                                    // The row is one big button that opens the
+                                    // ingredient sheet — the badge must
+                                    // navigate without also triggering it.
+                                    event.stopPropagation();
+                                    requestJump(jumpTarget);
+                                  }}
+                                  title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
+                                >
+                                  <LinkIcon className="tag-icon" optical={20} />
+                                  <span>Rezept</span>
+                                </button>
+                              )}
+                            </span>
+                            {/* A hint only where it says something the row
                                   does not: a normal row is identical to its
                                   master-list counterpart (no hint there
                                   either). */}
-                              {isNewName && (
-                                <span className="ingredient-hint">
-                                  Nicht in Stammdaten — antippen zum Anlegen
-                                </span>
-                              )}
-                            </button>
-                            <div className="step-row-actions">
-                              {/* The reference role lives on the master
+                            {isNewName && (
+                              <span className="ingredient-hint">
+                                Nicht in Stammdaten — antippen zum Anlegen
+                              </span>
+                            )}
+                          </button>
+                          <div className="step-row-actions">
+                            {/* The reference role lives on the master
                                   list only (decided with the user): neither
                                   the toggle nor the "REFERENZ" badge appears
                                   on a step row. */}
-                              <button
-                                type="button"
-                                className="row-remove"
-                                onClick={() =>
-                                  updateStep(stepIndex, (current) => ({
-                                    ...current,
-                                    ingredients: current.ingredients.filter(
-                                      (_, index) => index !== rowIndex,
-                                    ),
-                                  }))
-                                }
-                                aria-label={`${ingredient.name} aus dem Schritt entfernen`}
-                              >
-                                <CloseIcon className="button-icon" optical={20} />
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              className="row-remove"
+                              onClick={() =>
+                                updateStep(stepIndex, (current) => ({
+                                  ...current,
+                                  ingredients: current.ingredients.filter(
+                                    (_, index) => index !== rowIndex,
+                                  ),
+                                }))
+                              }
+                              aria-label={`${ingredient.name} aus dem Schritt entfernen`}
+                            >
+                              <CloseIcon className="button-icon" optical={20} />
+                            </button>
+                          </div>
+                        </li>
+                        {rowError !== undefined && (
+                          <li className="row-issue" role="alert">
+                            {rowError.message}
                           </li>
-                          {rowError !== undefined && (
-                            <li className="row-issue" role="alert">
-                              {rowError.message}
-                            </li>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </ul>
-                )}
-                <div className="step-add-row">
-                  <button
-                    type="button"
-                    className="add-button"
-                    onClick={() => openSheet({ kind: 'row-add', stepIndex })}
-                  >
-                    + Zutat zur Liste hinzufügen
-                  </button>
-                </div>
-
-                <StepEditor
-                  ref={(element) => {
-                    stepEditorRefs.current[stepIndex] = element;
-                  }}
-                  value={step.text}
-                  describedBy={
-                    stepIssues(stepIndex).length > 0 ? `editor-error-step-${stepIndex}` : undefined
-                  }
-                  invalid={stepIssues(stepIndex).length > 0}
-                  onChange={(next) =>
-                    updateStep(stepIndex, (current) => ({ ...current, text: next }))
-                  }
-                  onArtifactEdit={(artifact, at) =>
-                    openSheet({ kind: 'inline-edit', stepIndex, at, artifact })
-                  }
-                  onEnterNext={() => {
-                    // Enter advances to the next step's text (phone keyboard
-                    // "next"); the last step hands back to the form.
-                    if (stepIndex + 1 < draft.steps.length) {
-                      stepEditorRefs.current[stepIndex + 1]?.focus();
-                    } else {
-                      (document.activeElement as HTMLElement | null)?.blur();
-                    }
-                  }}
-                />
-                {stepIssues(stepIndex).length > 0 && (
-                  <div className="field-errors" id={`editor-error-step-${stepIndex}`}>
-                    {stepIssues(stepIndex).map((issue, index) => (
-                      <p className="field-error" key={`step-${stepIndex}-${index}`} role="alert">
-                        {issue.message}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {stepIndex === 0 &&
-                  sectionIssues('body').map((issue, index) => (
-                    <p className="field-error" key={`body-${index}`} role="alert">
-                      {issue.message}
-                    </p>
-                  ))}
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </ul>
+              )}
+              <div className="step-add-row">
                 <button
                   type="button"
                   className="add-button"
-                  onClick={() =>
-                    openSheet({
-                      kind: 'inline',
-                      stepIndex,
-                      insertAt:
-                        stepEditorRefs.current[stepIndex]?.caretOffset() ?? step.text.length,
-                    })
-                  }
+                  onClick={() => openSheet({ kind: 'row-add', stepIndex })}
                 >
-                  + Zutat oder Menge zum Text hinzufügen
+                  + Zutat zur Liste hinzufügen
                 </button>
               </div>
-            );
-          })}
 
-          {/* + Schritt hinzufügen — adds a new empty step after the last one. */}
-          <button
-            type="button"
-            className="add-button"
-            onClick={() =>
-              updateDraft((current) => ({
-                ...current,
-                steps: [...current.steps, { ingredients: [], text: '' }],
-              }))
-            }
-          >
-            + Schritt hinzufügen
-          </button>
-        </section>
+              <StepEditor
+                ref={(element) => {
+                  stepEditorRefs.current[stepIndex] = element;
+                }}
+                value={step.text}
+                describedBy={
+                  stepIssues(stepIndex).length > 0 ? `editor-error-step-${stepIndex}` : undefined
+                }
+                invalid={stepIssues(stepIndex).length > 0}
+                onChange={(next) =>
+                  updateStep(stepIndex, (current) => ({ ...current, text: next }))
+                }
+                onArtifactEdit={(artifact, at) =>
+                  openSheet({ kind: 'inline-edit', stepIndex, at, artifact })
+                }
+                onEnterNext={() => {
+                  // Enter advances to the next step's text (phone keyboard
+                  // "next"); the last step hands back to the form.
+                  if (stepIndex + 1 < draft.steps.length) {
+                    stepEditorRefs.current[stepIndex + 1]?.focus();
+                  } else {
+                    (document.activeElement as HTMLElement | null)?.blur();
+                  }
+                }}
+              />
+              {stepIssues(stepIndex).length > 0 && (
+                <div className="field-errors" id={`editor-error-step-${stepIndex}`}>
+                  {stepIssues(stepIndex).map((issue, index) => (
+                    <p className="field-error" key={`step-${stepIndex}-${index}`} role="alert">
+                      {issue.message}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {stepIndex === 0 &&
+                sectionIssues('body').map((issue, index) => (
+                  <p className="field-error" key={`body-${index}`} role="alert">
+                    {issue.message}
+                  </p>
+                ))}
+              <button
+                type="button"
+                className="add-button"
+                onClick={() =>
+                  openSheet({
+                    kind: 'inline',
+                    stepIndex,
+                    insertAt: stepEditorRefs.current[stepIndex]?.caretOffset() ?? step.text.length,
+                  })
+                }
+              >
+                + Zutat oder Menge zum Text hinzufügen
+              </button>
+            </section>
+          );
+        })}
+
+        {/* + Schritt hinzufügen — adds a new empty step after the last one. It is
+            also the scroll target of the "no step" issue (focusFirstIssue). */}
+        <button
+          type="button"
+          className="add-button"
+          id="editor-step-add"
+          onClick={() =>
+            updateDraft((current) => ({
+              ...current,
+              steps: [...current.steps, { ingredients: [], text: '' }],
+            }))
+          }
+        >
+          + Schritt hinzufügen
+        </button>
 
         {/* Zutaten — the read-only master list (reference role only, §4) */}
         <section className="editor-card" aria-label="Zutaten" id="editor-master-list">
