@@ -226,8 +226,8 @@ one opaque colour from the palette (§4.1), painted over its whole footprint, ed
 | Token | Value | Role |
 | --- | --- | --- |
 | `--radius-sm` | 6px | small elements: chips, badges, tags |
-| `--radius-md` | 10px | controls: buttons, inputs, list rows, card media tiles |
-| `--radius-lg` | 18px | containers: cards, panels |
+| `--radius-md` | 10px | controls: buttons, inputs, list rows; card media tiles and a surface nested on a card |
+| `--radius-lg` | 18px | containers: page-level cards and panels |
 | `--radius-xl` | 32px | sheets: bottom sheets |
 | `100%` or `100px` | — | circles and pills: the floating action button, pill buttons |
 
@@ -248,14 +248,25 @@ one opaque colour from the palette (§4.1), painted over its whole footprint, ed
   two steps are never mixed on one element.
 - A sticky bar covers the screen gutters too (negative inline margin plus `--app-padding`)
   and masks the gap above itself, so scrolling content never peeks around its edges.
-- **Nested corners are not concentric.** Both the radius and the padding of a nested
-  surface follow the pixel ladder (§4.3), as a fixed pair: 32px radius with 18px inner
-  padding, 18px radius with 10px inner padding. The inner padding equals the radius of the
-  elements inside it. Examples: the recipe card takes the 18px/10px pair — 18px radius,
-  10px padding, 10px image radius; the recipe overview sheet takes the 32px/18px pair —
-  32px radius, 18px padding, 18px image radius.
-- Atomic elements — buttons, badges, chips — are the exception: they never nest, so each
-  one always carries the same radius.
+- **Nested corners never repeat a radius, and they are never concentric.** A surface's
+  radius belongs to its level in the layout tree, never to what it contains: a card is
+  18px radius with 10px padding, a surface on a card is 10px radius with 6px padding, a
+  surface on that is 6px radius with 4px padding. Each rung's radius is the preferred
+  ladder step just below twice its padding — which keeps 18/10 and a sheet's 32/18 one
+  family — and the inner padding equals the radius of the elements inside it, so two
+  surfaces at one level always match.
+- **The card rung never nests.** A group that would be a second card becomes a card of
+  its own beside the first (the editor's steps) or a row or divider inside one; only the
+  element rungs nest, like the Design card's theme preview (10px radius, 6px padding) and
+  its accent sample (6px).
+- **A sheet is the root of its own tree.** A sheet keeps its own 32px radius with 18px
+  padding, and a surface directly on a sheet takes 18px — the recipe overview's hero
+  image. Page and sheet are the two roots; the chain runs from each downward.
+- **A rows list is the one surface with no padding of its own.** Its rows hold the
+  padding and are not rounded, so the rung hands the list a 0px inner radius (§5.4).
+- Atomic elements — buttons, form controls, badges, chips — are the exception: they never
+  nest, so each one keeps its own radius at every level (§5.1, §5.2). A media tile is not
+  atomic: it takes the rung of the surface it sits on (§5.8).
 
 *Applies to: cooking view.*
 
@@ -649,8 +660,8 @@ of padding on all four sides, so the square media area sits inside the border in
 bleeding into it. The title below starts on the same left edge (its own inline padding is 0),
 so media and title read as one column inside one frame.
 
-**Nested corners follow the fixed pairs (§4.4).** The card's mat and its media tile are the
-18px/10px pair: `--radius-lg` (18px) on the card, `--space-4` (10px) padding, and the media
+**Nested corners follow the card rung (§4.4).** The card's mat and its media tile are the
+18px/10px rung: `--radius-lg` (18px) on the card, `--space-4` (10px) padding, and the media
 tile takes `--radius-md` (10px).
 
 **A list is rows inside one card, not a card per row.** Rows share the container's surface and
@@ -819,8 +830,8 @@ new tab. It is the one badge in the export.
 *Applies to: web app.*
 
 **A recipe's media area is landscape, cropped to 4:3.** It fills its container's width and is
-cropped to that ratio (`object-fit: cover`); its radius follows the fixed pair of its container
-(§4.4): 10px (`--radius-md`) in a card, 18px (`--radius-lg`) in the recipe overview sheet. One
+cropped to that ratio (`object-fit: cover`); its radius follows the rung of its container
+(§4.4): 10px (`--radius-md`) on a card, 18px (`--radius-lg`) on the recipe overview sheet. One
 format serves the card, the overview hero and the editor preview.
 
 **An image is not a ladder value.** Aspect ratios and image pixel sizes come from the common
