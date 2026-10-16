@@ -41,6 +41,7 @@
  */
 
 import {
+  auDisplayName,
   formatAQValue,
   formatBQ,
   formatDecimal,
@@ -651,5 +652,6 @@ export function stockCountText(need: ShoppingNeed, stock: number): string | null
     count = nearestCount(target.au, raw);
   }
   const notation = isAQValue(count) ? formatAQValue(count) : formatDecimal(count);
-  return `${notation}${NNBSP}${target.au.name}`;
+  // The unit shows its singular or plural display form for the count (§3).
+  return `${notation}${NNBSP}${auDisplayName(target.au, count)}`;
 }

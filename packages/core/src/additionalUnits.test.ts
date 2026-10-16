@@ -2,17 +2,22 @@ import { describe, expect, it } from 'vitest';
 
 import { ADDITIONAL_UNITS, INGREDIENT_MAPPINGS, NUMBER_SCHEMES } from './additionalUnitsData.js';
 import {
+  auDisplayForms,
+  auDisplayName,
   formatAQ,
   formatAQSlash,
   formatAQValue,
   formatAQValueSlash,
   formatBQ,
   formatBQNumber,
+  formatBU,
   formatDecimal,
   formatPantryAq,
+  ingredientDisplayName,
   pantryReading,
   renderAQS,
   renderAQSSlash,
+  renderArrangementTemplate,
   renderPantryAmount,
   renderPantryChip,
   renderPantryLine,
@@ -34,53 +39,91 @@ describe('generated additional-unit master data', () => {
     expect(masterIngredientNames()).toContain('Joghurt');
   });
 
-  it('defines the units of the master data with the shared arrangement', () => {
+  it('defines the units of the master data in table order', () => {
     expect(ADDITIONAL_UNITS.map((unit) => unit.name)).toEqual([
+      'Dose (Abtropfgewicht)',
+      'Dose (Gesamtgewicht)',
+      'Dose Kichererbsen',
+      'Esslöffel',
+      'Packung (teilbar)',
+      'Packung (halbierbar)',
+      'Packung (unteilbar)',
+      'Stück (ZE zuerst)',
+      'Teelöffel',
+      'Zweig',
+      'Topf',
+      'Stück (BE zuerst)',
+      'Bund',
+      'Tube',
+      'Päckchen',
+      'Würfel',
+      'Blatt',
+      'Flasche',
       'Becher',
-      'EL',
-      'TL',
-      'Packung',
-      'Stück',
     ]);
+  });
+
+  it('keeps every arrangement a clean template (§4)', () => {
+    // The generator validates the placeholders; rendering every arrangement
+    // guards the other direction — a token the renderer does not substitute
+    // (or a stray bracket in free text) cannot slip through unnoticed.
     for (const unit of ADDITIONAL_UNITS) {
-      // <NNBSP> stays a placeholder in the data; the renderer substitutes U+202F.
-      expect(unit.arrangement).toBe('<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)');
+      const line = renderArrangementTemplate(unit.arrangement, {
+        aq: '2',
+        au: auDisplayName(unit, 2),
+        ingredient: 'Mehl',
+        ingredientForm: 'Mehl',
+        bq: 2000,
+        bu: 'g',
+      });
+      expect(line, unit.name).not.toMatch(/[<>]/);
     }
   });
 
-  it('assigns the documented number schemes to the units', () => {
+  it('assigns one of the defined number schemes to every unit', () => {
     const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.numberScheme]));
+    // Half-measure containers may show halves; counting units stay whole.
     expect(byName.get('Becher')).toBe('halves_and_integers_up_to_30');
-    expect(byName.get('EL')).toBe('integers_up_to_10');
-    expect(byName.get('TL')).toBe('integers_up_to_10');
-    // Counting units: half a pack or half a carrot is not a recipe quantity.
-    expect(byName.get('Packung')).toBe('integers_up_to_10');
-    expect(byName.get('Stück')).toBe('integers_up_to_10');
+    expect(byName.get('Packung (teilbar)')).toBe('halves_and_integers_up_to_30');
+    expect(byName.get('Packung (halbierbar)')).toBe('halves_and_integers_up_to_30');
+    expect(byName.get('Packung (unteilbar)')).toBe('integers_up_to_10');
+    expect(byName.get('Stück (ZE zuerst)')).toBe('integers_up_to_10');
+    expect(byName.get('Stück (BE zuerst)')).toBe('integers_up_to_10');
+    expect(byName.get('Esslöffel')).toBe('integers_up_to_10');
+    expect(byName.get('Teelöffel')).toBe('integers_up_to_10');
+    // Every unit references a scheme the generator compiled.
+    for (const unit of ADDITIONAL_UNITS) {
+      expect(NUMBER_SCHEMES[unit.numberScheme], unit.name).toBeDefined();
+    }
   });
 
   it('marks fixed measures as exact and average ones as approximate (Unit Exact)', () => {
-    // Becher and Packung are fixed measures (a 400 g cup of yogurt, a 1000 g
-    // pack of flour); a spoon is heaped or level and a carrot varies in weight,
-    // so their factor is an average and the stored weight stays the
-    // authoritative reading (§6.3).
+    // A package or container fixes the amount per unit; a spoon is heaped or
+    // level and a sprig or carrot varies in weight, so their factor is an
+    // average and the stored weight stays the authoritative reading (§6.3).
     const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.exact]));
     expect(byName.get('Becher')).toBe(true);
-    expect(byName.get('Packung')).toBe(true);
-    expect(byName.get('EL')).toBe(false);
-    expect(byName.get('TL')).toBe(false);
-    expect(byName.get('Stück')).toBe(false);
+    expect(byName.get('Packung (unteilbar)')).toBe(true);
+    expect(byName.get('Tube')).toBe(true);
+    expect(byName.get('Esslöffel')).toBe(false);
+    expect(byName.get('Teelöffel')).toBe(false);
+    expect(byName.get('Stück (ZE zuerst)')).toBe(false);
+    expect(byName.get('Zweig')).toBe(false);
   });
 
-  it('marks the purchase units as shopping units and the spoons as recipe measures', () => {
+  it('marks the purchase units as shopping units and the recipe measures as not', () => {
     // Shopping Unit (docs/additional_quantity_specifications.md §3.1): true when
-    // ingredients are bought in this unit. A Becher, a Packung and a Stück name
-    // a purchase; a spoon is only a recipe measure.
+    // ingredients are bought in this unit. A Becher, a Packung, a Bund and a
+    // Stück name a purchase; a spoon, a sprig and a Zweig do not.
     const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.shoppingUnit]));
     expect(byName.get('Becher')).toBe(true);
-    expect(byName.get('Packung')).toBe(true);
-    expect(byName.get('Stück')).toBe(true);
-    expect(byName.get('EL')).toBe(false);
-    expect(byName.get('TL')).toBe(false);
+    expect(byName.get('Packung (teilbar)')).toBe(true);
+    expect(byName.get('Stück (ZE zuerst)')).toBe(true);
+    expect(byName.get('Bund')).toBe(true);
+    expect(byName.get('Topf')).toBe(true);
+    expect(byName.get('Esslöffel')).toBe(false);
+    expect(byName.get('Teelöffel')).toBe(false);
+    expect(byName.get('Zweig')).toBe(false);
   });
 
   it('states the shopping-unit flag for every unit (the cell is mandatory)', () => {
@@ -89,6 +132,22 @@ describe('generated additional-unit master data', () => {
     // shopping list.
     for (const unit of ADDITIONAL_UNITS) {
       expect(typeof unit.shoppingUnit).toBe('boolean');
+    }
+  });
+
+  it('carries the display forms of every unit (the pair is atomic)', () => {
+    // Spot-check the Singular/Plural columns of docs/additional_units.csv. The
+    // qualifier in a canonical name ("Dose (Abtropfgewicht)", "Stück (ZE
+    // zuerst)") is a key, never the display — the display forms carry the word.
+    const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit]));
+    expect(byName.get('Dose (Abtropfgewicht)')?.singular).toBe('Dose');
+    expect(byName.get('Packung (teilbar)')?.plural).toBe('Packungen');
+    expect(byName.get('Stück (ZE zuerst)')?.singular).toBe('Stück');
+    for (const unit of ADDITIONAL_UNITS) {
+      // The pair is atomic, and every seed unit states one.
+      expect(unit.singular === undefined).toBe(unit.plural === undefined);
+      expect(typeof unit.singular).toBe('string');
+      expect(typeof unit.plural).toBe('string');
     }
   });
 
@@ -139,14 +198,38 @@ describe('generated additional-unit master data', () => {
     // The mapping list exists by construction (generator-validated master data).
     const entry = INGREDIENT_MAPPINGS.Joghurt!;
     expect(entry.bu).toBe('g');
-    expect(entry.entries.map((mapping) => mapping.au)).toEqual(['Becher', 'EL', 'TL']);
+    expect(entry.entries.map((mapping) => mapping.au)).toEqual([
+      'Becher',
+      'Esslöffel',
+      'Teelöffel',
+    ]);
     expect(entry.entries.map((mapping) => mapping.factor)).toEqual([400, 24, 7.5]);
     expect(entry.entries.map((mapping) => mapping.priority)).toEqual([1, 2, 3]);
   });
 
   it('includes a bare ingredient (Cashews) without additional units in the seed', () => {
-    expect(INGREDIENT_MAPPINGS.Cashews).toEqual({ bu: 'g', reorderPoint: 0, entries: [] });
+    expect(INGREDIENT_MAPPINGS.Cashews).toEqual({
+      bu: 'g',
+      reorderPoint: 0,
+      singular: 'Cashew',
+      plural: 'Cashews',
+      entries: [],
+    });
     expect(masterIngredientNames()).toContain('Cashews');
+  });
+
+  it('carries the display forms of the seed and leaves invariant names bare', () => {
+    // Spot-check the Singular/Plural columns of docs/ingredients.csv: a name
+    // with a count form states both, an invariant mass noun states neither.
+    expect(INGREDIENT_MAPPINGS.Karotten?.singular).toBe('Karotte');
+    expect(INGREDIENT_MAPPINGS.Karotten?.plural).toBe('Karotten');
+    expect(INGREDIENT_MAPPINGS.Haferflocken?.singular).toBe('Haferflocke');
+    expect(INGREDIENT_MAPPINGS.Zucker).not.toHaveProperty('singular');
+    expect(INGREDIENT_MAPPINGS.Milch).not.toHaveProperty('plural');
+    // The pair is atomic: no seed entry carries only one of the two forms.
+    for (const entry of Object.values(INGREDIENT_MAPPINGS)) {
+      expect(entry.singular === undefined).toBe(entry.plural === undefined);
+    }
   });
 
   it('carries the generated reorder point for every ingredient', () => {
@@ -214,10 +297,10 @@ describe('selectAQ (§6)', () => {
   });
 
   it('falls through to the next priority when the AQ fails the scheme', () => {
-    // Becher: raw 0.0625 (< 1/10, no AQ) → EL: raw 1.04 → rounds to 1 → integers ✓.
+    // Becher: raw 0.0625 (< 1/10, no AQ) → Esslöffel: raw 1.04 → rounds to 1 → integers ✓.
     const selected = selectAQ('Joghurt', 25, 'g');
     expect(selected?.aq).toBe('1');
-    expect(selected?.au.name).toBe('EL');
+    expect(selected?.au.name).toBe('Esslöffel');
   });
 
   it('returns null when no mapping passes (500 g Joghurt)', () => {
@@ -308,6 +391,110 @@ describe('renderAQS exact units (§6.3)', () => {
   });
 });
 
+describe('unit display forms (§3 — singular and plural)', () => {
+  const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit]));
+
+  it('takes the plural form for a count above one and the singular otherwise', () => {
+    const packung = byName.get('Packung (teilbar)')!;
+    expect(auDisplayName(packung, 1)).toBe('Packung');
+    expect(auDisplayName(packung, 2)).toBe('Packungen');
+    expect(auDisplayName(packung, 1.5)).toBe('Packungen');
+    // A fraction below one stays singular ("½ Packung"), and so does 0.
+    expect(auDisplayName(packung, 0.5)).toBe('Packung');
+    expect(auDisplayName(packung, 0)).toBe('Packung');
+  });
+
+  it('keeps a unit whose forms equal its name unchanged', () => {
+    // Becher and Würfel state the same word for singular and plural; the
+    // canonical name is never the display of a qualifier unit (see <INF>).
+    expect(auDisplayName(byName.get('Becher')!, 2)).toBe('Becher');
+    expect(auDisplayName(byName.get('Würfel')!, 5)).toBe('Würfel');
+  });
+
+  it('lists every form a unit can appear as, without duplicates', () => {
+    expect(auDisplayForms(byName.get('Packung (teilbar)')!)).toEqual([
+      'Packung (teilbar)',
+      'Packung',
+      'Packungen',
+    ]);
+    expect(auDisplayForms(byName.get('Becher')!)).toEqual(['Becher']);
+  });
+
+  it('renders the plural form in the arrangement for a count above one', () => {
+    // 2000 g of flour is two 1000 g packs: "2 Packungen Mehl (2 kg)" (§4).
+    expect(renderAQS('Mehl', 2000, 'g')).toBe(`2${NNBSP}Packungen Mehl (2${NNBSP}kg)`);
+    expect(renderAQS('Mehl', 1000, 'g')).toBe(`1${NNBSP}Packung Mehl (1${NNBSP}kg)`);
+    expect(renderAQSSlash('Mehl', 2000, 'g')).toBe(`2${NNBSP}Packungen Mehl (2${NNBSP}kg)`);
+    expect(renderQuantityText('Mehl', 2000, 'g')).toBe(`2${NNBSP}Packungen Mehl (2${NNBSP}kg)`);
+  });
+});
+
+describe('ingredient display forms (storage_format.md §9)', () => {
+  it('takes the plural form for a count above one and the singular otherwise', () => {
+    expect(ingredientDisplayName('Karotten', 1)).toBe('Karotte');
+    expect(ingredientDisplayName('Karotten', 2)).toBe('Karotten');
+    expect(ingredientDisplayName('Karotten', 1.5)).toBe('Karotten');
+    // 0 and a fraction below one stay singular, like the unit forms.
+    expect(ingredientDisplayName('Karotten', 0.5)).toBe('Karotte');
+  });
+
+  it('keeps the canonical name for an invariant or unknown ingredient', () => {
+    expect(ingredientDisplayName('Zucker', 5)).toBe('Zucker');
+    expect(ingredientDisplayName('Unbekannt', 5)).toBe('Unbekannt');
+  });
+
+  it('uses <INF> where the arrangement asks for the count form', () => {
+    // Karotten maps to "Stück (ZE zuerst)", whose arrangement uses <INF>: one
+    // Stück reads "Karotte", five read "Karotten". A unit whose arrangement
+    // keeps <IN> shows the canonical name for every count instead.
+    expect(renderAQS('Karotten', 80, 'g')).toBe(`1${NNBSP}Stück Karotte (80${NNBSP}g)`);
+    expect(renderAQS('Karotten', 400, 'g')).toBe(`5${NNBSP}Stück Karotten (400${NNBSP}g)`);
+  });
+});
+
+describe('arrangement templates (§4)', () => {
+  const values = {
+    aq: '2',
+    au: 'Packungen',
+    ingredient: 'Mehl',
+    ingredientForm: 'Mehl',
+    bq: 2000,
+    bu: 'g',
+  };
+
+  it('substitutes the combined number+unit run and the <NNBSP> space', () => {
+    expect(renderArrangementTemplate('<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)', values)).toBe(
+      `2${NNBSP}Packungen Mehl (2${NNBSP}kg)`,
+    );
+  });
+
+  it('keeps <IN> canonical while <INF> takes the singular/plural form', () => {
+    const karotte = {
+      aq: '1',
+      au: 'Stück',
+      ingredient: 'Karotten',
+      ingredientForm: 'Karotte',
+      bq: 80,
+      bu: 'g',
+    };
+    expect(renderArrangementTemplate('<AQ> <AU> <IN>', karotte)).toBe('1 Stück Karotten');
+    expect(renderArrangementTemplate('<AQ> <AU> <INF>', karotte)).toBe('1 Stück Karotte');
+  });
+
+  it('keeps free text exactly as written', () => {
+    expect(
+      renderArrangementTemplate('ca. <AQ> <AU> <IN> (<BQ><NNBSP><BU>), gestrichen', values),
+    ).toBe(`ca. 2 Packungen Mehl (2${NNBSP}kg), gestrichen`);
+  });
+
+  it('substitutes <BQ> and <BU> apart, with the kg / l display step', () => {
+    expect(renderArrangementTemplate('<AQ> <AU> <IN>: <BQ> <BU>', values)).toBe(
+      '2 Packungen Mehl: 2 kg',
+    );
+    expect(renderArrangementTemplate('<BQ> <BU> <IN>', values)).toBe('2 kg Mehl');
+  });
+});
+
 describe('renderQuantityText (a quantity that is not a stored recipe value)', () => {
   it('names a quantity that is not a ladder value at all', () => {
     // A need is a sum over dishes: 1150 g of flour, and no whole pack (1000 g)
@@ -370,9 +557,9 @@ describe('resolveReorderPoint (create form)', () => {
   });
 
   it('keeps the entered value for an approximate unit', () => {
-    // EL is approximate (a heaped spoon), so the entered weight stays the
+    // Esslöffel is approximate (a heaped spoon), so the entered weight stays the
     // authoritative reading; only the count is rounded.
-    const entry = draft('g', [{ au: 'EL', factor: 10, priority: 1 }]);
+    const entry = draft('g', [{ au: 'Esslöffel', factor: 10, priority: 1 }]);
     const resolved = resolveReorderPoint('Creme Fraiche', entry, 50, 'g');
     expect(resolved.preview).toBe(`5${NNBSP}EL Creme Fraiche (50${NNBSP}g)`);
     expect(resolved.storedValue).toBe(50);
@@ -508,6 +695,15 @@ describe('formatBQ (§2 — g/ml stored, kg/l displayed from 1000)', () => {
     expect(formatBQ(1.5, 'kg')).toBe(`1,5${NNBSP}kg`);
     expect(formatBQ(2, 'l')).toBe(`2${NNBSP}l`);
   });
+
+  it('exposes the displayed unit on its own (formatBU)', () => {
+    expect(formatBU(400, 'g')).toBe('g');
+    expect(formatBU(750, 'ml')).toBe('ml');
+    expect(formatBU(1600, 'g')).toBe('kg');
+    expect(formatBU(2500, 'ml')).toBe('l');
+    // A stored legacy unit has no step of its own and stays as it is.
+    expect(formatBU(1.5, 'kg')).toBe('kg');
+  });
 });
 
 describe('formatDecimal (§8 — German decimal comma on the display layer)', () => {
@@ -539,7 +735,7 @@ describe('pantryReading (the pantry sheet’s nearest-ladder reading)', () => {
     // hide the unit, and a recipe line may not restate the amount, but the pantry
     // reading keeps the unit ("⅕ Packung (200 g)").
     const reading = pantryReading('Mehl', 200, 'g');
-    expect(reading.au?.name).toBe('Packung');
+    expect(reading.au?.name).toBe('Packung (unteilbar)');
     expect(reading.aq).toBe(0.2);
     expect(renderPantryAmount('Mehl', 200, 'g')).toBe(`⅕${NNBSP}Packung (200${NNBSP}g)`);
   });
@@ -564,8 +760,9 @@ describe('pantryReading (the pantry sheet’s nearest-ladder reading)', () => {
   });
 
   it('counts beyond the ladder as a whole number', () => {
-    // 20 kg of flour is 20 packs — above the ladder's top the count is whole.
-    expect(renderPantryAmount('Mehl', 20000, 'g')).toBe(`20${NNBSP}Packung (20${NNBSP}kg)`);
+    // 20 kg of flour is 20 packs — above the ladder's top the count is whole,
+    // and a count above one takes the unit's plural form (§3).
+    expect(renderPantryAmount('Mehl', 20000, 'g')).toBe(`20${NNBSP}Packungen (20${NNBSP}kg)`);
   });
 
   it('falls back to the base form without a shopping unit', () => {
@@ -644,7 +841,8 @@ describe('renderPantryChip (the unit-full stock chip label)', () => {
   });
 
   it('keeps the kg / l switch of the base amount', () => {
-    expect(renderPantryChip('Mehl', 1600, 'g')).toBe(`1${NNBSP}½${NNBSP}Packung (1,6${NNBSP}kg)`);
+    // 1½ packs is a count above one, so the unit takes its plural form (§3).
+    expect(renderPantryChip('Mehl', 1600, 'g')).toBe(`1${NNBSP}½${NNBSP}Packungen (1,6${NNBSP}kg)`);
   });
 
   it('reads an empty stock as plain 0, never "0 Becher (0 g)"', () => {

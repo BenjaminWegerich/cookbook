@@ -23,6 +23,11 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
       through the web app („Neue Zutat anlegen“) and land in the Drive `zutaten.csv` +
       `zutaten-umrechnungen.csv`; the repo CSVs are the seed that initializes those files
       on first use.
+- [ ] Use the ingredient display forms: `zutaten.csv` now carries `Singular;Plural`
+      ([storage_format.md](storage_format.md) §9), but nothing reads them yet. Decide which
+      surfaces name an ingredient with a count (e.g. the cooking view's Zutaten list, the
+      shopping list) and render the matching form there, falling back to the canonical name
+      when the pair is empty.
 
 ### Design system: follow-ups from the DESIGN.md compliance pass
 
@@ -129,13 +134,16 @@ not where it is used.
       `einkaufs-artikel.csv` + the empty `einkaufs-synonyme.csv`, then deletes the
       old file. Out of scope: an automatic similarity ("fuzzy") merge, and any
       normalization written back into the tables.
-- [ ] Give the additional units a plural form: a unit's name is used as it stands, so a count
-      above one reads „2 Packung Mehl (2 kg)“ instead of „2 Packungen Mehl (2 kg)“. Needs a
-      plural column in `docs/additional_units.csv` (compiled by the generator), the substitution
-      in core's arrangement renderer, and an update of §3 of
-      `additional_quantity_specifications.md`. Counting units that are invariant (Becher,
-      Stück) would leave the cell empty. Decided with the user to defer this until after the
-      stock picker work.
+- [ ] Refine when a unit shows its singular and when its plural form. The rule implemented
+      with the unit display forms is the coarse „count above one → plural“
+      (`auDisplayName` in `packages/core/src/additionalUnits.ts`), so `0` reads „0 Packung“,
+      a fraction below one stays singular („½ Packung“) and a mixed number above one is plural
+      („1 ½ Packungen“). Decide the rule with Ben against German number agreement: whether `0`
+      takes the plural („0 Packungen“), whether a decimal count does, and whether the choice
+      keys on the numeric value or on the rendered count text. Align it with the ingredient
+      display-forms task above, which carries the same question for `<INF>` („1 Stück
+      Karotte“ vs. „1 Stück Karotten“), then update §3.2 of
+      additional_quantity_specifications.md and the tests.
 
 ### Next steps, in order
 

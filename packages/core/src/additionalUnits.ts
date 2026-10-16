@@ -93,12 +93,13 @@ export interface AdditionalQuantity {
 }
 
 /**
- * The parts of an ingredient entry that drive AU selection: its fixed base unit
- * and its AU mappings. The reorder point takes no part in it, so a **draft**
- * entry — the create form's not-yet-saved mapping rows — can be selected from
- * directly (see selectAQForEntry and resolveReorderPoint).
+ * The parts of an ingredient entry that drive the arrangement: its fixed base
+ * unit, its AU mappings and its Singular/Plural display forms. The reorder point
+ * takes no part in it, so a **draft** entry — the create form's not-yet-saved
+ * mapping rows — can be rendered from directly (see selectAQForEntry,
+ * renderSelectedAQ and resolveReorderPoint).
  */
-export type AuSelectableEntry = Pick<IngredientEntry, 'bu' | 'entries'>;
+export type AuSelectableEntry = Pick<IngredientEntry, 'bu' | 'entries' | 'singular' | 'plural'>;
 
 /**
  * Selects the additional quantity specification for an explicit entry (§6).
@@ -213,6 +214,16 @@ export function formatBQNumber(bq: number, bu: string): string {
 }
 
 /**
+ * The base unit as displayed for a quantity: the family unit (g / ml), or the
+ * display step (kg / l) from 1000 up — the same rule `formatBQ` applies to the
+ * number+unit atom. It exists on its own so an arrangement may place `<BQ>` and
+ * `<BU>` apart, with free text (or a plain space) between them (§4).
+ */
+export function formatBU(bq: number, bu: string): string {
+  return bq >= 1000 ? (DISPLAY_STEP[bu] ?? bu) : bu;
+}
+
+/**
  * Formats a base quantity for display (decided with the user): quantities are
  * stored in the family unit g or ml, and the display switches to kg / l at
  * 1000 ("right between 750 and 1000, the unit changes"). Values below 1000
@@ -223,8 +234,7 @@ export function formatBQNumber(bq: number, bu: string): string {
  * displays in the app (§8).
  */
 export function formatBQ(bq: number, bu: string): string {
-  const step = bq >= 1000 ? DISPLAY_STEP[bu] : undefined;
-  return `${formatBQNumber(bq, bu)}${NNBSP}${step ?? bu}`;
+  return `${formatBQNumber(bq, bu)}${NNBSP}${formatBU(bq, bu)}`;
 }
 
 /**
@@ -302,10 +312,126 @@ export function formatAQValueSlash(value: number): string {
 }
 
 /**
+ * Whether a count takes the plural display form. The current, coarse rule is
+ * "above one", so `0` and a fraction below one stay singular („½ Packung“).
+ * Both the unit forms (`auDisplayName`) and the ingredient forms
+ * (`ingredientDisplayName`) share it, so a refinement of the rule
+ * (docs/ROADMAP.md) has a single home.
+ */
+function usesPlural(count: number): boolean {
+  return count > 1;
+}
+
+/**
+ * The unit text to show for a count (docs/additional_quantity_specifications.md
+ * §3): the unit's **plural** form when the count is above one and the unit has
+ * one („2 Packungen Mehl“), otherwise its **singular** form — or the canonical
+ * name when the pair is empty (an invariant unit).
+ */
+export function auDisplayName(au: AdditionalUnit, count: number): string {
+  if (usesPlural(count) && au.plural !== undefined) {
+    return au.plural;
+  }
+  return au.singular ?? au.name;
+}
+
+/**
+ * The Singular/Plural display form of an ingredient entry for a count, or
+ * undefined when the entry is unknown or the name is invariant. The pair is
+ * atomic (the parser rejects a half-filled one), so one presence check suffices.
+ */
+function ingredientForm(
+  entry: Pick<IngredientEntry, 'singular' | 'plural'> | undefined,
+  count: number,
+): string | undefined {
+  if (entry?.singular === undefined || entry.plural === undefined) {
+    return undefined;
+  }
+  return usesPlural(count) ? entry.plural : entry.singular;
+}
+
+/**
+ * The ingredient name to show for a count (docs/storage_format.md §9): the
+ * ingredient's Singular/Plural display form („1 Karotte“ / „2 Karotten“), or the
+ * canonical name when the entry is unknown or the name is invariant (Zucker,
+ * Milch). The arrangement renderer uses it for `<INF>`, so one placeholder
+ * covers both forms and the count decides which one appears — exactly like the
+ * unit's own `<AU>` form (`auDisplayName`). The canonical name keeps its own
+ * placeholder, `<IN>`.
+ */
+export function ingredientDisplayName(ingredient: string, count: number): string {
+  return ingredientForm(mappingsFor(ingredient), count) ?? ingredient;
+}
+
+/**
+ * Every text form a unit can appear as in the app's own lines: the canonical
+ * name plus the singular and plural display forms, deduplicated. The shopping
+ * list's line vocabulary is derived from this (shoppingSort.ts), so a line the
+ * app wrote in any form is undone again — never a hand-kept copy.
+ */
+export function auDisplayForms(au: AdditionalUnit): readonly string[] {
+  const forms = [au.name];
+  if (au.singular !== undefined) {
+    forms.push(au.singular);
+  }
+  if (au.plural !== undefined) {
+    forms.push(au.plural);
+  }
+  return [...new Set(forms)];
+}
+
+/** The values an arrangement template substitutes (§4). */
+export interface ArrangementValues {
+  /** Additional quantity, already in its display typography. */
+  readonly aq: string;
+  /** Additional unit, already in its singular/plural display form. */
+  readonly au: string;
+  /** Canonical ingredient name (`<IN>`). */
+  readonly ingredient: string;
+  /**
+   * Ingredient name in its singular/plural display form for the count
+   * (`<INF>`, `ingredientDisplayName`); the canonical name for an invariant one.
+   */
+  readonly ingredientForm: string;
+  /** Base quantity to show (for an exact unit derived from the rounded AQ, §6.3). */
+  readonly bq: number;
+  /** Base unit family (g / ml) the base quantity is expressed in. */
+  readonly bu: string;
+}
+
+/**
+ * Substitutes an arrangement template's placeholders (§4): `<AQ>`, `<AU>`,
+ * `<IN>` (canonical ingredient name), `<INF>` (its singular/plural display form
+ * for the count), `<BQ>`, `<BU>` and `<NNBSP>` (U+202F). Everything else — any
+ * **free text**, punctuation or spacing — passes through unchanged. `<BQ>` and
+ * `<BU>` may stand apart, separated by free text or a plain space, as well as in
+ * the usual `<BQ><NNBSP><BU>` run; `<BQ>` renders the number and `<BU>` the
+ * displayed unit (kg / l from 1000 up, `formatBU`).
+ */
+export function renderArrangementTemplate(arrangement: string, values: ArrangementValues): string {
+  return (
+    arrangement
+      .replaceAll('<AQ>', values.aq)
+      .replaceAll('<AU>', values.au)
+      // <INF> before <IN>: the two tokens are disjoint, but the longer one reads
+      // as the specific case and stays first for clarity.
+      .replaceAll('<INF>', values.ingredientForm)
+      .replaceAll('<IN>', values.ingredient)
+      .replaceAll('<BQ>', formatBQNumber(values.bq, values.bu))
+      .replaceAll('<BU>', formatBU(values.bq, values.bu))
+      .replaceAll('<NNBSP>', NNBSP)
+  );
+}
+
+/**
  * Renders the selected unit's arrangement with the placeholders substituted
  * (§4). Shared by renderAQS (a registered ingredient) and resolveReorderPoint
  * (the create form's draft entry). `ingredient` may be empty in the draft case,
  * which drops the arrangement's space before the name.
+ *
+ * `entry` is the ingredient entry the `<INF>` display forms are read from;
+ * callers that already hold one (the create form's draft, renderQuantityText)
+ * pass it, and the registry is consulted otherwise.
  */
 function renderSelectedAQ(
   ingredient: string,
@@ -313,16 +439,23 @@ function renderSelectedAQ(
   bu: string,
   shownBq: number,
   formatAq: (aq: string) => string,
+  entry?: AuSelectableEntry,
 ): string {
-  // The arrangement binds <BQ> and <BU> together with a narrow no-break
-  // space; substitute that pair with the formatted base quantity first (the
-  // <NNBSP> placeholder is consumed here, before the general substitution).
-  const line = selected.au.arrangement
-    .replace('<BQ><NNBSP><BU>', formatBQ(shownBq, bu))
-    .replaceAll('<AQ>', formatAq(selected.aq))
-    .replaceAll('<AU>', selected.au.name)
-    .replaceAll('<IN>', ingredient)
-    .replaceAll('<NNBSP>', NNBSP);
+  // The count that drives the display forms of both the unit and the ingredient.
+  const count = aqToNumber(selected.aq);
+  // <INF> is the ingredient in its count form („1 Karotte“ / „2 Karotten“),
+  // falling back to the canonical name for an invariant or unknown name. The
+  // lookup is registry-backed unless the caller passed a (draft) entry.
+  const ingredientFormText = ingredientForm(entry ?? mappingsFor(ingredient), count) ?? ingredient;
+  const line = renderArrangementTemplate(selected.au.arrangement, {
+    aq: formatAq(selected.aq),
+    // <AU> renders the singular or plural display form of the count (§3).
+    au: auDisplayName(selected.au, count),
+    ingredient,
+    ingredientForm: ingredientFormText,
+    bq: shownBq,
+    bu,
+  });
   // The create form can preview an entry before a name is typed; the
   // arrangement would then leave a dangling space ("1 Becher  (160 g)").
   return ingredient === '' ? line.replaceAll('  ', ' ') : line;
@@ -330,7 +463,7 @@ function renderSelectedAQ(
 
 /**
  * Renders the full display line for an ingredient (§4): the selected unit's
- * arrangement template with <AQ> <AU> <IN> <BQ> <BU> and <NNBSP> (U+202F)
+ * arrangement template with <AQ> <AU> <IN> <INF> <BQ> <BU> and <NNBSP> (U+202F)
  * substituted, or the base form "<BQ> <BU> <IN>" when no AQS applies. The AQ
  * itself is rendered in the §8 glyph typography (`formatAQ`).
  *
@@ -439,7 +572,14 @@ export function renderQuantityText(ingredient: string, bq: number, bu: string): 
     if (au.exact && Math.abs(value * mapping.factor - bq) > AMOUNT_EPSILON) {
       continue;
     }
-    return renderSelectedAQ(ingredient, { aq, au, factor: mapping.factor }, bu, bq, formatAQ);
+    return renderSelectedAQ(
+      ingredient,
+      { aq, au, factor: mapping.factor },
+      bu,
+      bq,
+      formatAQ,
+      entry,
+    );
   }
   return base;
 }
@@ -688,7 +828,7 @@ export function resolveReorderPoint(
   }
   const storedValue = selected.au.exact ? aqToNumber(selected.aq) * selected.factor : bq;
   return {
-    preview: renderSelectedAQ(ingredient, selected, bu, storedValue, formatAQ),
+    preview: renderSelectedAQ(ingredient, selected, bu, storedValue, formatAQ, entry),
     storedValue,
   };
 }

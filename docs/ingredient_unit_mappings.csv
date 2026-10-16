@@ -1,20 +1,20 @@
 Ingredient;Additional Unit;Conversion Factor;Priority
 Joghurt;Becher;400;1
-Joghurt;EL;24;2
-Joghurt;TL;7.5;3
-Zucker;EL;12;1
-Zucker;TL;4;2
-Mehl;Packung;1000;1
+Joghurt;Esslöffel;24;2
+Joghurt;Teelöffel;7.5;3
+Zucker;Esslöffel;12;1
+Zucker;Teelöffel;4;2
+Mehl;Packung (unteilbar);1000;1
 Mehl;Becher;150;2
-Mehl;EL;10;3
-Butter;EL;10;1
+Mehl;Esslöffel;10;3
+Butter;Esslöffel;10;1
 Milch;Becher;250;1
-Milch;EL;15;2
+Milch;Esslöffel;15;2
 Sahne;Becher;200;1
-Olivenöl;EL;10;1
-Olivenöl;TL;3;2
-Zitronensaft;EL;15;1
-Honig;EL;21;1
+Olivenöl;Esslöffel;10;1
+Olivenöl;Teelöffel;3;2
+Zitronensaft;Esslöffel;15;1
+Honig;Esslöffel;21;1
 Haferflocken;Becher;100;1
-Haferflocken;EL;10;2
-Karotten;Stück;80;1
+Haferflocken;Esslöffel;10;2
+Karotten;Stück (ZE zuerst);80;1

@@ -92,6 +92,7 @@ import { Fragment, useCallback, useImperativeHandle, useMemo, useState } from 'r
 import type { ReactNode, Ref } from 'react';
 
 import {
+  auDisplayName,
   buyAmount,
   formatBQ,
   formatPantryAq,
@@ -221,10 +222,12 @@ interface PantryState {
  * base quantity as tappable React nodes (the name is empty — the pantry's lines
  * carry the ingredient name elsewhere). The arrangement template is split on its
  * placeholders; `<BQ><NNBSP><BU>` is grouped into one node so the number and its
- * unit stay inside a single tap target.
+ * unit stay inside a single tap target. `unitLabel` is the unit's singular or
+ * plural display form for the shown count (`auDisplayName`).
  */
 function renderArrangement(
   au: AdditionalUnit,
+  unitLabel: string,
   aqNode: ReactNode,
   bqNode: ReactNode,
   bu: string,
@@ -232,10 +235,13 @@ function renderArrangement(
   const template = au.arrangement
     .replaceAll('<BQ><NNBSP><BU>', '<BQBU>')
     .replaceAll('<BQ> <BU>', '<BQBU>')
+    // The pantry shows the ingredient name elsewhere on the row, so both name
+    // placeholders drop out: <IN> (canonical) and <INF> (count form).
+    .replaceAll('<INF>', '')
     .replaceAll('<IN>', '')
-    // A name-less arrangement drops the "<IN>" and its leading space, leaving a
-    // double space before the base quantity's parenthesis — collapse it like
-    // core's own name-less renderer does.
+    // A name-less arrangement drops the name placeholder and its leading space,
+    // leaving a double space before the base quantity's parenthesis — collapse
+    // it like core's own name-less renderer does.
     .replaceAll('  ', ' ');
   const parts = template.split(/(<AQ>|<AU>|<BQBU>|<BQ>|<BU>|<NNBSP>)/g);
   return parts.map((part, index) => {
@@ -243,7 +249,7 @@ function renderArrangement(
       case '<AQ>':
         return <Fragment key={index}>{aqNode}</Fragment>;
       case '<AU>':
-        return <Fragment key={index}>{au.name}</Fragment>;
+        return <Fragment key={index}>{unitLabel}</Fragment>;
       case '<BQBU>':
       case '<BQ>':
         return <Fragment key={index}>{bqNode}</Fragment>;
@@ -312,7 +318,7 @@ function TappableAmount({
     <TappableQuantity
       display={aqDisplay}
       editValue={aqEdit}
-      unitName={au.name}
+      unitName={auDisplayName(au, aqEdit)}
       showEditUnit={false}
       onCommit={onCommitAq}
       label={label}
@@ -327,7 +333,11 @@ function TappableAmount({
       label={label}
     />
   );
-  return <span className="pantry-amount">{renderArrangement(au, aqNode, bqNode, baseUnit)}</span>;
+  return (
+    <span className="pantry-amount">
+      {renderArrangement(au, auDisplayName(au, aqEdit), aqNode, bqNode, baseUnit)}
+    </span>
+  );
 }
 
 /**

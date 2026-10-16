@@ -83,14 +83,15 @@
 - Single source of truth, read by the web app, the HTML export, and (later) the backend
   module and the Gemini for Home preparation.
 - Ingredient master data lives in two CSV files in the same Drive folder — `zutaten.csv`
-  (ingredient list: name + base unit + reorder point) and `zutaten-umrechnungen.csv`
-  (AU mappings), in the canonical formats of docs/ingredients.csv +
-  docs/ingredient_unit_mappings.csv: the app loads both into the core ingredient registry
-  at startup, and they are authoritative once they exist — the repo CSVs are the built-in
-  seed used on first run. New ingredients are created from the recipe editor („Neue Zutat
-  anlegen“), which collects name, base unit, reorder point and AU mappings, appends to both
-  files and re-registers them. The split keeps ingredient-level fields (name, base unit,
-  reorder point) in one row per ingredient, separate from the AU mappings.
+  (ingredient list: name + base unit + reorder point + the optional Singular/Plural display
+  forms) and `zutaten-umrechnungen.csv` (AU mappings), in the canonical formats of
+  docs/ingredients.csv + docs/ingredient_unit_mappings.csv: the app loads both into the core
+  ingredient registry at startup, and they are authoritative once they exist — the repo CSVs
+  are the built-in seed used on first run. New ingredients are created from the recipe editor
+  („Neue Zutat anlegen“), which collects name, base unit, reorder point and AU mappings,
+  appends to both files and re-registers them. The split keeps ingredient-level fields (name,
+  base unit, reorder point, display forms) in one row per ingredient, separate from the AU
+  mappings.
 - Where an item is bought is a separate master-data set in the same Drive folder —
   `einkaufsweg.csv` (the route: store + section per row, in walking order),
   `einkaufs-artikel.csv` (the item table: item → store + section — the identity of everything
@@ -426,8 +427,8 @@ The VM tiers were rejected on their own merits before authentication was ever te
   reproducible and practical (e.g., 5 tbsp oil for 4 people → 6 tbsp for 5 people, not 6.25).
 - **Additional-unit master data:** additional units (e.g., tbsp, pack, piece) are converted
   to g / ml per ingredient; measured values improve accuracy. Each additional unit also defines
-  its display arrangement and number scheme; the selection logic is specified in
-  [additional_quantity_specifications.md](additional_quantity_specifications.md).
+  its display arrangement, number scheme and singular/plural display forms; the selection logic
+  is specified in [additional_quantity_specifications.md](additional_quantity_specifications.md).
 - **AI-optimized storage:** recipe files are stored in a format that is easy for AI agents to
   read and edit (Markdown + YAML, see [storage_format.md](storage_format.md)).
 - **Framework-free core:** all deterministic logic lives outside the UI framework so it can be

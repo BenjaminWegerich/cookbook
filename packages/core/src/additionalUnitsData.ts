@@ -7,9 +7,13 @@
 
 /** One additional unit: display arrangement, number scheme and unit flags. */
 export interface AdditionalUnit {
-  /** Unit name as shown in the display line. */
+  /** Canonical unit name: the identity the mappings reference and the runtime registry keys units by; without `singular`/`plural` it is also the form the display line shows. */
   readonly name: string;
-  /** Display template; placeholders <AQ> <AU> <IN> <BQ> <BU> <NNBSP> (narrow no-break space). */
+  /** Singular display form of the unit (count 1), e.g. "Packung"; absent = the name is invariant and serves for every count. Present exactly when `plural` is. */
+  readonly singular?: string;
+  /** Plural display form of the unit (count above one), e.g. "Packungen"; absent = invariant (see `singular`). */
+  readonly plural?: string;
+  /** Display template; placeholders <AQ> <AU> <IN> (canonical ingredient name) <INF> (its singular/plural form) <BQ> <BU> <NNBSP> (narrow no-break space). */
   readonly arrangement: string;
   /** Name of the number scheme gating this unit's additional quantities. */
   readonly numberScheme: string;
@@ -35,6 +39,10 @@ export interface IngredientEntry {
   readonly bu: string;
   /** Base-unit quantity definitely on stock directly after a shopping trip, independent of the meal plan (0 = only ever bought for a recipe; Infinity = always in stock, e.g. water). Not necessarily a ladder value. */
   readonly reorderPoint: number;
+  /** Singular display form of the name (count 1), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */
+  readonly singular?: string;
+  /** Plural display form of the name (count ≠ 1), e.g. "Karotten"; absent = invariant (see `singular`). */
+  readonly plural?: string;
   /** The ingredient's additional-unit mappings, ascending priority; empty = bare ingredient without additional units. */
   readonly entries: readonly IngredientMapping[];
 }
@@ -42,38 +50,174 @@ export interface IngredientEntry {
 /** All additional units, in table order. */
 export const ADDITIONAL_UNITS: readonly AdditionalUnit[] = [
   {
-    name: 'Becher',
+    name: 'Dose (Abtropfgewicht)',
+    singular: 'Dose',
+    plural: 'Dosen',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Abtropfgewicht)',
+    numberScheme: 'integers_up_to_10',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Dose (Gesamtgewicht)',
+    singular: 'Dose',
+    plural: 'Dosen',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Gesamtgewicht)',
+    numberScheme: 'integers_up_to_10',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Dose Kichererbsen',
+    singular: 'Dose Kichererbsen',
+    plural: 'Dosen Kichererbsen',
+    arrangement: '<BQ><NNBSP><BU> <IN> (<AQ><NNBSP><AU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Esslöffel',
+    singular: 'EL',
+    plural: 'EL',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: false,
+    shoppingUnit: false,
+  },
+  {
+    name: 'Packung (teilbar)',
+    singular: 'Packung',
+    plural: 'Packungen',
     arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
     numberScheme: 'halves_and_integers_up_to_30',
     exact: true,
     shoppingUnit: true,
   },
   {
-    name: 'EL',
+    name: 'Packung (halbierbar)',
+    singular: 'Packung',
+    plural: 'Packungen',
     arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
-    numberScheme: 'integers_up_to_10',
-    exact: false,
-    shoppingUnit: false,
+    numberScheme: 'halves_and_integers_up_to_30',
+    exact: true,
+    shoppingUnit: true,
   },
   {
-    name: 'TL',
-    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
-    numberScheme: 'integers_up_to_10',
-    exact: false,
-    shoppingUnit: false,
-  },
-  {
-    name: 'Packung',
+    name: 'Packung (unteilbar)',
+    singular: 'Packung',
+    plural: 'Packungen',
     arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
     numberScheme: 'integers_up_to_10',
     exact: true,
     shoppingUnit: true,
   },
   {
-    name: 'Stück',
+    name: 'Stück (ZE zuerst)',
+    singular: 'Stück',
+    plural: 'Stück',
+    arrangement: '<AQ><NNBSP><AU> <INF> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: false,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Teelöffel',
+    singular: 'TL',
+    plural: 'TL',
     arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
     numberScheme: 'integers_up_to_10',
     exact: false,
+    shoppingUnit: false,
+  },
+  {
+    name: 'Zweig',
+    singular: 'Zweig',
+    plural: 'Zweige',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: false,
+    shoppingUnit: false,
+  },
+  {
+    name: 'Topf',
+    singular: 'Topf',
+    plural: 'Töpfe',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: false,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Stück (BE zuerst)',
+    singular: 'Stück',
+    plural: 'Stück',
+    arrangement: '<BQ><NNBSP><BU> <IN> (<AQ><NNBSP>Stück)',
+    numberScheme: 'integers_up_to_10',
+    exact: false,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Bund',
+    singular: 'Bund',
+    plural: 'Bünde',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: false,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Tube',
+    singular: 'Tube',
+    plural: 'Tuben',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Päckchen',
+    singular: 'Päckchen',
+    plural: 'Päckchen',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Würfel',
+    singular: 'Würfel',
+    plural: 'Würfel',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Blatt',
+    singular: 'Blatt',
+    plural: 'Blätter',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Flasche',
+    singular: 'Flasche',
+    plural: 'Flaschen',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'integers_up_to_10',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
+    name: 'Becher',
+    singular: 'Becher',
+    plural: 'Becher',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'halves_and_integers_up_to_30',
+    exact: true,
     shoppingUnit: true,
   },
 ];
@@ -114,38 +258,38 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     reorderPoint: 0,
     entries: [
       { au: 'Becher', factor: 400, priority: 1 },
-      { au: 'EL', factor: 24, priority: 2 },
-      { au: 'TL', factor: 7.5, priority: 3 },
+      { au: 'Esslöffel', factor: 24, priority: 2 },
+      { au: 'Teelöffel', factor: 7.5, priority: 3 },
     ],
   },
   Zucker: {
     bu: 'g',
     reorderPoint: 1000,
     entries: [
-      { au: 'EL', factor: 12, priority: 1 },
-      { au: 'TL', factor: 4, priority: 2 },
+      { au: 'Esslöffel', factor: 12, priority: 1 },
+      { au: 'Teelöffel', factor: 4, priority: 2 },
     ],
   },
   Mehl: {
     bu: 'g',
     reorderPoint: 1000,
     entries: [
-      { au: 'Packung', factor: 1000, priority: 1 },
+      { au: 'Packung (unteilbar)', factor: 1000, priority: 1 },
       { au: 'Becher', factor: 150, priority: 2 },
-      { au: 'EL', factor: 10, priority: 3 },
+      { au: 'Esslöffel', factor: 10, priority: 3 },
     ],
   },
   Butter: {
     bu: 'g',
     reorderPoint: 500,
-    entries: [{ au: 'EL', factor: 10, priority: 1 }],
+    entries: [{ au: 'Esslöffel', factor: 10, priority: 1 }],
   },
   Milch: {
     bu: 'ml',
     reorderPoint: 100,
     entries: [
       { au: 'Becher', factor: 250, priority: 1 },
-      { au: 'EL', factor: 15, priority: 2 },
+      { au: 'Esslöffel', factor: 15, priority: 2 },
     ],
   },
   Sahne: {
@@ -157,36 +301,42 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'ml',
     reorderPoint: 500,
     entries: [
-      { au: 'EL', factor: 10, priority: 1 },
-      { au: 'TL', factor: 3, priority: 2 },
+      { au: 'Esslöffel', factor: 10, priority: 1 },
+      { au: 'Teelöffel', factor: 3, priority: 2 },
     ],
   },
   Zitronensaft: {
     bu: 'ml',
     reorderPoint: 0,
-    entries: [{ au: 'EL', factor: 15, priority: 1 }],
+    entries: [{ au: 'Esslöffel', factor: 15, priority: 1 }],
   },
   Honig: {
     bu: 'g',
     reorderPoint: 500,
-    entries: [{ au: 'EL', factor: 21, priority: 1 }],
+    entries: [{ au: 'Esslöffel', factor: 21, priority: 1 }],
   },
   Haferflocken: {
     bu: 'g',
     reorderPoint: 500,
+    singular: 'Haferflocke',
+    plural: 'Haferflocken',
     entries: [
       { au: 'Becher', factor: 100, priority: 1 },
-      { au: 'EL', factor: 10, priority: 2 },
+      { au: 'Esslöffel', factor: 10, priority: 2 },
     ],
   },
   Cashews: {
     bu: 'g',
     reorderPoint: 0,
+    singular: 'Cashew',
+    plural: 'Cashews',
     entries: [],
   },
   Karotten: {
     bu: 'g',
     reorderPoint: 0,
-    entries: [{ au: 'Stück', factor: 80, priority: 1 }],
+    singular: 'Karotte',
+    plural: 'Karotten',
+    entries: [{ au: 'Stück (ZE zuerst)', factor: 80, priority: 1 }],
   },
 };

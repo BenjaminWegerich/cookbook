@@ -3,8 +3,28 @@
  * Generates `src/additionalUnitsData.ts` from the additional-unit master data:
  *   - docs/number_schemes.csv            (AQ value × number scheme matrix)
  *   - docs/additional_units.csv          (units: name, arrangement, scheme, exactness, shopping flag)
- *   - docs/ingredients.csv               (ingredient list: name, base unit, reorder point)
+ *   - docs/ingredients.csv               (ingredient list: name, base unit, reorder point, display forms)
  *   - docs/ingredient_unit_mappings.csv  (ingredient → AU: factor, priority)
+ *
+ * The `Singular` / `Plural` columns of docs/ingredients.csv (columns B and C,
+ * directly after the name) are validated here and compiled into the optional
+ * `singular` / `plural` fields of each ingredient: the display forms the app
+ * uses when it names the ingredient with a count („1 Karotte“ / „2 Karotten“).
+ * The canonical `Ingredient` cell stays the key — it is what recipes and the
+ * mappings file use — and the two forms are display data only. Both cells are
+ * empty for an invariant name (Zucker, Milch, Butter): the ingredient name then
+ * serves for every count. A half-filled pair is an error (see
+ * parseDisplayForms).
+ *
+ * The same two columns of docs/additional_units.csv (again directly after the
+ * name) are validated and compiled into the optional `singular` / `plural`
+ * fields of each unit: the forms the app shows in place of `<AU>` when the count
+ * is one (singular) or above one (plural), so „2 Packungen Mehl (2 kg)“ reads
+ * correctly. The canonical `Additional Unit` cell stays the key — it is what the
+ * mappings file references and what the runtime registry keys units by — and
+ * the two forms are display data only. Both cells are empty for an invariant
+ * unit: the unit name then serves for every count. A half-filled pair is an
+ * error (see parseDisplayForms).
  *
  * The `Reorder Point` column of docs/ingredients.csv is validated here and
  * compiled into the `reorderPoint` field of each ingredient: the quantity of
@@ -62,14 +82,20 @@ const INGREDIENTS_CSV = resolve(ROOT, 'docs/ingredients.csv');
 const MAPPINGS_CSV = resolve(ROOT, 'docs/ingredient_unit_mappings.csv');
 const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/additionalUnitsData.ts');
 
-/** Placeholders allowed in an arrangement template (docs/additional_quantity_specifications.md §4). */
-const ARRANGEMENT_TOKENS = new Set(['<AQ>', '<AU>', '<IN>', '<BQ>', '<BU>', '<NNBSP>']);
+/**
+ * Placeholders allowed in an arrangement template
+ * (docs/additional_quantity_specifications.md §4). Everything else in the cell
+ * is **free text** and is rendered unchanged — literal words, punctuation and
+ * spacing all pass through — so this set only rejects a mistyped placeholder.
+ */
+const ARRANGEMENT_TOKENS = new Set(['<AQ>', '<AU>', '<IN>', '<INF>', '<BQ>', '<BU>', '<NNBSP>']);
 
 /** Exact header of the additional-units table (docs/additional_units.csv). */
-const UNITS_HEADER = 'Additional Unit;Arrangement;Number Scheme;Unit Exact;Shopping Unit';
+const UNITS_HEADER =
+  'Additional Unit;Singular;Plural;Arrangement;Number Scheme;Unit Exact;Shopping Unit';
 
 /** Exact header of the ingredient list (docs/ingredients.csv). */
-const INGREDIENTS_HEADER = 'Ingredient;Base Unit;Reorder Point';
+const INGREDIENTS_HEADER = 'Ingredient;Singular;Plural;Base Unit;Reorder Point';
 
 /** Converts a CSV cell to a number, accepting both '.' and ',' decimals. */
 function toNumber(cell) {
@@ -138,6 +164,33 @@ function parseReorderPoint(cell, ingredient) {
     );
   }
   return point;
+}
+
+/**
+ * Parses a `Singular` / `Plural` pair: the display forms used when the subject
+ * is named with a count („1 Karotte“ / „2 Karotten“, „2 Packungen“). Shared by
+ * the ingredient list and the additional-units table, whose two cells sit
+ * directly after the name they belong to. Both cells are empty for an invariant
+ * name (Zucker, Milch) — the canonical name then serves for every
+ * count — and both are filled for a name that has a count form. A half-filled
+ * pair is an error: with only one form given, one side would silently fall back
+ * to the canonical name, which is exactly the ambiguity these columns remove.
+ * Returns the fields to spread into the entry (`{}` for an invariant name, so
+ * the generated entry carries no empty strings).
+ */
+function parseDisplayForms(singularCell, pluralCell, subject, source) {
+  const singular = (singularCell ?? '').trim();
+  const plural = (pluralCell ?? '').trim();
+  if (singular === '' && plural === '') {
+    return {};
+  }
+  if (singular === '' || plural === '') {
+    throw new Error(
+      `${source}: incomplete Singular/Plural pair for '${subject}' ` +
+        `(fill both display forms or leave both empty for an invariant name)`,
+    );
+  }
+  return { singular, plural };
 }
 
 /** Parses a `;`-separated CSV into { header, rows } of trimmed cells. */
@@ -251,14 +304,15 @@ function buildSchemes(ladderAq) {
   return schemes;
 }
 
-/** Parses the additional units table; validates arrangements, scheme refs and the exactness flag. */
+/** Parses the additional units table; validates arrangements, scheme refs, exactness and display forms. */
 function buildUnits(schemeNames) {
   const { header, rows } = parseCsv(UNITS_CSV);
   if (header.join(';') !== UNITS_HEADER) {
     throw new Error(`${UNITS_CSV}: unexpected header ${JSON.stringify(header)}`);
   }
   const units = rows.map((row, index) => {
-    const [name, arrangement, numberScheme, exactCell, shoppingCell] = row;
+    const [name, singularCell, pluralCell, arrangement, numberScheme, exactCell, shoppingCell] =
+      row;
     if (name === '') {
       throw new Error(`${UNITS_CSV}: empty unit name in row ${index + 2}`);
     }
@@ -278,6 +332,12 @@ function buildUnits(schemeNames) {
     }
     return {
       name,
+      // "Singular" / "Plural": the display forms shown in place of <AU> for a
+      // count of one / above one; both empty for an invariant unit, whose name
+      // then serves for every count. Display data only — the canonical `name`
+      // stays the key the mappings reference. A qualifier in the name
+      // ("Packung (teilbar)") is a key too, so such a unit must state its pair.
+      ...parseDisplayForms(singularCell, pluralCell, name, UNITS_CSV),
       // <NNBSP> stays a placeholder in the arrangement; the runtime renderer
       // substitutes it with the narrow no-break space (U+202F) like any other
       // placeholder, keeping the generated module pure ASCII.
@@ -306,7 +366,7 @@ function buildUnits(schemeNames) {
   return units;
 }
 
-/** Parses the ingredient list; validates base units, reorder points and unique names. */
+/** Parses the ingredient list; validates base units, reorder points, display forms and unique names. */
 function buildIngredientList() {
   const { header, rows } = parseCsv(INGREDIENTS_CSV);
   if (header.join(';') !== INGREDIENTS_HEADER) {
@@ -314,7 +374,7 @@ function buildIngredientList() {
   }
   const byName = new Map();
   for (const row of rows) {
-    const [ingredient, bu, reorderCell] = row;
+    const [ingredient, singularCell, pluralCell, bu, reorderCell] = row;
     if (ingredient === '' || bu === '') {
       throw new Error(
         `${INGREDIENTS_CSV}: empty ingredient or base unit in line: ${row.join(';')}`,
@@ -328,7 +388,11 @@ function buildIngredientList() {
     if (byName.has(ingredient)) {
       throw new Error(`${INGREDIENTS_CSV}: duplicate ingredient '${ingredient}'`);
     }
-    byName.set(ingredient, { bu, reorderPoint: parseReorderPoint(reorderCell, ingredient) });
+    byName.set(ingredient, {
+      bu,
+      reorderPoint: parseReorderPoint(reorderCell, ingredient),
+      ...parseDisplayForms(singularCell, pluralCell, ingredient, INGREDIENTS_CSV),
+    });
   }
   if (byName.size === 0) {
     throw new Error(`${INGREDIENTS_CSV}: no ingredients defined`);
@@ -418,10 +482,20 @@ function render(units, schemes, ingredientList, mappings) {
   lines.push('');
   lines.push('/** One additional unit: display arrangement, number scheme and unit flags. */');
   lines.push('export interface AdditionalUnit {');
-  lines.push('  /** Unit name as shown in the display line. */');
+  lines.push(
+    '  /** Canonical unit name: the identity the mappings reference and the runtime registry keys units by; without `singular`/`plural` it is also the form the display line shows. */',
+  );
   lines.push('  readonly name: string;');
   lines.push(
-    '  /** Display template; placeholders <AQ> <AU> <IN> <BQ> <BU> <NNBSP> (narrow no-break space). */',
+    '  /** Singular display form of the unit (count 1), e.g. "Packung"; absent = the name is invariant and serves for every count. Present exactly when `plural` is. */',
+  );
+  lines.push('  readonly singular?: string;');
+  lines.push(
+    '  /** Plural display form of the unit (count above one), e.g. "Packungen"; absent = invariant (see `singular`). */',
+  );
+  lines.push('  readonly plural?: string;');
+  lines.push(
+    '  /** Display template; placeholders <AQ> <AU> <IN> (canonical ingredient name) <INF> (its singular/plural form) <BQ> <BU> <NNBSP> (narrow no-break space). */',
   );
   lines.push('  readonly arrangement: string;');
   lines.push("  /** Name of the number scheme gating this unit's additional quantities. */");
@@ -457,6 +531,14 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push('  readonly reorderPoint: number;');
   lines.push(
+    '  /** Singular display form of the name (count 1), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */',
+  );
+  lines.push('  readonly singular?: string;');
+  lines.push(
+    '  /** Plural display form of the name (count ≠ 1), e.g. "Karotten"; absent = invariant (see `singular`). */',
+  );
+  lines.push('  readonly plural?: string;');
+  lines.push(
     "  /** The ingredient's additional-unit mappings, ascending priority; empty = bare ingredient without additional units. */",
   );
   lines.push('  readonly entries: readonly IngredientMapping[];');
@@ -465,8 +547,14 @@ function render(units, schemes, ingredientList, mappings) {
   lines.push('/** All additional units, in table order. */');
   lines.push('export const ADDITIONAL_UNITS: readonly AdditionalUnit[] = [');
   for (const unit of units) {
+    // The display forms are emitted only when the unit has them, so an invariant
+    // unit keeps the lean entry shape (no empty strings).
+    const forms =
+      unit.singular !== undefined
+        ? `singular: ${JSON.stringify(unit.singular)}, plural: ${JSON.stringify(unit.plural)}, `
+        : '';
     lines.push(
-      `  { name: ${JSON.stringify(unit.name)}, arrangement: ${JSON.stringify(unit.arrangement)}, ` +
+      `  { name: ${JSON.stringify(unit.name)}, ${forms}arrangement: ${JSON.stringify(unit.arrangement)}, ` +
         `numberScheme: ${JSON.stringify(unit.numberScheme)}, exact: ${unit.exact}, ` +
         `shoppingUnit: ${unit.shoppingUnit} },`,
     );
@@ -490,6 +578,12 @@ function render(units, schemes, ingredientList, mappings) {
     lines.push(`  ${JSON.stringify(ingredient)}: {`);
     lines.push(`    bu: ${JSON.stringify(entry.bu)},`);
     lines.push(`    reorderPoint: ${formatReorderPoint(entry.reorderPoint)},`);
+    // The display forms are emitted only when the name has them, so an
+    // invariant ingredient keeps the lean entry shape (no empty strings).
+    if (entry.singular !== undefined) {
+      lines.push(`    singular: ${JSON.stringify(entry.singular)},`);
+      lines.push(`    plural: ${JSON.stringify(entry.plural)},`);
+    }
     lines.push('    entries: [');
     for (const mapping of entries) {
       lines.push(

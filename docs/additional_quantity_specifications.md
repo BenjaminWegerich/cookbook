@@ -41,7 +41,7 @@
 | Base unit (BU) | The unit of the BQS: g / kg / ml / l. | g |
 | Additional quantity specification (AQS) | The computed display form added to the BQS. | "1 Becher" |
 | Additional quantity (AQ) | The numeric value of the AQS; an AQ ladder value (fraction) after rounding. | 1+1/4 |
-| Additional unit (AU) | The unit the AQS is expressed in. Defines the display arrangement, the number scheme, and whether it is a shopping unit. | Becher |
+| Additional unit (AU) | The unit the AQS is expressed in. Defines the display arrangement, the number scheme, the singular/plural display forms, and whether it is a shopping unit. | Becher |
 
 The abbreviations (BQS, BQ, BU, AQS, AQ, AU) are conversational shorthand only;
 the full English terms above are the canonical names. Concrete identifiers for
@@ -61,6 +61,8 @@ guards the scheme matrix against drift from the ladder's AQ column (see
 
 1. **Additional units** — each AU has:
    - a **name** ("Becher"),
+   - **display forms** (`Singular`, `Plural`, see §3.2): the form shown in place
+     of the name for a count of one / above one,
    - a **display arrangement** (see §4),
    - a **number scheme** (see §5),
    - an **exactness flag** (`Unit Exact`, see §6.3): `yes` when the unit fixes
@@ -97,6 +99,32 @@ guards the scheme matrix against drift from the ladder's AQ column (see
   with distinct names**, one `yes` and one `no`. This mirrors the exact/approximate rule of §6.3:
   the flag belongs to the unit, so two meanings need two units.
 
+### 3.2 Singular and Plural Forms
+
+- A unit's **name** is canonical: it is the identity the mappings file references and the
+  runtime registry keys units by. The display line does not always show it, though — a count
+  above one needs the plural in German („2 Packungen Mehl (2 kg)“) — so the unit carries two
+  **display forms** (`Singular`, `Plural` in `docs/additional_units.csv`).
+- The two cells sit directly after the name they belong to and are **display data only**: they
+  never appear in the mappings file, never identify a unit and never key the registry. Like the
+  ingredient list's `Singular`/`Plural` columns ([storage_format.md](storage_format.md) §9),
+  they are an atomic pair — both filled for a unit with a count form, both empty for an
+  **invariant** one, whose canonical name then serves for every count. A half-filled pair is a
+  master-data error and rejected by the generator.
+- A canonical name may carry a **qualifier** that distinguishes variants of one word
+  („Packung (teilbar)“, „Dose (Abtropfgewicht)“, „Stück (ZE zuerst)“). It is a key, never the
+  display: the display forms carry the word the user sees („Packung“/„Packungen“,
+  „Dose“/„Dosen“, „Stück“/„Stück“), so a qualifier must always come with a filled pair —
+  otherwise `<AU>` would put the qualifier itself on the display line.
+- The substitution happens in the arrangement renderer (§4): `<AU>` renders the **plural** form
+  when the additional quantity is **above one** and the unit has one, and the **singular** form
+  (or the canonical name for an invariant unit) otherwise. A fraction below one stays singular
+  („½ Packung“); a mixed number above one is plural („1 ½ Packungen“).
+- `Additional Unit` stays the key: the rare unit that must be both a shopping and a
+  non-shopping unit is still modelled as two units with distinct names (§3.1), and the variants
+  may carry different display forms. Adding or correcting a form never touches a mapping or an
+  ingredient.
+
 ## 4. Display Arrangement
 
 - Each AU defines the **arrangement**: the order in which the components of the
@@ -106,16 +134,39 @@ guards the scheme matrix against drift from the ladder's AQ column (see
   | Placeholder | Component |
   |---|---|
   | `<AQ>` | additional quantity |
-  | `<AU>` | additional unit |
-  | `<IN>` | ingredient name |
+  | `<AU>` | additional unit — its singular or plural display form for the count (§3.2) |
+  | `<IN>` | ingredient name — always the canonical name |
+  | `<INF>` | ingredient name — its singular or plural display form for the count (see below) |
   | `<BQ>` | base quantity |
-  | `<BU>` | base unit |
+  | `<BU>` | base unit (kg / l from 1000 up, see §8) |
+  | `<NNBSP>` | narrow no-break space (U+202F) — the space between a number and its unit |
 
-- Example — "Becher": `<AQ> <AU> <IN> (<BQ> <BU>)` → "1 Becher Joghurt (400 g)".
-- Example — "Zitrone" (for Zitronensaft): `<BQ> <BU> <IN> (<AQ> <AU>)`
-  → "15 ml Zitronensaft (1/2 Zitrone)".
+- Everything that is **not** one of these placeholders is **free text** and is
+  rendered unchanged: literal words, punctuation, commas and spacing all stand as
+  written („ca. <AQ> <AU> <IN>, gestrichen“). `<BQ>` and `<BU>` may therefore also
+  stand apart, separated by free text or a plain space, instead of forming the
+  usual `<BQ><NNBSP><BU>` run.
+- **Two name placeholders, one shared form.** `<IN>` always renders the canonical
+  ingredient name — the identity recipes, the mappings and the item table use.
+  `<INF>` renders the ingredient's Singular/Plural display form
+  ([storage_format.md](storage_format.md) §9) and falls back to the canonical name
+  when the pair is empty (Zucker, Milch). Inside `<INF>`, the **count decides**
+  which form appears, exactly as it does for `<AU>`: one arrangement yields „1
+  Stück Karotte“ (singular) and „2 Stück Karotten“ (plural). A count above one
+  takes the plural, so `0` and a fraction below one stay singular — the same rule
+  as the unit forms.
+- Example — "Becher": `<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)` →
+  "1 Becher Joghurt (400 g)".
+- `<AU>` follows the count (§3.2): "2 Packungen Mehl (2 kg)" for a unit with a
+  plural form, "2 Becher Joghurt (800 g)" for an invariant one. `<INF>` follows it
+  the same way: `<AQ><NNBSP><AU> <INF> (<BQ><NNBSP><BU>)` yields "1 Stück Karotte
+  (80 g)" and "2 Stück Karotten (160 g)".
+- Example — "Zitrone" (for Zitronensaft): `<BQ><NNBSP><BU> <IN> (<AQ><NNBSP><AU>)`
+  → "15 ml Zitronensaft (½ Zitrone)".
 - If **no** AQS applies, the ingredient is rendered in the standard base form
-  `<BQ> <BU> <IN>`: "200 g Joghurt", "800 ml Wasser".
+  `<BQ> <BU> <IN>` (number and unit joined by U+202F, §8): "200 g Joghurt",
+  "800 ml Wasser". Its name is the canonical one — a base amount is not a count,
+  so no display form applies there.
 - The base quantity is shown with its **exact stored/scaled value** — except for
   an **exact** unit (§6.3), whose factor defines the base amount: there the shown
   base quantity is derived from the rounded additional quantity instead. The

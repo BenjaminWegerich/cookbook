@@ -4,7 +4,9 @@
  * The user's authoritative ingredient master data lives in two CSV files
  * inside the Cookbook folder:
  * - `zutaten.csv` — the ingredient list: one row per ingredient
- *   (`Ingredient;Base Unit;Reorder Point`); ingredient-level fields can be
+ *   (`Ingredient;Singular;Plural;Base Unit;Reorder Point`), where the two cells
+ *   after the name are the optional display forms for a count („1 Karotte“ /
+ *   „2 Karotten“; empty for an invariant name); ingredient-level fields can be
  *   added as further columns later without touching the mapping file;
  * - `zutaten-umrechnungen.csv` — the AU mappings: one row per
  *   ingredient–additional-unit mapping (`Ingredient;Additional Unit;

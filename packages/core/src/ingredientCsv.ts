@@ -5,16 +5,24 @@
  * folder (zutaten.csv + zutaten-umrechnungen.csv).
  *
  * The master data is split into two files:
- * - the **ingredient list** (`Ingredient;Base Unit;Reorder Point`, one row per
- *   ingredient): the source of ingredient names, their fixed base unit and
- *   their reorder point — the base-unit quantity definitely on stock directly
- *   after a shopping trip, independent of the meal plan (0 = only ever bought
- *   for a recipe; `inf` = always in stock, e.g. water). The reorder point is a
- *   mandatory cell and need not be a ladder value. Ingredient-level fields
- *   (e.g. a category) can be added as further columns later without touching
- *   the mapping file. Files written before the reorder-point column existed
- *   still parse under the legacy two-column header: they load with the neutral
- *   reorder point 0 and gain the full column the next time they are written;
+ * - the **ingredient list** (`Ingredient;Singular;Plural;Base Unit;Reorder Point`,
+ *   one row per ingredient): the source of ingredient names, their display
+ *   forms, their fixed base unit and their reorder point. The reorder point is
+ *   the base-unit quantity definitely on stock directly after a shopping trip,
+ *   independent of the meal plan (0 = only ever bought for a recipe; `inf` =
+ *   always in stock, e.g. water). It is a mandatory cell, need not be a ladder
+ *   value, and stays the last column so a spreadsheet round-trip never drops a
+ *   meaningful cell. `Singular` / `Plural` (columns B and C, directly after the
+ *   name) are the forms used when the ingredient is named with a count („1
+ *   Karotte“ / „2 Karotten“); both cells are empty for an invariant name
+ *   (Zucker, Milch, Butter — the `Ingredient` cell then serves for every count)
+ *   and a half-filled pair is rejected. `Ingredient` stays the canonical key:
+ *   recipes and the mappings file use it, never a display form. Ingredient-level
+ *   fields (e.g. a category) can be added as further columns later without
+ *   touching the mapping file. A file under an older header still parses and is
+ *   upgraded on its next write: `Ingredient;Base Unit;Reorder Point` (before
+ *   the display forms existed — the name is invariant) and `Ingredient;Base
+ *   Unit` (before the reorder point existed — neutral 0);
  * - the **AU mappings** (`Ingredient;Additional Unit;Conversion Factor;Priority`,
  *   one row per ingredient–additional-unit mapping): a pure overlay on the
  *   list — an ingredient without additional units simply has no rows here.
@@ -60,6 +68,15 @@ export interface IngredientListEntry {
    * ladder value; never empty.
    */
   readonly reorderPoint: number;
+  /**
+   * Display form for a count of one („1 Karotte“), or undefined for an
+   * invariant name (Zucker, Milch) — the `Ingredient` name then serves for
+   * every count. Present exactly when {@link plural} is (the pair is atomic;
+   * see parseDisplayForms).
+   */
+  readonly singular?: string;
+  /** Display form for a count other than one („2 Karotten“); see {@link singular}. */
+  readonly plural?: string;
 }
 
 /** The ingredient list: ingredient name → base unit + reorder point. */
@@ -69,20 +86,29 @@ export type IngredientList = Readonly<Record<string, IngredientListEntry>>;
 export type IngredientMappingsByIngredient = Readonly<Record<string, readonly IngredientMapping[]>>;
 
 /** Exact header of the current ingredient list CSV. */
-const LIST_HEADER = 'Ingredient;Base Unit;Reorder Point';
+const LIST_HEADER = 'Ingredient;Singular;Plural;Base Unit;Reorder Point';
+
+/**
+ * Header of the ingredient list as written before the display-form columns
+ * existed. Such files still parse (see parseIngredientListCsv): every
+ * ingredient is invariant, so the name serves for every count; the next write
+ * upgrades them to LIST_HEADER.
+ */
+const LEGACY_LIST_HEADER = 'Ingredient;Base Unit;Reorder Point';
 
 /**
  * Header of the ingredient list as written before the reorder-point column
  * existed. Such files still parse (see parseIngredientListCsv) and load with
  * the neutral reorder point 0; the next write upgrades them to LIST_HEADER.
  */
-const LEGACY_LIST_HEADER = 'Ingredient;Base Unit';
+const ANCIENT_LIST_HEADER = 'Ingredient;Base Unit';
 
 /** Exact header of the AU mappings CSV. */
 const MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor;Priority';
 
 /**
- * The known additional unit names (Becher, EL, TL).
+ * The known additional unit names (from docs/additional_units.csv, e.g. Becher,
+ * Esslöffel, Packung (teilbar)).
  * The exactness of a unit is a property of the unit itself and lives in
  * docs/additional_units.csv (`Unit Exact`), not in this mappings file.
  */
@@ -125,20 +151,91 @@ function formatReorderPointCell(value: number): string {
 }
 
 /**
- * Parses the ingredient list CSV (`Ingredient;Base Unit;Reorder Point`) into
- * name → base unit + reorder point. Throws on malformed input (empty or
- * duplicate names, unknown base unit, missing or invalid reorder point); the
- * returned record preserves the file order.
+ * Parses the two display-form cells (`Singular`, `Plural`) of an
+ * ingredient-list row. Both cells are empty for an invariant name (Zucker,
+ * Milch, Butter) — the canonical `Ingredient` name then serves for every
+ * count — and both are filled for a name with a count form (Karotte /
+ * Karotten). A half-filled pair is rejected: with only one form given, one
+ * side would silently fall back to the canonical name, which is exactly the
+ * ambiguity these columns remove. Returns the fields of an invariant name as
+ * undefined, so no empty strings travel through the registry.
+ */
+function parseDisplayForms(
+  singularCell: string | undefined,
+  pluralCell: string | undefined,
+  ingredient: string,
+): { singular?: string; plural?: string } {
+  const singular = singularCell ?? '';
+  const plural = pluralCell ?? '';
+  if (singular === '' && plural === '') {
+    return {};
+  }
+  if (singular === '' || plural === '') {
+    throw new Error(
+      `Zutaten-Liste: unvollständiges Singular/Plural-Paar für "${ingredient}" ` +
+        `(beide Formen ausfüllen oder beide leer lassen — ein invarianter Name braucht keine).`,
+    );
+  }
+  return { singular, plural };
+}
+
+/** One ingredient-list row's cells, named after their meaning in the matched header. */
+interface IngredientListCells {
+  readonly ingredient: string | undefined;
+  readonly singular: string | undefined;
+  readonly plural: string | undefined;
+  readonly bu: string | undefined;
+  readonly reorderPoint: string | undefined;
+}
+
+/**
+ * Reads one data row's cells by position. The current format
+ * (`Ingredient;Singular;Plural;Base Unit;Reorder Point`) puts the display
+ * forms in columns B and C — directly after the name — so the base unit and
+ * the reorder point sit two cells further right than in the older layouts. An
+ * older row has no display forms at all (its name counts as invariant) and, in
+ * the oldest layout, no reorder-point cell either.
+ */
+function readIngredientListRow(
+  row: readonly string[],
+  hasDisplayForms: boolean,
+): IngredientListCells {
+  if (hasDisplayForms) {
+    const [ingredient, singular, plural, bu, reorderPoint] = row;
+    return { ingredient, singular, plural, bu, reorderPoint };
+  }
+  const [ingredient, bu, reorderPoint] = row;
+  return { ingredient, singular: undefined, plural: undefined, bu, reorderPoint };
+}
+
+/**
+ * Parses the ingredient list CSV
+ * (`Ingredient;Singular;Plural;Base Unit;Reorder Point`) into name → base
+ * unit + reorder point + display forms. Throws on malformed input (empty or
+ * duplicate names, unknown base unit, missing or invalid reorder point,
+ * half-filled display-form pair); the returned record preserves the file
+ * order.
  *
- * A file under the legacy two-column header (`Ingredient;Base Unit`) still
- * parses; every ingredient then gets the neutral reorder point 0, and the next
- * serialization writes the full three-column format.
+ * A file under an older header still parses and gains the missing columns on
+ * its next serialization: `Ingredient;Base Unit;Reorder Point` (display forms
+ * before they existed — the names count as invariant) and `Ingredient;Base
+ * Unit` (reorder point before it existed — the neutral 0). The older layouts
+ * are not a prefix of the current one (the display forms sit in columns B and
+ * C), so the matched header decides how the cells are read.
  */
 export function parseIngredientListCsv(text: string): IngredientList {
-  const { rows } = parseCsvRows(text, [LIST_HEADER, LEGACY_LIST_HEADER]);
+  const { header, rows } = parseCsvRows(text, [
+    LIST_HEADER,
+    LEGACY_LIST_HEADER,
+    ANCIENT_LIST_HEADER,
+  ]);
+  const hasDisplayForms = header.join(';') === LIST_HEADER;
   const result: Record<string, IngredientListEntry> = {};
   for (const row of rows) {
-    const [ingredient, bu, reorderCell] = row;
+    const { ingredient, singular, plural, bu, reorderPoint } = readIngredientListRow(
+      row,
+      hasDisplayForms,
+    );
     if (ingredient === undefined || ingredient === '' || bu === undefined || bu === '') {
       throw new Error(`Zutaten-Liste: leere Zutat oder Basis-Einheit in Zeile "${row.join(';')}".`);
     }
@@ -148,11 +245,13 @@ export function parseIngredientListCsv(text: string): IngredientList {
     if (result[ingredient] !== undefined) {
       throw new Error(`Zutaten-Liste: doppelte Zutat "${ingredient}".`);
     }
-    // A legacy row has no reorder-point cell at all; those files predate the
-    // column and load with the neutral 0 until the next write adds the column.
+    // An older row has no reorder-point cell in the oldest layout at all
+    // (neutral 0 until the next write) and no display forms (invariant name).
     result[ingredient] = {
       bu,
-      reorderPoint: reorderCell === undefined ? 0 : parseReorderPointCell(reorderCell, ingredient),
+      reorderPoint:
+        reorderPoint === undefined ? 0 : parseReorderPointCell(reorderPoint, ingredient),
+      ...parseDisplayForms(singular, plural, ingredient),
     };
   }
   return result;
@@ -160,13 +259,19 @@ export function parseIngredientListCsv(text: string): IngredientList {
 
 /**
  * Serializes the ingredient list to canonical CSV text (header + rows, LF
- * line endings). Row order follows the record's key order, so a parsed file
- * round-trips byte-stable.
+ * line endings). Invariant ingredients get two empty cells, so the column
+ * count is the same in every row and the mandatory reorder point stays the
+ * last cell (a spreadsheet round-trip never drops a meaningful cell). Row
+ * order follows the record's key order, so a parsed file round-trips
+ * byte-stable.
  */
 export function serializeIngredientListCsv(list: IngredientList): string {
   const lines = [LIST_HEADER];
   for (const [ingredient, entry] of Object.entries(list)) {
-    lines.push(`${ingredient};${entry.bu};${formatReorderPointCell(entry.reorderPoint)}`);
+    lines.push(
+      `${ingredient};${entry.singular ?? ''};${entry.plural ?? ''};${entry.bu};` +
+        `${formatReorderPointCell(entry.reorderPoint)}`,
+    );
   }
   return `${lines.join('\n')}\n`;
 }
@@ -242,11 +347,29 @@ export function serializeIngredientMappingsCsv(mappings: IngredientMappingsByIng
 }
 
 /**
+ * Projects the display forms of one ingredient (list entry or registry entry)
+ * onto the entry fields: both forms, or neither for an invariant name. The
+ * pair is atomic — parseDisplayForms and the build-time generator both reject
+ * a half-filled pair — so a lone `singular` can never reach this helper; the
+ * shape is spread into a fresh entry instead of assigning `undefined`, which
+ * keeps an invariant ingredient's entry free of empty-string fields.
+ */
+function displayFormFields(entry: { singular?: string; plural?: string }): {
+  singular?: string;
+  plural?: string;
+} {
+  return entry.singular !== undefined && entry.plural !== undefined
+    ? { singular: entry.singular, plural: entry.plural }
+    : {};
+}
+
+/**
  * Combines the parsed ingredient list and AU mappings into the runtime
  * registry shape. The list is the authoritative source of ingredient names,
- * base units and reorder points: an ingredient in the list without mappings is
- * a bare ingredient (empty entries), and a mapping for a name that is not in
- * the list is inconsistent — the file pair must never reach that state.
+ * base units, reorder points and display forms: an ingredient in the list
+ * without mappings is a bare ingredient (empty entries), and a mapping for a
+ * name that is not in the list is inconsistent — the file pair must never
+ * reach that state.
  */
 export function mergeIngredientMasterData(
   list: IngredientList,
@@ -264,6 +387,9 @@ export function mergeIngredientMasterData(
     result[ingredient] = {
       bu: entry.bu,
       reorderPoint: entry.reorderPoint,
+      // The display forms travel into the registry unchanged; an invariant
+      // name gets neither key (see displayFormFields).
+      ...displayFormFields(entry),
       entries: mappings[ingredient] ?? [],
     };
   }
@@ -282,7 +408,11 @@ export function splitIngredientMasterData(mappings: IngredientMappings): {
   const list: Record<string, IngredientListEntry> = {};
   const byIngredient: Record<string, readonly IngredientMapping[]> = {};
   for (const [ingredient, entry] of Object.entries(mappings)) {
-    list[ingredient] = { bu: entry.bu, reorderPoint: entry.reorderPoint };
+    list[ingredient] = {
+      bu: entry.bu,
+      reorderPoint: entry.reorderPoint,
+      ...displayFormFields(entry),
+    };
     // Bare ingredients have no rows in the mappings file — they live in the
     // list only, mirroring what the parser produces.
     if (entry.entries.length > 0) {

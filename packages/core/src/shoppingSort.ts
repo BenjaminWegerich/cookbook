@@ -34,7 +34,7 @@
  */
 
 import { ADDITIONAL_UNITS } from './additionalUnitsData.js';
-import { BASE_UNIT_TOKENS } from './additionalUnits.js';
+import { BASE_UNIT_TOKENS, auDisplayForms } from './additionalUnits.js';
 import {
   allShoppingItems,
   allShoppingStops,
@@ -78,12 +78,14 @@ function escapeRegExp(literal: string): string {
 
 /**
  * The unit tokens a shopping line may carry: the additional units flagged
- * `Shopping Unit` (a Becher, a Packung, a Stück) plus the base-unit tokens the
- * app writes (`BASE_UNIT_TOKENS`). Derived from the master data and the
- * formatter, so a change there reaches the line vocabulary automatically.
+ * `Shopping Unit` (a Becher, a Packung, a Stück) in every display form — the
+ * canonical name plus the singular and plural forms, because the app writes
+ * „2 Packungen Mehl“ — plus the base-unit tokens the app writes
+ * (`BASE_UNIT_TOKENS`). Derived from the master data and the formatter, so a
+ * change there reaches the line vocabulary automatically.
  */
 function shoppingLineUnits(): readonly string[] {
-  const units = ADDITIONAL_UNITS.filter((unit) => unit.shoppingUnit).map((unit) => unit.name);
+  const units = ADDITIONAL_UNITS.filter((unit) => unit.shoppingUnit).flatMap(auDisplayForms);
   // Longest first: "kg" must be tried before... its own prefix does not exist,
   // but "Stück" and a hypothetical "St" would otherwise depend on table order.
   return [...units, ...BASE_UNIT_TOKENS].sort((a, b) => b.length - a.length);

@@ -275,7 +275,7 @@ describe('shoppingRow', () => {
     // 12 kg of flour in 1000 g packs = 12 packs: odd but true, and the scheme
     // that bounds a *recipe* display must not shrink a shopping list.
     expect(shoppingRow(need({ ingredient: 'Mehl', needed: 12000 }), 0).text).toBe(
-      `12${NB}Packung Mehl (12${NB}kg)`,
+      `12${NB}Packungen Mehl (12${NB}kg)`,
     );
   });
 
@@ -466,10 +466,12 @@ describe('shoppingUnitOf', () => {
   it('answers the shopping unit and its factor', () => {
     // Flour is bought in 1000 g packs, carrots in pieces of about 80 g.
     expect(shoppingUnitOf(need({ ingredient: 'Mehl', needed: 1200 }))).toMatchObject({
-      au: { name: 'Packung' },
+      au: { name: 'Packung (unteilbar)' },
       factor: 1000,
     });
-    expect(shoppingUnitOf(need({ ingredient: 'Karotten', needed: 500 }))?.au.name).toBe('Stück');
+    expect(shoppingUnitOf(need({ ingredient: 'Karotten', needed: 500 }))?.au.name).toBe(
+      'Stück (ZE zuerst)',
+    );
   });
 
   it('is null without a shopping unit', () => {
@@ -508,7 +510,9 @@ describe('stockCountText', () => {
   it('names only whole packs of an exact shopping unit', () => {
     // Flour is bought in 1000 g packs: two packs read as two packs, but 200 g is
     // no whole pack and would name a shelf that cannot exist.
-    expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 2000)).toBe(`2${NB}Packung`);
+    expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 2000)).toBe(
+      `2${NB}Packungen`,
+    );
     expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 0)).toBe(`0${NB}Packung`);
     expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 200)).toBeNull();
   });

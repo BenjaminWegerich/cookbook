@@ -299,33 +299,48 @@ prep_time: 15 min
 
 ## 9. Ingredient Master Data Files
 
-The collection's ingredient master data (name → base unit → reorder point → additional
-units with factors) lives in two CSV files inside the recipe folder, in the same canonical
-formats as the repo seeds (`docs/ingredients.csv` + `docs/ingredient_unit_mappings.csv`):
+The collection's ingredient master data (name → display forms → base unit → reorder point →
+additional units with factors) lives in two CSV files inside the recipe folder, in the same
+canonical formats as the repo seeds (`docs/ingredients.csv` +
+`docs/ingredient_unit_mappings.csv`):
 
     zutaten.csv                  (ingredient list)
-    Ingredient;Base Unit;Reorder Point
-    Joghurt;g;0
-    Cashews;g;0
+    Ingredient;Singular;Plural;Base Unit;Reorder Point
+    Joghurt;;;g;0
+    Cashews;Cashew;Cashews;g;0
 
     zutaten-umrechnungen.csv     (AU mappings; an ingredient without additional
     Ingredient;Additional Unit;Conversion Factor;Priority   units has no rows here)
     Joghurt;Becher;400;1
 
 The ingredient list is the authoritative source of ingredient names, their fixed base
-unit and their reorder point — one row per ingredient, so further ingredient-level fields
-can be added as columns later. Where an item is bought is deliberately not such a column:
-it is the separate shopping-route pair of §10, whose name set also covers items that are
-not ingredients at all.
+unit, their reorder point and their display forms — one row per ingredient, so further
+ingredient-level fields can be added as columns later. Where an item is bought is
+deliberately not such a column: it is the separate shopping-route pair of §10, whose name
+set also covers items that are not ingredients at all.
 
 The reorder point is the base-unit (g/ml) quantity that is definitely on stock directly
 after a shopping trip, independent of the meal plan. It is a mandatory cell and need not
 be a ladder value: `0` = the ingredient is only ever bought for a recipe; a positive
 number = that much is on stock even without a planned recipe (1000 g of flour means the
 shopping list is refilled once the last pack is opened, outside the app); `inf` = infinite
-stock (realistically only water). A file written before this column existed (header
-`Ingredient;Base Unit`) still loads: its ingredients get the neutral reorder point 0, and
-the next write adds the column.
+stock (realistically only water). It is the last column, so a spreadsheet round-trip — which
+may drop trailing empty cells — can never cut a meaningful cell. A file written before this
+column existed (header `Ingredient;Base Unit`) still loads: its ingredients get the neutral
+reorder point 0, and the next write adds the column.
+
+`Singular` and `Plural` are the **display forms** of the name — what the app writes when it
+names the ingredient with a count („1 Karotte“ / „2 Karotten“). They sit in columns B and C,
+directly after the name they belong to; the canonical key and the two display cells of a row
+stay together. The `Ingredient` cell stays the canonical key: recipes, the mappings file and
+the item table (§10) always use it, never a display form, so adding or correcting a form
+never touches a recipe. Both cells are empty for an **invariant** name (Zucker, Milch,
+Butter): the name then serves for every count. A name whose canonical form is already the
+plural states the pair in full („Haferflocken“ → `Haferflocke;Haferflocken`, „Karotten“ →
+`Karotte;Karotten`). The pair is atomic — a row with only one of the two cells is rejected
+with a German error, because the empty side would silently fall back to the canonical name.
+A file written before these columns existed (header `Ingredient;Base Unit;Reorder Point`)
+still loads with every name invariant, and the next write adds both columns.
 
 An **ingredient recipe** (a sub-recipe) has its row here too, like any other ingredient. Its
 reorder point is the amount of the finished product that is on hand — cooked and kept, e.g.
@@ -346,8 +361,9 @@ Cashews) exists only in the list and always renders in the base form (see
 additional_quantity_specifications.md §4).
 
 The additional **units** themselves — display arrangement, number scheme, the
-`Unit Exact` flag (see additional_quantity_specifications.md §6.3) and the `Shopping Unit`
-flag (see additional_quantity_specifications.md §3.1) — are not part of the
+`Unit Exact` flag (see additional_quantity_specifications.md §6.3), the `Shopping Unit`
+flag (see additional_quantity_specifications.md §3.1) and the `Singular`/`Plural` display
+forms (see additional_quantity_specifications.md §3.2) — are not part of the
 user's Drive files: they are built-in definitions compiled from `docs/additional_units.csv`
 into the core package. Only the ingredient list and the mappings are user data.
 

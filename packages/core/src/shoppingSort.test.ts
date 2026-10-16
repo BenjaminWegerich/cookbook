@@ -7,11 +7,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type {
-  ShoppingItems,
-  ShoppingRoute,
-  ShoppingSynonyms,
-} from './shoppingRouteCsv.js';
+import type { ShoppingItems, ShoppingRoute, ShoppingSynonyms } from './shoppingRouteCsv.js';
 import {
   resetShoppingRoute,
   setShoppingItems,
@@ -69,6 +65,14 @@ describe('shoppingNameField', () => {
     expect(shoppingNameField(`2${N}Becher${N}Joghurt${N}(800${N}g)`)).toBe('Joghurt');
   });
 
+  it('undoes the app’s plural unit form', () => {
+    // A count above one makes the app write the unit's plural form
+    // (docs/additional_quantity_specifications.md §3), so the derived
+    // vocabulary carries it too.
+    expect(shoppingNameField('2 Packungen Mehl (2 kg)')).toBe('Mehl');
+    expect(shoppingNameField(`2${N}Packungen${N}Mehl${N}(2${N}kg)`)).toBe('Mehl');
+  });
+
   it('undoes the app’s base shape, including the kg / l display step', () => {
     expect(shoppingNameField('850 g Butter')).toBe('Butter');
     expect(shoppingNameField('1,15 kg Mehl')).toBe('Mehl');
@@ -92,12 +96,13 @@ describe('shoppingNameField', () => {
   });
 
   it('does not undo a shape the app never writes', () => {
-    // "Bund" is neither a shopping unit nor a base unit, so the leading "1" is
-    // not decoration either — the line stays as it is and is answered by a
+    // "Handvoll" is neither a shopping unit nor a base unit, so the leading "1"
+    // is not decoration either — the line stays as it is and is answered by a
     // suggestion (docs/shopping_item_identity.md §2).
-    expect(shoppingNameField('1 Bund Petersilie')).toBe('1 Bund Petersilie');
-    // EL and TL are recipe measures, not shopping units: the app never writes
-    // them onto a shopping line, so they are not part of the vocabulary.
+    expect(shoppingNameField('1 Handvoll Petersilie')).toBe('1 Handvoll Petersilie');
+    // EL and TL are the display forms of Esslöffel/Teelöffel, which are recipe
+    // measures, not shopping units: the app never writes them onto a shopping
+    // line, so they are not part of the vocabulary.
     expect(shoppingNameField('2 EL Zucker')).toBe('2 EL Zucker');
   });
 
@@ -112,6 +117,7 @@ describe('matchShoppingItem', () => {
     expect(matchShoppingItem('2 Becher Joghurt (800 g)')).toBe('Joghurt');
     expect(matchShoppingItem('850 g Butter')).toBe('Butter');
     expect(matchShoppingItem('1 Packung Mehl (1 kg)')).toBe('Mehl');
+    expect(matchShoppingItem('2 Packungen Mehl (2 kg)')).toBe('Mehl');
     expect(matchShoppingItem('6 Stück Karotten (500 g)')).toBe('Karotten');
   });
 
@@ -148,8 +154,8 @@ describe('matchShoppingItem', () => {
 
   it('does not undo an unknown unit just to reach a known name', () => {
     setShoppingItems(ITEMS);
-    // Petersilie exists, but "1 Bund Petersilie" is not that name field.
-    expect(matchShoppingItem('1 Bund Petersilie')).toBeNull();
+    // Petersilie exists, but "1 Handvoll Petersilie" is not that name field.
+    expect(matchShoppingItem('1 Handvoll Petersilie')).toBeNull();
   });
 
   it('returns null for an empty line', () => {
@@ -161,7 +167,7 @@ describe('matchShoppingItem', () => {
 describe('shoppingItemSuggestions', () => {
   it('suggests an item name contained in the name field', () => {
     setShoppingItems(ITEMS);
-    expect(shoppingItemSuggestions('1 Bund Petersilie')).toEqual(['Petersilie']);
+    expect(shoppingItemSuggestions('1 Handvoll Petersilie')).toEqual(['Petersilie']);
   });
 
   it('suggests items the name field is a prefix of, names first', () => {
@@ -211,7 +217,7 @@ describe('the built-in seed (no fixture)', () => {
     expect(matchShoppingItem('2 Becher Joghurt (800 g)')).toBe('Joghurt');
     expect(matchShoppingItem('850 g Mehl')).toBe('Mehl');
     expect(matchShoppingItem('Klopapier')).toBe('Klopapier');
-    expect(matchShoppingItem('1 Bund Petersilie')).toBeNull();
+    expect(matchShoppingItem('1 Handvoll Petersilie')).toBeNull();
   });
 });
 
@@ -227,7 +233,7 @@ describe('shoppingSortOrder', () => {
       { text: '6 Stück Karotten (500 g)', checked: false, item: 'Karotten' }, // REWE/Obst
       { text: '1 Packung Mehl (1 kg)', checked: false, item: 'Mehl' }, // Lidl/Trocken
       { text: 'Klopapier', checked: true, item: 'Klopapier' }, // checked
-      { text: '1 Bund Petersilie', checked: false, item: null }, // resolved to a stop
+      { text: '1 Handvoll Petersilie', checked: false, item: null }, // resolved to a stop
     ];
 
     const order = shoppingSortOrder(lines, (text) =>
@@ -238,7 +244,7 @@ describe('shoppingSortOrder', () => {
       'Wandfarbe', // ignored, top
       '2 Becher Joghurt (800 g)', // Lidl/Molkerei
       '1 Packung Mehl (1 kg)', // Lidl/Trockensortiment (before the resolved one, stable)
-      '1 Bund Petersilie', // Lidl/Trockensortiment (resolved)
+      '1 Handvoll Petersilie', // Lidl/Trockensortiment (resolved)
       '6 Stück Karotten (500 g)', // REWE/Obst und Gemüse
       'Klopapier', // checked, bottom
     ]);
