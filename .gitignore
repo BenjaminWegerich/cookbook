@@ -30,5 +30,10 @@ pnpm-debug.log*
 # Coverage
 coverage/
 
+# Local copies of the user's Drive master data (ad-hoc exports for inspection,
+# never repo data — the seed lives in docs/)
+/zutaten.csv
+/zutaten-umrechnungen.csv
+
 # Font verification scratch
 .fonts/
