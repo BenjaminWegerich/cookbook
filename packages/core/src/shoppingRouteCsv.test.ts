@@ -92,6 +92,14 @@ describe('parseShoppingRouteCsv', () => {
     expect(parseShoppingRouteCsv(sloppy)).toEqual(ROUTE);
   });
 
+  it('parses a comma-separated spreadsheet export', () => {
+    // Same tolerance as the ingredient master data (csv.ts): a comma-delimited
+    // export loads, and the next write emits the canonical semicolon form.
+    const comma = ROUTE_TEXT.replaceAll(';', ',');
+    expect(parseShoppingRouteCsv(comma)).toEqual(ROUTE);
+    expect(serializeShoppingRouteCsv(parseShoppingRouteCsv(comma))).toBe(`${ROUTE_TEXT}\n`);
+  });
+
   it('throws on an empty file', () => {
     expect(() => parseShoppingRouteCsv('')).toThrow(/leer/);
   });

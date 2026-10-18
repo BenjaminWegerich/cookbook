@@ -256,6 +256,66 @@ describe('parseIngredientMappingsCsv', () => {
   });
 });
 
+describe('comma-separated spreadsheet exports', () => {
+  // The user's master data is edited in a spreadsheet, and spreadsheet apps
+  // export "CSV" comma-separated in an English locale. The header row decides
+  // the delimiter (csv.ts), so such a file loads instead of failing with
+  // „unerwartete Kopfzeile“ — and the next write restores the canonical
+  // semicolon form, because that is the only form the serializers emit.
+  it('parses a comma-separated mappings file', () => {
+    expect(parseIngredientMappingsCsv(MAPPINGS_TEXT.replaceAll(';', ','))).toEqual(MAPPINGS);
+  });
+
+  it('parses a comma-separated ingredient-list file', () => {
+    expect(parseIngredientListCsv(LIST_TEXT.replaceAll(';', ','))).toEqual(LIST);
+  });
+
+  it('keeps a quoted German decimal comma inside its cell', () => {
+    // The spreadsheet quotes a cell that contains the delimiter; unquoted, the
+    // factor would split into two cells and the row would be reported as
+    // having the wrong column count.
+    const comma = [
+      'Ingredient,Additional Unit,Conversion Factor,Priority',
+      'Joghurt,Becher,"1,5",1',
+    ].join('\n');
+    expect(parseIngredientMappingsCsv(comma)).toEqual({
+      Joghurt: [{ au: 'Becher', factor: 1.5, priority: 1 }],
+    });
+  });
+
+  it('reads quoted header cells and a trailing empty cell like a spreadsheet writes them', () => {
+    const comma = [
+      '"Ingredient","Additional Unit","Conversion Factor","Priority",',
+      'Joghurt,Becher,400,1,',
+    ].join('\n');
+    expect(parseIngredientMappingsCsv(comma)).toEqual({
+      Joghurt: [{ au: 'Becher', factor: 400, priority: 1 }],
+    });
+  });
+
+  it('writes the canonical semicolon form again after reading a comma file', () => {
+    // The file heals itself on the next write instead of staying comma-separated.
+    expect(
+      serializeIngredientMappingsCsv(
+        parseIngredientMappingsCsv(MAPPINGS_TEXT.replaceAll(';', ',')),
+      ),
+    ).toBe(`${MAPPINGS_TEXT}\n`);
+    expect(serializeIngredientListCsv(parseIngredientListCsv(LIST_TEXT.replaceAll(';', ',')))).toBe(
+      `${LIST_TEXT}\n`,
+    );
+  });
+
+  it('still reports the file\u2019s own header when no accepted header matches', () => {
+    // The message shows the comma header verbatim — the visible hint for a file
+    // whose header matches no accepted format (here: a renamed column).
+    expect(() =>
+      parseIngredientMappingsCsv(
+        'Ingredient,Additional Unit,Factor,Priority\nJoghurt,Becher,400,1',
+      ),
+    ).toThrow(/unerwartete Kopfzeile "Ingredient,Additional Unit,Factor,Priority"/);
+  });
+});
+
 describe('mergeIngredientMasterData', () => {
   it('combines list and mappings into the registry shape', () => {
     expect(mergeIngredientMasterData(LIST, MAPPINGS)).toEqual(MERGED);

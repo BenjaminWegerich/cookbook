@@ -371,8 +371,10 @@ The files are created on the first user addition („Neue Zutat anlegen“ in th
 editor), seeded with the built-in repo data, and are the authoritative master data once
 they exist: the app loads both into the runtime registry at startup and renders/exports
 every ingredient through them. Dot decimals; the parser tolerates German commas from
-spreadsheet edits. The files are user data like the recipes themselves — the repo CSVs
-are only the seed.
+spreadsheet edits. The canonical delimiter is `;`; a file exported comma-separated
+(spreadsheet apps do that in an English locale) still loads — the header row decides the
+delimiter, quoted cells are honoured — and the next write restores the semicolon form.
+The files are user data like the recipes themselves — the repo CSVs are only the seed.
 
 ## 10. Shopping Route, Item Table and Synonym Table
 
