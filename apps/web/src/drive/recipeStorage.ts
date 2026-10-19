@@ -11,9 +11,8 @@
  *   text artifacts and reference names) in all other recipes (pure
  *   transformation in @cookbook/core, ./rename).
  *
- * The folder is created on first use and its id is remembered in localStorage
- * (the "drive.file" scope only exposes files the app created itself, so a
- * name search alone cannot find folders from other apps) — see
+ * The folder is created on first use and its id is remembered in localStorage,
+ * so the app resolves to the same folder instead of guessing by name — see
  * ./cookbookFolder, which all master data shares.
  *
  * All writes go through a round-trip check (`serializeRecipe` + `parseRecipe`)

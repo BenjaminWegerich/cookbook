@@ -3,8 +3,10 @@
  *
  * The app needs Google access for two unrelated jobs, and they are kept apart on purpose:
  *
- * - **Drive** (`.../auth/drive.file`) — the recipe collection. The browser calls the Drive
- *   API with it directly.
+ * - **Drive** (`.../auth/drive`) — the recipe collection. The browser calls the Drive API
+ *   with it directly. Full Drive access is what makes recipes visible that this app did not
+ *   create itself (files copied in through the Drive UI, a folder shared between two
+ *   accounts); the code keeps to the Cookbook folder, see ../drive/cookbookFolder.
  * - **Identity** (`openid email`) — proof of *who* the user is, presented to the Keep
  *   gateway. It grants no access to any data, which is what makes it safe to hand to our own
  *   backend — and the reason the gateway never gets the Drive token.
@@ -26,8 +28,18 @@
 
 import { GOOGLE_CLIENT_ID } from '../config';
 
-/** OAuth scope: access to files the app itself creates or opens in Drive. */
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+/**
+ * OAuth scope: the signed-in account's Drive.
+ *
+ * Deliberately broader than the "drive.file" per-file scope it replaced — that
+ * one only exposes files this app created itself, so recipes copied in through
+ * the Drive UI (or a collection folder shared between two accounts) stayed
+ * invisible, without any error. Full Drive access is the only scope Google
+ * offers that covers those files; a folder-scoped grant does not exist.
+ * The app keeps to the Cookbook folder (../drive/cookbookFolder); moving the
+ * credential out of the browser is tracked in docs/ROADMAP.md.
+ */
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 
 /**
  * OAuth scope for the Keep gateway: the account's address, and nothing else.

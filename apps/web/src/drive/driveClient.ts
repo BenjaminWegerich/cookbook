@@ -1,9 +1,10 @@
 /**
  * Minimal Google Drive API client (REST via fetch).
  *
- * Uses the access token from ./auth/googleAuth with the "drive.file" scope,
- * i.e. only files this app created (or opened) are visible — the rest of the
- * user's Drive stays hidden.
+ * Uses the access token from ./auth/googleAuth with the "drive" scope, i.e.
+ * the signed-in account's whole Drive is reachable. The storage layer narrows
+ * that to the Cookbook folder: every collection call takes the folder id from
+ * ./cookbookFolder, and files are addressed by ids found inside it.
  *
  * The recipe storage format (Markdown + YAML files, folder structure) is
  * defined in docs/storage_format.md; this module provides the low-level
@@ -94,10 +95,11 @@ async function driveRequest<T>(token: string, path: string, init: RequestInit = 
 }
 
 /**
- * Lists the app's files in Drive (files not in the trash).
+ * Lists files in the account's Drive (files not in the trash).
  *
- * With the "drive.file" scope this returns only files the app itself created
- * or explicitly opened. Used as the connectivity smoke test.
+ * With the "drive" scope this returns everything the account can see, so the
+ * result is not the collection — listing the collection goes through
+ * listFilesInFolder(token, folderId). Used as the connectivity smoke test.
  */
 export async function listFiles(token: string): Promise<DriveFile[]> {
   const params = new URLSearchParams({

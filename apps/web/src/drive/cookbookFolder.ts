@@ -2,9 +2,10 @@
  * The Cookbook folder in Google Drive — the one container every master data
  * file and every recipe lives in.
  *
- * It is created on first use, and its id is remembered in localStorage: the
- * "drive.file" scope only exposes files the app created itself, so a name
- * search alone cannot find a folder from another app on a later visit.
+ * It is created on first use, and its id is remembered in localStorage so the
+ * app keeps resolving to the same folder: a name search is ambiguous as soon
+ * as a second folder called "Cookbook" exists (for example one shared from
+ * another account), and the cached id also survives a rename.
  *
  * The helper lives here rather than in ./recipeStorage (where it started)
  * because the ingredient master data and the shopping route use it as well —

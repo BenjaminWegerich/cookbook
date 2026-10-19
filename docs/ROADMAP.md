@@ -225,6 +225,20 @@ Two things to carry over rather than rediscover:
 
 - [ ] Gemini for Home: speech-optimized preparation of recipe steps for read-aloud.
 
+## Drive access (depends on: web app, storage)
+
+- [ ] **Folder-scoped Drive credential via a gateway.** The web app calls the Drive API with
+      the signed-in account's `drive` token. The code only touches the Cookbook folder, but
+      the grant covers that account's whole Drive — the price for seeing recipes the app did
+      not create itself (imported files, a shared collection folder). Replace it with a small
+      HTTP service in the shape of the Keep gateway (Cloud Run, identity token + allowlist,
+      secret held server-side): it acts as a service account (or a throwaway account) on the
+      Cookbook folder shared with it and exposes list, read, write, rename, delete, photo
+      upload/download and HTML export. The browser would then hold no Drive token, a leaked
+      credential would reach exactly the shared folder, and two personal accounts could share
+      one collection without either granting full Drive access.
+      Prerequisite for [Sharing](#sharing-depends-on-web-app-storage).
+
 ## Sharing (depends on: web app, storage)
 
 - [x] Share an individual recipe: the recipe overview's „Mehr“ menu leads with „Link kopieren“
