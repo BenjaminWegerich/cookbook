@@ -68,6 +68,9 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
       - [x] Resume the chat after a draft has been created: change requests go to the AI, and a
             drafted Zutaten-Rezept continues the same conversation after it was saved (the dish
             that uses it is prefilled as the next request).
+- [x] Model `gemini-3.8-flash` (free tier) with the URL context tool: a link pasted into the AI
+      prompt is read server-side, so copied page text is only the fallback. Google Search
+      grounding stays off — not available on the free tier.
 
 ## Google Keep — follow-up milestone (depends on: web app)
 

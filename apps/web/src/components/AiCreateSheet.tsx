@@ -16,7 +16,7 @@
  * - No blocking "new ingredient" confirm step: the draft opens in the recipe
  *   editor, where unknown ingredient names / sub-recipes are handled with the
  *   editor's existing flows ("Neue Zutat anlegen", saving an ingredient_recipe).
- * - The first prompt carries recipe specifications below the source field: the
+ * - The first prompt carries recipe specifications below the prompt field: the
  *   manual editor's Typ and Portionen/Ergiebigkeit controls (defaults: 6
  *   Portionen for a Gericht, Gewicht / 1 kg for a Zutaten-Rezept), the Merkmale
  *   flags "Vorgaben" (vegan — always on for now, schnell und einfach, günstig)
@@ -42,8 +42,8 @@
  *   focus and only on pointer/keyboard devices — see .ai-field-hint.
  *
  * The same sheet also runs the AI-edit flow ("Mit KI bearbeiten", Task B of the
- * rules): `mode === 'edit'` drops every create-only extra — the source textarea
- * and the Typ/Portionen/Merkmale/„KI-Verhalten“ block — so the screen is the
+ * rules): `mode === 'edit'` drops every create-only extra — the
+ * Typ/Portionen/Merkmale/„KI-Verhalten“ block — so the screen is the
  * explanation plus a *single* prompt field. The original recipe is transferred
  * to the AI in full (buildEditTaskText) and the user only describes the desired
  * changes; the prompt's explanation says exactly that. Everything else (API
@@ -63,7 +63,7 @@ import {
 } from 'react';
 import type { KeyboardEvent, Ref } from 'react';
 
-import { NNBSP, allIngredientMappings, integerLadderValues, serializeRecipe } from '@cookbook/core';
+import { allIngredientMappings, integerLadderValues, serializeRecipe } from '@cookbook/core';
 import type { Recipe, RecipeType } from '@cookbook/core';
 
 import {
@@ -235,8 +235,8 @@ interface AiCreateSheetProps {
   /**
    * Which task the sheet runs: `'create'` (Task A, the default) starts a new
    * recipe from a description, `'edit'` (Task B) revises the recipe passed as
-   * `editTarget`. Edit mode hides the create-only extras (source textarea,
-   * Vorgaben) and shows a single prompt field.
+   * `editTarget`. Edit mode hides the create-only extras (the Vorgaben block)
+   * and shows a single prompt field.
    */
   mode?: 'create' | 'edit';
   /**
@@ -374,18 +374,6 @@ function handoffPrompt(title: string): string {
   return `Erstelle jetzt das eigentliche Gericht und verwende „${title}“ als Zutat.`;
 }
 
-/**
- * Splits a user input into a leading description and any pasted source text,
- * giving the AI both (source text = "Inspiration", pasted by the user).
- */
-function composeUserMessage(description: string, source: string): string {
-  const parts = [description.trim()];
-  if (source.trim() !== '') {
-    parts.push(`Als Inspiration übernehme ich folgenden Quelltext:\n\n${source.trim()}`);
-  }
-  return parts.join('\n\n');
-}
-
 /** The current (newest) draft in the transcript, or null. */
 function currentDraft(entries: readonly ChatEntry[]): Recipe | null {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
@@ -430,13 +418,11 @@ export default function AiCreateSheet({
   /** Chat transcript, including the draft card at its creation point. */
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [description, setDescription] = useState(initialPrompt ?? '');
-  const [source, setSource] = useState('');
-  /** The prompt and the source field grow with their content (§5.3). One ref
-   *  serves the prompt: the reply field reuses it once a conversation started. */
+  /** The prompt field grows with its content (§5.3). One ref serves the first
+   *  field and, once a conversation started, the reply field. */
   const draftFieldRef = useGrowingTextarea(description);
-  const sourceFieldRef = useGrowingTextarea(source);
   /**
-   * Recipe specifications below the source field (editor parity): the Typ
+   * Recipe specifications below the prompt field (editor parity): the Typ
    * toggle, the type-dependent Portionen / Ergiebigkeit input, and the
    * Merkmale flags. They are serialized into the session's system instruction
    * (see the specification effect below), so they constrain every turn of the
@@ -615,14 +601,13 @@ export default function AiCreateSheet({
   /** Sends the description / answer and advances the conversation. */
   const handleSend = async (): Promise<void> => {
     if (session === null || busy || refreshing) return;
-    if (description.trim() === '' && source.trim() === '') return;
+    if (description.trim() === '') return;
     setError(null);
-    const userText = composeUserMessage(description, source);
+    const userText = description.trim();
     // A draft already exists: this text is a change request for it (rule A4).
     const revise = draft !== null;
     setEntries((current) => [...current, { kind: 'message', role: 'user', content: userText }]);
     setDescription('');
-    setSource('');
     setBusy(true);
     try {
       const result = revise ? await session.sendRevision(userText) : await session.send(userText);
@@ -683,7 +668,7 @@ export default function AiCreateSheet({
    *  recipe, so the button waits (derived, not state: it mirrors the parent's
    *  handoff signal, which is cleared when the refresh finished). */
   const refreshing = handoff !== null && session !== null;
-  const canSend = !busy && !refreshing && (description.trim() !== '' || source.trim() !== '');
+  const canSend = !busy && !refreshing && description.trim() !== '';
 
   /**
    * Placeholder of the shared prompt field. Before the first turn an edit
@@ -714,7 +699,6 @@ export default function AiCreateSheet({
    *  too — the key is session-only (N6), so leaving it loses nothing. */
   const hasWork =
     (description !== initialPromptValue && description.trim() !== '') ||
-    source.trim() !== '' ||
     entries.length > 0 ||
     draft !== null;
 
@@ -727,7 +711,7 @@ export default function AiCreateSheet({
    * it threatened is gone (see useLeaveGuard).
    */
   const guard = useLeaveGuard({
-    workSignature: `${description}\u0000${source}\u0000${entries.length}\u0000${draft !== null}`,
+    workSignature: `${description}\u0000${entries.length}\u0000${draft !== null}`,
     needsConfirm: hasWork,
   });
 
@@ -836,27 +820,18 @@ export default function AiCreateSheet({
                     {isEdit ? (
                       // Edit task (Task B): the whole point of the screen is
                       // that the user does not retype the recipe — say so before
-                      // the single prompt field.
-                      <>
-                        <p>
-                          Das Rezept „{editTarget?.title ?? ''}“ wird vollständig an die KI
-                          übergeben.
-                        </p>
-                        <p>
-                          Beschreibe unten nur, was sich ändern soll — z.{NNBSP}B. „ohne Sahne“,
-                          „für 4 Portionen“ oder „Mengen und Einheiten prüfen“.
-                        </p>
-                      </>
+                      // the single prompt field. Both variants name the one
+                      // thing that replaces copied page text: a link.
+                      <p>
+                        Das Rezept „{editTarget?.title ?? ''}“ wird vollständig an die KI übergeben.
+                        Beschreibe die gewünschten Änderungen frei und beliebig detailliert. Füge
+                        Links zu Webseiten ein, wenn diese als Inspiration dienen sollen.
+                      </p>
                     ) : (
-                      <>
-                        <p>Beschreibe das Gericht frei und beliebig detailliert.</p>
-                        <p>
-                          Soll eine Webseite als Inspiration dienen, füge nicht den Link ein,
-                          sondern beschreibe die Webseite (z.{NNBSP}B. „Thick and Creamy Tomato Soup
-                          von Serious Eats“), oder kopiere den Text und füge ihn im zweiten Feld
-                          ein.
-                        </p>
-                      </>
+                      <p>
+                        Beschreibe das Gericht frei und beliebig detailliert. Füge Links zu
+                        Webseiten ein, wenn diese als Inspiration dienen sollen.
+                      </p>
                     )}
                   </div>
                 )}
@@ -932,16 +907,6 @@ export default function AiCreateSheet({
                         value={description}
                         placeholder={promptPlaceholder}
                         onChange={(event) => setDescription(event.target.value)}
-                      />
-                      <FieldHint />
-                    </div>
-                    {/* Optional pasted source text: grows the same way. */}
-                    <div className="ai-field">
-                      <textarea
-                        ref={sourceFieldRef}
-                        value={source}
-                        placeholder="Quelltext von einer Webseite einfügen (optional) …"
-                        onChange={(event) => setSource(event.target.value)}
                       />
                       <FieldHint />
                     </div>

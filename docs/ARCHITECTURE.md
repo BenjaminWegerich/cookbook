@@ -451,4 +451,6 @@ The VM tiers were rejected on their own merits before authentication was ever te
   the master token has to be minted from the cloud — a home-minted token is refused there.
 - Gemini Home / read-aloud integration details (product/API chosen when that milestone is built).
 - Recipe-editing AI is decided: Google Gemini via browser-direct REST (`generateContent`), key
-  pasted per session; see the ROADMAP Phase 3 note and `apps/web/src/ai/`.
+  pasted per session, model `gemini-3.8-flash` with the URL context tool (the Interactions API is
+  the eventual migration). Google Search grounding is off (paid tier only). See the ROADMAP
+  Phase 3 note and `apps/web/src/ai/`.
