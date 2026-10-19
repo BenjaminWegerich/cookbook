@@ -1,20 +1,20 @@
 Additional Unit;Singular;Plural;Arrangement;Number Scheme;Unit Exact;Shopping Unit
-Dose (Abtropfgewicht);Dose;Dosen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Abtropfgewicht);integers_up_to_10;yes;yes
-Dose (Gesamtgewicht);Dose;Dosen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Gesamtgewicht);integers_up_to_10;yes;yes
-Dose Kichererbsen;Dose Kichererbsen;Dosen Kichererbsen;<BQ><NNBSP><BU> <IN> (<AQ><NNBSP><AU>);integers_up_to_10;yes;yes
+Dose (Abtropfgewicht);Dose;Dosen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Abtropfgewicht);halves_and_integers_up_to_30;yes;yes
+Dose (Gesamtgewicht);Dose;Dosen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Gesamtgewicht);halves_and_integers_up_to_30;yes;yes
 Esslöffel;EL;EL;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;no;no
-Packung (teilbar);Packung;Packungen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes;yes
+Packung (teilbar);Packung;Packungen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);all_fractions_and_integers_up_to_30;yes;yes
 Packung (halbierbar);Packung;Packungen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes;yes
-Packung (unteilbar);Packung;Packungen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;yes;yes
-Stück (ZE zuerst);Stück;Stück;<AQ><NNBSP><AU> <INF> (<BQ><NNBSP><BU>);integers_up_to_10;no;yes
+Packung (unteilbar);Packung;Packungen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_30;yes;yes
+Stück (ZE zuerst);Stück;Stück;<AQ><NNBSP><INF> (<BQ><NNBSP><BU>);quarters_halves_and_integers_up_to_30;no;yes
 Teelöffel;TL;TL;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;no;no
-Zweig;Zweig;Zweige;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;no;no
-Topf;Topf;Töpfe;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;no;yes
-Stück (BE zuerst);Stück;Stück;<BQ><NNBSP><BU> <IN> (<AQ><NNBSP>Stück);integers_up_to_10;no;yes
-Bund;Bund;Bünde;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;no;yes
-Tube;Tube;Tuben;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;yes;yes
-Päckchen;Päckchen;Päckchen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;yes;yes
-Würfel;Würfel;Würfel;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;yes;yes
+Zweig;Zweig;Zweige;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);quarters_halves_and_integers_up_to_30;no;no
+Topf;Topf;Töpfe;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);quarters_halves_and_integers_up_to_30;no;yes
+Stück (BE zuerst);Stück;Stück;<BQ><NNBSP><BU> <IN> (<AQ><NNBSP><INF>);quarters_halves_and_integers_up_to_30;no;yes
+Stück (BE zuerst, exakt);Stück;Stück;<BQ><NNBSP><BU> <IN> (<AQ><NNBSP><INF>);quarters_halves_and_integers_up_to_30;yes;yes
+Bund;Bund;Bünde;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);quarters_halves_and_integers_up_to_30;no;yes
+Tube;Tube;Tuben;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes;yes
+Päckchen;Päckchen;Päckchen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes;yes
+Würfel;Würfel;Würfel;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes;yes
 Blatt;Blatt;Blätter;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;yes;yes
-Flasche;Flasche;Flaschen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;yes;yes
+Flasche;Flasche;Flaschen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes;yes
 Becher;Becher;Becher;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes;yes

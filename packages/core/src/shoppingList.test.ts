@@ -240,8 +240,17 @@ describe('shoppingRow', () => {
     // 500 g needed → 7 pieces, while the line keeps the amount the dishes need
     // (7 × 80 g = 560 g is the approximate reading, 500 g the authoritative one).
     expect(shoppingRow(need({ ingredient: 'Karotten', needed: 500 }), 0).text).toBe(
-      `7${NB}Stück Karotten (500${NB}g)`,
+      `7${NB}Karotten (500${NB}g)`,
     );
+  });
+
+  it('names the exact BE-first unit through the ingredient count forms', () => {
+    // Aquafaba is bought by the can behind "Stück (BE zuerst, exakt)"; the
+    // arrangement leads with the base amount and names the can as the count.
+    const row = shoppingRow(need({ ingredient: 'Aquafaba', needed: 180, baseUnit: 'ml' }), 0);
+    expect(row.text).toBe(`180${NB}ml Aquafaba (1${NB}Dose Kichererbsen)`);
+    // The name-less "kaufen" side keeps the count form, too.
+    expect(row.amountText).toBe(`180${NB}ml (1${NB}Dose Kichererbsen)`);
   });
 
   it('falls back to the family unit without a shopping unit, rounded up to a whole unit', () => {

@@ -50,7 +50,11 @@ import {
   shoppingUnitFor,
 } from './additionalUnits.js';
 import { aqToNumber, isAQValue } from './aqLadder.js';
-import { NUMBER_SCHEMES, type AdditionalUnit } from './additionalUnitsData.js';
+import {
+  NUMBER_SCHEMES,
+  type AdditionalUnit,
+  type IngredientEntry,
+} from './additionalUnitsData.js';
 import { mappingsFor } from './ingredientRegistry.js';
 import {
   difference,
@@ -245,6 +249,8 @@ export function shoppingNeeds(uses: readonly Ingredient[]): ShoppingNeed[] {
  * @param factor the mapping's conversion factor (base unit per one unit)
  * @param bu the family unit the amount is expressed in
  * @param amount the missing base quantity (see `shoppingRow`)
+ * @param entry the ingredient entry that supplies `<INF>` while the name is
+ *   hidden (the singular/plural count form of units without `<AU>`)
  */
 function renderShoppingAmount(
   count: number,
@@ -252,8 +258,9 @@ function renderShoppingAmount(
   factor: number,
   bu: string,
   amount: number,
+  entry: IngredientEntry | undefined,
 ): string {
-  return renderUnitCount('', count, au, factor, bu, amount);
+  return renderUnitCount('', count, au, factor, bu, amount, entry);
 }
 
 /**
@@ -359,7 +366,8 @@ export function shoppingRow(need: ShoppingNeed, stock: number): ShoppingRow {
   if (!(missing > 0)) {
     return { ...base, covered: true, text: null, amountText: null };
   }
-  const target = shoppingUnitFor(mappingsFor(need.ingredient), need.baseUnit);
+  const entry = mappingsFor(need.ingredient);
+  const target = shoppingUnitFor(entry, need.baseUnit);
   if (target !== null) {
     const count = Math.ceil(roundThousandths(missing / target.factor));
     return {
@@ -373,7 +381,14 @@ export function shoppingRow(need: ShoppingNeed, stock: number): ShoppingRow {
         need.baseUnit,
         missing,
       ),
-      amountText: renderShoppingAmount(count, target.au, target.factor, need.baseUnit, missing),
+      amountText: renderShoppingAmount(
+        count,
+        target.au,
+        target.factor,
+        need.baseUnit,
+        missing,
+        entry,
+      ),
     };
   }
   const amount = Math.ceil(missing);

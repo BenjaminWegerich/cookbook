@@ -43,7 +43,6 @@ describe('generated additional-unit master data', () => {
     expect(ADDITIONAL_UNITS.map((unit) => unit.name)).toEqual([
       'Dose (Abtropfgewicht)',
       'Dose (Gesamtgewicht)',
-      'Dose Kichererbsen',
       'Esslöffel',
       'Packung (teilbar)',
       'Packung (halbierbar)',
@@ -53,6 +52,7 @@ describe('generated additional-unit master data', () => {
       'Zweig',
       'Topf',
       'Stück (BE zuerst)',
+      'Stück (BE zuerst, exakt)',
       'Bund',
       'Tube',
       'Päckchen',
@@ -82,15 +82,37 @@ describe('generated additional-unit master data', () => {
 
   it('assigns one of the defined number schemes to every unit', () => {
     const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.numberScheme]));
-    // Half-measure containers may show halves; counting units stay whole.
-    expect(byName.get('Becher')).toBe('halves_and_integers_up_to_30');
-    expect(byName.get('Packung (teilbar)')).toBe('halves_and_integers_up_to_30');
-    expect(byName.get('Packung (halbierbar)')).toBe('halves_and_integers_up_to_30');
-    expect(byName.get('Packung (unteilbar)')).toBe('integers_up_to_10');
-    expect(byName.get('Stück (ZE zuerst)')).toBe('integers_up_to_10');
-    expect(byName.get('Stück (BE zuerst)')).toBe('integers_up_to_10');
+    // Whole counting units stay whole.
+    expect(byName.get('Blatt')).toBe('integers_up_to_10');
     expect(byName.get('Esslöffel')).toBe('integers_up_to_10');
     expect(byName.get('Teelöffel')).toBe('integers_up_to_10');
+    // Half-measure containers may show halves.
+    for (const name of [
+      'Dose (Abtropfgewicht)',
+      'Dose (Gesamtgewicht)',
+      'Packung (halbierbar)',
+      'Tube',
+      'Päckchen',
+      'Würfel',
+      'Flasche',
+      'Becher',
+    ]) {
+      expect(byName.get(name), name).toBe('halves_and_integers_up_to_30');
+    }
+    // The divisible pack carries every fraction; the indivisible one only wholes.
+    expect(byName.get('Packung (teilbar)')).toBe('all_fractions_and_integers_up_to_30');
+    expect(byName.get('Packung (unteilbar)')).toBe('integers_up_to_30');
+    // Counting units accept quarters and halves.
+    for (const name of [
+      'Stück (ZE zuerst)',
+      'Stück (BE zuerst)',
+      'Stück (BE zuerst, exakt)',
+      'Zweig',
+      'Topf',
+      'Bund',
+    ]) {
+      expect(byName.get(name), name).toBe('quarters_halves_and_integers_up_to_30');
+    }
     // Every unit references a scheme the generator compiled.
     for (const unit of ADDITIONAL_UNITS) {
       expect(NUMBER_SCHEMES[unit.numberScheme], unit.name).toBeDefined();
@@ -105,9 +127,11 @@ describe('generated additional-unit master data', () => {
     expect(byName.get('Becher')).toBe(true);
     expect(byName.get('Packung (unteilbar)')).toBe(true);
     expect(byName.get('Tube')).toBe(true);
+    expect(byName.get('Stück (BE zuerst, exakt)')).toBe(true);
     expect(byName.get('Esslöffel')).toBe(false);
     expect(byName.get('Teelöffel')).toBe(false);
     expect(byName.get('Stück (ZE zuerst)')).toBe(false);
+    expect(byName.get('Stück (BE zuerst)')).toBe(false);
     expect(byName.get('Zweig')).toBe(false);
   });
 
@@ -151,7 +175,7 @@ describe('generated additional-unit master data', () => {
     }
   });
 
-  it('defines the two schemes as documented', () => {
+  it('defines the number schemes as documented', () => {
     expect(NUMBER_SCHEMES.integers_up_to_10).toEqual([
       '1',
       '2',
@@ -188,10 +212,106 @@ describe('generated additional-unit master data', () => {
       '28',
       '30',
     ]);
-    // Fractions that are neither integer nor half are excluded (e.g. 1+1/4),
-    // and the upper bound cuts off at 30 (e.g. 35).
+    expect(NUMBER_SCHEMES.integers_up_to_30).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '10',
+      '12',
+      '15',
+      '18',
+      '20',
+      '22',
+      '25',
+      '28',
+      '30',
+    ]);
+    expect(NUMBER_SCHEMES.quarters_halves_and_integers_up_to_30).toEqual([
+      '1/4',
+      '1/2',
+      '3/4',
+      '1',
+      '1+1/4',
+      '1+1/2',
+      '1+3/4',
+      '2',
+      '2+1/4',
+      '2+1/2',
+      '2+3/4',
+      '3',
+      '3+1/2',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '10',
+      '12',
+      '15',
+      '18',
+      '20',
+      '22',
+      '25',
+      '28',
+      '30',
+    ]);
+    expect(NUMBER_SCHEMES.all_fractions_and_integers_up_to_30).toEqual([
+      '1/10',
+      '1/9',
+      '1/8',
+      '1/6',
+      '1/5',
+      '1/4',
+      '1/3',
+      '3/8',
+      '2/5',
+      '1/2',
+      '3/5',
+      '2/3',
+      '3/4',
+      '7/8',
+      '1',
+      '1+1/4',
+      '1+1/2',
+      '1+3/4',
+      '2',
+      '2+1/4',
+      '2+1/2',
+      '2+3/4',
+      '3',
+      '3+1/2',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '10',
+      '12',
+      '15',
+      '18',
+      '20',
+      '22',
+      '25',
+      '28',
+      '30',
+    ]);
+    // Fractions that are neither integer nor half are excluded from the halves
+    // scheme (e.g. 1+1/4), and every scheme cuts off at 30 (e.g. 35).
     expect(NUMBER_SCHEMES.halves_and_integers_up_to_30).not.toContain('1+1/4');
     expect(NUMBER_SCHEMES.halves_and_integers_up_to_30).not.toContain('35');
+    expect(NUMBER_SCHEMES.integers_up_to_30).not.toContain('1/2');
+    expect(NUMBER_SCHEMES.integers_up_to_30).not.toContain('35');
+    expect(NUMBER_SCHEMES.quarters_halves_and_integers_up_to_30).not.toContain('1/3');
+    expect(NUMBER_SCHEMES.quarters_halves_and_integers_up_to_30).not.toContain('35');
+    expect(NUMBER_SCHEMES.all_fractions_and_integers_up_to_30).not.toContain('35');
   });
 
   it('maps Joghurt with factors 400/24/7.5 and ascending priorities', () => {
@@ -216,6 +336,18 @@ describe('generated additional-unit master data', () => {
       entries: [],
     });
     expect(masterIngredientNames()).toContain('Cashews');
+  });
+
+  it('maps Aquafaba to the exact BE-first unit and names one can in the line', () => {
+    // One can of chickpeas yields 180 ml of aquafaba; the exact unit derives the
+    // shown amount from that count, while the ingredient forms name the can.
+    expect(INGREDIENT_MAPPINGS.Aquafaba).toEqual({
+      bu: 'ml',
+      reorderPoint: 0,
+      singular: 'Dose Kichererbsen',
+      plural: 'Dosen Kichererbsen',
+      entries: [{ au: 'Stück (BE zuerst, exakt)', factor: 180, priority: 1 }],
+    });
   });
 
   it('carries the display forms of the seed and leaves invariant names bare', () => {
@@ -356,9 +488,9 @@ describe('renderAQS (§4)', () => {
 });
 
 describe('renderAQS exact units (§6.3)', () => {
-  // The seed marks only Becher as exact. For an exact unit the shown base
-  // quantity follows the shown count, so the display can never contradict
-  // itself: 1000 g Joghurt would otherwise read "2+1/2 Becher (1 kg)".
+  // Becher is exact in the seed. For an exact unit the shown base quantity
+  // follows the shown count, so the display can never contradict itself:
+  // 1000 g Joghurt would otherwise read "2+1/2 Becher (1 kg)".
   it('derives the shown base quantity from the rounded AQ for exact units', () => {
     // A quantity whose AQ rounding moves the amount: 1500 g ÷ 400 g = 3.75
     // rounds to 4 Becher (scheme: halves and integers), and the shown amount is
@@ -379,6 +511,24 @@ describe('renderAQS exact units (§6.3)', () => {
     expect(renderAQS('Joghurt', 50, 'g')).toBe(`2${NNBSP}EL Joghurt (50${NNBSP}g)`);
     expect(renderAQS('Joghurt', 25, 'g')).toBe(`1${NNBSP}EL Joghurt (25${NNBSP}g)`);
     expect(renderAQS('Joghurt', 8, 'g')).toBe(`1${NNBSP}TL Joghurt (8${NNBSP}g)`);
+  });
+
+  it('renders the exact BE-first unit with the ingredient count forms', () => {
+    // Aquafaba maps to "Stück (BE zuerst, exakt)": the base amount leads, the
+    // can count follows in the ingredient's Singular/Plural pair. One can is
+    // 180 ml, so the count and the shown amount agree.
+    expect(renderAQS('Aquafaba', 180, 'ml')).toBe(
+      `180${NNBSP}ml Aquafaba (1${NNBSP}Dose Kichererbsen)`,
+    );
+    // 90 ml is half a can (singular, a fraction below one); 280 ml stored
+    // rounds to 1+1/2 cans, and the exact unit shows the 270 ml they bring
+    // home (1+1/2 × 180 ml) in the plural.
+    expect(renderAQS('Aquafaba', 90, 'ml')).toBe(
+      `90${NNBSP}ml Aquafaba (½${NNBSP}Dose Kichererbsen)`,
+    );
+    expect(renderAQS('Aquafaba', 280, 'ml')).toBe(
+      `270${NNBSP}ml Aquafaba (1${NNBSP}½${NNBSP}Dosen Kichererbsen)`,
+    );
   });
 
   it('exposes the mapping factor on the selection', () => {
@@ -444,11 +594,11 @@ describe('ingredient display forms (storage_format.md §9)', () => {
   });
 
   it('uses <INF> where the arrangement asks for the count form', () => {
-    // Karotten maps to "Stück (ZE zuerst)", whose arrangement uses <INF>: one
-    // Stück reads "Karotte", five read "Karotten". A unit whose arrangement
-    // keeps <IN> shows the canonical name for every count instead.
-    expect(renderAQS('Karotten', 80, 'g')).toBe(`1${NNBSP}Stück Karotte (80${NNBSP}g)`);
-    expect(renderAQS('Karotten', 400, 'g')).toBe(`5${NNBSP}Stück Karotten (400${NNBSP}g)`);
+    // Karotten maps to "Stück (ZE zuerst)", whose arrangement uses only <INF>
+    // (no <AU>): one reads "Karotte", five read "Karotten". A unit whose
+    // arrangement keeps <IN> shows the canonical name for every count instead.
+    expect(renderAQS('Karotten', 80, 'g')).toBe(`1${NNBSP}Karotte (80${NNBSP}g)`);
+    expect(renderAQS('Karotten', 400, 'g')).toBe(`5${NNBSP}Karotten (400${NNBSP}g)`);
   });
 });
 
@@ -515,7 +665,7 @@ describe('renderQuantityText (a quantity that is not a stored recipe value)', ()
   it('always uses an approximate unit, which keeps the queried amount', () => {
     // A piece of carrot is about 80 g, so 500 g is six pieces — the amount the
     // dishes need stays the authoritative reading (§6.3).
-    expect(renderQuantityText('Karotten', 500, 'g')).toBe(`6${NNBSP}Stück Karotten (500${NNBSP}g)`);
+    expect(renderQuantityText('Karotten', 500, 'g')).toBe(`6${NNBSP}Karotten (500${NNBSP}g)`);
   });
 
   it('falls back to the base form for an unknown ingredient or another family unit', () => {
@@ -742,7 +892,7 @@ describe('pantryReading (the pantry sheet’s nearest-ladder reading)', () => {
 
   it('reads an empty amount as 0 in the unit', () => {
     expect(renderPantryAmount('Mehl', 0, 'g')).toBe(`0${NNBSP}Packung (0${NNBSP}g)`);
-    expect(renderPantryAmount('Karotten', 0, 'g')).toBe(`0${NNBSP}Stück (0${NNBSP}g)`);
+    expect(renderPantryAmount('Karotten', 0, 'g')).toBe(`0${NNBSP}Karotte (0${NNBSP}g)`);
   });
 
   it('keeps the amount itself as the shown base quantity, even for an exact unit', () => {
@@ -756,7 +906,14 @@ describe('pantryReading (the pantry sheet’s nearest-ladder reading)', () => {
 
   it('counts whole pieces for an approximate shopping unit', () => {
     // 500 g of carrots at about 80 g a piece is 6¼ → 6 pieces.
-    expect(renderPantryAmount('Karotten', 500, 'g')).toBe(`6${NNBSP}Stück (500${NNBSP}g)`);
+    expect(renderPantryAmount('Karotten', 500, 'g')).toBe(`6${NNBSP}Karotten (500${NNBSP}g)`);
+  });
+
+  it('keeps the ingredient count form while the name is hidden', () => {
+    // The pantry amount omits <IN>, but the can still appears through <INF>.
+    expect(renderPantryAmount('Aquafaba', 180, 'ml')).toBe(
+      `180${NNBSP}ml (1${NNBSP}Dose Kichererbsen)`,
+    );
   });
 
   it('counts beyond the ladder as a whole number', () => {

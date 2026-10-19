@@ -431,7 +431,9 @@ export function renderArrangementTemplate(arrangement: string, values: Arrangeme
  *
  * `entry` is the ingredient entry the `<INF>` display forms are read from;
  * callers that already hold one (the create form's draft, renderQuantityText)
- * pass it, and the registry is consulted otherwise.
+ * pass it, and the registry is consulted otherwise. A caller that hides the
+ * name (an empty `ingredient`) can still pass the entry so `<INF>` keeps its
+ * singular/plural form — the name-less shopping and pantry lines rely on it.
  */
 function renderSelectedAQ(
   ingredient: string,
@@ -536,7 +538,7 @@ const AMOUNT_EPSILON = 1e-6;
  *   needed is not 400 g needed, so the mapping is skipped and the search
  *   continues — down to the base form ("350 g Joghurt"). An approximate unit
  *   always applies: it keeps the queried amount as the authoritative reading
- *   ("6 Stück Karotten (500 g)").
+ *   ("6 Karotten (500 g)").
  *
  * An empty name (the create form's preview before a name is typed) has no
  * mappings to look up, so the base amount stands alone ("600 g").
@@ -637,6 +639,8 @@ export function shoppingUnitFor(
  * @param factor the mapping's conversion factor (base unit per one unit)
  * @param bu the family unit the amount is expressed in
  * @param amount the required base quantity (see above)
+ * @param entry the ingredient entry that supplies `<INF>` when `ingredient` is
+ *   empty (the name-less shopping amount)
  */
 export function renderUnitCount(
   ingredient: string,
@@ -645,9 +649,17 @@ export function renderUnitCount(
   factor: number,
   bu: string,
   amount: number,
+  entry?: AuSelectableEntry,
 ): string {
   const shownBq = au.exact ? count * factor : amount;
-  return renderSelectedAQ(ingredient, { aq: String(count), au, factor }, bu, shownBq, formatAQ);
+  return renderSelectedAQ(
+    ingredient,
+    { aq: String(count), au, factor },
+    bu,
+    shownBq,
+    formatAQ,
+    entry,
+  );
 }
 
 /**
@@ -727,7 +739,12 @@ function pantryAqNotation(aq: number): string {
  * name-less form is what the sheet shows (it carries the name elsewhere); the
  * named form is the Keep write's line.
  */
-function renderPantryText(ingredient: string, reading: PantryReading, bu: string): string {
+function renderPantryText(
+  ingredient: string,
+  reading: PantryReading,
+  bu: string,
+  entry?: AuSelectableEntry,
+): string {
   if (reading.au === null || reading.aq === null) {
     const base = formatBQ(reading.bq, bu);
     return ingredient === '' ? base : `${base} ${ingredient}`;
@@ -738,6 +755,7 @@ function renderPantryText(ingredient: string, reading: PantryReading, bu: string
     bu,
     reading.bq,
     formatAQ,
+    entry,
   );
 }
 
@@ -748,7 +766,7 @@ function renderPantryText(ingredient: string, reading: PantryReading, bu: string
  * pieces; this string is the plain-text reading of it.
  */
 export function renderPantryAmount(ingredient: string, bq: number, bu: string): string {
-  return renderPantryText('', pantryReading(ingredient, bq, bu), bu);
+  return renderPantryText('', pantryReading(ingredient, bq, bu), bu, mappingsFor(ingredient));
 }
 
 /**
