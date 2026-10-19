@@ -59,11 +59,10 @@ import {
   deleteFile,
   getFileContent,
   isDriveAuthError,
-  listFilesInFolder,
   updateFileWithContent,
   type DriveFile,
 } from './driveClient';
-import { ensureRecipeFolder } from './cookbookFolder';
+import { listCookbookFolder, type CookbookFolder } from './cookbookFolder';
 
 /** File name of the route in the Cookbook folder (user-visible). */
 const ROUTE_FILE_NAME = 'einkaufsweg.csv';
@@ -118,13 +117,16 @@ function findMasterDataFiles(files: readonly DriveFile[]): MasterDataFiles {
  */
 export async function loadShoppingRouteMasterData(token: string): Promise<void> {
   writtenSinceLoad = false;
-  const folderId = await ensureRecipeFolder(token);
-  const files = await listFilesInFolder(token, folderId);
-  const migrated = await migrateLegacyItemsFile(token, folderId, findMasterDataFiles(files));
+  const folder = await listCookbookFolder(token);
+  const migrated = await migrateLegacyItemsFile(
+    token,
+    folder.id,
+    findMasterDataFiles(folder.files),
+  );
   if (migrated) {
     return;
   }
-  const { route, items, synonyms } = findMasterDataFiles(files);
+  const { route, items, synonyms } = findMasterDataFiles(folder.files);
   // The route and the item table are the master data as a set: with only one of
   // the two present, they are treated as not yet created and the seed stays
   // active (the next write re-creates the set from the seed).
@@ -242,9 +244,16 @@ interface CurrentMasterData {
  * table) is treated as not yet created — the write below re-creates the set from
  * the seed, intentionally superseding any edits in the surviving file, because
  * the set is the unit of master data.
+ *
+ * The three contents are fetched at once (the reads are independent; only the
+ * parsing below is ordered, because items and synonyms are validated against the
+ * route). All reads complete before the caller writes anything.
  */
-async function readCurrentMasterData(token: string, folderId: string): Promise<CurrentMasterData> {
-  const files = findMasterDataFiles(await listFilesInFolder(token, folderId));
+async function readCurrentMasterData(
+  token: string,
+  folder: CookbookFolder,
+): Promise<CurrentMasterData> {
+  const files = findMasterDataFiles(folder.files);
   if (files.route === undefined || files.items === undefined) {
     return {
       route: allShoppingStops(),
@@ -255,12 +264,17 @@ async function readCurrentMasterData(token: string, folderId: string): Promise<C
       synonymsFileId: undefined,
     };
   }
-  const route = parseShoppingRouteCsv(await getFileContent(token, files.route.id));
-  const items = parseShoppingItemsCsv(await getFileContent(token, files.items.id), route);
+  const [routeText, itemsText, synonymsText] = await Promise.all([
+    getFileContent(token, files.route.id),
+    getFileContent(token, files.items.id),
+    // A missing synonym file is the normal state before the first confirmed
+    // suggestion: it reads as the empty table below, without a request.
+    files.synonyms === undefined ? Promise.resolve('') : getFileContent(token, files.synonyms.id),
+  ]);
+  const route = parseShoppingRouteCsv(routeText);
+  const items = parseShoppingItemsCsv(itemsText, route);
   const synonyms =
-    files.synonyms === undefined
-      ? {}
-      : parseShoppingSynonymsCsv(await getFileContent(token, files.synonyms.id), items);
+    files.synonyms === undefined ? {} : parseShoppingSynonymsCsv(synonymsText, items);
   return {
     route,
     items,
@@ -302,7 +316,9 @@ async function writeMasterDataFile(
  * Writes the whole master-data set to Drive in one cycle: the route, the item
  * table and the synonym table. All three serializers round-trip their own output
  * through the parsers before returning it (shoppingRouteCsv.ts), so text the
- * loader would reject can never reach Drive. The registry is published only
+ * loader would reject can never reach Drive. The three files are independent, so
+ * the uploads run together; every read finished before the first upload started,
+ * which keeps the read-before-write guarantee. The registry is published only
  * after every write succeeded, and marked as newer than any in-flight load.
  */
 async function writeMasterData(
@@ -316,15 +332,17 @@ async function writeMasterData(
   const itemsContent = serializeShoppingItemsCsv(items, current.route);
   const synonymsContent = serializeShoppingSynonymsCsv(synonyms, items);
 
-  await writeMasterDataFile(token, folderId, ROUTE_FILE_NAME, current.routeFileId, routeContent);
-  await writeMasterDataFile(token, folderId, ITEMS_FILE_NAME, current.itemsFileId, itemsContent);
-  await writeMasterDataFile(
-    token,
-    folderId,
-    SYNONYMS_FILE_NAME,
-    current.synonymsFileId,
-    synonymsContent,
-  );
+  await Promise.all([
+    writeMasterDataFile(token, folderId, ROUTE_FILE_NAME, current.routeFileId, routeContent),
+    writeMasterDataFile(token, folderId, ITEMS_FILE_NAME, current.itemsFileId, itemsContent),
+    writeMasterDataFile(
+      token,
+      folderId,
+      SYNONYMS_FILE_NAME,
+      current.synonymsFileId,
+      synonymsContent,
+    ),
+  ]);
   writtenSinceLoad = true;
   setShoppingItems(items);
   setShoppingSynonyms(synonyms);
@@ -349,9 +367,11 @@ async function writeMasterData(
 export async function appendShoppingItems(
   token: string,
   entries: ReadonlyArray<{ item: string; stop: ShoppingStop }>,
+  /** Folder snapshot of the caller's save; resolved here when omitted. */
+  folder?: CookbookFolder,
 ): Promise<void> {
-  const folderId = await ensureRecipeFolder(token);
-  const current = await readCurrentMasterData(token, folderId);
+  const resolved = folder ?? (await listCookbookFolder(token));
+  const current = await readCurrentMasterData(token, resolved);
 
   // Build on a mutable record, then freeze into the registry's read-only shape
   // (the item table's `Readonly<Record<...>>` only permits reading).
@@ -366,7 +386,7 @@ export async function appendShoppingItems(
     }
     mutable[existing ?? item] = stop;
   }
-  await writeMasterData(token, folderId, current, mutable, current.synonyms);
+  await writeMasterData(token, resolved.id, current, mutable, current.synonyms);
 }
 
 /**
@@ -378,13 +398,17 @@ export async function appendShoppingItems(
  * @param item the item name (exact — recipe ingredient or, like Klopapier or
  *   Blumen, an item that is no ingredient at all)
  * @param stop the store and section the item is bought at
+ * @param folder the folder snapshot of the caller's save, or omitted to resolve
+ *   the folder here (the new-ingredient flow passes the snapshot it shares with
+ *   the ingredient write, so the folder is listed once per save)
  */
 export async function appendShoppingItem(
   token: string,
   item: string,
   stop: ShoppingStop,
+  folder?: CookbookFolder,
 ): Promise<void> {
-  await appendShoppingItems(token, [{ item, stop }]);
+  await appendShoppingItems(token, [{ item, stop }], folder);
 }
 
 /**
@@ -399,13 +423,27 @@ export async function appendShoppingItem(
  * variant ambiguous). The item must exist — the serializer's round-trip check
  * turns a variant that names an unknown item, or one that would shadow an item
  * name, into a loud failure before anything is written.
+ *
+ * @param folder the folder snapshot of the caller's action, or omitted to resolve
+ *   the folder here. The sort flow writes the item rows just before this call,
+ *   so a snapshot taken before that write may still show a folder without the
+ *   shopping set; such a snapshot is not used (see below), because the synonyms
+ *   must be validated against the items that write has just created.
  */
 export async function appendShoppingSynonyms(
   token: string,
   entries: ReadonlyArray<{ variant: string; item: string }>,
+  folder?: CookbookFolder,
 ): Promise<void> {
-  const folderId = await ensureRecipeFolder(token);
-  const current = await readCurrentMasterData(token, folderId);
+  const files = folder === undefined ? undefined : findMasterDataFiles(folder.files);
+  const snapshotComplete = files?.route !== undefined && files.items !== undefined;
+  // A snapshot without the shopping set cannot be trusted here: the item write
+  // that runs before this call may have created the files since the snapshot
+  // (the first sort on an empty Drive). Re-listing then is the only way to
+  // validate the variants against the rows that write has just stored.
+  const resolved =
+    folder !== undefined && snapshotComplete ? folder : await listCookbookFolder(token);
+  const current = await readCurrentMasterData(token, resolved);
 
   const mutable: Record<string, string> = { ...current.synonyms };
   for (const { variant, item } of entries) {
@@ -417,5 +455,5 @@ export async function appendShoppingSynonyms(
     }
     mutable[variant] = item;
   }
-  await writeMasterData(token, folderId, current, current.items, mutable);
+  await writeMasterData(token, resolved.id, current, current.items, mutable);
 }

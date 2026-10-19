@@ -107,6 +107,14 @@
   chips, the section as a searchable list of that store's sections — and writes the item row
   before the ingredient row: a row without an ingredient is valid (the name set is a superset),
   an ingredient without its row is not (it is then simply never bought).
+- **Master-data writes read before they write.** Every append, edit, rename and sort
+  assignment first reads the authoritative file content from Drive and only then writes
+  the set, so a spreadsheet edit made meanwhile is not overwritten. A save that writes
+  both sets (creating an ingredient stores its item row and then its ingredient row)
+  resolves and lists the Cookbook folder once and shares that snapshot between the two
+  writes; independent file reads and uploads run in parallel, while no write starts
+  before every read of its set has finished. The snapshot carries only file ids and
+  names — file content is always read fresh.
 - Resolving a Keep line to an item happens at read time in core
   (`packages/core/src/shoppingSort.ts`, [shopping_item_identity.md](shopping_item_identity.md)):
   the line's decoration is undone to a name field, that field must equal an item name (or a

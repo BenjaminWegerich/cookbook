@@ -42,6 +42,7 @@ import Snackbar from './components/Snackbar';
 import SubRecipeSelect from './components/SubRecipeSelect';
 import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
+import { listCookbookFolder } from './drive/cookbookFolder';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import {
   appendShoppingItems,
@@ -1775,11 +1776,20 @@ function App() {
           newItems.push({ item: resolution.name, stop: resolution.stop });
         }
       }
+      // One folder resolution + listing for both master-data writes (they touch
+      // the same files); each write still reads the files' content before
+      // changing them, so the read-before-write guarantee is unchanged. The
+      // synonym write re-lists if the item write created the set (see
+      // appendShoppingSynonyms).
+      const folder =
+        newItems.length > 0 || newSynonyms.length > 0
+          ? await listCookbookFolder(activeToken)
+          : undefined;
       if (newItems.length > 0) {
-        await appendShoppingItems(activeToken, newItems);
+        await appendShoppingItems(activeToken, newItems, folder);
       }
       if (newSynonyms.length > 0) {
-        await appendShoppingSynonyms(activeToken, newSynonyms);
+        await appendShoppingSynonyms(activeToken, newSynonyms, folder);
       }
 
       // The target order, derived before the persist so an ignored line keeps its

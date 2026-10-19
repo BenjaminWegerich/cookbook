@@ -42,11 +42,10 @@ import {
 import {
   createFileWithContent,
   getFileContent,
-  listFilesInFolder,
   updateFileWithContent,
   type DriveFile,
 } from './driveClient';
-import { ensureRecipeFolder } from './cookbookFolder';
+import { listCookbookFolder, type CookbookFolder } from './cookbookFolder';
 
 /** File name of the ingredient list in the Cookbook folder (user-visible). */
 const LIST_FILE_NAME = 'zutaten.csv';
@@ -71,10 +70,9 @@ let writtenSinceLoad = false;
  */
 export async function loadIngredientMasterData(token: string): Promise<void> {
   writtenSinceLoad = false;
-  const folderId = await ensureRecipeFolder(token);
-  const files = await listFilesInFolder(token, folderId);
-  const listFile = files.find((entry) => entry.name === LIST_FILE_NAME);
-  const mappingsFile = files.find((entry) => entry.name === MAPPINGS_FILE_NAME);
+  const folder = await listCookbookFolder(token);
+  const listFile = folder.files.find((entry) => entry.name === LIST_FILE_NAME);
+  const mappingsFile = folder.files.find((entry) => entry.name === MAPPINGS_FILE_NAME);
   // The Drive master data is authoritative as a pair: with only one of the
   // two files present, the files are treated as not yet created and the seed
   // stays active (the next addition re-creates both files).
@@ -99,20 +97,16 @@ export async function loadIngredientMasterData(token: string): Promise<void> {
 }
 
 /**
- * Finds the two master-data files in the Cookbook folder. Either of them may be
+ * Finds the two master-data files in a folder listing. Either of them may be
  * absent, which the callers treat as "the pair is not created yet".
  */
-async function findMasterDataFiles(token: string): Promise<{
-  folderId: string;
+function findMasterDataFiles(folder: CookbookFolder): {
   listFile: DriveFile | undefined;
   mappingsFile: DriveFile | undefined;
-}> {
-  const folderId = await ensureRecipeFolder(token);
-  const files = await listFilesInFolder(token, folderId);
+} {
   return {
-    folderId,
-    listFile: files.find((entry) => entry.name === LIST_FILE_NAME),
-    mappingsFile: files.find((entry) => entry.name === MAPPINGS_FILE_NAME),
+    listFile: folder.files.find((entry) => entry.name === LIST_FILE_NAME),
+    mappingsFile: folder.files.find((entry) => entry.name === MAPPINGS_FILE_NAME),
   };
 }
 
@@ -121,6 +115,9 @@ async function findMasterDataFiles(token: string): Promise<{
  * present, else the registry's state (the built-in seed). A partial pair counts
  * as not yet created — the pair is the unit of master data, so a write
  * re-creates both files and supersedes the surviving one.
+ *
+ * The two contents are fetched at once (the reads are independent; only the
+ * merge below needs both). All reads complete before the caller writes anything.
  */
 async function readAuthoritativeMasterData(
   token: string,
@@ -130,16 +127,51 @@ async function readAuthoritativeMasterData(
   if (listFile === undefined || mappingsFile === undefined) {
     return allIngredientMappings();
   }
+  const [listText, mappingsText] = await Promise.all([
+    getFileContent(token, listFile.id),
+    getFileContent(token, mappingsFile.id),
+  ]);
   return mergeIngredientMasterData(
-    parseIngredientListCsv(await getFileContent(token, listFile.id)),
-    parseIngredientMappingsCsv(await getFileContent(token, mappingsFile.id)),
+    parseIngredientListCsv(listText),
+    parseIngredientMappingsCsv(mappingsText),
   );
+}
+
+/**
+ * Writes one file of the pair — creating it when the pair does not exist yet,
+ * updating it otherwise.
+ */
+async function writeMasterDataFile(
+  token: string,
+  folderId: string,
+  fileName: string,
+  file: DriveFile | undefined,
+  content: string,
+): Promise<void> {
+  if (file === undefined) {
+    await createFileWithContent(token, {
+      name: fileName,
+      mimeType: MASTER_DATA_MIME_TYPE,
+      content,
+      parents: [folderId],
+    });
+    return;
+  }
+  await updateFileWithContent(token, file.id, {
+    name: fileName,
+    mimeType: MASTER_DATA_MIME_TYPE,
+    content,
+  });
 }
 
 /**
  * Writes the master-data pair, creating either file when it does not exist yet.
  * Both files are round-trip checked first, mirroring the recipe write path
  * (canonicalText): content the parser would reject must never reach Drive.
+ *
+ * The list and the mappings are separate files, so their uploads run together.
+ * The caller read the pair before this write, which keeps the read-before-write
+ * guarantee; the round-trip checks above run before the first upload.
  */
 async function writeMasterDataFiles(
   token: string,
@@ -154,34 +186,10 @@ async function writeMasterDataFiles(
   parseIngredientListCsv(listContent);
   parseIngredientMappingsCsv(mappingsContent);
 
-  if (listFile === undefined) {
-    await createFileWithContent(token, {
-      name: LIST_FILE_NAME,
-      mimeType: MASTER_DATA_MIME_TYPE,
-      content: listContent,
-      parents: [folderId],
-    });
-  } else {
-    await updateFileWithContent(token, listFile.id, {
-      name: LIST_FILE_NAME,
-      mimeType: MASTER_DATA_MIME_TYPE,
-      content: listContent,
-    });
-  }
-  if (mappingsFile === undefined) {
-    await createFileWithContent(token, {
-      name: MAPPINGS_FILE_NAME,
-      mimeType: MASTER_DATA_MIME_TYPE,
-      content: mappingsContent,
-      parents: [folderId],
-    });
-  } else {
-    await updateFileWithContent(token, mappingsFile.id, {
-      name: MAPPINGS_FILE_NAME,
-      mimeType: MASTER_DATA_MIME_TYPE,
-      content: mappingsContent,
-    });
-  }
+  await Promise.all([
+    writeMasterDataFile(token, folderId, LIST_FILE_NAME, listFile, listContent),
+    writeMasterDataFile(token, folderId, MAPPINGS_FILE_NAME, mappingsFile, mappingsContent),
+  ]);
 }
 
 /**
@@ -202,6 +210,9 @@ async function writeMasterDataFiles(
  *   positive-integer priorities (may be empty — an ingredient without
  *   additional units is valid master data); the entries are stored sorted by
  *   ascending priority (registry invariant, see additionalUnitsData.ts)
+ * @param folder the folder snapshot of the caller's save, or omitted to resolve
+ *   the folder here (the new-ingredient flow passes the snapshot it shares with
+ *   the shopping assignment, so the folder is listed once per save)
  */
 export async function appendIngredientMasterData(
   token: string,
@@ -209,8 +220,10 @@ export async function appendIngredientMasterData(
   bu: string,
   reorderPoint: number,
   entries: ReadonlyArray<{ au: string; factor: number; priority: number }>,
+  folder?: CookbookFolder,
 ): Promise<void> {
-  const { folderId, listFile, mappingsFile } = await findMasterDataFiles(token);
+  const resolved = folder ?? (await listCookbookFolder(token));
+  const { listFile, mappingsFile } = findMasterDataFiles(resolved);
 
   // The current authoritative set (see `readAuthoritativeMasterData`): a
   // partial pair counts as not yet created, so the append re-creates both
@@ -239,7 +252,7 @@ export async function appendIngredientMasterData(
       })),
     },
   };
-  await writeMasterDataFiles(token, folderId, listFile, mappingsFile, extended);
+  await writeMasterDataFiles(token, resolved.id, listFile, mappingsFile, extended);
   // Mark the registry state as newer than any in-flight load (see the guard
   // in loadIngredientMasterData) before publishing it.
   writtenSinceLoad = true;
@@ -336,7 +349,8 @@ export async function updateIngredientMasterData(
     priorities.add(entry.priority);
   }
 
-  const { folderId, listFile, mappingsFile } = await findMasterDataFiles(token);
+  const folder = await listCookbookFolder(token);
+  const { listFile, mappingsFile } = findMasterDataFiles(folder);
   const current = await readAuthoritativeMasterData(token, listFile, mappingsFile);
   const previous = current[name];
   if (previous === undefined) {
@@ -356,7 +370,7 @@ export async function updateIngredientMasterData(
     entries: sorted,
   };
   const next: IngredientMappings = { ...current, [name]: nextEntry };
-  await writeMasterDataFiles(token, folderId, listFile, mappingsFile, next);
+  await writeMasterDataFiles(token, folder.id, listFile, mappingsFile, next);
   // Publish after the files were written, so the UI never shows a state Drive
   // did not accept (the same order the append and rename paths use).
   writtenSinceLoad = true;
@@ -389,7 +403,8 @@ export async function renameIngredientMasterData(
   oldName: string,
   newName: string,
 ): Promise<boolean> {
-  const { folderId, listFile, mappingsFile } = await findMasterDataFiles(token);
+  const folder = await listCookbookFolder(token);
+  const { listFile, mappingsFile } = findMasterDataFiles(folder);
   if (listFile === undefined || mappingsFile === undefined) {
     return false;
   }
@@ -409,7 +424,7 @@ export async function renameIngredientMasterData(
   const renamed: IngredientMappings = Object.fromEntries(
     Object.entries(current).map(([name, entry]) => [name === oldName ? newName : name, entry]),
   );
-  await writeMasterDataFiles(token, folderId, listFile, mappingsFile, renamed);
+  await writeMasterDataFiles(token, folder.id, listFile, mappingsFile, renamed);
   writtenSinceLoad = true;
   setIngredientMappings(renamed);
   return true;

@@ -14,7 +14,13 @@
  * the ingredient master data, see ./ingredientMasterData).
  */
 
-import { createFolder, findFoldersByName, getFile } from './driveClient';
+import {
+  createFolder,
+  findFoldersByName,
+  getFile,
+  listFilesInFolder,
+  type DriveFile,
+} from './driveClient';
 
 /** Name of the folder that holds the collection (user-visible in Drive). */
 const COOKBOOK_FOLDER_NAME = 'Cookbook';
@@ -41,4 +47,33 @@ export async function ensureRecipeFolder(token: string): Promise<string> {
   const folder = existing[0] ?? (await createFolder(token, COOKBOOK_FOLDER_NAME));
   localStorage.setItem(FOLDER_ID_KEY, folder.id);
   return folder.id;
+}
+
+/**
+ * One resolved Cookbook folder: its id plus the files directly inside it at the
+ * moment of the listing.
+ *
+ * A save that has to write two master-data sets (the new-ingredient flow writes
+ * the shopping assignment and then the ingredient list) works on the same
+ * folder twice. Resolving and listing it once and handing the same snapshot to
+ * both write paths removes two Drive round trips from that save.
+ *
+ * The snapshot only carries ids and names. Every write path still reads the
+ * *content* of each file it is about to change, so the read-before-write
+ * guarantee is unchanged: the snapshot can be slightly older than the write, the
+ * content cannot.
+ */
+export interface CookbookFolder {
+  readonly id: string;
+  readonly files: readonly DriveFile[];
+}
+
+/**
+ * Resolves the Cookbook folder and lists its files in one step. Callers that
+ * touch several master-data sets in one action pass the result to both write
+ * paths instead of resolving the folder themselves.
+ */
+export async function listCookbookFolder(token: string): Promise<CookbookFolder> {
+  const id = await ensureRecipeFolder(token);
+  return { id, files: await listFilesInFolder(token, id) };
 }

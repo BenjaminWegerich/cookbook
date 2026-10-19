@@ -86,6 +86,7 @@ import {
   uploadRecipeImage,
   type StoredRecipe,
 } from '../drive/recipeStorage';
+import { listCookbookFolder } from '../drive/cookbookFolder';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
 import { appendShoppingItem } from '../drive/shoppingRouteMasterData';
 import { loadRecipePhoto } from '../drive/recipePhoto';
@@ -1703,6 +1704,10 @@ function RecipeEditor({
    *
    * `stop` is null while the shopping route holds no stops at all — decided with
    * the user: the ingredient is then created without a shopping stop.
+   *
+   * The folder is resolved and listed once and handed to both writes (they write
+   * into the same folder); each write path still reads the content of the files
+   * it is about to change, so the read-before-write guarantee is unchanged.
    */
   const handleCreateIngredient = async (
     name: string,
@@ -1714,10 +1719,11 @@ function RecipeEditor({
     setCreateSaving(true);
     setCreateError(null);
     try {
+      const folder = await listCookbookFolder(token);
       if (stop !== null) {
-        await appendShoppingItem(token, name, stop);
+        await appendShoppingItem(token, name, stop, folder);
       }
-      await appendIngredientMasterData(token, name, bu, reorderPoint, entries);
+      await appendIngredientMasterData(token, name, bu, reorderPoint, entries, folder);
       setCreateSheet(null);
       if (sheetContext !== null) {
         setSheet(sheetContext.sheet);
