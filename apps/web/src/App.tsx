@@ -26,6 +26,8 @@ import AiCreateSheet, {
   type AiCreateSheetHandle,
   type AiHandoff,
 } from './components/AiCreateSheet';
+import IngredientMaster, { type IngredientMasterHandle } from './components/IngredientMaster';
+import ManageIngredientsButton from './components/ManageIngredientsButton';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import { newRecipeDraftWithTitle } from './components/recipeDrafts';
 import RecipeList from './components/RecipeList';
@@ -68,6 +70,7 @@ import './styles/shopping-list-select.css';
 import './styles/shopping-sort-select.css';
 import './styles/pantry-select.css';
 import './styles/editor.css';
+import './styles/ingredient-master.css';
 import './styles/snackbar.css';
 
 /**
@@ -80,9 +83,19 @@ import './styles/snackbar.css';
  * performs the write (components/PantrySelect): three full screens of one flow —
  * the flow can carry sheets and the editor above the selection page, so it is
  * not simply a sibling of the list (see shoppingFlowRef).
+ * 'ingredients' is the ingredient master-data screen
+ * (components/IngredientMaster), a place of its own over the list.
  */
 type TopScreen =
-  'editor' | 'ai' | 'menu' | 'overview' | 'shopping' | 'pantrySub' | 'pantry' | 'sort';
+  | 'editor'
+  | 'ai'
+  | 'menu'
+  | 'overview'
+  | 'shopping'
+  | 'pantrySub'
+  | 'pantry'
+  | 'sort'
+  | 'ingredients';
 
 /**
  * Which AI task the sheet runs while it is the visible 'ai' screen: create a new
@@ -364,6 +377,15 @@ function App() {
    */
   const [sortOpen, setSortOpen] = useState(false);
   /**
+   * The ingredient master-data screen („Zutaten“) is open. A place of its own
+   * over the list, like the sort page; its edit sheet lives inside it, so the
+   * screen also carries a handle through which browser Back can close that
+   * sheet before the screen itself.
+   */
+  const [ingredientsOpen, setIngredientsOpen] = useState(false);
+  /** Browser-Back consumer of the ingredient master-data screen. */
+  const ingredientsHandleRef = useRef<IngredientMasterHandle | null>(null);
+  /**
    * The shopping-list items the sort page was opened for — a snapshot taken when
    * the page opens, so the rows do not move under the user's fingers while Keep
    * state changes (the same reason the pantry step snapshots its cards).
@@ -478,11 +500,28 @@ function App() {
           ? 'pantrySub'
           : sortOpen
             ? 'sort'
-            : shoppingOpen
-              ? 'shopping'
-              : 'list';
+            : ingredientsOpen
+              ? 'ingredients'
+              : shoppingOpen
+                ? 'shopping'
+                : 'list';
   /** Remembers/restores the window scroll per page (see useScrollMemory). */
   const scrollMemory = useScrollMemory(visiblePageKey);
+
+  /**
+   * True while the recipe list is the visible base layer. A sheet (the overview,
+   * the create menu) may sit above it and keeps it rendered; a full screen —
+   * the editor, the AI screen, the shopping flow, the sort or the ingredient
+   * master data — replaces it and hides it.
+   */
+  const listVisible =
+    !editorOpen &&
+    !aiOpen &&
+    !shoppingOpen &&
+    !pantryOpen &&
+    !pantrySubOpen &&
+    !sortOpen &&
+    !ingredientsOpen;
 
   // Give the recipe list an own guard entry (LIST_MARKER) directly above the
   // entry the app was loaded on. The list is the bottom layer and stays the
@@ -589,6 +628,9 @@ function App() {
       // The sort page is a place of its own over the list (nothing layers above
       // it), so it is mounted while it is the visible page and dropped otherwise.
       setSortOpen(next === 'sort');
+      // The ingredient master data is the same kind of place: mounted while it
+      // is the visible page; its edit sheet is internal and dies with it.
+      setIngredientsOpen(next === 'ingredients');
       // The selection page stays mounted (hidden) while any layer of its flow is
       // above it — the overview opened from a row, the editor opened from that
       // sheet — so the checked dishes survive the detour. The flow flag is set
@@ -807,6 +849,18 @@ function App() {
         // guard entry the pop just landed on: nothing to re-establish.
         navRef.current = null;
         setSortOpen(false);
+        return;
+      }
+      if (top === 'ingredients') {
+        // Back closes the screen's edit sheet first (the handle re-establishes
+        // the entry the pop consumed); only the next Back leaves for the list,
+        // which sits on the guard entry the pop just landed on.
+        if (ingredientsHandleRef.current?.notifyBack() === true) {
+          guardCurrentEntry();
+          return;
+        }
+        navRef.current = null;
+        setIngredientsOpen(false);
         return;
       }
       if (top === 'overview' && shoppingFlowRef.current) {
@@ -2109,6 +2163,18 @@ function App() {
         />
       )}
 
+      {/* The ingredient master data ("Zutaten") — a place of its own over the
+          list. Its edit sheet is internal, so App only needs the handle for the
+          browser Back button (Back closes the sheet before the screen). */}
+      {ingredientsOpen && (
+        <IngredientMaster
+          ref={ingredientsHandleRef}
+          token={token ?? ''}
+          onClose={() => setNav(null)}
+          showSnackbar={showSnackbar}
+        />
+      )}
+
       {editorOpen ? (
         <>
           {/* The base level (recipe from the list, or the AI draft). It stays
@@ -2163,7 +2229,7 @@ function App() {
             </div>
           ))}
         </>
-      ) : aiOpen ? null : shoppingOpen || pantryOpen || pantrySubOpen || sortOpen ? null : (
+      ) : !listVisible ? null : (
         <main className="app">
           {/* No screen header any more (decided with the user): the search field
               alone opens the screen, and the two section captions below carry
@@ -2208,29 +2274,44 @@ function App() {
               Rezepte werden geladen …
             </p>
           ) : recipes.length === 0 ? (
-            <section className="empty-state">
-              <p>Noch keine Rezepte im Cookbook-Ordner.</p>
-              <p>Tippe auf das + unten rechts, um dein erstes Rezept zu schreiben.</p>
-            </section>
+            <>
+              <section className="empty-state">
+                <p>Noch keine Rezepte im Cookbook-Ordner.</p>
+                <p>Tippe auf das + unten rechts, um dein erstes Rezept zu schreiben.</p>
+              </section>
+              {/* The master data is independent of the recipe collection, so
+                  its entry stays reachable even while no recipe exists. */}
+              <div className="master-entry">
+                <ManageIngredientsButton onClick={() => setNav('ingredients')} />
+              </div>
+            </>
           ) : (
-            <RecipeList
-              recipes={recipes}
-              token={token}
-              onOpenRecipe={openCollectionOverview}
-              onOpenPlanCard={openMealPlanOverview}
-              mealPlanCards={mealPlanResolution?.cards ?? null}
-              plannedRecipeTitles={plannedRecipeTitles}
-              keepStatus={keep.status}
-              keepError={keep.error}
-              onConnectKeep={() => void keep.connect()}
-              onRetryKeep={keep.retry}
-              onWriteShoppingList={openShoppingSelect}
-              shoppingWritten={shoppingWritten}
-              onSortShoppingList={openShoppingSort}
-              shoppingSortable={shoppingSortable}
-              shoppingSorted={shoppingSorted}
-              shoppingItems={shoppingItems}
-            />
+            <>
+              <RecipeList
+                recipes={recipes}
+                token={token}
+                onOpenRecipe={openCollectionOverview}
+                onOpenPlanCard={openMealPlanOverview}
+                mealPlanCards={mealPlanResolution?.cards ?? null}
+                plannedRecipeTitles={plannedRecipeTitles}
+                keepStatus={keep.status}
+                keepError={keep.error}
+                onConnectKeep={() => void keep.connect()}
+                onRetryKeep={keep.retry}
+                onWriteShoppingList={openShoppingSelect}
+                shoppingWritten={shoppingWritten}
+                onSortShoppingList={openShoppingSort}
+                shoppingSortable={shoppingSortable}
+                shoppingSorted={shoppingSorted}
+                shoppingItems={shoppingItems}
+              />
+              {/* The master data is edited rarely, so its entry sits below the
+                  last recipe rather than in a caption or the FAB menu; the
+                  same quiet outlined treatment as the shopping-list actions. */}
+              <div className="master-entry">
+                <ManageIngredientsButton onClick={() => setNav('ingredients')} />
+              </div>
+            </>
           )}
 
           {token && (

@@ -39,6 +39,9 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
       surfaces name an ingredient with a count (e.g. the cooking view's Zutaten list, the
       shopping list) and render the matching form there, falling back to the canonical name
       when the pair is empty.
+- [ ] Shopping master data management: a second button next to „Zutaten verwalten" opens the
+      shopping route/item table for both ingredient and non-ingredient shopping-list entries
+      ([storage_format.md](storage_format.md) §10).
 
 ### Design system: follow-ups from the DESIGN.md compliance pass
 

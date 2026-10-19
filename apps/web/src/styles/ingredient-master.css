@@ -1,0 +1,124 @@
+/**
+ * Ingredient master-data screen — component styles.
+ *
+ * The „Zutaten“ place behind the home screen's „Zutaten verwalten“ button, plus
+ * the pieces the edit sheet shares with the other master-data forms. All pixel
+ * values come from the design ladder (docs/CODING_CONVENTIONS.md); colours and
+ * sizes reference the tokens in styles/tokens.css.
+ */
+
+/* The screen shell: the shared reading-page cap (`.app-narrow`) plus the
+   vertical rhythm of the header, search field and list. The header's own
+   negative bottom margin (see .app-header-stacked) cancels this gap, so the
+   search follows it at the header's masking padding. */
+.ingredient-master {
+  display: grid;
+  gap: var(--space-5);
+  padding-block-end: var(--space-10);
+}
+
+/* The home screen's search bar, without its sticky behaviour: the screen
+   header already sticks, and a second sticky bar would take too much of a
+   phone's viewport. `::before` is the sticky bar's gap mask — not needed here. */
+.ingredient-master-search {
+  position: static;
+  margin-block-end: 0;
+}
+
+.ingredient-master-search::before {
+  content: none;
+}
+
+/* One paper surface for the whole reference list, with hairlines between the
+   rows (the same shape as the sort page's list). No padding of its own: the
+   rows hold it and stay unrounded (§5.4). */
+.ingredient-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* A row is one ingredient and one target. The name is the row's only text:
+   base unit, stock and mapping count are edited behind it, so repeating them
+   here would turn the reference list into a table. The padding gives the row
+   a 52 px height, above the 42 px minimum. */
+.ingredient-row {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-5);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--color-ink);
+  text-align: start;
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Rows are separated by a hairline, never by a shadow or a gap in the
+   surface; the first row carries none (§5.4). The line belongs to the list
+   item, so the button's press wash stays inside its own row. */
+.ingredient-list li + li {
+  border-block-start: 1px solid var(--color-line);
+}
+
+/* Search result without a match, or an empty master data set. The search
+   field above names the term, so the empty result is the established bare em
+   dash; only a genuinely empty list gets a sentence (§6.3). */
+.ingredient-master-empty {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+/* A save failure belongs to no field — the write itself failed — so it is
+   reported once above the form as a banner (§5.3). The same surface is used
+   for the screen's refresh warning. */
+.master-banner {
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+/* The home screen's entry into the master data: a quiet outlined action below
+   the last recipe, left-aligned like the shopping-list buttons. It is the last
+   content on the page, so the bottom padding keeps the FAB from covering it. */
+.master-entry {
+  display: flex;
+  justify-content: flex-start;
+  margin-block-start: var(--space-7);
+  /* The entry is the last content on the page: keep it clear of the phone's
+     gesture bar and give the fixed FAB's corner some breathing room. */
+  padding-block-end: calc(var(--space-7) + env(safe-area-inset-bottom, 0px));
+}
+
+/* The optional Singular/Plural pair is one field group: the legend is the
+   field caption, the two labelled inputs are the pair. A fieldset carries
+   browser margin, padding and a border by default; all three are reset so it
+   sits in the sheet's grid like any other field. */
+.display-form-field {
+  display: grid;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* The legend's default inline padding would indent it past the other field
+   captions; it lines up with the sheet's content edge instead. */
+.display-form-field > legend {
+  padding: 0;
+}

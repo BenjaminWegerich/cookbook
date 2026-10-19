@@ -673,6 +673,11 @@ widening the sheet.
 the field-caption typography (`--text-sm`, weight 600, muted, ALL CAPS by CSS), an optional
 action may sit beside it in the same row, and `--space-7` separates two sections.
 
+**A collection-level action that is used only rarely sits below the last card.** It is one
+outlined button, left-aligned with the card grid, `--space-7` above it; it is not a caption
+action and not a FAB destination. The ingredient master data's „Zutaten verwalten" is the first
+such action. *decided with the user*
+
 **Rules**
 
 - A card or row is tappable as a whole; a control inside it (a badge's ×, a checkbox) is the
@@ -1008,6 +1013,29 @@ returns to the next step). Tapping the step text does not advance.
 from step 1 to Zutaten, from Zutaten to the intro. Changing the size on the intro discards the
 checkmarks.
 
+### 5.12 Ingredient master data
+
+*Applies to: web app.*
+
+**The master data is a place over the list.** „Zutaten verwalten" opens `IngredientMaster`
+with a sticky stacked header (§5.5: „Zurück", `h1` „Zutaten"), one search field and one rows
+list (§5.4). The screen refreshes the pair from Drive when it opens; a failed refresh shows the
+established danger banner above the cached rows.
+
+**A row carries the canonical name only.** The base unit, the reorder point and the mappings are
+edited in the sheet behind the row; repeating them in the list would turn the reference list
+into a data table. Search matches the canonical name and both display forms; a search without a
+match is the bare „—". *decided with the user*
+
+**„Zutat bearbeiten" is a change.** The sheet edits the optional Singular/Plural pair (§5.3), the
+reorder point (§5.3, the create sheet's picker) and the AU mappings. The canonical name and the
+base unit are the entry's identity and are shown in the sheet head, not offered as fields. The
+shopping stop belongs to the shopping master data and is not part of this sheet. A save without
+a change closes the sheet without a write or a notice (§5.1); a successful save reports
+„<Name>" gespeichert. and offers „Rückgängig" (§5.9, §6.5). *decided with the user*
+
+*Cooking view: not applicable.*
+
 ## 6. Patterns and flows
 
 ### 6.1 Leaving a screen: place vs. change
@@ -1339,9 +1367,11 @@ The cooking view (`.html`) has its own inventory, written below.
 | „Einkaufsliste schreiben" | `setNav('shopping')`, `ShoppingListSelect` | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 1: Zutaten-Rezepte" | `setNav('pantrySub')`, `SubRecipeSelect` | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 2: Zutaten" | `setNav('pantry')`, `PantrySelect` | place (flow step) | „Zurück" (asks) |
+| „Zutaten" | `setNav('ingredients')`, `IngredientMaster` | place | „Zurück" |
 | „Zum Essensplan hinzufügen" / „Übernehmen" | `MealPlanSheet` | change | „Abbrechen" |
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
 | Ingredient sheet / new ingredient | `IngredientSheet`, `NewIngredientSheet` | change | „Abbrechen" |
+| „Zutat bearbeiten" | `EditIngredientSheet` | change | „Abbrechen" |
 | „Änderungen verwerfen?" | `LeaveConfirmSheet` (over the editor and the AI screen) | change | „Abbrechen", scrim, Escape, Back |
 | Snackbar | `Snackbar` (app root) | transient, never a layer | none |
 
@@ -1371,6 +1401,7 @@ that file.
 | §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.outlined-button`, `.text-button`, `.add-button`, `.sheet-actions`) |
 | §5.2 Chips and segmented controls | `apps/web/src/styles/editor.css`, `apps/web/src/components/quantityChips.ts` |
 | §5.3 Form fields | `apps/web/src/styles/editor.css` (`.field`, `.field-label`, `.field-error`), `apps/web/src/index.css` (the shared text-field focus outline) |
+| §5.3 master-data form (shared) | `apps/web/src/components/ingredientMasterForm.ts`, `apps/web/src/components/IngredientMappingsField.tsx` |
 | §5.4 Cards and list items | `apps/web/src/styles/recipe-list.css`, `apps/web/src/components/RecipeList.tsx`, `apps/web/src/styles/pantry-select.css` (`.pantry-row--attention`, `.pantry-attention-note`) |
 | §5.5 Headers and sticky bars | `apps/web/src/styles/recipe-list.css` (`.app-header`, `.app-header-stacked`, `.app-header-title`, `.app-header-subtitle`) |
 | §5.6 Sheets | `apps/web/src/styles/editor.css` (`.sheet`, `.sheet-backdrop`, `.sheet-actions`) |
@@ -1378,6 +1409,7 @@ that file.
 | §5.8 Media | `apps/web/src/components/RecipeThumb.tsx`, `apps/web/src/styles/recipe-list.css`, `apps/web/src/styles/recipe-overview.css` |
 | §5.9 Snackbar | `apps/web/src/components/Snackbar.tsx`, `apps/web/src/hooks/useSnackbar.ts`, `apps/web/src/styles/snackbar.css` |
 | §5.10 FAB and create menu | `apps/web/src/App.tsx`, `apps/web/src/styles/recipe-list.css` |
+| §5.12 Ingredient master data | `apps/web/src/components/IngredientMaster.tsx`, `apps/web/src/components/EditIngredientSheet.tsx`, `apps/web/src/components/ManageIngredientsButton.tsx`, `apps/web/src/styles/ingredient-master.css` |
 | §6 Patterns | `apps/web/src/App.tsx` (navigation, flows), `apps/web/src/hooks/useLeaveGuard.ts`, `apps/web/src/components/LeaveConfirmSheet.tsx` |
 | §7 Language | the component strings (source of truth); the rules bind every component above |
 | §8 Accessibility | the components above (`aria-*`, `role`, `alt` live in the markup) |

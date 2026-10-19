@@ -35,6 +35,7 @@ import {
   serializeIngredientMappingsCsv,
   setIngredientMappings,
   splitIngredientMasterData,
+  type IngredientEntry,
   type IngredientMappings,
 } from '@cookbook/core';
 
@@ -243,6 +244,124 @@ export async function appendIngredientMasterData(
   // in loadIngredientMasterData) before publishing it.
   writtenSinceLoad = true;
   setIngredientMappings(extended);
+}
+
+/**
+ * One master-data entry as the edit sheet submits it. The name and the base
+ * unit are deliberately absent: both are identities the collection is built on,
+ * so an edit never changes them.
+ */
+export interface IngredientMasterEntryInput {
+  /** Singular display form, or null for an invariant name (with plural null). */
+  singular: string | null;
+  /** Plural display form, or null for an invariant name (with singular null). */
+  plural: string | null;
+  /** Base-unit quantity on stock after a shopping trip: 0, a positive value, or Infinity. */
+  reorderPoint: number;
+  /** The AU mappings; the write stores them sorted by ascending priority. */
+  entries: ReadonlyArray<{ au: string; factor: number; priority: number }>;
+}
+
+/** The state an edit replaced, so the caller can offer an undo. */
+export interface IngredientMasterUpdateResult {
+  /** The entry as it was stored before this write (from Drive, not the cache). */
+  previous: IngredientEntry;
+}
+
+/**
+ * Replaces one ingredient's editable master-data fields and writes the pair to
+ * Drive.
+ *
+ * The write follows the same transaction shape as the append and rename paths:
+ * read the authoritative pair first, replace exactly one entry in it, and only
+ * then write both files. Reading first is what keeps a spreadsheet edit the
+ * user made meanwhile from being overwritten — the write starts from the file
+ * content, not from this session's cached registry.
+ *
+ * The name and base unit are not part of the edit: recipes, inline mentions and
+ * the mappings file key on the name, and the base unit decides how every stored
+ * quantity is read. Changing either is a collection-wide operation of its own,
+ * not an edit of one row.
+ *
+ * A missing Drive pair is not an error: the write materializes both files from
+ * the built-in seed plus this edit, exactly like the first append does.
+ *
+ * @param token the Drive access token
+ * @param name the canonical ingredient name (the entry's key)
+ * @param update the new display forms, reorder point and AU mappings
+ * @returns the entry as it was before this write, for the undo notice
+ * @throws {Error} when the validation fails, the entry is unknown, or Drive rejects the write
+ */
+export async function updateIngredientMasterData(
+  token: string,
+  name: string,
+  update: IngredientMasterEntryInput,
+): Promise<IngredientMasterUpdateResult> {
+  // The stored format keeps the display forms atomic; a half-filled pair would
+  // silently fall back to the canonical name on one side.
+  if ((update.singular === null) !== (update.plural === null)) {
+    throw new Error(
+      'Zutaten-Stammdaten: Singular und Plural müssen gemeinsam gesetzt oder beide leer sein.',
+    );
+  }
+  // The serializer writes plain semicolon cells (the protocol accepts quoted
+  // cells, but only the parser handles them). Reject a delimiter or a line
+  // break here so no caller can produce a file that fails its own round-trip.
+  if (/[;"\r\n]/.test(update.singular ?? '') || /[;"\r\n]/.test(update.plural ?? '')) {
+    throw new Error(
+      'Zutaten-Stammdaten: Singular und Plural dürfen kein Semikolon, keine Anführungszeichen und keinen Zeilenumbruch enthalten.',
+    );
+  }
+  // 0 and Infinity are the two special stock levels; everything between them is
+  // a normal positive base quantity (docs/storage_format.md §9).
+  if (Number.isNaN(update.reorderPoint) || update.reorderPoint < 0) {
+    throw new Error('Zutaten-Stammdaten: Der Vorrat muss eine Zahl ≥ 0 oder unendlich sein.');
+  }
+  // The registry and the CSV parser both require unique positive-integer
+  // priorities. Checking here turns a programming mistake into a clear message
+  // instead of a parse failure after the files were serialized.
+  const priorities = new Set<number>();
+  for (const entry of update.entries) {
+    if (!Number.isFinite(entry.factor) || entry.factor <= 0) {
+      throw new Error(`Zutaten-Stammdaten: ungültiger Faktor für „${name}“ → „${entry.au}“.`);
+    }
+    if (!Number.isInteger(entry.priority) || entry.priority <= 0) {
+      throw new Error(`Zutaten-Stammdaten: ungültige Priorität für „${name}“ → „${entry.au}“.`);
+    }
+    if (priorities.has(entry.priority)) {
+      throw new Error(
+        `Zutaten-Stammdaten: doppelte Priorität ${entry.priority} für „${name}“ — jede Umrechnung braucht eine eindeutige Priorität.`,
+      );
+    }
+    priorities.add(entry.priority);
+  }
+
+  const { folderId, listFile, mappingsFile } = await findMasterDataFiles(token);
+  const current = await readAuthoritativeMasterData(token, listFile, mappingsFile);
+  const previous = current[name];
+  if (previous === undefined) {
+    throw new Error(`Die Zutat „${name}“ steht nicht in den Stammdaten.`);
+  }
+
+  // The registry invariant is ascending priority; the form already validates
+  // uniqueness, so this only restores the order after the grid was edited.
+  const sorted = [...update.entries].sort((a, b) => a.priority - b.priority);
+  const nextEntry: IngredientEntry = {
+    bu: previous.bu,
+    reorderPoint: update.reorderPoint,
+    // Both forms or neither: an invariant name must not carry empty strings.
+    ...(update.singular !== null && update.plural !== null
+      ? { singular: update.singular, plural: update.plural }
+      : {}),
+    entries: sorted,
+  };
+  const next: IngredientMappings = { ...current, [name]: nextEntry };
+  await writeMasterDataFiles(token, folderId, listFile, mappingsFile, next);
+  // Publish after the files were written, so the UI never shows a state Drive
+  // did not accept (the same order the append and rename paths use).
+  writtenSinceLoad = true;
+  setIngredientMappings(next);
+  return { previous };
 }
 
 /**

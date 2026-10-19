@@ -43,7 +43,7 @@
 import { useState } from 'react';
 
 import {
-  ADDITIONAL_UNITS,
+  formatDecimal,
   masterIngredientNames,
   mappingsFor,
   resolveReorderPoint,
@@ -52,7 +52,14 @@ import {
   type ShoppingStop,
 } from '@cookbook/core';
 
+import IngredientMappingsField from './IngredientMappingsField';
 import QuantityPicker from './QuantityPicker';
+import {
+  buildMappingRows,
+  mappingEntriesFromRows,
+  validateMappingRows,
+  type MappingRow,
+} from './ingredientMasterForm';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /** One filled mapping row handed to the parent for persistence. */
@@ -90,65 +97,6 @@ interface NewIngredientSheetProps {
 const BASE_UNITS = ['g', 'ml'] as const;
 
 /**
- * Parses a factor input, tolerating the German decimal comma ("7,5" → 7.5).
- * Returns NaN for empty/invalid input.
- */
-function parseFactor(raw: string): number {
-  return Number(raw.trim().replace(',', '.'));
-}
-
-/**
- * Parses a priority input. Returns NaN for empty/invalid input; non-integer
- * values ("2,5") stay non-integers so the validation can reject them.
- */
-function parsePriority(raw: string): number {
-  return Number(raw.trim().replace(',', '.'));
-}
-
-/** One mapping row of the form: the raw factor + priority of one AU. */
-interface MappingRow {
-  au: string;
-  /** The trimmed factor input; "" = row skipped. */
-  factorRaw: string;
-  /** The trimmed priority input; "" = not yet entered. */
-  priorityRaw: string;
-}
-
-/**
- * Validates the filled mapping rows. Returns a German error message, or null
- * when the rows are ready to save.
- */
-function validateRows(rows: MappingRow[]): string | null {
-  const priorityByAu = new Map<number, string>();
-  for (const row of rows) {
-    if (row.factorRaw === '') {
-      // Skipped row; a priority without a factor is a user mistake worth flagging.
-      if (row.priorityRaw !== '') {
-        return `Bitte für „${row.au}“ auch einen Faktor angeben (Priorität ist bereits gesetzt).`;
-      }
-      continue;
-    }
-    const factor = parseFactor(row.factorRaw);
-    if (!Number.isFinite(factor) || factor <= 0) {
-      return `Der Faktor für „${row.au}“ muss eine positive Zahl sein.`;
-    }
-    if (row.priorityRaw === '') {
-      return `Bitte eine Priorität für „${row.au}“ angeben (1 = bevorzugt).`;
-    }
-    const priority = parsePriority(row.priorityRaw);
-    if (!Number.isInteger(priority) || priority <= 0) {
-      return `Die Priorität für „${row.au}“ muss eine positive ganze Zahl sein.`;
-    }
-    const existing = priorityByAu.get(priority);
-    if (existing !== undefined) {
-      return `„${existing}“ und „${row.au}“ haben beide die Priorität ${priority} — jede Umrechnung braucht eine eindeutige Priorität.`;
-    }
-    priorityByAu.set(priority, row.au);
-  }
-  return null;
-}
-
-/**
  * The exact German message a save attempt would report for the current form:
  * empty/duplicate name first, then the first invalid mapping row. It is the
  * single source of truth for both the save attempt and the live error text.
@@ -161,7 +109,7 @@ function currentSaveErrorMessage(name: string, rows: MappingRow[]): string | nul
   if (masterIngredientNames().includes(trimmed)) {
     return `„${trimmed}“ existiert bereits in der Stammdatenliste.`;
   }
-  return validateRows(rows);
+  return validateMappingRows(rows);
 }
 
 /**
@@ -259,24 +207,13 @@ function NewIngredientSheet({
   });
 
   /** The filled rows in AU order (Becher, EL, TL). */
-  const mappingRows: MappingRow[] = ADDITIONAL_UNITS.map((unit) => ({
-    au: unit.name,
-    factorRaw: (factors[unit.name] ?? '').trim(),
-    priorityRaw: (priorities[unit.name] ?? '').trim(),
-  }));
+  const mappingRows = buildMappingRows(factors, priorities);
 
   /**
    * The rows that carry a mapping, in the order the parent will persist them
    * (ascending priority — matches the registry invariant).
    */
-  const entries: NewIngredientEntry[] = mappingRows
-    .filter((row) => row.factorRaw !== '')
-    .map((row) => ({
-      au: row.au,
-      factor: parseFactor(row.factorRaw),
-      priority: parsePriority(row.priorityRaw),
-    }))
-    .sort((a, b) => a.priority - b.priority);
+  const entries: NewIngredientEntry[] = mappingEntriesFromRows(mappingRows);
 
   /**
    * The rows that would actually be saved (a finite positive factor and a
@@ -372,7 +309,9 @@ function NewIngredientSheet({
     markEdited();
   };
 
-  /** Copies the mappings of `source` into the form (AU rows are overwritten). */
+  /** Copies the mappings of `source` into the form (AU rows are overwritten).
+   *  Factors enter the inputs with the German decimal comma ("7,5"), the same
+   *  display form the edit sheet uses for its prefilled rows. */
   const applyCopy = (source: string): void => {
     const entry = mappingsFor(source);
     if (entry === undefined) {
@@ -381,7 +320,7 @@ function NewIngredientSheet({
     const nextFactors = { ...factors };
     const nextPriorities = { ...priorities };
     for (const mapping of entry.entries) {
-      nextFactors[mapping.au] = String(mapping.factor);
+      nextFactors[mapping.au] = formatDecimal(mapping.factor);
       nextPriorities[mapping.au] = String(mapping.priority);
     }
     setFactors(nextFactors);
@@ -505,42 +444,19 @@ function NewIngredientSheet({
           )}
 
           <p className="field-hint">Manuell anpassen:</p>
-          <div className="factor-grid">
-            <span className="factor-head-cell" aria-hidden="true" />
-            <span className="factor-head-cell" aria-hidden="true">
-              Menge [{bu}]
-            </span>
-            <span className="factor-head-cell" aria-hidden="true">
-              Priorität
-            </span>
-            {ADDITIONAL_UNITS.flatMap((unit) => [
-              <span key={`${unit.name}:name`} className="factor-unit">
-                {unit.name}
-              </span>,
-              <input
-                key={`${unit.name}:menge`}
-                type="text"
-                inputMode="decimal"
-                aria-label={`${unit.name}: Menge in ${bu}`}
-                value={factors[unit.name] ?? ''}
-                onChange={(event) => {
-                  setFactors((current) => ({ ...current, [unit.name]: event.target.value }));
-                  markEdited();
-                }}
-              />,
-              <input
-                key={`${unit.name}:prioritaet`}
-                type="text"
-                inputMode="numeric"
-                aria-label={`${unit.name}: Priorität`}
-                value={priorities[unit.name] ?? ''}
-                onChange={(event) => {
-                  setPriorities((current) => ({ ...current, [unit.name]: event.target.value }));
-                  markEdited();
-                }}
-              />,
-            ])}
-          </div>
+          <IngredientMappingsField
+            bu={bu}
+            factors={factors}
+            priorities={priorities}
+            onFactorChange={(au, value) => {
+              setFactors((current) => ({ ...current, [au]: value }));
+              markEdited();
+            }}
+            onPriorityChange={(au, value) => {
+              setPriorities((current) => ({ ...current, [au]: value }));
+              markEdited();
+            }}
+          />
         </div>
 
         {/* The reorder point: what is on the shelf after a shopping trip. Same
