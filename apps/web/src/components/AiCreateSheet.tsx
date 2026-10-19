@@ -26,6 +26,10 @@
  * - The conversation does not end with a draft: the composer stays visible, and
  *   a change request goes to `sendRevision` (rule A4) — the AI revises its own
  *   draft instead of the user reworking it by hand.
+ * - The draft-ready card belongs to the transcript, at the turn that created
+ *   it — not to a fixed block above the composer. A later change request or
+ *   clarifying question then reads *below* the draft it refers to. Only the
+ *   current draft card is kept: a newer draft replaces the previous one.
  * - When the user saves a drafted Zutaten-Rezept in the editor, the conversation
  *   continues here: the parent hands the saved recipe back via `handoff`, the
  *   context is re-read (the new sub-recipe is a valid ingredient now) and the
@@ -83,9 +87,25 @@ import { EyeIcon } from './icons';
 
 /** One bubble of the chat transcript. */
 interface ChatMessage {
+  kind: 'message';
   role: 'user' | 'assistant';
   content: string;
 }
+
+/**
+ * The draft-ready card, kept inside the transcript at the exact point of the
+ * conversation that created it. It is a transcript entry rather than a fixed
+ * block above the composer, so a later message (a revision request or a
+ * clarifying question) appears *below* the draft it refers to instead of above
+ * it. Only the current draft is kept: a newer draft replaces the previous card.
+ */
+interface ChatDraft {
+  kind: 'draft';
+  recipe: Recipe;
+}
+
+/** One entry of the chat transcript: a message bubble or the draft card. */
+type ChatEntry = ChatMessage | ChatDraft;
 
 /** A draft the user saved in the editor, handed back to the running chat. */
 export interface AiHandoff {
@@ -366,6 +386,24 @@ function composeUserMessage(description: string, source: string): string {
   return parts.join('\n\n');
 }
 
+/** The current (newest) draft in the transcript, or null. */
+function currentDraft(entries: readonly ChatEntry[]): Recipe | null {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.kind === 'draft') return entry.recipe;
+  }
+  return null;
+}
+
+/**
+ * Appends a draft card to the transcript and drops every previous one: only the
+ * current draft may stay tappable, because an older card would open a
+ * superseded revision in the editor.
+ */
+function appendDraft(entries: readonly ChatEntry[], recipe: Recipe): ChatEntry[] {
+  return [...entries.filter((entry) => entry.kind === 'message'), { kind: 'draft', recipe }];
+}
+
 export default function AiCreateSheet({
   token,
   mode = 'create',
@@ -389,8 +427,8 @@ export default function AiCreateSheet({
   /** German key input shown while no session key is stored (N6). */
   const [showKeyField, setShowKeyField] = useState(() => getAiApiKey() === null);
   const [keyInput, setKeyInput] = useState('');
-  /** Chat transcript. */
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  /** Chat transcript, including the draft card at its creation point. */
+  const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [description, setDescription] = useState(initialPrompt ?? '');
   const [source, setSource] = useState('');
   /** The prompt and the source field grow with their content (§5.3). One ref
@@ -419,10 +457,12 @@ export default function AiCreateSheet({
   /** „KI-Verhalten“: ask for clarification by default (current behaviour). */
   const [replyMode, setReplyMode] = useState<ReplyMode>('clarify');
   const [busy, setBusy] = useState(false);
-  /** A validated draft ready to open in the editor. */
-  const [draft, setDraft] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  /** The validated draft the conversation is currently working on. It is the
+   *  newest draft card in the transcript, so the card's position and the
+   *  revision state can never drift apart. */
+  const draft = currentDraft(entries);
 
   /** True while mounted — guards late promise resolutions. StrictMode
    *  double-invokes effects (setup → cleanup → setup), so the flag is
@@ -477,7 +517,7 @@ export default function AiCreateSheet({
   // Keep the newest bubble visible.
   useEffect(() => {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
-  }, [messages, busy]);
+  }, [entries, busy]);
 
   /**
    * Serializes the current Vorgaben into the session's system instruction. The
@@ -534,10 +574,12 @@ export default function AiCreateSheet({
         session.setCollectionText(`${context.collectionText}\n\n${handoffNote(handoff.title)}`);
         session.setIngredientRecipeTitles(context.ingredientRecipeTitles);
         // The saved draft's card is history now — the next message is the dish.
-        setDraft(null);
-        setMessages((current) => [
-          ...current,
+        // It leaves the transcript at its old place instead of being pulled
+        // below the new note.
+        setEntries((current) => [
+          ...current.filter((entry) => entry.kind === 'message'),
           {
+            kind: 'message',
             role: 'assistant',
             content: `„${handoff.title}“ ist gespeichert und steht dir jetzt als Zutat zur Verfügung.`,
           },
@@ -578,21 +620,28 @@ export default function AiCreateSheet({
     const userText = composeUserMessage(description, source);
     // A draft already exists: this text is a change request for it (rule A4).
     const revise = draft !== null;
-    setMessages((current) => [...current, { role: 'user', content: userText }]);
+    setEntries((current) => [...current, { kind: 'message', role: 'user', content: userText }]);
     setDescription('');
     setSource('');
     setBusy(true);
     try {
       const result = revise ? await session.sendRevision(userText) : await session.send(userText);
       if (result.kind === 'question') {
-        setMessages((current) => [...current, { role: 'assistant', content: result.text }]);
+        setEntries((current) => [
+          ...current,
+          { kind: 'message', role: 'assistant', content: result.text },
+        ]);
       } else if (result.kind === 'draft') {
         // The AI's own prose before the file (rule A2) belongs in the
-        // transcript; on a revision it is what explains the change.
-        if (result.preamble !== '') {
-          setMessages((current) => [...current, { role: 'assistant', content: result.preamble }]);
-        }
-        setDraft(result.recipe);
+        // transcript; on a revision it is what explains the change. The card
+        // then follows that prose at the point of this turn.
+        setEntries((current) => {
+          const next: ChatEntry[] = [...current];
+          if (result.preamble !== '') {
+            next.push({ kind: 'message', role: 'assistant', content: result.preamble });
+          }
+          return appendDraft(next, result.recipe);
+        });
       } else {
         setError(result.message);
       }
@@ -628,7 +677,7 @@ export default function AiCreateSheet({
 
   /** True once the user sent the first prompt — from then on only a single
    *  answer field is shown (the two-field description layout is over). */
-  const conversationStarted = messages.length > 0;
+  const conversationStarted = entries.length > 0;
   /** True while a saved sub-recipe is being re-read into the AI context — a
    *  send during that window would reach the model without the new ingredient
    *  recipe, so the button waits (derived, not state: it mirrors the parent's
@@ -666,7 +715,7 @@ export default function AiCreateSheet({
   const hasWork =
     (description !== initialPromptValue && description.trim() !== '') ||
     source.trim() !== '' ||
-    messages.length > 0 ||
+    entries.length > 0 ||
     draft !== null;
 
   /**
@@ -678,7 +727,7 @@ export default function AiCreateSheet({
    * it threatened is gone (see useLeaveGuard).
    */
   const guard = useLeaveGuard({
-    workSignature: `${description}\u0000${source}\u0000${messages.length}\u0000${draft !== null}`,
+    workSignature: `${description}\u0000${source}\u0000${entries.length}\u0000${draft !== null}`,
     needsConfirm: hasWork,
   });
 
@@ -782,7 +831,7 @@ export default function AiCreateSheet({
           {session !== null && (
             <>
               <section className="ai-transcript" ref={transcriptRef} aria-label="Unterhaltung">
-                {messages.length === 0 && (
+                {entries.length === 0 && (
                   <div className="ai-hint">
                     {isEdit ? (
                       // Edit task (Task B): the whole point of the screen is
@@ -811,44 +860,47 @@ export default function AiCreateSheet({
                     )}
                   </div>
                 )}
-                {messages.map((message, index) => (
-                  <p key={index} className={`ai-bubble ai-${message.role}`}>
-                    {message.content}
-                  </p>
-                ))}
+                {entries.map((entry, index) =>
+                  entry.kind === 'message' ? (
+                    <p key={index} className={`ai-bubble ai-${entry.role}`}>
+                      {entry.content}
+                    </p>
+                  ) : (
+                    // The draft card is a transcript entry: it stays at the
+                    // point of the turn that created it, so later messages read
+                    // below the draft they belong to.
+                    <section key={index} className="editor-card ai-draft-card">
+                      <h2 className="editor-card-title">Entwurf erstellt</h2>
+                      <p>
+                        {isEdit
+                          ? `Ich habe eine überarbeitete Fassung von „${entry.recipe.title}“ erstellt. Du kannst sie jetzt im Editor prüfen und speichern — dabei wird das vorhandene Rezept ersetzt — oder unten beschreiben, was die KI weiter ändern soll.`
+                          : `Ich habe einen Entwurf für „${entry.recipe.title}“ erstellt. Du kannst ihn jetzt im Editor ansehen, ändern und speichern — oder unten beschreiben, was die KI am Entwurf ändern soll.`}
+                      </p>
+                      <div className="sheet-actions">
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={() => {
+                            // Opening the draft is a deliberate "keep working"
+                            // action — drop any armed discard confirmation so the
+                            // header button reads "Zurück" again on return.
+                            guard.reset();
+                            onOpenDraft(entry.recipe);
+                          }}
+                        >
+                          <EyeIcon className="button-icon" optical={20} />
+                          <span>Entwurf überprüfen</span>
+                        </button>
+                      </div>
+                    </section>
+                  ),
+                )}
                 {busy && (
                   <p className="ai-bubble ai-assistant" role="status">
                     Die KI denkt nach …
                   </p>
                 )}
               </section>
-
-              {draft !== null && (
-                <section className="editor-card ai-draft-card">
-                  <h2 className="editor-card-title">Entwurf erstellt</h2>
-                  <p>
-                    {isEdit
-                      ? `Ich habe eine überarbeitete Fassung von „${draft.title}“ erstellt. Du kannst sie jetzt im Editor prüfen und speichern — dabei wird das vorhandene Rezept ersetzt — oder unten beschreiben, was die KI weiter ändern soll.`
-                      : `Ich habe einen Entwurf für „${draft.title}“ erstellt. Du kannst ihn jetzt im Editor ansehen, ändern und speichern — oder unten beschreiben, was die KI am Entwurf ändern soll.`}
-                  </p>
-                  <div className="sheet-actions">
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() => {
-                        // Opening the draft is a deliberate "keep working"
-                        // action — drop any armed discard confirmation so the
-                        // header button reads "Zurück" again on return.
-                        guard.reset();
-                        onOpenDraft(draft);
-                      }}
-                    >
-                      <EyeIcon className="button-icon" optical={20} />
-                      <span>Entwurf überprüfen</span>
-                    </button>
-                  </div>
-                </section>
-              )}
 
               <form
                 className="ai-composer"

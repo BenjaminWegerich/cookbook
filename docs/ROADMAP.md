@@ -11,6 +11,17 @@ management (design, list, editor), and AI-assisted create/edit. The exported HTM
 the cooking experience (scaling + step navigation); the web app manages recipes. The Google
 Keep integration is a follow-up milestone. Sharing builds on the web app and the export.
 
+## Known external blockers
+
+- [ ] **Android keyboard hides on Chromium 154.** Chrome and WebView 154 dismiss the soft
+      keyboard when an IME-owned popup takes window focus — Gboard's spell-check suggestions
+      and language menu, Samsung Keyboard's clipboard confirmation. It affects every text field
+      of the app, is reproducible across Chromium-based browsers and is reported upstream
+      ([Chromium 570135727](https://issues.chromium.org/issues/570135727),
+      [Chromium 570312518](https://issues.chromium.org/issues/570312518)); the app cannot keep
+      the keyboard open. Re-test after a Chrome/WebView update. Samsung Internet and Firefox
+      are not affected.
+
 ## Web app — Phase 2: Recipe management (depends on: Phase 1)
 
 - [x] Recipe editor: create and edit all fields, validation feedback per storage_format.md

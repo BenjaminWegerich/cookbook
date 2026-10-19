@@ -238,6 +238,12 @@ interface RecipeEditorProps {
   recipes: StoredRecipe[];
   /** Back without saving (list stays as-is). */
   onClose: () => void;
+  /**
+   * Label of the header's back button (default „Zurück"). An editor opened
+   * from the AI screen passes a label that names the conversation it returns
+   * to, so the user can tell where Back leads before pressing it.
+   */
+  backLabel?: string;
   /** After a successful save/delete: the list was changed. `saved` is the
    *  stored recipe (as saved, so with a possibly renamed title), or null after
    *  a delete — the AI-create handoff needs the saved title and type. */
@@ -1039,6 +1045,7 @@ function RecipeEditor({
   initialDraft,
   recipes,
   onClose,
+  backLabel = 'Zurück',
   onSaved,
   onOpenRecipe,
   visible = true,
@@ -1933,7 +1940,7 @@ function RecipeEditor({
               className="text-button back-button"
               onClick={() => void requestLeave('button')}
             >
-              Zurück
+              {backLabel}
             </button>
           </div>
           <p className="error-message" role="alert">
@@ -2052,7 +2059,7 @@ function RecipeEditor({
               className="text-button back-button"
               onClick={() => void requestLeave('button')}
             >
-              Zurück
+              {backLabel}
             </button>
             <button
               type="button"

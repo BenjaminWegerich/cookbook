@@ -313,6 +313,10 @@ they name two different kinds of leaving, and a screen carries exactly one of th
   screen untouched. Its exit is „Abbrechen" in the bottom action row, directly
   left of the primary button.
 
+The exit label names its destination only where the screen underneath is not the previous
+list-level screen: a recipe editor opened from the AI screen reads „Zurück zum KI-Editor".
+The control, its position and its meaning are unchanged.
+
 **One-liner:** *Does leaving mean "go back" or "never mind"? Go back → „Zurück"
 top left. Never mind → „Abbrechen" next to the commit.*
 
@@ -320,7 +324,7 @@ top left. Never mind → „Abbrechen" next to the commit.*
 
 | Surface | Kind | Exit |
 | --- | --- | --- |
-| Recipe editor, incl. every sub-recipe level | place (scroll key `editor:<level>`) | „Zurück" |
+| Recipe editor, incl. every sub-recipe level | place (scroll key `editor:<level>`) | „Zurück"; on the AI-opened base level „Zurück zum KI-Editor" |
 | „Rezept mit KI schreiben / bearbeiten" | place (scroll key `ai`) | „Zurück" |
 | „Gerichte vom Essensplan auswählen" | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 1: Zutaten-Rezepte" | place (flow step) | „Zurück" |

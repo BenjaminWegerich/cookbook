@@ -1026,6 +1026,12 @@ and the app remembers it — its scroll key, its draft — so leaving returns to
 level. A place has no second, cancel-shaped exit: its own forward action („Speichern",
 „Einkaufsliste schreiben") stands alone at the bottom right. *decided with the user*
 
+**The exit names its destination where that destination is not the previous list-level screen.**
+A recipe editor opened from the AI screen returns to the still-running AI conversation, so its
+back button reads „Zurück zum KI-Editor". It is the same control in the same position — only the
+place it returns to is named. A sub-recipe level opened inside that editor keeps „Zurück",
+because it returns to its parent level. *decided with the user*
+
 **A change exits with „Abbrechen".** It is a sheet under a scrim, over the screen it belongs to
 (§5.6): closing throws the pending input away and reveals that screen untouched. Its exit is the
 first button of the bottom action row, directly left of the primary button (§5.1). *decided with
@@ -1086,8 +1092,9 @@ control that discards — a second Back therefore dismisses the question instead
 change to that work, or closing the sheet, drops it, so a confirmation can never be spent on
 content it was not asked about.
 
-**„Zurück" keeps its label and stays reachable.** Navigation and a write decision remain separate
-controls (§6.1); the scrim is what guarantees that only the sheet's answers can discard.
+**The exit label stays put — only its destination may be named.** „Zurück zum KI-Editor" is the
+same control at the same position, not a second exit (§6.1). Navigation and a write decision
+remain separate controls; the scrim is what guarantees that only the sheet's answers can discard.
 *decided with the user*
 
 **Leaving the document is the browser's own question.** A reload, a closed tab or a navigation away
@@ -1327,7 +1334,7 @@ The cooking view (`.html`) has its own inventory, written below.
 | Recipe list | `RecipeList` (root, state `null`) | root | — |
 | Create menu | `setNav('menu')`, the FAB's menu | browsing layer | scrim, Escape, choice |
 | Recipe overview | `setNav('overview')`, `RecipeOverview` | browsing layer | scrim, Escape, Back |
-| Recipe editor | `setNav('editor')`, `RecipeEditor` (base + each sub-recipe level) | place | „Zurück" |
+| Recipe editor | `setNav('editor')`, `RecipeEditor` (base + each sub-recipe level) | place | „Zurück"; on the AI-opened base level „Zurück zum KI-Editor" |
 | AI create / edit | `setNav('ai')`, `AiCreateSheet` | place | „Zurück" |
 | „Einkaufsliste schreiben" | `setNav('shopping')`, `ShoppingListSelect` | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 1: Zutaten-Rezepte" | `setNav('pantrySub')`, `SubRecipeSelect` | place (flow step) | „Zurück" |

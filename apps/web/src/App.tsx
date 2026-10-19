@@ -241,6 +241,14 @@ function App() {
    * (see the handoff below).
    */
   const editorOriginRef = useRef<'ai-create' | 'ai-edit' | 'list' | 'overview' | null>(null);
+  /**
+   * True while the open editor was started from the AI screen. The label of
+   * its back button is part of the render, so it cannot read `editorOriginRef`
+   * (refs are handler state, not render state); this mirror is set by the two
+   * AI openers and reset by every other opener. The ref stays the synchronous
+   * truth for the popstate handler.
+   */
+  const [editorReturnsToAi, setEditorReturnsToAi] = useState(false);
   /** The AI draft that opened the editor (null for a list/manual edit). */
   const pendingDraftRef = useRef<Recipe | null>(null);
   /**
@@ -1781,6 +1789,7 @@ function App() {
   const openEditor = useCallback(
     (recipe: StoredRecipe | null): void => {
       editorOriginRef.current = 'list';
+      setEditorReturnsToAi(false);
       // A create flow started from an unrecognized entry ends here: the list is
       // the destination of this one, so the overview return must not linger.
       overviewReturnRef.current = false;
@@ -1797,6 +1806,7 @@ function App() {
     (recipe: Recipe): void => {
       // Remembered so saving the draft can hand it back to the conversation.
       editorOriginRef.current = 'ai-create';
+      setEditorReturnsToAi(true);
       pendingDraftRef.current = recipe;
       startEditorChain();
       showInEditor(null, recipe);
@@ -1814,6 +1824,7 @@ function App() {
   const openEditorWithRevision = useCallback(
     (original: StoredRecipe, revision: Recipe): void => {
       editorOriginRef.current = 'ai-edit';
+      setEditorReturnsToAi(true);
       pendingDraftRef.current = revision;
       startEditorChain();
       showInEditor(original, revision);
@@ -1877,6 +1888,7 @@ function App() {
     if (overviewTarget === null || overviewTarget.kind !== 'unknown') return;
     overviewReturnRef.current = true;
     editorOriginRef.current = 'overview';
+    setEditorReturnsToAi(false);
     pendingDraftRef.current = null;
     startEditorChain();
     showInEditor(null, newRecipeDraftWithTitle(overviewTarget.text));
@@ -2115,6 +2127,15 @@ function App() {
               target={editorTarget}
               initialDraft={editorDraft ?? undefined}
               recipes={recipes ?? []}
+              // An AI draft's editor returns to the still-running conversation,
+              // not to the list: naming that destination on the back button is
+              // what makes the hop clear before it is taken. Sub-recipe levels
+              // keep „Zurück", because they step to their parent level.
+              backLabel={
+                editorReturnsToAi && editorSubRecipes.length === 0
+                  ? 'Zurück zum KI-Editor'
+                  : undefined
+              }
               onClose={closeEditor}
               onSaved={handleEditorSaved}
               onOpenRecipe={openSubRecipe}
