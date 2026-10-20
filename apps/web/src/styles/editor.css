@@ -1192,7 +1192,7 @@
   font-weight: 600;
 }
 
-/* Typeface chips: one per shortlist face — the default "Source Sans 3" first —
+/* Typeface chips: one per shortlist face — the default "Noto Sans" first —
    each rendered in its own font via the inline font-family. The larger text
    size shows the typeface's character better than the default chip caption. */
 .theme-font-chips {

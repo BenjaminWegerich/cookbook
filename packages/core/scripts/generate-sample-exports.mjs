@@ -16,7 +16,7 @@
  *   becomes a sub-recipe link (`<title>.html`), mirroring what the web app does
  *   with the export files in a Drive folder (recipe_storage.ts), so the samples
  *   show the „Rezept" badge;
- * - the wraps sample carries the `Fraunces` theme, so the pair shows both the
+ * - the wraps sample carries the `Noto Serif` theme, so the pair shows both the
  *   default theme and a themed cooking view (DESIGN §4.8).
  */
 
@@ -37,7 +37,7 @@ const SAMPLES = [
   {
     source: 'Shredded Tofu Wraps.md',
     output: 'sample-wraps.html',
-    theme: { font: 'Fraunces' },
+    theme: { font: 'Noto Serif' },
   },
 ];
 

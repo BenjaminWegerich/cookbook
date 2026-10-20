@@ -336,7 +336,7 @@ title: X
 type: finished_dish
 servings: 2
 theme:
-  font: Fraunces
+  font: Noto Serif
   accent: "#ad5632"
   paper: "#faf5ec"
   ink: "#2b241d"
@@ -347,7 +347,7 @@ prep_time: 25 min
 1. x
 `);
     expect(full.theme).toEqual({
-      font: 'Fraunces',
+      font: 'Noto Serif',
       accent: '#ad5632',
       paper: '#faf5ec',
       ink: '#2b241d',

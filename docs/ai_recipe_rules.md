@@ -24,7 +24,7 @@ reference:                (optional, beide Typen)
 prep_time: 30 min
 total_time: 45 min        (optional, nur wenn größer als prep_time)
 theme:                    (optional, beide Typen — s. u.)
-  font: Fraunces
+  font: Noto Serif
   accent: "#b85c38"
 ---
 ```
@@ -42,10 +42,10 @@ theme:                    (optional, beide Typen — s. u.)
   Palette (DESIGN.md §4.8). Setze es nur, wenn du eine klare, zum Gericht passende Idee hast;
   sonst lass es weg (es gilt das Standard-Design). Jedes Unterfeld ist einzeln optional — schreibe
   nur, was du bewusst setzt.
-  - `font`: genau eine Schriftart der Kurzliste: `Source Sans 3`, `Inter`, `Montserrat`,
-    `Nunito`, `Source Serif 4`, `Fraunces`, `Playfair Display`, `Bitter`,
-    `IBM Plex Sans Condensed`, `Caveat`, `IBM Plex Mono`. Wähle passend zum Charakter des
-    Gerichts — z. B. `Fraunces`/`Playfair Display` elegant, `Bitter` rustikal, `Caveat` lässig.
+  - `font`: genau eine Schriftart der Kurzliste: `Noto Sans`, `Noto Serif`,
+    `Noto Serif Display`, `Noto Sans Mono`, `Noto Sans Condensed`. Wähle passend zum Charakter
+    des Gerichts — z. B. `Noto Serif Display` elegant, `Noto Serif` klassisch,
+    `Noto Sans Mono` technisch.
   - `accent`/`paper`/`ink`/`line`: Hex-Farben `#rrggbb`, immer in Anführungszeichen
     (`accent: "#b85c38"`) — ein `#` ohne Anführungszeichen wäre ein YAML-Kommentar. Freie
     Farbwahl; als Orientierung: `paper` hell und `ink` dunkel (gut lesbar), `line` dezent.

@@ -75,7 +75,7 @@
 - **Warm palette:** warm, appetizing colors ("kitchen / durable surfaces"); no cold or blue
   hues. Primary text is espresso ink, accents are clay/terracotta and olive.
 - **Typography:** readability first; body text is `18px` (the ladder has no `16px`). One
-  self-hosted typeface, Source Sans 3 (variable), bundled at build time via `@fontsource` —
+  self-hosted typeface, Noto Sans (variable), bundled from its `latin` subset at build time —
   no runtime font fetch and no server.
 - **Number and unit are inseparable:** user-visible text joins a number and its unit with a
   narrow no-break space (U+202F), so they never wrap apart: `300 g`, `1,5 kg`, `500 ml`.

@@ -524,24 +524,20 @@ function TimeChips({
 }
 
 /**
- * CSS font stacks for the export font shortlist, as registered by their
- * @fontsource packages (main.tsx). Variable fonts register "<Name> Variable"
- * as the family; the IBM Plex faces ship only as static weights and keep their
- * plain family name. Each stack ends in a genre-appropriate system fallback,
- * so a face still reads with the right character while loading.
+ * CSS font stacks for the export font shortlist, as declared by
+ * styles/fonts.css. Every face is a bundled variable font registered under its
+ * "<Name> Variable" family (or the generated Noto Sans Condensed name). The
+ * plain system family names are deliberately absent: on Windows a broken
+ * duplicate of the installed Noto Sans resolves to its italic face, so a failed
+ * font load would turn the preview cursive. Each stack therefore ends in a
+ * genre-appropriate generic fallback only.
  */
 const THEME_FONT_STACKS: Readonly<Record<string, string>> = {
-  'Source Sans 3': "'Source Sans 3 Variable', 'Source Sans 3', system-ui, sans-serif",
-  Inter: "'Inter Variable', 'Inter', system-ui, sans-serif",
-  Montserrat: "'Montserrat Variable', 'Montserrat', system-ui, sans-serif",
-  Nunito: "'Nunito Variable', 'Nunito', system-ui, sans-serif",
-  'Source Serif 4': "'Source Serif 4 Variable', 'Source Serif 4', Georgia, serif",
-  Fraunces: "'Fraunces Variable', 'Fraunces', Georgia, serif",
-  'Playfair Display': "'Playfair Display Variable', 'Playfair Display', Georgia, serif",
-  Bitter: "'Bitter Variable', 'Bitter', Georgia, serif",
-  'IBM Plex Sans Condensed': "'IBM Plex Sans Condensed', system-ui, sans-serif",
-  Caveat: "'Caveat Variable', 'Caveat', cursive",
-  'IBM Plex Mono': "'IBM Plex Mono', ui-monospace, monospace",
+  'Noto Sans': "'Noto Sans Variable', system-ui, sans-serif",
+  'Noto Serif': "'Noto Serif Variable', Georgia, serif",
+  'Noto Serif Display': "'Noto Serif Display Variable', Georgia, serif",
+  'Noto Sans Mono': "'Noto Sans Mono Variable', ui-monospace, monospace",
+  'Noto Sans Condensed': "'Noto Sans Condensed', system-ui, sans-serif",
 };
 
 /** The CSS font stack that renders one shortlist typeface in the web app. */
@@ -966,7 +962,7 @@ function ThemeEditor({
             onClick={() => patch({ font: undefined })}
             title="Standard-Schriftart"
           >
-            Source Sans 3
+            {DEFAULT_THEME.font}
           </button>
           {THEME_FONT_SHORTLIST.filter((font) => font !== DEFAULT_THEME.font).map((font) => (
             <button

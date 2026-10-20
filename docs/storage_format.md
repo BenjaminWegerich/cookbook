@@ -78,7 +78,7 @@ independently:
 
 | Token | Type | Default | Notes |
 |---|---|---|---|
-| `font` | string | `Source Sans 3` | One typeface of the export font shortlist (DESIGN.md §4.8); no other typeface is allowed. |
+| `font` | string | `Noto Sans` | One typeface of the export font shortlist (DESIGN.md §4.8); no other typeface is allowed. |
 | `accent` | string | `#ad5632` | Active state, forward actions, links, sub-recipe badge. |
 | `paper` | string | `#faf5ec` | Page background. |
 | `ink` | string | `#2b241d` | Primary text. |
@@ -92,7 +92,7 @@ the app's look.
 
 ```markdown
 theme:
-  font: Fraunces
+  font: Noto Serif
   accent: "#ad5632"
   paper: "#faf5ec"
 ```

@@ -111,7 +111,7 @@ describe('serializeRecipe', () => {
     const text = serializeRecipe(
       makeDish({
         theme: {
-          font: 'Fraunces',
+          font: 'Noto Serif',
           accent: '#ad5632',
           paper: '#faf5ec',
           ink: '#2b241d',
@@ -126,7 +126,7 @@ describe('serializeRecipe', () => {
       'prep_time: 25 min\n' +
         'total_time: 40 min\n' +
         'theme:\n' +
-        '  font: Fraunces\n' +
+        '  font: Noto Serif\n' +
         '  accent: "#ad5632"\n' +
         '  paper: "#faf5ec"\n' +
         '  ink: "#2b241d"\n' +
@@ -139,7 +139,7 @@ describe('serializeRecipe', () => {
 
   it('round-trips a theme through parseRecipe', () => {
     const theme = {
-      font: 'Caveat',
+      font: 'Noto Sans Condensed',
       accent: '#123456',
       paper: '#ffffff',
       ink: '#000000',

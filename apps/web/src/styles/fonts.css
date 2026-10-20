@@ -1,0 +1,74 @@
+/**
+ * The six self-hosted Noto faces (scripts/generate-noto-faces.mjs).
+ *
+ * The four stock faces are the latin subsets of the `@fontsource` packages, so
+ * the bundle ships exactly the files the app can use — no Cyrillic, Devanagari
+ * or math subsets that a German cooking app never loads. All of them are
+ * variable fonts; the two weights of DESIGN §4.2 (400 and 600) come from the
+ * same file.
+ *
+ * Noto Sans has two extra needs that the latin subset does not cover:
+ *
+ * 1. The Number Forms fraction glyphs (U+2150–215E, ⅐ … ⅞) that `formatAQ`
+ *    emits — ⅓, ⅒, ⅛ … would otherwise be drawn by the operating system's
+ *    fallback font, in a different weight and size next to ¼ ½ ¾.
+ * 2. The narrow no-break space (U+202F) every number/unit pair uses. The latin
+ *    subset has no glyph for it, so the main face's `unicode-range` below
+ *    deliberately excludes it and lets the companion face supply it.
+ *
+ * The companion is a second face of the same family with a narrow range, so
+ * the browser composes the family per character.
+ */
+
+@font-face {
+  font-family: 'Noto Sans Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-sans-latin.woff2') format('woff2-variations');
+  /* The latin subset minus U+202F, which the companion face owns. */
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-202E, U+2030-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Noto Sans Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-sans-fractions.woff2') format('woff2-variations');
+  unicode-range: U+202F, U+2150-215E, U+2189;
+}
+
+@font-face {
+  font-family: 'Noto Serif Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-serif-latin.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Noto Serif Display Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-serif-display-latin.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Noto Sans Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-sans-mono-latin.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Noto Sans Condensed';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-sans-condensed.woff2') format('woff2-variations');
+}

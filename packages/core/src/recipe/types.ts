@@ -76,7 +76,7 @@ export type MasterIngredient = Ingredient & { reference?: boolean };
  * render time.
  */
 export interface RecipeTheme {
-  /** Export typeface, one of the shortlist (DESIGN §4.8); default Source Sans 3. */
+  /** Export typeface, one of the shortlist (DESIGN §4.8); default Noto Sans. */
   font?: string;
   /** Accent colour: active state, forward actions, links, sub-recipe badge. */
   accent?: string;

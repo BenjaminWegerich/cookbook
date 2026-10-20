@@ -41,8 +41,12 @@
   --color-press-overlay: color-mix(in srgb, var(--color-ink) 12%, transparent);
 
   /* ---- Typography ------------------------------------------------------- */
-  /* Self-hosted via @fontsource (bundled at build, no runtime fetch). */
-  --font-sans: 'Source Sans 3 Variable', 'Source Sans 3', system-ui, sans-serif;
+  /* The bundled Noto Sans faces (styles/fonts.css), no runtime fetch. The
+     family name is the one those @font-face rules declare; a plain "Noto Sans"
+     fallback is deliberately absent — on Windows a broken duplicate of the
+     installed Noto Sans family resolves to its italic face, so a load failure
+     would turn the whole interface cursive. system-ui is the safe fallback. */
+  --font-sans: 'Noto Sans Variable', system-ui, sans-serif;
 
   --text-sm: 14px; /* captions, meta */
   --text-md: 18px; /* body — base size, readability first */

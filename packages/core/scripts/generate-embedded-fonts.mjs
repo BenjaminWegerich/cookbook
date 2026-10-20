@@ -3,21 +3,18 @@
  * Generates `src/recipe/embeddedFonts.ts` from the export font shortlist's
  * WOFF2 files (docs/DESIGN.md §4.8).
  *
- * The source of the bytes are the `@fontsource` packages (installed at the repo
- * root through the web app's dependencies, which bundle the same faces for the
- * recipe editor's theme preview). Each face is the package's *latin* subset —
- * Basic Latin + Latin-1 (the German letters ä ö ü ß Ä Ö Ü included) plus the
- * typographic punctuation the export renders („ " ' – — … and the narrow
- * no-break space) — so the inlined font stays practical in size while covering
- * everything the cooking view draws. The latin subset is a superset of DESIGN
- * §4.8's required coverage, which is the point of "subset to the required
- * coverage" there.
+ * The source of the bytes are the committed latin WOFF2 files the web app
+ * serves (`apps/web/src/fonts`, built by apps/web/scripts/generate-noto-faces.mjs
+ * from the `@fontsource-variable` packages and one generated instance). Each
+ * face covers Basic Latin + Latin-1 (the German letters ä ö ü ß Ä Ö Ü included)
+ * plus the typographic punctuation the export renders („ " ' – — …) — so the
+ * inlined font stays practical in size while covering everything the cooking
+ * view draws. That coverage is a superset of DESIGN §4.8's requirement, which
+ * is the point of "subset to the required coverage" there.
  *
- * Nine of the eleven shortlist faces are variable fonts and ship a single
- * `*-latin-wght-normal.woff2` covering the whole weight axis; they are embedded
- * once and declared over the two weights the cooking view uses (`400 600`,
- * DESIGN §4.2). The two IBM Plex faces ship only static weights and are embedded
- * as the `400` and `600` files.
+ * All five shortlist faces are variable fonts covering the whole weight axis,
+ * so each is embedded once and declared over the two weights the cooking view
+ * uses (`400 600`, DESIGN §4.2).
  *
  * The generator is a drift guard like the other `generate-*` scripts: a missing,
  * empty or non-WOFF2 file fails the run with an explicit message. Keeping the
@@ -41,22 +38,24 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/recipe/embeddedFonts.ts');
 
 /**
- * The export font shortlist in DESIGN §4.8 order, mapped to its @fontsource
- * package. `kind: 'variable'` faces ship one `*-latin-wght-normal.woff2`;
- * `kind: 'static'` faces ship `*-latin-400-normal.woff2` + `*-latin-600-normal.woff2`.
+ * The export font shortlist in DESIGN §4.8 order, mapped to the committed
+ * latin WOFF2 the web app also serves (apps/web/src/fonts). The export embeds
+ * those exact files, so a themed cooking view and its editor preview render
+ * identical bytes; the web app's fraction companion is not needed here, because
+ * the cooking view renders fractions in the slash form (§7).
  */
 const FONTS = [
-  { family: 'Source Sans 3', kind: 'variable', package: 'source-sans-3' },
-  { family: 'Inter', kind: 'variable', package: 'inter' },
-  { family: 'Montserrat', kind: 'variable', package: 'montserrat' },
-  { family: 'Nunito', kind: 'variable', package: 'nunito' },
-  { family: 'Source Serif 4', kind: 'variable', package: 'source-serif-4' },
-  { family: 'Fraunces', kind: 'variable', package: 'fraunces' },
-  { family: 'Playfair Display', kind: 'variable', package: 'playfair-display' },
-  { family: 'Bitter', kind: 'variable', package: 'bitter' },
-  { family: 'IBM Plex Sans Condensed', kind: 'static', package: 'ibm-plex-sans-condensed' },
-  { family: 'Caveat', kind: 'variable', package: 'caveat' },
-  { family: 'IBM Plex Mono', kind: 'static', package: 'ibm-plex-mono' },
+  { family: 'Noto Sans', path: 'apps/web/src/fonts/noto-sans-latin.woff2' },
+  { family: 'Noto Serif', path: 'apps/web/src/fonts/noto-serif-latin.woff2' },
+  {
+    family: 'Noto Serif Display',
+    path: 'apps/web/src/fonts/noto-serif-display-latin.woff2',
+  },
+  { family: 'Noto Sans Mono', path: 'apps/web/src/fonts/noto-sans-mono-latin.woff2' },
+  {
+    family: 'Noto Sans Condensed',
+    path: 'apps/web/src/fonts/noto-sans-condensed.woff2',
+  },
 ];
 
 /** First four bytes of a WOFF2 file (`wOF2`). */
@@ -84,28 +83,31 @@ function readWoff2(path) {
   return buffer.toString('base64');
 }
 
-/** The face(s) of one shortlist family: weight range plus base64 bytes. */
+/** The face of one shortlist family: weight range plus base64 bytes. */
 function buildFaces(font) {
-  if (font.kind === 'variable') {
-    const path = resolve(
-      ROOT,
-      `node_modules/@fontsource-variable/${font.package}/files/${font.package}-latin-wght-normal.woff2`,
-    );
-    return [{ weight: '400 600', base64: readWoff2(path) }];
-  }
-  const dir = resolve(ROOT, `node_modules/@fontsource/${font.package}/files`);
-  return [
-    { weight: '400', base64: readWoff2(resolve(dir, `${font.package}-latin-400-normal.woff2`)) },
-    { weight: '600', base64: readWoff2(resolve(dir, `${font.package}-latin-600-normal.woff2`)) },
-  ];
+  return [{ weight: '400 600', base64: readWoff2(resolve(ROOT, font.path)) }];
 }
+
+/**
+ * The Noto Sans companion face the exports embed beside every theme face: the
+ * Number Forms block and the narrow no-break space (U+202F). The latin subsets
+ * have no glyph for the narrow space, so without this face a quantity would
+ * lose the gap between number and unit ("300g"). The range is shared with the
+ * web app's styles/fonts.css.
+ */
+const COMPANION = {
+  weight: '400 600',
+  unicodeRange: 'U+202F, U+2150-215E, U+2189',
+  base64: readWoff2(resolve(ROOT, 'apps/web/src/fonts/noto-sans-fractions.woff2')),
+};
 
 /** Renders the TypeScript module. */
 function render(byFamily) {
   const lines = [];
   lines.push('/**');
-  lines.push(" * AUTO-GENERATED from the @fontsource packages' latin-subset WOFF2 files by");
-  lines.push(' * scripts/generate-embedded-fonts.mjs.');
+  lines.push(" * AUTO-GENERATED from the shortlist faces' WOFF2 files by");
+  lines.push(' * scripts/generate-embedded-fonts.mjs (the @fontsource latin subsets, plus the');
+  lines.push(" * web app's generated Noto Sans Condensed and fraction/space companion faces).");
   lines.push(
     " * Do not edit by hand — re-run 'npm run generate:fonts' (packages/core) after a font change.",
   );
@@ -121,6 +123,8 @@ function render(byFamily) {
   lines.push('  readonly weight: string;');
   lines.push('  /** The subsetted WOFF2 bytes, base64-encoded (without the `data:` prefix). */');
   lines.push('  readonly base64: string;');
+  lines.push('  /** The CSS `unicode-range` when the face covers only a few characters. */');
+  lines.push('  readonly unicodeRange?: string;');
   lines.push('}');
   lines.push('');
   lines.push('/**');
@@ -140,6 +144,19 @@ function render(byFamily) {
     }
     lines.push('  ],');
   }
+  lines.push('};');
+  lines.push('');
+  lines.push('/**');
+  lines.push(' * The companion face every export embeds beside the theme face (DESIGN §4.8):');
+  lines.push(' * the Number Forms fraction glyphs and the narrow no-break space (U+202F), which');
+  lines.push(' * the latin subsets omit. The theme face itself is declared with a `unicode-range`');
+  lines.push(' * that excludes these characters, so the browser takes them from this face and a');
+  lines.push(' * quantity keeps its number/unit gap ("300 g").');
+  lines.push(' */');
+  lines.push('export const EMBEDDED_FONT_COMPANION: EmbeddedFontFace = {');
+  lines.push(`  weight: ${JSON.stringify(COMPANION.weight)},`);
+  lines.push(`  unicodeRange: ${JSON.stringify(COMPANION.unicodeRange)},`);
+  lines.push(`  base64: '${COMPANION.base64}',`);
   lines.push('};');
   lines.push('');
   return lines.join('\n');

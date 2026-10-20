@@ -73,7 +73,7 @@ import type { ResolvedTheme } from './theme.js';
 import { displayTimeText } from './timeValues.js';
 import { yieldViewQuantities } from './yieldViews.js';
 import type { Ingredient, Recipe, Step, Unit } from './types.js';
-import { EMBEDDED_FONTS } from './embeddedFonts.js';
+import { EMBEDDED_FONT_COMPANION, EMBEDDED_FONTS } from './embeddedFonts.js';
 
 /** Allowed serving options of the export: integer ladder values 1–30 (§D2). */
 const SERVING_MIN = 1;
@@ -172,30 +172,56 @@ function themeCss(theme: ResolvedTheme): string {
 }
 
 /**
+ * The latin coverage of the theme faces (DESIGN §4.8), minus U+202F and the
+ * Number Forms block: those characters belong to the companion face, so the
+ * browser never selects the theme face first for the narrow no-break space.
+ */
+const THEME_FACE_UNICODE_RANGE =
+  'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, ' +
+  'U+0304, U+0308, U+0329, U+2000-202E, U+2030-206F, U+20AC, U+2122, U+2191, ' +
+  'U+2193, U+2212, U+2215, U+FEFF, U+FFFD';
+
+/**
  * The theme typeface's `@font-face` rules, or '' when the typeface has no
  * embedded face (§4.8). Each face is the latin subset of the shortlist
  * typeface (embeddedFonts.ts), inlined as a `data:` URI so the export stays
- * self-contained: no runtime font fetch and no sibling file. Variable faces are
- * declared once over the two weights the cooking view uses (`400 600`, §4.2);
- * a static family (the two IBM Plex faces) declares one rule per weight.
+ * self-contained: no runtime font fetch and no sibling file. Every shortlist
+ * face is a variable font, declared once over the two weights the cooking view
+ * uses (`400 600`, §4.2).
+ *
+ * A companion face follows the theme face under the same family name. It
+ * supplies the narrow no-break space (U+202F) every quantity uses and the
+ * Number Forms fraction glyphs; the theme face's `unicode-range` excludes
+ * them, so the browser takes them from the companion. Without it the number
+ * and its unit lose their gap ("300g") in browsers that fall back without a
+ * space glyph.
  */
 function fontFaceCss(theme: ResolvedTheme): string {
   const faces = EMBEDDED_FONTS[theme.font];
   if (faces === undefined) return '';
-  return (
-    faces
-      .map(
-        (face) =>
-          `@font-face {\n` +
-          `  font-family: '${theme.font}';\n` +
-          `  font-style: normal;\n` +
-          `  font-display: swap;\n` +
-          `  font-weight: ${face.weight};\n` +
-          `  src: url(data:font/woff2;base64,${face.base64}) format('woff2');\n` +
-          `}`,
-      )
-      .join('\n') + '\n'
-  );
+  const themeFaces = faces
+    .map(
+      (face) =>
+        `@font-face {\n` +
+        `  font-family: '${theme.font}';\n` +
+        `  font-style: normal;\n` +
+        `  font-display: swap;\n` +
+        `  font-weight: ${face.weight};\n` +
+        `  unicode-range: ${THEME_FACE_UNICODE_RANGE};\n` +
+        `  src: url(data:font/woff2;base64,${face.base64}) format('woff2');\n` +
+        `}`,
+    )
+    .join('\n');
+  const companion =
+    `@font-face {\n` +
+    `  font-family: '${theme.font}';\n` +
+    `  font-style: normal;\n` +
+    `  font-display: swap;\n` +
+    `  font-weight: ${EMBEDDED_FONT_COMPANION.weight};\n` +
+    `  unicode-range: ${EMBEDDED_FONT_COMPANION.unicodeRange};\n` +
+    `  src: url(data:font/woff2;base64,${EMBEDDED_FONT_COMPANION.base64}) format('woff2');\n` +
+    `}\n`;
+  return `${themeFaces}\n${companion}`;
 }
 
 /**

@@ -20,27 +20,27 @@
 import type { RecipeTheme } from './types.js';
 
 /**
- * The export font shortlist (DESIGN §4.8): eleven typefaces deliberately unlike
- * each other. `font` must name exactly one of these — no other typeface is
- * selectable.
+ * The export font shortlist (DESIGN §4.8): five Noto faces. `font` must name
+ * exactly one of these — no other typeface is selectable.
+ *
+ * The list is deliberate about what Noto can and cannot express: the project
+ * has no slab, handwriting or rounded Latin text family, so the shortlist
+ * trades the old eleven-genre spread for one coherent superfamily (grotesque,
+ * serif, display serif, monospace, and the condensed width instance). The
+ * condensed name is the width-axis instance of Noto Sans (see the web app's
+ * generate-noto-faces script), not a separate Google family.
  */
 export const THEME_FONT_SHORTLIST: readonly string[] = [
-  'Source Sans 3',
-  'Inter',
-  'Montserrat',
-  'Nunito',
-  'Source Serif 4',
-  'Fraunces',
-  'Playfair Display',
-  'Bitter',
-  'IBM Plex Sans Condensed',
-  'Caveat',
-  'IBM Plex Mono',
+  'Noto Sans',
+  'Noto Serif',
+  'Noto Serif Display',
+  'Noto Sans Mono',
+  'Noto Sans Condensed',
 ];
 
 /** The default theme: the web app's palette and typeface (DESIGN §4.8). */
 export const DEFAULT_THEME: Required<RecipeTheme> = {
-  font: 'Source Sans 3',
+  font: 'Noto Sans',
   accent: '#ad5632', // clay — active state, forward actions, links
   paper: '#faf5ec', // page background
   ink: '#2b241d', // primary text

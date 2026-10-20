@@ -296,7 +296,7 @@ title: X
 type: finished_dish
 servings: 2
 theme:
-  font: Fraunces
+  font: Noto Serif
   accent: "#123456"
 prep_time: 15 min
 ---
@@ -306,7 +306,7 @@ prep_time: 15 min
 
   it('exposes the resolved theme tokens as CSS variables', () => {
     const html = generateRecipeHtml(themed);
-    expect(html).toContain("--theme-font: 'Fraunces';");
+    expect(html).toContain("--theme-font: 'Noto Serif';");
     expect(html).toContain('--theme-accent: #123456;');
     // Missing tokens fall back to the default theme independently.
     expect(html).toContain('--theme-paper: #faf5ec;');
@@ -316,7 +316,7 @@ prep_time: 15 min
 
   it('uses the default theme for a recipe without theme data', () => {
     const html = generateRecipeHtml(WRAPS);
-    expect(html).toContain("--theme-font: 'Source Sans 3';");
+    expect(html).toContain("--theme-font: 'Noto Sans';");
     expect(html).toContain('--theme-accent: #ad5632;');
     expect(html).toContain('--theme-paper: #faf5ec;');
     expect(html).toContain('--theme-ink: #2b241d;');
@@ -341,23 +341,23 @@ prep_time: 15 min
 });
 
 describe('generateRecipeHtml — font embedding (§4.8)', () => {
-  const fraunces = parseRecipe(`---
+  const serif = parseRecipe(`---
 title: X
 type: finished_dish
 servings: 2
 theme:
-  font: Fraunces
+  font: Noto Serif
 prep_time: 15 min
 ---
 ## Zubereitung
 1. x
 `);
-  const mono = parseRecipe(`---
+  const condensed = parseRecipe(`---
 title: X
 type: finished_dish
 servings: 2
 theme:
-  font: IBM Plex Mono
+  font: Noto Sans Condensed
 prep_time: 15 min
 ---
 ## Zubereitung
@@ -365,9 +365,9 @@ prep_time: 15 min
 `);
 
   it('embeds the theme typeface as a self-hosted WOFF2 data URI', () => {
-    const html = generateRecipeHtml(fraunces);
+    const html = generateRecipeHtml(serif);
     expect(html).toContain('@font-face');
-    expect(html).toContain("font-family: 'Fraunces';");
+    expect(html).toContain("font-family: 'Noto Serif';");
     expect(html).toContain('data:font/woff2;base64,');
     expect(html).toContain("format('woff2')");
     // Self-contained: no network font URL.
@@ -376,23 +376,29 @@ prep_time: 15 min
 
   it('embeds the default typeface for a recipe without theme data', () => {
     const html = generateRecipeHtml(WRAPS);
-    expect(html).toContain("font-family: 'Source Sans 3';");
+    expect(html).toContain("font-family: 'Noto Sans';");
     expect(html).toContain('data:font/woff2;base64,');
   });
 
   it('declares a variable face over the two required weights', () => {
-    const html = generateRecipeHtml(fraunces);
+    const html = generateRecipeHtml(serif);
     expect(html).toContain('font-weight: 400 600;');
-    expect(html).toContain("font-family: 'Fraunces';");
+    expect(html).toContain("font-family: 'Noto Serif';");
   });
 
-  it('embeds one face per static weight for a static family', () => {
-    const html = generateRecipeHtml(mono);
-    expect(html).toContain('font-weight: 400;');
-    expect(html).toContain('font-weight: 600;');
-    // Two @font-face rules — one per static weight — and no variable range.
+  it('embeds the generated condensed width instance as one variable face', () => {
+    const html = generateRecipeHtml(condensed);
+    expect(html).toContain("font-family: 'Noto Sans Condensed';");
+    expect(html).toContain('font-weight: 400 600;');
+    // The theme face plus the shared companion, both under the theme family.
     expect(html.match(/@font-face/g)).toHaveLength(2);
-    expect(html).not.toContain('font-weight: 400 600;');
+  });
+
+  it('embeds the fraction/space companion beside the theme face', () => {
+    const html = generateRecipeHtml(serif);
+    // The theme face excludes U+202F; the companion owns it and the Number Forms.
+    expect(html).toContain('unicode-range: U+202F, U+2150-215E, U+2189;');
+    expect(html.match(/@font-face/g)).toHaveLength(2);
   });
 });
 

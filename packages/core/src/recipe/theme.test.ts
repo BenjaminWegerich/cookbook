@@ -7,20 +7,20 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_THEME, THEME_FONT_SHORTLIST, isHexColor, resolveTheme } from './theme.js';
-import { EMBEDDED_FONTS } from './embeddedFonts.js';
+import { EMBEDDED_FONT_COMPANION, EMBEDDED_FONTS } from './embeddedFonts.js';
 
 describe('THEME_FONT_SHORTLIST', () => {
-  it('holds the eleven typefaces of DESIGN §4.8, no duplicates', () => {
-    expect(THEME_FONT_SHORTLIST).toHaveLength(11);
-    expect(new Set(THEME_FONT_SHORTLIST).size).toBe(11);
-    expect(THEME_FONT_SHORTLIST[0]).toBe('Source Sans 3');
+  it('holds the five Noto faces of DESIGN §4.8, no duplicates', () => {
+    expect(THEME_FONT_SHORTLIST).toHaveLength(5);
+    expect(new Set(THEME_FONT_SHORTLIST).size).toBe(5);
+    expect(THEME_FONT_SHORTLIST[0]).toBe('Noto Sans');
   });
 });
 
 describe('DEFAULT_THEME', () => {
   it('is the web app palette and typeface of DESIGN §4.8', () => {
     expect(DEFAULT_THEME).toEqual({
-      font: 'Source Sans 3',
+      font: 'Noto Sans',
       accent: '#ad5632',
       paper: '#faf5ec',
       ink: '#2b241d',
@@ -58,16 +58,16 @@ describe('EMBEDDED_FONTS', () => {
     }
   });
 
-  it('gives the static IBM Plex faces one weight each and the rest a variable range', () => {
-    // The keys are guaranteed by the test above, but noUncheckedIndexedAccess
-    // still requires the non-null assertion at the call site.
-    for (const family of ['IBM Plex Mono', 'IBM Plex Sans Condensed']) {
-      expect(EMBEDDED_FONTS[family]!.map((face) => face.weight).sort()).toEqual(['400', '600']);
-    }
+  it('declares every face over the two required weights as one variable rule', () => {
     for (const family of THEME_FONT_SHORTLIST) {
-      if (family === 'IBM Plex Mono' || family === 'IBM Plex Sans Condensed') continue;
       expect(EMBEDDED_FONTS[family]!.map((face) => face.weight)).toEqual(['400 600']);
     }
+  });
+
+  it('embeds the fraction/space companion for the theme faces', () => {
+    expect(EMBEDDED_FONT_COMPANION.base64.length).toBeGreaterThan(0);
+    expect(EMBEDDED_FONT_COMPANION.weight).toBe('400 600');
+    expect(EMBEDDED_FONT_COMPANION.unicodeRange).toContain('U+202F');
   });
 });
 
@@ -82,9 +82,9 @@ describe('resolveTheme', () => {
       ...DEFAULT_THEME,
       accent: '#123456',
     });
-    expect(resolveTheme({ font: 'Fraunces', line: '#000000' })).toEqual({
+    expect(resolveTheme({ font: 'Noto Serif', line: '#000000' })).toEqual({
       ...DEFAULT_THEME,
-      font: 'Fraunces',
+      font: 'Noto Serif',
       line: '#000000',
     });
   });
