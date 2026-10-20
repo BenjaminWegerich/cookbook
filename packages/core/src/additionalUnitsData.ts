@@ -220,6 +220,15 @@ export const ADDITIONAL_UNITS: readonly AdditionalUnit[] = [
     exact: true,
     shoppingUnit: true,
   },
+  {
+    name: 'Glas',
+    singular: 'Glas',
+    plural: 'Gläser',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'halves_and_integers_up_to_30',
+    exact: true,
+    shoppingUnit: true,
+  },
 ];
 
 /** Number schemes: allowed AQ values per scheme, in ladder AQ order. */

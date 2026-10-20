@@ -60,6 +60,7 @@ describe('generated additional-unit master data', () => {
       'Blatt',
       'Flasche',
       'Becher',
+      'Glas',
     ]);
   });
 
@@ -96,6 +97,7 @@ describe('generated additional-unit master data', () => {
       'Würfel',
       'Flasche',
       'Becher',
+      'Glas',
     ]) {
       expect(byName.get(name), name).toBe('halves_and_integers_up_to_30');
     }
@@ -125,6 +127,7 @@ describe('generated additional-unit master data', () => {
     // average and the stored weight stays the authoritative reading (§6.3).
     const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.exact]));
     expect(byName.get('Becher')).toBe(true);
+    expect(byName.get('Glas')).toBe(true);
     expect(byName.get('Packung (unteilbar)')).toBe(true);
     expect(byName.get('Tube')).toBe(true);
     expect(byName.get('Stück (BE zuerst, exakt)')).toBe(true);
@@ -141,6 +144,7 @@ describe('generated additional-unit master data', () => {
     // Stück name a purchase; a spoon, a sprig and a Zweig do not.
     const byName = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit.shoppingUnit]));
     expect(byName.get('Becher')).toBe(true);
+    expect(byName.get('Glas')).toBe(true);
     expect(byName.get('Packung (teilbar)')).toBe(true);
     expect(byName.get('Stück (ZE zuerst)')).toBe(true);
     expect(byName.get('Bund')).toBe(true);
@@ -167,6 +171,7 @@ describe('generated additional-unit master data', () => {
     expect(byName.get('Dose (Abtropfgewicht)')?.singular).toBe('Dose');
     expect(byName.get('Packung (teilbar)')?.plural).toBe('Packungen');
     expect(byName.get('Stück (ZE zuerst)')?.singular).toBe('Stück');
+    expect(byName.get('Glas')?.plural).toBe('Gläser');
     for (const unit of ADDITIONAL_UNITS) {
       // The pair is atomic, and every seed unit states one.
       expect(unit.singular === undefined).toBe(unit.plural === undefined);
