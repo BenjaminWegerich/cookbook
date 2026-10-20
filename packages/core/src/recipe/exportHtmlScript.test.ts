@@ -88,9 +88,14 @@ class ElementStub {
   /** The checkboxes inside a check list (used by the size-change reset). */
   boxes: ElementStub[] = [];
 
-  /** The stub has no other children: step navigation is not what is under test. */
+  /** The steps inside a step wrap (the node model counts them). */
+  steps: ElementStub[] = [];
+
+  /** The stub has no other children: unrelated queries come back empty. */
   querySelectorAll(selector = ''): ElementStub[] {
-    return selector.indexOf('input') === 0 ? (this.boxes ?? []) : [];
+    if (selector.indexOf('input') === 0) return this.boxes ?? [];
+    if (selector === '.step') return this.steps;
+    return [];
   }
 
   querySelector(): ElementStub | null {
@@ -112,25 +117,57 @@ function stubFromTag(tag: string): ElementStub {
   return new ElementStub(/class="([^"]*)"/.exec(tag)?.[1] ?? '', attributesOf(tag));
 }
 
+/** The state one history entry carries (written by the export's script). */
+interface EntryState {
+  cookbook?: number;
+  node?: string;
+}
+
 /**
- * A `history` stand-in that records each traversal. `calls` lets a test assert
- * that an in-page back navigated the browser's history instead of pushing a
- * second entry for the same node; a test may flip `onForward` / `onBack` to
- * simulate the browser delivering the entry's `popstate`.
+ * A `history` stand-in that models the tab's session history: a list of entries
+ * plus a pointer, where `back()` / `forward()` move the pointer and deliver the
+ * reached entry's `popstate` — which is the browser's whole part of §6.6.
+ * `calls` records the traversals the page asked for, so a test can prove that an
+ * in-page move reused an entry instead of pushing a second one for the same
+ * node. Entry 0 is the entry the page loaded on; a real Back from it leaves the
+ * document, which this model cannot reproduce, so tests stay above it.
  */
 const HISTORY = {
   calls: [] as string[],
-  onForward: null as (() => void) | null,
-  onBack: null as (() => void) | null,
-  replaceState: (): void => {},
-  pushState: (): void => {},
+  stack: [] as { state: EntryState | null }[],
+  pointer: 0,
+  /** The page under test, which receives the `popstate` of each traversal. */
+  page: null as Page | null,
+  /** The state the browser hands the page as `history.state` on load. */
+  get state(): EntryState | null {
+    return HISTORY.stack[HISTORY.pointer]?.state ?? null;
+  },
+  replaceState(state: EntryState): void {
+    HISTORY.stack[HISTORY.pointer] = { state };
+  },
+  pushState(state: EntryState): void {
+    HISTORY.stack.length = HISTORY.pointer + 1;
+    HISTORY.stack.push({ state });
+    HISTORY.pointer = HISTORY.stack.length - 1;
+  },
+  /** Delivers the `popstate` of the entry the pointer now rests on. */
+  deliver(): void {
+    const state = HISTORY.stack[HISTORY.pointer]?.state ?? null;
+    HISTORY.page?.popstate.forEach((handler) => handler({ state }));
+  },
   forward(): void {
     HISTORY.calls.push('forward');
-    if (HISTORY.onForward !== null) HISTORY.onForward();
+    if (HISTORY.pointer < HISTORY.stack.length - 1) {
+      HISTORY.pointer += 1;
+      HISTORY.deliver();
+    }
   },
   back(): void {
     HISTORY.calls.push('back');
-    if (HISTORY.onBack !== null) HISTORY.onBack();
+    if (HISTORY.pointer > 0) {
+      HISTORY.pointer -= 1;
+      HISTORY.deliver();
+    }
   },
 };
 
@@ -145,6 +182,10 @@ interface Page {
   /** The bar's two buttons, so a test can press them. */
   backButton: ElementStub;
   forwardButton: ElementStub;
+  /** The three screens, whose `active` class is the node on screen (§5.11). */
+  screens: Record<'intro' | 'zutaten' | 'zubereitung', ElementStub>;
+  /** The step title, so a test can read which step is shown. */
+  stepTitle: ElementStub;
   /** The window's `popstate` listeners, so a test can deliver a browser Back. */
   popstate: ((event: unknown) => void)[];
 }
@@ -177,9 +218,24 @@ function buildPage(html: string, hash: string, injected?: string): Page {
   );
   const yieldLists = checkLists.filter((list) => list.getAttribute('data-yield') !== null);
 
-  // Generic non-null stubs so the render step (screens, buttons, counter) can
-  // run without a DOM; the size selection happens before and is what we read.
-  const screen = (): ElementStub => new ElementStub();
+  // One stub per screen: `render` toggles `active` and the slide class on them.
+  const screens = {
+    intro: new ElementStub(),
+    zutaten: new ElementStub(),
+    zubereitung: new ElementStub(),
+  };
+  const stepTitle = new ElementStub();
+  const counter = new ElementStub();
+  // The flow's step count: every baked size repeats the same steps, so the
+  // highest data-step is the number of nodes after Zutaten.
+  const stepNumbers = [...html.matchAll(/class="step" data-step="(\d+)"/g)].map((match) =>
+    Number(match[1]),
+  );
+  const firstWrap = new ElementStub();
+  firstWrap.steps = Array.from(
+    { length: stepNumbers.length === 0 ? 0 : Math.max(...stepNumbers) },
+    () => new ElementStub(),
+  );
   // Every check list's boxes, so the size-change reset can be observed.
   const allBoxes = checkLists.flatMap((list) => (list.boxes = [new ElementStub()]));
   const popstate: ((event: unknown) => void)[] = [];
@@ -196,16 +252,22 @@ function buildPage(html: string, hash: string, injected?: string): Page {
           return servingChips;
         case '.yield-chip':
           return yieldChips;
+        case '.step-wrap':
+          return [firstWrap];
         default:
           return [];
       }
     },
     querySelector: (selector: string): ElementStub | null => {
       switch (selector) {
+        case '.step-wrap':
+          return firstWrap;
         case '[data-screen="intro"]':
+          return screens.intro;
         case '[data-screen="zutaten"]':
+          return screens.zutaten;
         case '[data-screen="zubereitung"]':
-          return screen();
+          return screens.zubereitung;
         case '.chip.active':
           return activeChip;
         case '.serving-chip':
@@ -228,6 +290,10 @@ function buildPage(html: string, hash: string, injected?: string): Page {
           return backButton;
         case 'btn-next':
           return forwardButton;
+        case 'step-title':
+          return stepTitle;
+        case 'counter':
+          return counter;
         default:
           return new ElementStub();
       }
@@ -248,6 +314,8 @@ function buildPage(html: string, hash: string, injected?: string): Page {
     chips: [...servingChips, ...yieldChips],
     backButton: backButton ?? new ElementStub(),
     forwardButton: forwardButton ?? new ElementStub(),
+    screens,
+    stepTitle,
     popstate,
   };
 }
@@ -258,13 +326,24 @@ function buildPage(html: string, hash: string, injected?: string): Page {
  *
  * `injected` is the size the export host passes to the page as
  * `window.__COOKBOOK_PLAN_SIZE__`; `hash` stands in for the page's own URL,
- * which a bare Drive link uses.
+ * which a bare Drive link uses. `restored` is the state of the entry the page
+ * loads on — a reload keeps the state the flow wrote into it before, a fresh
+ * load has none.
  */
-function runPage(recipe: Recipe, hash: string, injected?: string): Page {
+function runPage(
+  recipe: Recipe,
+  hash: string,
+  injected?: string,
+  restored: EntryState | null = null,
+): Page {
   const html = generateRecipeHtml(recipe);
   const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
   if (script === undefined) throw new Error('the export embeds no script');
   const page = buildPage(html, hash, injected);
+  // The tab stands on one entry when the document starts.
+  HISTORY.stack = [{ state: restored }];
+  HISTORY.pointer = 0;
+  HISTORY.page = page;
   new Function('document', 'window', 'history', script)(page.document, page.window, HISTORY);
   return page;
 }
@@ -300,8 +379,9 @@ prep_time: 5 min
 
 beforeEach(() => {
   HISTORY.calls.length = 0;
-  HISTORY.onForward = null;
-  HISTORY.onBack = null;
+  HISTORY.stack = [];
+  HISTORY.pointer = 0;
+  HISTORY.page = null;
 });
 
 describe('embedded script — finished dish', () => {
@@ -333,25 +413,70 @@ describe('embedded script — size injected by the export host', () => {
 describe('embedded script — the bar and the browser history (§6.6)', () => {
   it('traverses an already-visited step instead of pushing a second entry', () => {
     const page = runPage(DISH, '');
-    HISTORY.calls.length = 0;
     page.forwardButton.fire('click'); // intro → zutaten: a new node, so it pushes
-    // The browser answers a traversal with the entry it reaches.
-    let reachedBackEntry = false;
-    HISTORY.onBack = () => {
-      reachedBackEntry = true;
-      page.popstate[0]!({ state: { node: 'intro', trailIndex: 0 } });
-    };
+    HISTORY.calls.length = 0;
     page.backButton.fire('click'); // zutaten → intro: visited, so it must traverse
     expect(HISTORY.calls).toEqual(['back']);
-    expect(reachedBackEntry).toBe(true);
+    expect(page.screens.intro.hasClass('active')).toBe(true);
   });
 
-  it('pushes a new entry only for a node the trail does not hold', () => {
+  it('pushes a new entry only for a node the flow does not hold yet', () => {
     const page = runPage(DISH, '');
     HISTORY.calls.length = 0;
     page.forwardButton.fire('click'); // intro → zutaten
     page.forwardButton.fire('click'); // zutaten → the first step
     expect(HISTORY.calls).toEqual([]);
+  });
+
+  it('shows the previous node, with the back slide, on a device Back', () => {
+    const page = runPage(DISH, '');
+    page.forwardButton.fire('click'); // intro → zutaten
+    page.forwardButton.fire('click'); // zutaten → step 1
+    expect(page.screens.zubereitung.hasClass('active')).toBe(true);
+    HISTORY.calls.length = 0;
+    HISTORY.back(); // the device-back gesture: the browser pops one entry
+    expect(HISTORY.calls).toEqual(['back']);
+    expect(page.screens.zutaten.hasClass('active')).toBe(true);
+    expect(page.screens.zutaten.hasClass('slide-back')).toBe(true);
+    expect(page.screens.zutaten.hasClass('slide-fwd')).toBe(false);
+  });
+
+  it('lands a bar Zurück exactly where a device Back lands', () => {
+    const page = runPage(DISH, '');
+    page.forwardButton.fire('click'); // intro → zutaten
+    HISTORY.calls.length = 0;
+    page.backButton.fire('click');
+    // The bar asks the browser for the previous entry; the popstate renders it,
+    // so the button and the device gesture cannot drift apart.
+    expect(HISTORY.calls).toEqual(['back']);
+    expect(page.screens.intro.hasClass('active')).toBe(true);
+    expect(page.screens.intro.hasClass('slide-back')).toBe(true);
+  });
+
+  it('reuses a step entry after device back → Weiter → device back', () => {
+    // The regression this guards: after a Back, the forward node was no longer
+    // recognised as already visited, so Weiter pushed a second entry on top of
+    // the old one and the next Back landed on the wrong node.
+    const page = runPage(DISH, '');
+    page.forwardButton.fire('click'); // → zutaten
+    page.forwardButton.fire('click'); // → step 1
+    HISTORY.back(); // device Back → zutaten
+    page.forwardButton.fire('click'); // Weiter → step 1
+    HISTORY.back(); // device Back → zutaten
+    HISTORY.calls.length = 0;
+    page.forwardButton.fire('click'); // Weiter must traverse, not push a copy
+    expect(HISTORY.calls).toEqual(['forward']);
+    expect(page.screens.zubereitung.hasClass('active')).toBe(true);
+  });
+
+  it('resumes the node of the entry a reload lands on', () => {
+    // The entry the page loads on carries the state the flow wrote last. A
+    // reload must show that node: restarting at the intro over a stack that
+    // points deeper would make the next Back walk forward.
+    const page = runPage(DISH, '', undefined, { cookbook: 1, node: 'step-1' });
+    expect(page.screens.zubereitung.hasClass('active')).toBe(true);
+    expect(page.stepTitle.textContent).toBe('Schritt 1 von 1');
+    expect(page.forwardButton.hidden).toBe(true);
   });
 });
 

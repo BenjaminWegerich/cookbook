@@ -1032,42 +1032,82 @@
     }
   }
 
-  // The visit trail: one history entry per visited node, keyed by its index in
-  // this list. The bar buttons, Escape and a swipe move along the trail instead
-  // of pushing a duplicate entry, so browser Back and Forward always move one
-  // node in the flow's direction, whichever control asked (§6.6).
-  var trail = [0];
-  var trailIndex = 0;
+  // One flow, one history: every node this session has visited owns exactly one
+  // history entry, and every move shows the node of the entry the browser is on.
+  // Zurück/Weiter, Escape, a swipe and the browser's or the device's Back button
+  // therefore all end in the same render — the bar buttons only ask for the
+  // neighbouring node, the browser performs the move (§6.6). No second path can
+  // disagree with the history, which is what made a device Back land on the
+  // wrong node after the bar had been used.
+  //
+  // deepest is the highest node this session holds an entry for. Going back
+  // leaves the entries above the current one alive, so their node can be
+  // reached again by traversing forward; a node pushed on top drops those
+  // entries, so the mark comes back down to it.
+  var deepest = 0;
 
-  function pushEntry(index) {
-    var direction = index > trailIndex ? 'forward' : 'back';
-    trailIndex = index;
-    if (trailIndex === trail.length - 1) { trail.push(index); } else { trail[trailIndex] = index; }
-    // The history entry is written before the render, so a render that throws
-    // cannot leave the flow and the browser's history disagreeing.
-    try { history.pushState({ node: nodes[index], trailIndex: trailIndex }, ''); } catch (e) { /* file:// */ }
+  // A file:// document cannot hold history entries (pushState throws), and a
+  // real history.back() there leaves the document instead of moving in it. The
+  // flow still works — it renders in place — but it must not touch the browser
+  // history then.
+  var historyLive = true;
+
+  // The state of the entry that shows index. The marker keeps an entry of
+  // another document (the session history outlives this page) from being read
+  // as a node of this flow.
+  function entryState(index) { return { cookbook: 1, node: nodes[index] }; }
+  function entryIndex(state) {
+    if (!state || state.cookbook !== 1) { return -1; }
+    return nodes.indexOf(state.node);
+  }
+
+  // Shows index and moves the flow's pointer. The flow is linear, so the
+  // direction is only the slide's direction of travel: down the list is a back
+  // move, up the list a forward one, whatever trigger asked for it.
+  function show(index, direction) {
     current = index;
+    if (index > deepest) { deepest = index; }
     render(direction);
   }
 
-  function forward() { if (current < nodes.length - 1) { go(current + 1, 'forward'); } }
-  function back() { if (current > 0) { go(current - 1, 'back'); } }
-  // A step back that has already been visited is a traversal: the browser's own
-  // Forward returns to it, and no second entry for the same node is created.
-  function go(index, direction) {
-    var known = trail.indexOf(index);
-    if (trailIndex < trail.length - 1) {
+  // Writes the entry for a node the flow has not reached in this session yet.
+  // The entry is written before the render, so a render that throws cannot
+  // leave the flow and the browser's history disagreeing.
+  function pushEntry(index) {
+    var direction = index > current ? 'forward' : 'back';
+    if (historyLive) {
       try {
-        if (known !== -1 && known > trailIndex) {
-          history.forward();
-          return;
-        }
-      } catch (e) { /* file:// */ }
-    } else if (known !== -1 && known < trailIndex) {
-      try { history.back(); return; } catch (e) { /* file:// */ }
+        history.pushState(entryState(index), '');
+        deepest = index;
+      } catch (e) {
+        historyLive = false;
+        deepest = current;
+      }
+    }
+    show(index, direction);
+  }
+
+  function go(index) {
+    if (index === current || index < 0 || index >= nodes.length) { return; }
+    var direction = index > current ? 'forward' : 'back';
+    // Both directions are traversals whenever the browser still holds the
+    // entry: a move to a node this session already reached reuses its entry
+    // instead of pushing a second one for the same visit. deepest says how far
+    // the session got, and a push (below) truncates the forward entries, which
+    // is why the mark comes down with them.
+    if (historyLive) {
+      try {
+        if (direction === 'back') { history.back(); return; }
+        if (index <= deepest) { history.forward(); return; }
+      } catch (e) {
+        historyLive = false;
+      }
     }
     pushEntry(index);
   }
+
+  function forward() { go(current + 1); }
+  function back() { go(current - 1); }
 
   btnBack.addEventListener('click', back);
   btnNext.addEventListener('click', forward);
@@ -1075,21 +1115,19 @@
   // Escape = one node back (§6.6).
   window.addEventListener('keydown', function (e) { if (e.key === 'Escape') { back(); } });
 
-  // Browser Back/Forward: the node of the entry being reached is rendered, and
-  // the trail pointer follows, so the next in-page action reuses the forward
-  // entries instead of growing the history (§6.6).
+  // Browser Back/Forward, the device-back gesture and the swipe-back gesture
+  // arrive here. The flow shows the node of the entry the browser reached and
+  // slides in the direction of travel, so a device Back looks and lands exactly
+  // like the bar's Zurück (§6.6).
   window.addEventListener('popstate', function (e) {
-    var state = e.state;
-    if (state && typeof state.trailIndex === 'number') {
-      trailIndex = state.trailIndex;
-      trail[trailIndex] = state.node;
-    } else {
-      trailIndex = 0;
-      trail[0] = 0;
-    }
-    current = state && state.node ? nodes.indexOf(state.node) : 0;
-    if (current < 0) { current = 0; }
-    render();
+    var index = entryIndex(e.state);
+    // An entry the flow did not write (the page-load entry, another document's
+    // state) names no node of this flow; the only sensible landing is the intro.
+    if (index < 0) { index = 0; }
+    // A traversal the flow has already rendered — the bar's own Zurück/Weiter —
+    // must neither animate nor render a second time.
+    if (index === current) { return; }
+    show(index, index > current ? 'forward' : 'back');
   });
 
   // Swipe on every screen (not only the steps): left = forward, right = back.
@@ -1113,8 +1151,22 @@
     });
   });
 
-  // Initial state (no history entry yet; replace so Back does not reload).
-  try { history.replaceState({ node: nodes[0], trailIndex: 0 }, ''); } catch (e) { /* file:// */ }
+  // Initial state: the entry the page loaded on shows the node the flow resumes
+  // on. A reload keeps the state of its entry, so the flow comes back on the
+  // step it was left on and the first Back still lands on the node before it
+  // (rendering the intro over a stack that still points at step 3 would make
+  // Back walk forward on the next press). A fresh load has no state and starts
+  // at the intro. replaceState rather than push, so Back does not reload.
+  var start = 0;
+  try {
+    var resumed = entryIndex(history.state);
+    if (resumed >= 0) { start = resumed; }
+    history.replaceState(entryState(start), '');
+  } catch (e) {
+    historyLive = false;
+  }
+  current = start;
+  deepest = start;
   render();
 })();
 
