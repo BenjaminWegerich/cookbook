@@ -628,6 +628,16 @@
   padding: var(--space-3) var(--space-4);
 }
 
+/* The master list reads as plain body text, not as a list of headings. The row
+   class is shared with the ingredient master-data screen (ingredient-master.css),
+   whose rows are semibold on purpose; that sheet is bundled globally, so its
+   `.ingredient-row` rule would otherwise bold these rows as well. The extra
+   `.editor-card` step keeps this weight independent of the stylesheets' load
+   order and leaves the master-data screen's semibold untouched. */
+.editor-card .ingredient-row {
+  font-weight: 400;
+}
+
 /* Reference toggle — master list only (decided with the user): outline star
    when off, the same star filled when on, in the reference colour (olive — the
    colour of the "REFERENZ" badge), so toggle and badge tell the same story.
