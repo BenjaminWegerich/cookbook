@@ -63,6 +63,7 @@ import {
   parseRecipe,
   parseTimeValue,
   resolveTheme,
+  resolveThemeFonts,
   serializeRecipe,
   splitArtifacts,
   artifactToText,
@@ -934,7 +935,11 @@ function ThemeEditor({
   // Resolve the five tokens once; each falls back to the default independently.
   const resolved = resolveTheme(theme);
   const onAccent = onAccentColor(resolved.accent, resolved.ink, resolved.paper);
-  const fontStack = themeFontStack(resolved.font);
+  // The preview mirrors the export's pairing: a Noto Serif Display theme sets
+  // only the title in the display face and the body in Noto Serif (§4.8).
+  const fonts = resolveThemeFonts(resolved.font);
+  const headingStack = themeFontStack(fonts.heading);
+  const bodyStack = themeFontStack(fonts.body);
 
   // Every change passes through the save-time normalization: defaults dropped,
   // hex lower-cased, an empty theme collapsing back to undefined.
@@ -1011,14 +1016,14 @@ function ThemeEditor({
           style={{
             backgroundColor: resolved.paper,
             color: resolved.ink,
-            fontFamily: fontStack,
+            fontFamily: bodyStack,
           }}
         >
-          <span className="theme-preview-title" style={{ fontFamily: fontStack }}>
+          <span className="theme-preview-title" style={{ fontFamily: headingStack }}>
             {title.trim() !== '' ? title.trim() : 'Rezepttitel'}
           </span>
           <span className="theme-preview-line" style={{ backgroundColor: resolved.line }} />
-          <span className="theme-preview-body" style={{ fontFamily: fontStack }}>
+          <span className="theme-preview-body" style={{ fontFamily: bodyStack }}>
             Zutaten vorbereiten, Schritt für Schritt.
           </span>
           <span

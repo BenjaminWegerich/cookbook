@@ -76,7 +76,11 @@ export type MasterIngredient = Ingredient & { reference?: boolean };
  * render time.
  */
 export interface RecipeTheme {
-  /** Export typeface, one of the shortlist (DESIGN §4.8); default Noto Sans. */
+  /**
+   * Export typeface, one of the shortlist (DESIGN §4.8); default Noto Sans.
+   * `Noto Serif Display` sets only the main heading of each page in the display
+   * face and pairs it with Noto Serif for the rest.
+   */
   font?: string;
   /** Accent colour: active state, forward actions, links, sub-recipe badge. */
   accent?: string;

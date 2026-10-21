@@ -50,6 +50,32 @@ export const DEFAULT_THEME: Required<RecipeTheme> = {
 /** A theme with every token filled in (recipe overrides merged over defaults). */
 export type ResolvedTheme = Required<RecipeTheme>;
 
+/**
+ * The two typefaces a theme renders with. They are the same face for every
+ * shortlist entry but the display serif; see {@link resolveThemeFonts}.
+ */
+export interface ThemeFonts {
+  /** The face of the page's main heading: the intro title, „Zutaten", the step title. */
+  heading: string;
+  /** The face of everything else: prose, captions, controls, badges. */
+  body: string;
+}
+
+/**
+ * Resolves a theme's `font` to its heading/body pairing (DESIGN §4.8).
+ *
+ * The display serif is a heading face only: its high-contrast forms carry a
+ * page title, but at the body sizes of §4.2 and at arm's length they lose
+ * legibility. A `Noto Serif Display` theme therefore sets only the main heading
+ * of each page in it and renders everything else in the book serif, Noto Serif.
+ * Every other face plays both roles.
+ */
+export function resolveThemeFonts(font: string): ThemeFonts {
+  return font === 'Noto Serif Display'
+    ? { heading: 'Noto Serif Display', body: 'Noto Serif' }
+    : { heading: font, body: font };
+}
+
 /** A 6-digit hex colour (`#rrggbb`), case-insensitive — the canonical form. */
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 

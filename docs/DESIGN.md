@@ -149,7 +149,8 @@ size as `¼ ½ ¾` instead of falling back to the operating system's font.
 *Applies to: cooking view.*
 
 **One typeface per recipe**, from the theme's `font`, self-hosted and embedded in the export —
-no runtime font fetch. The default typeface is Noto Sans.
+no runtime font fetch. The default typeface is Noto Sans. `Noto Serif Display` is the one
+exception: it sets only the main heading of each page, and Noto Serif renders the rest.
 
 **Four sizes**, each with its fixed line height, every value a ladder step:
 
@@ -427,7 +428,7 @@ theme independently:
 
 | Token | Default (the app palette) | Role |
 | --- | --- | --- |
-| `font` | Noto Sans | the one typeface of the export |
+| `font` | Noto Sans | the export typeface (with `Noto Serif Display`: the main heading only, Noto Serif for the rest) |
 | `accent` | `#ad5632` (clay) | active state, the forward actions, the sub-recipe badge, links |
 | `paper` | `#faf5ec` | page background |
 | `ink` | `#2b241d` | primary text |
@@ -454,6 +455,11 @@ chosen independently of its typeface. *decided with the user*
 | Noto Sans Mono | monospace |
 | Noto Sans Condensed | condensed grotesque — the width-axis instance of Noto Sans |
 
+The display serif is a heading face. A `Noto Serif Display` theme sets only the main heading of
+each page — the intro title, the Zutaten heading and the step title — in it and renders
+everything else in the book serif, Noto Serif; the high-contrast forms that make the face
+distinctive are what fails at the body sizes of §4.2. That theme embeds both faces.
+
 A typeface joins the shortlist only when it meets every requirement:
 
 - **Embeddable and offline.** Self-hostable and inlined into the standalone `.html`; no CDN,
@@ -474,13 +480,16 @@ A typeface joins the shortlist only when it meets every requirement:
   quantity keeps its gap even though the theme font's latin subset omits the character.
 - **Legible at arm's length** at the four sizes of §4.2 within their fixed line-heights, with
   clear figures. A typeface may be expressive in any genre, but body text (18–24 px) that
-  fails at arm's length is out.
+  fails at arm's length is out. The display serif meets this as a heading face only; its body
+  face is Noto Serif.
 
 **Rules**
 
 - The default theme is the web app's palette and typeface: a recipe without `theme` data
   renders in the app's look.
 - A recipe's `font` is one of the shortlist's five Noto faces; no other typeface is selectable.
+- `Noto Serif Display` is the only two-face theme: the display serif for the main heading of
+  each page, Noto Serif for everything else.
 - A recipe may override any subset; the rest fall back to the default.
 - The theme may carry decorative details but never changes the placement, size or wording of
   any control.

@@ -27,7 +27,8 @@
   --theme-paper: #faf5ec;
   --theme-ink: #2b241d;
   --theme-line: #e6dbc8;
-  --font: var(--theme-font), system-ui, sans-serif;
+  --font: 'Noto Serif', system-ui, sans-serif;
+  --font-heading: 'Noto Serif', system-ui, sans-serif;
   --paper: var(--theme-paper);
   --ink: var(--theme-ink);
   --accent: var(--theme-accent);
@@ -80,6 +81,11 @@
      top margin (--space-6) is the gap between the photo and the title. */
   .media { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
            border-radius: var(--radius-md); }
+  /* The theme's display face, when it has one, is reserved for the main heading
+     of each page: the intro title, the Zutaten heading and the step title. All
+     other text — the captions included — stays in the theme's body face
+     (§4.8). */
+  h1, .screen-title, .step-title { font-family: var(--font-heading); }
   h1 { font-size: var(--text-xl); line-height: var(--leading-xl); font-weight: 600; margin: var(--space-6) 0 var(--space-2);
        overflow-wrap: anywhere; }
   .description { margin: 0 0 var(--space-6); overflow-wrap: anywhere; }

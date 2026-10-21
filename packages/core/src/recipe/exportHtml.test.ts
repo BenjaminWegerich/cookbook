@@ -323,6 +323,24 @@ prep_time: 15 min
     expect(html).toContain('--theme-line: #e6dbc8;');
   });
 
+  it('pairs the display serif with Noto Serif for the body', () => {
+    const displayThemed = parseRecipe(`---
+title: X
+type: finished_dish
+servings: 2
+theme:
+  font: Noto Serif Display
+prep_time: 15 min
+---
+## Zubereitung
+1. x
+`);
+    const html = generateRecipeHtml(displayThemed);
+    expect(html).toContain("--theme-font: 'Noto Serif Display';");
+    expect(html).toContain("--font: 'Noto Serif', system-ui, sans-serif;");
+    expect(html).toContain("--font-heading: 'Noto Serif Display', system-ui, sans-serif;");
+  });
+
   it('computes the derived colours (muted and on-accent) as solid hex', () => {
     const html = generateRecipeHtml(WRAPS);
     // muted = ink #2b241d blended 40% toward paper #faf5ec → #7e7870.
@@ -358,6 +376,17 @@ type: finished_dish
 servings: 2
 theme:
   font: Noto Sans Condensed
+prep_time: 15 min
+---
+## Zubereitung
+1. x
+`);
+  const display = parseRecipe(`---
+title: X
+type: finished_dish
+servings: 2
+theme:
+  font: Noto Serif Display
 prep_time: 15 min
 ---
 ## Zubereitung
@@ -399,6 +428,20 @@ prep_time: 15 min
     // The theme face excludes U+202F; the companion owns it and the Number Forms.
     expect(html).toContain('unicode-range: U+202F, U+2150-215E, U+2189;');
     expect(html.match(/@font-face/g)).toHaveLength(2);
+  });
+
+  it('embeds both faces of a display-serif theme, each with its companion', () => {
+    const html = generateRecipeHtml(display);
+    expect(html).toContain("font-family: 'Noto Serif Display';");
+    expect(html).toContain("font-family: 'Noto Serif';");
+    // Latin face + companion for the heading and for the body family.
+    expect(html.match(/@font-face/g)).toHaveLength(4);
+  });
+
+  it('sets only the page headings in the heading face', () => {
+    const html = generateRecipeHtml(display);
+    expect(html).toContain('h1, .screen-title, .step-title { font-family: var(--font-heading); }');
+    expect(html).toContain('font-family: var(--font);');
   });
 });
 

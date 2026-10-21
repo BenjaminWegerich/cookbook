@@ -6,7 +6,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_THEME, THEME_FONT_SHORTLIST, isHexColor, resolveTheme } from './theme.js';
+import {
+  DEFAULT_THEME,
+  THEME_FONT_SHORTLIST,
+  isHexColor,
+  resolveTheme,
+  resolveThemeFonts,
+} from './theme.js';
 import { EMBEDDED_FONT_COMPANION, EMBEDDED_FONTS } from './embeddedFonts.js';
 
 describe('THEME_FONT_SHORTLIST', () => {
@@ -68,6 +74,21 @@ describe('EMBEDDED_FONTS', () => {
     expect(EMBEDDED_FONT_COMPANION.base64.length).toBeGreaterThan(0);
     expect(EMBEDDED_FONT_COMPANION.weight).toBe('400 600');
     expect(EMBEDDED_FONT_COMPANION.unicodeRange).toContain('U+202F');
+  });
+});
+
+describe('resolveThemeFonts', () => {
+  it('keeps the selected face in both roles for every face but the display serif', () => {
+    for (const font of THEME_FONT_SHORTLIST.filter((name) => name !== 'Noto Serif Display')) {
+      expect(resolveThemeFonts(font)).toEqual({ heading: font, body: font });
+    }
+  });
+
+  it('pairs the display serif as the heading face with Noto Serif for the body', () => {
+    expect(resolveThemeFonts('Noto Serif Display')).toEqual({
+      heading: 'Noto Serif Display',
+      body: 'Noto Serif',
+    });
   });
 });
 

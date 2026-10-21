@@ -68,7 +68,7 @@ import {
   PLAN_PRESELECT_ELEMENT_ID,
   formatLinkQuantity,
 } from '../planLink.js';
-import { resolveTheme } from './theme.js';
+import { resolveTheme, resolveThemeFonts } from './theme.js';
 import type { ResolvedTheme } from './theme.js';
 import { displayTimeText } from './timeValues.js';
 import { yieldViewQuantities } from './yieldViews.js';
@@ -150,6 +150,7 @@ function themeCss(theme: ResolvedTheme): string {
     contrastRatio(theme.ink, theme.accent) >= contrastRatio(theme.paper, theme.accent)
       ? theme.ink
       : theme.paper;
+  const fonts = resolveThemeFonts(theme.font);
   return (
     `:root {\n` +
     `  --theme-font: '${theme.font}';\n` +
@@ -157,10 +158,14 @@ function themeCss(theme: ResolvedTheme): string {
     `  --theme-paper: ${theme.paper};\n` +
     `  --theme-ink: ${theme.ink};\n` +
     `  --theme-line: ${theme.line};\n` +
-    // The applied tokens. The theme font is embedded as self-hosted WOFF2
-    // `@font-face` rules (see fontFaceCss below); the system-ui stack remains
-    // the fallback for a typeface without an embedded face (§4.8).
-    `  --font: var(--theme-font), system-ui, sans-serif;\n` +
+    // The applied font tokens. Body text uses the theme's body face; only the
+    // page headings use the heading face — for Noto Serif Display that is the
+    // book serif for the body (see resolveThemeFonts). Both faces are embedded
+    // as self-hosted WOFF2 `@font-face` rules (see fontFaceCss below); the
+    // system-ui stack remains the fallback for a face without an embedded font
+    // (§4.8).
+    `  --font: '${fonts.body}', system-ui, sans-serif;\n` +
+    `  --font-heading: '${fonts.heading}', system-ui, sans-serif;\n` +
     `  --paper: var(--theme-paper);\n` +
     `  --ink: var(--theme-ink);\n` +
     `  --accent: var(--theme-accent);\n` +
@@ -182,28 +187,27 @@ const THEME_FACE_UNICODE_RANGE =
   'U+2193, U+2212, U+2215, U+FEFF, U+FFFD';
 
 /**
- * The theme typeface's `@font-face` rules, or '' when the typeface has no
- * embedded face (§4.8). Each face is the latin subset of the shortlist
- * typeface (embeddedFonts.ts), inlined as a `data:` URI so the export stays
+ * The `@font-face` rules of one family, or '' when the family has no embedded
+ * face (§4.8). The face is the latin subset of the shortlist typeface
+ * (embeddedFonts.ts), inlined as a `data:` URI so the export stays
  * self-contained: no runtime font fetch and no sibling file. Every shortlist
  * face is a variable font, declared once over the two weights the cooking view
  * uses (`400 600`, §4.2).
  *
- * A companion face follows the theme face under the same family name. It
- * supplies the narrow no-break space (U+202F) every quantity uses and the
- * Number Forms fraction glyphs; the theme face's `unicode-range` excludes
- * them, so the browser takes them from the companion. Without it the number
- * and its unit lose their gap ("300g") in browsers that fall back without a
- * space glyph.
+ * A companion face follows the family under the same name. It supplies the
+ * narrow no-break space (U+202F) every quantity uses and the Number Forms
+ * fraction glyphs; the family's `unicode-range` excludes them, so the browser
+ * takes them from the companion. Without it the number and its unit lose their
+ * gap ("300g") in browsers that fall back without a space glyph.
  */
-function fontFaceCss(theme: ResolvedTheme): string {
-  const faces = EMBEDDED_FONTS[theme.font];
+function familyFaceCss(family: string): string {
+  const faces = EMBEDDED_FONTS[family];
   if (faces === undefined) return '';
   const themeFaces = faces
     .map(
       (face) =>
         `@font-face {\n` +
-        `  font-family: '${theme.font}';\n` +
+        `  font-family: '${family}';\n` +
         `  font-style: normal;\n` +
         `  font-display: swap;\n` +
         `  font-weight: ${face.weight};\n` +
@@ -214,7 +218,7 @@ function fontFaceCss(theme: ResolvedTheme): string {
     .join('\n');
   const companion =
     `@font-face {\n` +
-    `  font-family: '${theme.font}';\n` +
+    `  font-family: '${family}';\n` +
     `  font-style: normal;\n` +
     `  font-display: swap;\n` +
     `  font-weight: ${EMBEDDED_FONT_COMPANION.weight};\n` +
@@ -222,6 +226,18 @@ function fontFaceCss(theme: ResolvedTheme): string {
     `  src: url(data:font/woff2;base64,${EMBEDDED_FONT_COMPANION.base64}) format('woff2');\n` +
     `}\n`;
   return `${themeFaces}\n${companion}`;
+}
+
+/**
+ * The `@font-face` rules of the theme's heading and body faces. They are the
+ * same family for every theme but Noto Serif Display, whose body is the book
+ * serif (see resolveThemeFonts) — that theme embeds both faces, so the export
+ * stays self-contained.
+ */
+function fontFaceCss(theme: ResolvedTheme): string {
+  const fonts = resolveThemeFonts(theme.font);
+  const families = fonts.heading === fonts.body ? [fonts.heading] : [fonts.heading, fonts.body];
+  return families.map(familyFaceCss).join('\n');
 }
 
 /**
@@ -982,6 +998,11 @@ const STYLES = `
      top margin (--space-6) is the gap between the photo and the title. */
   .media { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
            border-radius: var(--radius-md); }
+  /* The theme's display face, when it has one, is reserved for the main heading
+     of each page: the intro title, the Zutaten heading and the step title. All
+     other text — the captions included — stays in the theme's body face
+     (§4.8). */
+  h1, .screen-title, .step-title { font-family: var(--font-heading); }
   h1 { font-size: var(--text-xl); line-height: var(--leading-xl); font-weight: 600; margin: var(--space-6) 0 var(--space-2);
        overflow-wrap: anywhere; }
   .description { margin: 0 0 var(--space-6); overflow-wrap: anywhere; }
