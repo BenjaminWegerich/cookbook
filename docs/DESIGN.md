@@ -813,7 +813,7 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 | „Neu" | new releases | danger | the ingredient is not in the master data yet |
 | „Rezept" | link | accent | the ingredient has a recipe of its own; the badge itself opens it |
 | „Referenz" | outline star | olive | mirrors the star toggle; its × clears the role |
-| „Unbekannt" | room service | danger | a meal-plan line the app cannot recognise |
+| „Unbekannt" | globe with a link, room service otherwise | accent with a link, danger otherwise | a meal-plan line the app cannot recognise |
 
 **Rules**
 
@@ -858,8 +858,9 @@ without a photo starts its body at the sheet's top padding, like an unrecognized
 that opened the sheet already carried the room-service placeholder, so the sheet does not repeat
 it. The card grid keeps the placeholder for recipes without a photo.
 
-**An unrecognised meal-plan line gets the danger media area** with the room-service symbol
-instead of a placeholder — that card then needs no badge of its own (§5.7).
+**An unrecognised meal-plan line gets its own media area** instead of a placeholder: a line
+with a link shows the globe on the clay accent, a line without one the room-service cloche on the
+danger colour — that card then needs no badge of its own (§5.7).
 
 **Sizes.** Card media: the full card width, 4:3. Overview hero: the full sheet content width,
 4:3. Editor preview: 120 × 90px (4:3).

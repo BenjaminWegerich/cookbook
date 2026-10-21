@@ -23,8 +23,10 @@
  *   instead of showing nothing (the same fallback the recipe overview's
  *   "Geplant" value uses, core's `writtenPlannedAmount`). Only an entry whose
  *   file could not be read at all shows no size;
- * - for an unrecognized entry the entry's complete text and the familiar danger
- *   badge "Unbekannt" after it, the same one the home screen's card shows.
+ * - for an unrecognized entry the entry's complete text and the familiar
+ *   badge "Unbekannt" after it, the same one the home screen's card shows — with
+ *   the globe on clay when the entry carries a link, the cloche on danger
+ *   otherwise.
  *
  * Tapping the row body (never a word inside it) opens the familiar recipe
  * overview in the applicable style — App builds that target from the card, the
@@ -46,7 +48,7 @@ import type { ReactNode } from 'react';
 import { formatPlannedAmount } from '@cookbook/core';
 
 import type { MealPlanCard } from '../keep/mealPlanCards';
-import { RoomServiceIcon } from './icons';
+import { GlobeIcon, RoomServiceIcon } from './icons';
 
 interface ShoppingListSelectProps {
   /**
@@ -181,8 +183,18 @@ function ShoppingListSelect({
                   <span className="shopping-select-size">{formatPlannedAmount(planned)}</span>
                 )}
                 {recipe === null && (
-                  <span className="recipe-badge recipe-badge-unknown">
-                    <RoomServiceIcon className="recipe-badge-icon" optical={20} />
+                  <span
+                    className={
+                      card.link === null
+                        ? 'recipe-badge recipe-badge-unknown'
+                        : 'recipe-badge recipe-badge-unknown is-linked'
+                    }
+                  >
+                    {card.link === null ? (
+                      <RoomServiceIcon className="recipe-badge-icon" optical={20} />
+                    ) : (
+                      <GlobeIcon className="recipe-badge-icon" optical={20} />
+                    )}
                     <span>Unbekannt</span>
                   </span>
                 )}

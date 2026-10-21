@@ -270,9 +270,9 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   size stays in the title candidate, so a recipe whose name carries it is still found; for an
   entry that matches no recipe, `splitTitleNote` separates it as a free-text note.
 - **Cards.** Recognized entries use the known card format. An unrecognized entry renders with
-  the danger „unbekannt“ symbol as its whole media area (no photo, no badge; the glyph is the
-  serving cloche of `RoomServiceIcon`, so the state reads as "a dish, not known yet" and not as a
-  failure) and
+  the „unbekannt“ symbol as its whole media area (no photo, no badge): the globe on the clay
+  accent when the line carries a link, the serving cloche of `RoomServiceIcon` on danger
+  otherwise, so the state reads as "a dish, not known yet" and not as a failure. It shows
   its title without export link, stated size and free-text note — the shape a known card has —
   and is tappable: the recipe overview is its destination, where the entry can be replaced by
   an existing recipe or by a new one (manual or AI) or dropped from the plan with „Abhaken“.
@@ -282,7 +282,8 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   „Umplanen“; the hero carries no „Eingeplant“ badge, since the „Geplant“ value and „Umplanen“
   already state the plan, and a planned recipe only ever appears in the „Essensplan“ section
   („Restliche Sammlung“ leaves it out). An unrecognized entry has no hero at all; its
-  caption/value row leads with the danger „Unbekannt“ badge and then shows the parts its line
+  caption/value row leads with the „Unbekannt“ badge (the globe on clay for a linked line, the
+  cloche on danger otherwise) and then shows the parts its line
   carries: the parsed title, the free-text note as a line of its own under the
   title (in its written parentheses, in the description's typography), the stated size as the
   „Geplant“ caption/value item exactly like a known planned recipe, and the link's domain

@@ -418,7 +418,7 @@
    editor's ingredient tags use the same recipe). A badge is plain content
    inside its card or row and never a hitbox of its own — the whole card is the
    single tap target. An unrecognized meal-plan card carries no badge: its media
-   area *is* the danger symbol (`.recipe-thumb-unknown` below). The badge itself
+   area *is* the symbol (`.recipe-thumb-unknown` below). The badge itself
    leads the recipe overview's caption/value row and sits inline after an
    entry's text in the shopping-list selection
    (styles/shopping-list-select.css). */
@@ -447,9 +447,16 @@
 }
 
 /* "Unbekannt" (meal plan): the entry does not name a recipe of
-   the collection, so nothing here can be scaled or cooked from. */
+   the collection, so nothing here can be scaled or cooked from. An entry that
+   carries a link wears the clay accent (`.is-linked`), because its symbol is the
+   globe and the line reads as "from the web, not recognized yet" rather than as
+   an error; an entry without a link keeps the cloche and its danger colour. */
 .recipe-badge-unknown {
   background: var(--color-danger);
+}
+
+.recipe-badge-unknown.is-linked {
+  background: var(--color-accent);
 }
 
 /* Wrapper that groups a card's media area (the photo / placeholder / symbol) as one
@@ -483,19 +490,24 @@
 }
 
 /* Media area of an unrecognized meal-plan card: not a placeholder photo but the
-   "unbekannt" symbol (RoomServiceIcon's serving cloche) on the danger colour,
-   decided with the user — the cloche reads as "a dish, not known yet" where the
-   error glyph read as a failure. One element, one message, and the card needs
-   no badge of its own. */
+   "unbekannt" symbol, decided with the user — the cloche reads as "a dish, not
+   known yet" where the error glyph read as a failure. It follows the line: an
+   entry with a link shows the globe (GlobeIcon) on the clay accent, an entry
+   without one the serving cloche (RoomServiceIcon) on the danger colour. One
+   element, one message, and the card needs no badge of its own. */
 .recipe-thumb-unknown {
   background: var(--color-danger);
   color: var(--color-on-accent);
 }
 
-/* The room-service symbol on a media area, at the former letter avatar's size
-   (42 px, a ladder value), so the media area keeps its proportions whatever it
-   carries. One class for both the no-photo placeholder and the unrecognized
-   entry's danger media area. */
+.recipe-thumb-unknown.is-linked {
+  background: var(--color-accent);
+}
+
+/* The symbol on a media area, at the former letter avatar's size (42 px, a
+   ladder value), so the media area keeps its proportions whatever it carries.
+   One class for the no-photo cloche, the unrecognized entry's cloche and its
+   globe. */
 .recipe-thumb-icon {
   display: block;
   width: var(--placeholder-symbol-size);
