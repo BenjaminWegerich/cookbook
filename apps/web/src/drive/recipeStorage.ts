@@ -285,12 +285,16 @@ export interface RecipeWriteOptions {
 }
 
 /**
- * Regenerates the export after a recipe write, degrading instead of failing:
- * the recipe file is the source of truth and the export is rewritten in place
- * on the next save, so a failed export must never surface as a failed save
- * (which would tempt the caller into a duplicate-creating retry).
+ * Regenerates the export after a recipe write or a photo change, degrading
+ * instead of failing: the recipe file is the source of truth and the export is
+ * rewritten in place on the next save, so a failed export must never surface as
+ * a failed save (which would tempt the caller into a duplicate-creating retry).
+ *
+ * The editor calls this once more after applying a queued photo change: the
+ * export embeds the photo, and the recipe save above regenerated it from the
+ * previous photo state. Waiting for the next save would lose the new image.
  */
-async function writeRecipeExportSafely(token: string, recipe: Recipe): Promise<void> {
+export async function writeRecipeExportSafely(token: string, recipe: Recipe): Promise<void> {
   try {
     await writeRecipeExport(token, recipe);
   } catch (error) {

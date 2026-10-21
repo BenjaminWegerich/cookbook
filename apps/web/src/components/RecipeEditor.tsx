@@ -84,6 +84,7 @@ import {
   removeRecipeImage,
   saveRecipe,
   uploadRecipeImage,
+  writeRecipeExportSafely,
   type StoredRecipe,
 } from '../drive/recipeStorage';
 import { listCookbookFolder } from '../drive/cookbookFolder';
@@ -1487,7 +1488,9 @@ function RecipeEditor({
   /**
    * Validates, then saves (create / update / §6 rename) and returns to the
    * list. Photo changes are part of the save: they are applied after the
-   * recipe text is written, and a failed save leaves them queued for a retry.
+   * recipe text is written, and the export is then regenerated once more so it
+   * embeds the new photo instead of the previous one. A failed save leaves the
+   * photo change queued for a retry.
    */
   const handleSave = async (): Promise<void> => {
     if (draft === null || saving) return;
@@ -1517,6 +1520,10 @@ function RecipeEditor({
         );
         if (photoChange !== null) {
           await applyPhotoChange(photoChange, target.fileId);
+          // The save above already wrote the export, but from the previous
+          // photo state (the export embeds the photo). Regenerate it now so the
+          // first save after adding, replacing or removing a photo is correct.
+          await writeRecipeExportSafely(token, savedRecipe);
         }
       } else {
         // New recipe: create once; a retry after a failure updates the same
@@ -1531,6 +1538,8 @@ function RecipeEditor({
         }
         if (photoChange !== null) {
           await applyPhotoChange(photoChange, fileId);
+          // Same as above: re-bake the export with the freshly uploaded photo.
+          await writeRecipeExportSafely(token, savedRecipe);
         }
       }
       setPhotoChange(null);
