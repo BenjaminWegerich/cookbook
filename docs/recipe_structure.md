@@ -102,8 +102,9 @@
 - List the steps in the correct order.
 - The order is specified, even if it doesn’t matter (e.g., because two components are prepared separately).
 - Each step consists of **its own ingredient list followed by a prose instruction**:
-  - the list holds the step's counted ingredients (editable per step — add, edit or
-    remove rows; quantities are changed there, never in the master list);
+  - the list holds the step's counted ingredients (editable per step — add, edit,
+    reorder or remove rows; quantities are changed there, never in the master
+    list);
   - the prose is free text that may reference ingredients by name as plain words
     and may contain display-only inline artifacts for scaled quantities.
 - There is no summary; the recipe ends with the last step. However, this step may include serving suggestions.

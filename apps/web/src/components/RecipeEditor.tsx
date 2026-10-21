@@ -3,8 +3,8 @@
  *
  * Decided with the user:
  * - every step carries its own counted ingredient list (rows) that appears
- *   above the step text; rows are added/edited per step ("+ Zutat zur Liste
- *   hinzufügen") and feed
+ *   above the step text; rows are added, edited and reordered per step ("+
+ *   Zutat zur Liste hinzufügen", ↑/↓ on the row) and feed
  *   the derived master list (order of first use, duplicates merged with the
  *   total, storage_format.md §4);
  * - the step text is free prose; display-only inline artifacts ("+ Menge im
@@ -1596,6 +1596,24 @@ function RecipeEditor({
     });
   };
 
+  /**
+   * Moves one counted ingredient row of a step by one position (`offset` −1 up,
+   * +1 down). The row order is the order of use (recipe_structure.md
+   * "Ingredients List"), and the derived master list follows it: an ingredient
+   * moves only where this step holds its first use, and duplicates keep the
+   * position of that first use. Out-of-range moves are no-ops — the two end
+   * buttons are disabled, this guards the keyboard path too.
+   */
+  const moveStepRow = (stepIndex: number, rowIndex: number, offset: -1 | 1): void => {
+    updateStep(stepIndex, (current) => {
+      const target = rowIndex + offset;
+      if (target < 0 || target >= current.ingredients.length) return current;
+      const ingredients = [...current.ingredients];
+      [ingredients[rowIndex], ingredients[target]] = [ingredients[target]!, ingredients[rowIndex]!];
+      return { ...current, ingredients };
+    });
+  };
+
   /** Removes a step from the draft (the armed "remove" button's confirming tap,
    *  or an empty step's immediate tap). Called only when the step being removed is
    *  the one the armed state refers to. */
@@ -2503,9 +2521,32 @@ function RecipeEditor({
                                   list only (decided with the user): neither
                                   the toggle nor the "REFERENZ" badge appears
                                   on a step row. */}
+                            {/* Row order = order of use. Same compact ↑ ↓ pair
+                                as the step head; at the ends of the list the
+                                direction has nowhere to go, and the row's
+                                position is the visible cause of the disabled
+                                look (DESIGN §5.1). */}
                             <button
                               type="button"
-                              className="row-remove"
+                              className="icon-button"
+                              disabled={rowIndex === 0}
+                              onClick={() => moveStepRow(stepIndex, rowIndex, -1)}
+                              aria-label={`${ingredient.name} nach oben`}
+                            >
+                              <ArrowUpIcon className="button-icon" optical={20} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button"
+                              disabled={rowIndex === step.ingredients.length - 1}
+                              onClick={() => moveStepRow(stepIndex, rowIndex, 1)}
+                              aria-label={`${ingredient.name} nach unten`}
+                            >
+                              <ArrowDownIcon className="button-icon" optical={20} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button danger-text"
                               onClick={() =>
                                 updateStep(stepIndex, (current) => ({
                                   ...current,

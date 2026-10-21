@@ -674,19 +674,6 @@
   height: var(--icon-size);
 }
 
-/* Row remove (step rows): the ✕ of one counted ingredient. The box centres the
-   symbol, so it sets no line height (§4.2). */
-.row-remove {
-  flex: none;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--color-danger);
-  cursor: pointer;
-}
-
 .ref-toggle.on {
   color: var(--color-olive);
 }
@@ -1125,10 +1112,14 @@
   display: none;
 }
 
+/* The row's three compact icon controls (↑ ↓ ✕), the step head's pattern
+   (§5.1): 32px boxes whose ring beyond the box brings each hit area to
+   --control-height. The gap is --space-4, so two neighbouring rings (5px each)
+   meet without overlapping. */
 .step-row-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
 
 /* Validation message directly under an ingredient row whose name is not in
