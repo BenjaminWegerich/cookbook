@@ -14,6 +14,10 @@ and smart displays, and integration with Google Keep and Gemini for Home.
 
 Support for entering, capturing, supplementing, and revising recipes through AI.
 
+- On Android, share a TikTok video into Cookbook: the caption arrives in the AI screen's
+  „Quelltext“ field, fetched by a small Cloudflare Worker (`apps/tiktok-extractor/`). Other
+  recipe links can be pasted directly — the AI reads those pages itself.
+
 ### 2. Ingredient-specific additional units
 
 - Fixed additional units per ingredient (e.g., tbsp, pack, piece) with conversion to g / ml.

@@ -635,6 +635,11 @@ accent outline, so the caret's position is always visible — not only for keybo
 text area grows with its content: no scrollbar, no resize grip; an empty one starts at 42px,
 a description at 74px.
 
+**One exception:** the AI screen's „Quelltext“ field holds quoted page text — a TikTok caption
+runs to thousands of characters — so it stops at `38dvh` and scrolls inside. Growing it would
+push the recipe settings and the send button several screens down; the no-scrollbar rule is
+about prose the user writes.
+
 **A caption may be followed by one quiet hint line** (`--text-sm`, muted) that explains the
 field; a hint never repeats the caption.
 

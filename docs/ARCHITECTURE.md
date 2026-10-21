@@ -7,8 +7,10 @@
 > recipe editor uses the per-step ingredient model: every step has its own counted
 > ingredient rows above a free-prose text, and the master ingredient list is derived from
 > the rows (the step text may contain display-only inline artifacts for scaled
-> quantities, see [storage_format.md](storage_format.md) §4/§5). AI-assisted create/edit,
-> Gemini and sharing integrations follow in the upcoming roadmap tasks. The Google Keep
+> quantities, see [storage_format.md](storage_format.md) §4/§5). AI-assisted create/edit runs
+> in the browser against Gemini, whose URL context tool reads linked pages; on Android a share
+> target feeds a TikTok caption into the same screen through a small Cloudflare Worker
+> (`apps/tiktok-extractor/`). The Google Keep
 > integration has started: its gateway (`apps/keep-gateway/`) reads both Keep lists over a
 > thin HTTP boundary, and the web app shows the meal plan as the first of the recipe list's two
 > captioned sections („Essensplan“ over „Restliche Sammlung“, entry recognition, the
@@ -29,7 +31,8 @@
   exported `.html` file is the cooking experience.
 - Talks to Google Drive directly from the browser (OAuth): reads and writes recipe files,
   regenerates HTML exports in place.
-- Entry point for the shopping-list transfer and recipe sharing.
+- Entry point for the shopping-list transfer, recipe sharing and the Android share target
+  (TikTok → Cookbook).
 
 ### Core logic module (framework-free TypeScript)
 
@@ -362,8 +365,8 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   read before the write; a named line that Keep no longer carries fails the undo instead of
   claiming it is back to before.
 - **Sign-in.** Started automatically once the Google login is done, reopenable from the
-  „Essensplan“ section; the token is held in memory only, like the AI API key (N6), and nothing
-  has to be looked up by hand any more. An expired token is renewed silently; only when Google
+  „Essensplan“ section; the token is held in memory only, like the AI API key by default (N6),
+  and nothing has to be looked up by hand any more. An expired token is renewed silently; only when Google
   needs a gesture does the section offer „Keep verbinden“. The gateway URL is the build-time
   variable `VITE_KEEP_GATEWAY_URL`; without it the feature is off. The app asks Google for
   **two** credentials (the Drive token and this identity token) through the same GIS token
@@ -417,6 +420,24 @@ The VM tiers were rejected on their own merits before authentication was ever te
   A service answering a few requests a day meets every one of those criteria, and the policy
   has no carve-out for Pay-as-You-Go tenancies.
 
+### TikTok extractor (Cloudflare Worker)
+
+- `apps/tiktok-extractor/`: the backend half of the Android share flow. The installed PWA
+  registers a `share_target` in its manifest (`/cookbook/?url=…`), so TikTok's share sheet can
+  hand a link to Cookbook. The browser cannot fetch `tiktok.com` (CORS) and the AI's URL context
+  tool is blocked there, so this Worker fetches the public video page and returns the caption
+  from its hydration JSON (`__UNIVERSAL_DATA_FOR_REHYDRATION__` → `webapp.reflow.video.detail`,
+  or the older `webapp.video-detail`). oEmbed is not an option: it returns no caption and
+  rate-limits.
+- Deliberately separate from the keep-gateway: it holds no credential and serves public data,
+  while the gateway's whole design is built around holding one narrowly scoped Keep credential.
+  Its host allowlist keeps it from becoming an open fetch proxy (SSRF), and CORS is `*` because
+  the response gives away nothing a `curl` could not fetch.
+- The app maps the share into the AI screen's two fields
+  (`apps/web/src/share/incomingShare.ts`): a TikTok caption into „Quelltext“, any other link into
+  the description, where the URL context tool reads it. Without `VITE_TIKTOK_EXTRACTOR_URL` the
+  flow degrades to „open the AI screen and paste by hand“.
+
 ### Gemini for Home integration (later)
 
 - Speech-optimized preparation of recipe steps for read-aloud on smart speakers and smart
@@ -433,6 +454,9 @@ The VM tiers were rejected on their own merits before authentication was ever te
 - **Static architecture:** the app is a static site; the browser reads and writes the recipe
   files in Google Drive directly. Nothing to run or maintain in v1; later server-side pieces
   (Google Keep, Gemini) are added behind a clean HTTP boundary.
+- **One narrow job per backend:** the keep-gateway exists to hold the one credential the
+  browser must not have; the TikTok extractor holds none and is kept apart from it, so a
+  scraping endpoint can never widen that credential's blast radius.
 - **One source of truth, derived presentations:** the canonical recipe files are the only
   data; the web app is a live renderer, and the HTML export and the speech preparation are
   generated artifacts.
@@ -464,6 +488,7 @@ The VM tiers were rejected on their own merits before authentication was ever te
   the master token has to be minted from the cloud — a home-minted token is refused there.
 - Gemini Home / read-aloud integration details (product/API chosen when that milestone is built).
 - Recipe-editing AI is decided: Google Gemini via browser-direct REST (`generateContent`), key
-  pasted per session, model `gemini-3.8-flash` with the URL context tool (the Interactions API is
-  the eventual migration). Google Search grounding is off (paid tier only). See the ROADMAP
-  Phase 3 note and `apps/web/src/ai/`.
+  pasted per session and optionally remembered on this device (opt-in since the share target,
+  which always starts the app cold), model `gemini-3.8-flash` with the URL context tool (the
+  Interactions API is the eventual migration). Google Search grounding is off (paid tier only).
+  See the ROADMAP Phase 3 note and `apps/web/src/ai/`.

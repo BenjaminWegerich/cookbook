@@ -56,7 +56,9 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 - [x] Provider-agnostic AI abstraction — provider decision: Google Gemini, called browser-direct
       via its REST API (no relay); the seam keeps DeepSeek possible later behind a CORS relay.
       Implemented in `apps/web/src/ai/` (types, Gemini adapter, factory, session key store).
-- [x] AI key handling: pasted per session, never stored (N6).
+- [x] AI key handling: pasted per session, never stored (N6). Since the Android share target
+      (which always starts the app cold): an opt-in „Auf diesem Gerät merken“ and a „Vergessen“
+      line under the composer.
 - [x] AI create: natural-language description → draft recipe in the canonical format,
       reviewable and editable before saving.
 - [x] AI edit: fill gaps / correct units, preview + accept or reject (user story A3).
@@ -69,8 +71,13 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
             drafted Zutaten-Rezept continues the same conversation after it was saved (the dish
             that uses it is prefilled as the next request).
 - [x] Model `gemini-3.8-flash` (free tier) with the URL context tool: a link pasted into the AI
-      prompt is read server-side, so copied page text is only the fallback. Google Search
+      prompt is read server-side, so copied page text is only the fallback — and for pages the
+      tool cannot read (TikTok, Instagram) the „Quelltext“ field takes the caption. Google Search
       grounding stays off — not available on the free tier.
+- [x] Android share target: TikTok → Teilen → Cookbook opens the AI-create screen with the
+      caption in the „Quelltext“ field. The caption comes from `apps/tiktok-extractor/` (a
+      Cloudflare Worker; the browser cannot fetch tiktok.com and the URL context tool is blocked
+      there). Other shared links land in the description.
 
 ## Google Keep — follow-up milestone (depends on: web app)
 
