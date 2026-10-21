@@ -1,10 +1,20 @@
 /**
- * Session-only storage for the user's AI API key (N6).
+ * Storage for the user's AI API key.
  *
- * The key is pasted by the user per session and held in memory only — it is
- * never written to localStorage or any other persistent store, so a page
- * reload (and the explicit {@link clearAiApiKey} on logout) removes it.
- * Mirrors the Google access token handling in ./auth/googleAuth.
+ * Two levels, chosen by the user at the key field:
+ *
+ * - **Session** (default, N6): held in memory only. A page reload forgets it.
+ * - **This device** (opt-in): written to localStorage, so a cold start no longer
+ *   asks for the key. The Android share target opens the app fresh every time,
+ *   which is why the second level exists: without it every share would land on
+ *   the key field again.
+ *
+ * Security: the key is a *billing* credential, not a data credential. Stored in
+ * localStorage it is readable by any script on this origin (an XSS or a
+ * compromised dependency), by someone using the unlocked device, and by an
+ * Android backup. The app loads no third-party scripts, the choice is explicit
+ * and off by default, and the key should be restricted to the Gemini API with a
+ * quota in Google AI Studio. {@link forgetAiApiKey} removes it again.
  *
  * The key is deliberately not part of an {@link AiClient} instance's public
  * state: callers read it here at call time and pass it into
@@ -14,25 +24,95 @@
  * in long-lived state.
  */
 
-/** API key of the current session, or null when not entered yet. */
+/** localStorage key of the remembered key. */
+const STORAGE_KEY = 'cookbook.aiApiKey';
+
+/** API key of the current session, or null when none was entered (yet). */
 let apiKey: string | null = null;
 
-/** Returns the session API key, or null when none was entered. */
+/** Reads the key remembered on this device, or null. Storage can be blocked
+ *  (private mode, hardened browser), which is never an error here. */
+function readStoredKey(): string | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored === null || stored.trim() === '' ? null : stored;
+  } catch {
+    return null;
+  }
+}
+
+/** Removes the remembered key; blocked storage is not an error. */
+function removeStoredKey(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Nothing to clean up when storage is unavailable.
+  }
+}
+
+/** Options of {@link setAiApiKey}. */
+export interface AiApiKeyOptions {
+  /** Write the key to this device's storage (explicit user choice). */
+  remember?: boolean;
+}
+
+/** Returns the API key in use: the session key, else the one remembered on this
+ *  device, else null. A remembered key becomes the session key on first read. */
 export function getAiApiKey(): string | null {
+  if (apiKey === null) {
+    apiKey = readStoredKey();
+  }
   return apiKey;
 }
 
-/** True when a session API key is present. */
+/** True when an API key is available (session or remembered). */
 export function hasAiApiKey(): boolean {
-  return apiKey !== null;
+  return getAiApiKey() !== null;
 }
 
-/** Stores the pasted key for this session (trimmed); never persists it. */
-export function setAiApiKey(key: string): void {
-  apiKey = key.trim() === '' ? null : key.trim();
+/** True when a key is remembered on this device (opt-in, see the key field). */
+export function isAiApiKeyRemembered(): boolean {
+  return readStoredKey() !== null;
 }
 
-/** Clears the session key — called on logout and never persisted anyway. */
+/**
+ * Stores the pasted key for this session and, when asked, on this device.
+ * Passing `remember: false` also removes a previously remembered key, so the
+ * checkbox is the single switch for both directions.
+ */
+export function setAiApiKey(key: string, options: AiApiKeyOptions = {}): void {
+  const trimmed = key.trim();
+  apiKey = trimmed === '' ? null : trimmed;
+  if (trimmed !== '' && options.remember === true) {
+    try {
+      localStorage.setItem(STORAGE_KEY, trimmed);
+    } catch {
+      // Storage blocked: the key still works for this session.
+    }
+  } else {
+    removeStoredKey();
+  }
+}
+
+/** Forgets the key entirely: session and device. Used by {@link forgetAiApiKey}
+ *  and on logout. */
 export function clearAiApiKey(): void {
   apiKey = null;
+  removeStoredKey();
+}
+
+/**
+ * Removes only the copy remembered on this device. The running session keeps
+ * its key (the created clients hold it in their closure), so this never breaks
+ * a conversation — it only makes the next start ask again.
+ */
+export function forgetStoredAiApiKey(): void {
+  removeStoredKey();
+}
+
+/** Alias with the user-facing intent of {@link clearAiApiKey}. */
+export function forgetAiApiKey(): void {
+  clearAiApiKey();
 }

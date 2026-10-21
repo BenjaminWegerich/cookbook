@@ -1,0 +1,12 @@
+{
+  "name": "@cookbook/tiktok-extractor",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Cloudflare Worker: turns a shared TikTok link into the video's caption for the Cookbook share target",
+  "scripts": {
+    "test": "node --test",
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy"
+  }
+}

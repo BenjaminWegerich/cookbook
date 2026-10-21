@@ -37,3 +37,6 @@ coverage/
 
 # Font verification scratch
 .fonts/
+
+# Wrangler's local cache/state (apps/tiktok-extractor)
+.wrangler/

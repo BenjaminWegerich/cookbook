@@ -12,13 +12,15 @@
   min-height: 100dvh;
 }
 
-/* ---- Key entry card (N6: pasted per session, never stored) -------------- */
+/* ---- Key entry card (N6: session by default, opt-in on this device) ------ */
 
 .ai-key-card {
   max-width: 32rem; /* the app's shared content width (§4.7) */
 }
 
-.ai-key-card input {
+/* Only the key field itself — the card also holds the "remember" checkbox,
+   which must keep its native box and tapping behaviour. */
+.ai-key-card input[type='password'] {
   width: 100%;
   padding: var(--space-3) var(--space-4);
   background: var(--color-bg);
@@ -27,6 +29,30 @@
   color: var(--color-ink);
   font-size: var(--text-md);
   line-height: var(--leading-md);
+}
+
+/* The remembered-key line under the composer (AiCreateSheet): quiet, and the
+   one place the stored key can be revoked — the key card is gone by then. */
+.ai-key-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+/* A pasted page text (a TikTok caption runs to thousands of characters) is the
+   one *quoted* text of the composer: grown to its full height it would push the
+   Vorgaben and "Senden" several screens down. So this field alone stops at a
+   third of the viewport and scrolls inside — a deliberate, narrow exception to
+   the "no scrollbar" rule of §5.3, which is about prose the user writes. */
+.ai-source-field textarea {
+  max-height: 38dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* ---- Chat transcript ------------------------------------------------------ */

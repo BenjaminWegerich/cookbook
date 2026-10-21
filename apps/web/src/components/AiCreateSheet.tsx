@@ -9,18 +9,28 @@
  *
  * Decisions (agreed with the user):
  * - The conversation is shown as a chat transcript.
- * - The API key is pasted here when none is stored yet — session only, never
- *   persisted (N6). A key that arrives in one piece (autofill, paste) is
- *   applied immediately; typing it by hand still needs the button, which also
- *   stays the fallback when a browser fills the field without firing `input`.
+ * - The API key is pasted here when none is stored yet. By default it lives in
+ *   memory only (N6); the key field offers an explicit "Auf diesem Gerät
+ *   merken", which writes it to localStorage so a cold start — the Android
+ *   share target opens the app fresh — does not ask again. A key that arrives
+ *   in one piece (autofill, paste) is applied immediately; typing it by hand
+ *   still needs the button, which also stays the fallback when a browser fills
+ *   the field without firing `input`.
  * - No blocking "new ingredient" confirm step: the draft opens in the recipe
  *   editor, where unknown ingredient names / sub-recipes are handled with the
  *   editor's existing flows ("Neue Zutat anlegen", saving an ingredient_recipe).
- * - The first prompt carries recipe specifications below the prompt field: the
- *   manual editor's Typ and Portionen/Ergiebigkeit controls (defaults: 6
- *   Portionen for a Gericht, Gewicht / 1 kg for a Zutaten-Rezept), the Merkmale
- *   flags "Vorgaben" (vegan — always on for now, schnell und einfach, günstig)
- *   and "KI-Verhalten" (Bei Bedarf nachfragen vs. Direkt entwerfen).
+ * - The first prompt has two fields: the description and an optional source
+ *   field ("Quelltext") for pasted page text. The source is sent as
+ *   "Inspiration" next to the description (composeUserMessage). It exists for
+ *   pages the AI cannot read itself — TikTok and Instagram — while nearly every
+ *   other recipe link belongs in the description, where the URL context tool
+ *   reads it.
+ * - The first prompt carries recipe specifications below the prompt and source
+ *   fields: the manual editor's Typ and Portionen/Ergiebigkeit controls
+ *   (defaults: 6 Portionen for a Gericht, Gewicht / 1 kg for a Zutaten-Rezept),
+ *   the Merkmale flags "Vorgaben" (vegan — always on for now, schnell und
+ *   einfach, günstig) and "KI-Verhalten" (Bei Bedarf nachfragen vs. Direkt
+ *   entwerfen).
  *   They are serialized into the system instruction (aiContext.ts), so they
  *   constrain the whole conversation — including revisions and repair rounds.
  * - The conversation does not end with a draft: the composer stays visible, and
@@ -42,8 +52,8 @@
  *   focus and only on pointer/keyboard devices — see .ai-field-hint.
  *
  * The same sheet also runs the AI-edit flow ("Mit KI bearbeiten", Task B of the
- * rules): `mode === 'edit'` drops every create-only extra — the
- * Typ/Portionen/Merkmale/„KI-Verhalten“ block — so the screen is the
+ * rules): `mode === 'edit'` drops every create-only extra — the source field
+ * and the Typ/Portionen/Merkmale/„KI-Verhalten“ block — so the screen is the
  * explanation plus a *single* prompt field. The original recipe is transferred
  * to the AI in full (buildEditTaskText) and the user only describes the desired
  * changes; the prompt's explanation says exactly that. Everything else (API
@@ -76,7 +86,12 @@ import type { RecipeSpecifications } from '../ai/aiContext';
 import { createAiCreateSession } from '../ai/createRecipeDraft';
 import type { AiCreateSession } from '../ai/createRecipeDraft';
 import { createAiClient } from '../ai/client';
-import { getAiApiKey, setAiApiKey } from '../ai/sessionKey';
+import {
+  forgetStoredAiApiKey,
+  getAiApiKey,
+  isAiApiKeyRemembered,
+  setAiApiKey,
+} from '../ai/sessionKey';
 import type { StoredRecipe } from '../drive/recipeStorage';
 import { listRecipes, readRecipe } from '../drive/recipeStorage';
 import { loadRecipeGuidelines } from '../drive/personalRules';
@@ -253,6 +268,12 @@ interface AiCreateSheetProps {
    */
   initialPrompt?: string;
   /**
+   * Prefill of the create task's source field ("Quelltext"). App passes the
+   * caption extracted from a shared TikTok link here, so the user lands on the
+   * composer with the page text already in place. Ignored in `'edit'` mode.
+   */
+  initialSource?: string;
+  /**
    * True while this screen is the visible one. The sheet deliberately stays
    * mounted (hidden) while its own draft is edited, so its Escape trigger must
    * be off in that state — otherwise Escape would hit the editor and this sheet
@@ -374,6 +395,21 @@ function handoffPrompt(title: string): string {
   return `Erstelle jetzt das eigentliche Gericht und verwende „${title}“ als Zutat.`;
 }
 
+/**
+ * Composes the first user turn out of the two create fields: the user's
+ * description and the optional source text (a page's text the AI cannot read
+ * itself, e.g. a TikTok caption). The source is labelled "Inspiration" so the
+ * model treats it as reference material rather than as an instruction. Either
+ * field may be empty; the caller guarantees that at least one is filled.
+ */
+function composeUserMessage(description: string, source: string): string {
+  const parts = [description.trim()];
+  if (source.trim() !== '') {
+    parts.push(`Als Inspiration übernehme ich folgenden Quelltext:\n\n${source.trim()}`);
+  }
+  return parts.join('\n\n');
+}
+
 /** The current (newest) draft in the transcript, or null. */
 function currentDraft(entries: readonly ChatEntry[]): Recipe | null {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
@@ -397,6 +433,7 @@ export default function AiCreateSheet({
   mode = 'create',
   editTarget,
   initialPrompt,
+  initialSource,
   visible,
   recipes,
   handoff,
@@ -415,12 +452,24 @@ export default function AiCreateSheet({
   /** German key input shown while no session key is stored (N6). */
   const [showKeyField, setShowKeyField] = useState(() => getAiApiKey() === null);
   const [keyInput, setKeyInput] = useState('');
+  /** True when the key is remembered on this device (opt-in in the key field). */
+  const [rememberKey, setRememberKey] = useState(false);
+  /** True while a key remembered on this device is in use — drives the quiet
+   *  "Vergessen" line under the composer. */
+  const [keyRemembered, setKeyRemembered] = useState(() => isAiApiKeyRemembered());
   /** Chat transcript, including the draft card at its creation point. */
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [description, setDescription] = useState(initialPrompt ?? '');
+  /** Optional source text ("Quelltext") of the first turn: a page the AI
+   *  cannot read itself (TikTok/Instagram caption). Prefilled by App when the
+   *  sheet was opened from a shared link. */
+  const [source, setSource] = useState(isEdit ? '' : (initialSource ?? ''));
   /** The prompt field grows with its content (§5.3). One ref serves the first
    *  field and, once a conversation started, the reply field. */
   const draftFieldRef = useGrowingTextarea(description);
+  /** The source field grows the same way; it disappears once the first turn
+   *  was sent. */
+  const sourceFieldRef = useGrowingTextarea(source);
   /**
    * Recipe specifications below the prompt field (editor parity): the Typ
    * toggle, the type-dependent Portionen / Ergiebigkeit input, and the
@@ -585,7 +634,8 @@ export default function AiCreateSheet({
   /** Stores the pasted / autofilled key for this session and prepares the session. */
   const handleKeyApply = (rawKey: string): void => {
     if (rawKey.trim() === '') return;
-    setAiApiKey(rawKey);
+    setAiApiKey(rawKey, { remember: rememberKey });
+    setKeyRemembered(rememberKey);
     setKeyInput('');
     setShowKeyField(false);
     setLoadError(null);
@@ -598,16 +648,28 @@ export default function AiCreateSheet({
     }
   };
 
-  /** Sends the description / answer and advances the conversation. */
+  /**
+   * Removes the key remembered on this device. The running session keeps
+   * working (its client already holds the key); only the next start asks again.
+   */
+  const handleForgetStoredKey = (): void => {
+    forgetStoredAiApiKey();
+    setKeyRemembered(false);
+  };
+
+  /** Sends the description / source text / answer and advances the conversation. */
   const handleSend = async (): Promise<void> => {
     if (session === null || busy || refreshing) return;
-    if (description.trim() === '') return;
+    if (description.trim() === '' && source.trim() === '') return;
     setError(null);
-    const userText = description.trim();
+    // The source field belongs to the first turn only; once a conversation is
+    // running it is empty (the reply field replaces both create fields).
+    const userText = composeUserMessage(description, source);
     // A draft already exists: this text is a change request for it (rule A4).
     const revise = draft !== null;
     setEntries((current) => [...current, { kind: 'message', role: 'user', content: userText }]);
     setDescription('');
+    setSource('');
     setBusy(true);
     try {
       const result = revise ? await session.sendRevision(userText) : await session.send(userText);
@@ -668,7 +730,7 @@ export default function AiCreateSheet({
    *  recipe, so the button waits (derived, not state: it mirrors the parent's
    *  handoff signal, which is cleared when the refresh finished). */
   const refreshing = handoff !== null && session !== null;
-  const canSend = !busy && !refreshing && description.trim() !== '';
+  const canSend = !busy && !refreshing && (description.trim() !== '' || source.trim() !== '');
 
   /**
    * Placeholder of the shared prompt field. Before the first turn an edit
@@ -691,14 +753,20 @@ export default function AiCreateSheet({
    * discard.
    */
   const initialPromptValue = initialPrompt ?? '';
+  /** The same for the source field: the caption App handed over with a shared
+   *  link. An untouched prefill is not work either — re-sharing the link is
+   *  cheaper than a discard question. */
+  const initialSourceValue = isEdit ? '' : (initialSource ?? '');
 
   /** True when leaving would discard started work: text typed into the
    *  composer, a started conversation, or an AI draft that was never saved.
-   *  A prefilled entry text that is still untouched is *not* work — leaving then
-   *  discards nothing the user wrote. The API-key field is deliberately excluded
-   *  too — the key is session-only (N6), so leaving it loses nothing. */
+   *  A prefilled entry text or shared caption that is still untouched is *not*
+   *  work — leaving then discards nothing the user wrote. The API-key field is
+   *  deliberately excluded too — the key is session-only (N6), so leaving it
+   *  loses nothing. */
   const hasWork =
     (description !== initialPromptValue && description.trim() !== '') ||
+    (source !== initialSourceValue && source.trim() !== '') ||
     entries.length > 0 ||
     draft !== null;
 
@@ -711,7 +779,7 @@ export default function AiCreateSheet({
    * it threatened is gone (see useLeaveGuard).
    */
   const guard = useLeaveGuard({
-    workSignature: `${description}\u0000${entries.length}\u0000${draft !== null}`,
+    workSignature: `${description}\u0000${source}\u0000${entries.length}\u0000${draft !== null}`,
     needsConfirm: hasWork,
   });
 
@@ -768,8 +836,8 @@ export default function AiCreateSheet({
         <section className="editor-card ai-key-card" aria-label="API-Schlüssel">
           <h2 className="editor-card-title">Gemini-API-Schlüssel</h2>
           <p>
-            Füge deinen Gemini-API-Schlüssel ein. Er wird nur für diese Sitzung im Speicher gehalten
-            und niemals dauerhaft gespeichert.
+            Füge deinen Gemini-API-Schlüssel ein. Er gilt für diese Sitzung; mit dem Häkchen
+            darunter auch nach einem Neustart der App.
           </p>
           <input
             type="password"
@@ -789,6 +857,18 @@ export default function AiCreateSheet({
               setKeyInput(nextValue);
             }}
           />
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={rememberKey}
+              onChange={(event) => setRememberKey(event.target.checked)}
+            />
+            <span>Auf diesem Gerät merken</span>
+          </label>
+          <p className="field-hint">
+            Der Schlüssel wird dann dauerhaft in diesem Browser gespeichert — nur auf einem Gerät,
+            das du allein nutzt.
+          </p>
           <div className="sheet-actions">
             <button
               type="button"
@@ -824,13 +904,13 @@ export default function AiCreateSheet({
                       // thing that replaces copied page text: a link.
                       <p>
                         Das Rezept „{editTarget?.title ?? ''}“ wird vollständig an die KI übergeben.
-                        Beschreibe die gewünschten Änderungen frei und beliebig detailliert. Füge
-                        Links zu Webseiten ein, wenn diese als Inspiration dienen sollen.
+                        Beschreibe die gewünschten Änderungen frei und beliebig detailliert.
+                        Rezept-Links kannst du direkt einfügen — die KI liest die Seite selbst.
                       </p>
                     ) : (
                       <p>
-                        Beschreibe das Gericht frei und beliebig detailliert. Füge Links zu
-                        Webseiten ein, wenn diese als Inspiration dienen sollen.
+                        Beschreibe das Gericht frei und beliebig detailliert. Die meisten
+                        Rezept-Links kannst du direkt einfügen — die KI liest die Seite selbst.
                       </p>
                     )}
                   </div>
@@ -909,6 +989,26 @@ export default function AiCreateSheet({
                         onChange={(event) => setDescription(event.target.value)}
                       />
                       <FieldHint />
+                    </div>
+
+                    {/* Optional source text ("Quelltext"): page text the AI
+                        cannot fetch itself. TikTok and Instagram block the URL
+                        context tool, so their captions belong here; nearly
+                        every other recipe link belongs in the field above. */}
+                    <div className="field ai-field ai-source-field">
+                      <span className="field-label">
+                        Quelltext<span className="optional-mark">(optional)</span>
+                      </span>
+                      <textarea
+                        ref={sourceFieldRef}
+                        value={source}
+                        placeholder="Beschreibungstext einfügen …"
+                        onChange={(event) => setSource(event.target.value)}
+                      />
+                      <p className="field-hint">
+                        TikTok- und Instagram-Links kann die KI nicht öffnen. Kopiere dort den
+                        Beschreibungstext und füge ihn hier ein.
+                      </p>
                     </div>
 
                     {/* Rezept-Vorgaben — the manual editor's Typ and
@@ -1057,6 +1157,18 @@ export default function AiCreateSheet({
                     {busy ? 'Senden …' : refreshing ? 'Kontext wird aktualisiert …' : 'Senden'}
                   </button>
                 </div>
+
+                {/* The remembered-key state stays visible and revocable: the
+                    key field is gone by the time this line shows, so without it
+                    a stored key could only be removed by clearing site data. */}
+                {keyRemembered && (
+                  <p className="ai-key-note">
+                    Der Gemini-Schlüssel ist auf diesem Gerät gespeichert.
+                    <button type="button" className="text-button" onClick={handleForgetStoredKey}>
+                      Vergessen
+                    </button>
+                  </p>
+                )}
               </form>
             </>
           )}

@@ -32,11 +32,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The Google OAuth client ID, the Keep gateway URL and the export host URL
-      # are public data (all three ship in the browser), but they are kept out of
-      # the repository: the CI build reads them from the repository variables set
-      # in the GitHub settings. An unset VITE_KEEP_GATEWAY_URL simply switches
-      # Keep off; an unset VITE_EXPORT_HOST_URL falls back to Drive export links.
+      # The Google OAuth client ID, the Keep gateway URL, the export host URL and
+      # the TikTok extractor URL are public data (all four ship in the browser),
+      # but they are kept out of the repository: the CI build reads them from the
+      # repository variables set in the GitHub settings. An unset
+      # VITE_KEEP_GATEWAY_URL simply switches Keep off; an unset
+      # VITE_EXPORT_HOST_URL falls back to Drive export links; an unset
+      # VITE_TIKTOK_EXTRACTOR_URL switches the automatic TikTok caption off.
       - name: Configure build environment
         run: |
           : > apps/web/.env
@@ -48,6 +50,9 @@ jobs:
           fi
           if [ -n "${{ vars.VITE_EXPORT_HOST_URL }}" ]; then
             echo "VITE_EXPORT_HOST_URL=${{ vars.VITE_EXPORT_HOST_URL }}" >> apps/web/.env
+          fi
+          if [ -n "${{ vars.VITE_TIKTOK_EXTRACTOR_URL }}" ]; then
+            echo "VITE_TIKTOK_EXTRACTOR_URL=${{ vars.VITE_TIKTOK_EXTRACTOR_URL }}" >> apps/web/.env
           fi
 
       - name: Typecheck core module

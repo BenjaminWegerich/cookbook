@@ -43,6 +43,7 @@ import ShoppingSortSelect, { type SortResolution } from './components/ShoppingSo
 import Snackbar from './components/Snackbar';
 import SubRecipeSelect from './components/SubRecipeSelect';
 import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
+import { TIKTOK_EXTRACTOR_URL } from './config';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { listCookbookFolder } from './drive/cookbookFolder';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
@@ -64,6 +65,12 @@ import {
 import { resolveMealPlan, type MealPlanCard, type MealPlanResolution } from './keep/mealPlanCards';
 import type { ShoppingInputs } from './keep/shoppingBundle';
 import { useKeep } from './keep/useKeep';
+import {
+  ShareResolveError,
+  readIncomingShare,
+  resolveIncomingShare,
+  type IncomingShare,
+} from './share/incomingShare';
 import './styles/ai-create.css';
 import './styles/recipe-list.css';
 import './styles/recipe-overview.css';
@@ -109,7 +116,25 @@ type TopScreen =
  * recipe (Task A) or revise an existing one (Task B) — the latter carrying the
  * stored recipe the user opened it for.
  */
-type AiScreen = { mode: 'create'; prompt?: string } | { mode: 'edit'; recipe: StoredRecipe };
+type AiScreen =
+  { mode: 'create'; prompt?: string; source?: string } | { mode: 'edit'; recipe: StoredRecipe };
+
+/**
+ * German notice for a share that could not be turned into a prefill. The share
+ * module itself carries no UI strings (share/incomingShare.ts), so the mapping
+ * lives here, next to the screen that shows it.
+ */
+function shareErrorMessage(error: unknown): string {
+  if (error instanceof ShareResolveError) {
+    if (error.code === 'no-extractor') {
+      return 'TikTok-Links kann die App noch nicht selbst lesen. Füge den Beschreibungstext von Hand ein.';
+    }
+    if (error.code === 'no-caption') {
+      return 'Dieses Video hat keine Beschreibung. Beschreibe das Gericht stattdessen selbst.';
+    }
+  }
+  return 'Der geteilte Link konnte nicht gelesen werden. Füge den Beschreibungstext von Hand ein.';
+}
 
 /**
  * Browser-history markers of the two entries a TopScreen is layered between.
@@ -2035,6 +2060,49 @@ function App() {
   }, [overviewTarget, setNav]);
 
   /**
+   * Reads a share-target launch off the URL once. The installed PWA is opened
+   * at `/cookbook/?url=…` (or `?text=…`) by the Android share sheet. The value
+   * is captured in a state initializer (pure, but StrictMode runs it twice —
+   * both reads see the same URL); the effect below then removes the parameters,
+   * so a refresh cannot replay the share and the Back stack keeps only the
+   * screens the app pushes itself.
+   */
+  const [incomingShare] = useState<IncomingShare | null>(() =>
+    readIncomingShare(window.location.search),
+  );
+  useEffect(() => {
+    if (incomingShare === null) return;
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${window.location.hash}`,
+    );
+  }, [incomingShare]);
+
+  /**
+   * Opens the pending share in the AI-create screen once Drive access exists:
+   * a TikTok caption lands in the source field ("Quelltext"), any other link in
+   * the description. Without a token the share waits — the login panel is up,
+   * and this effect runs again when the token arrives. A failed extraction still
+   * opens the screen (empty) with a notice, so the user can paste by hand.
+   */
+  const incomingShareConsumedRef = useRef(false);
+  useEffect(() => {
+    if (incomingShare === null || token === null || incomingShareConsumedRef.current) return;
+    incomingShareConsumedRef.current = true;
+    void resolveIncomingShare(incomingShare, TIKTOK_EXTRACTOR_URL)
+      .then((resolved) => {
+        setAiScreen({ mode: 'create', prompt: resolved.prompt, source: resolved.source });
+        setNav('ai');
+      })
+      .catch((error: unknown) => {
+        showSnackbar({ tone: 'error', text: shareErrorMessage(error) });
+        setAiScreen({ mode: 'create' });
+        setNav('ai');
+      });
+  }, [incomingShare, token, setNav, showSnackbar]);
+
+  /**
    * Leaves the editor one step: first back to the parent level of an open
    * sub-recipe chain (the level stays mounted, so nothing is lost), and only
    * from the base level out of the editor (to the selection page of the bundled
@@ -2153,6 +2221,7 @@ function App() {
             mode={aiScreen.mode}
             editTarget={aiScreen.mode === 'edit' ? aiScreen.recipe : undefined}
             initialPrompt={aiScreen.mode === 'create' ? aiScreen.prompt : undefined}
+            initialSource={aiScreen.mode === 'create' ? aiScreen.source : undefined}
             token={token ?? ''}
             visible={!editorOpen}
             recipes={recipes ?? []}

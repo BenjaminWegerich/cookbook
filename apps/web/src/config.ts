@@ -30,3 +30,16 @@ export const GOOGLE_CLIENT_ID: string | undefined = import.meta.env.VITE_GOOGLE_
  * inside Keep.
  */
 export const EXPORT_HOST_URL: string | undefined = import.meta.env.VITE_EXPORT_HOST_URL;
+
+/**
+ * Base URL of the TikTok caption extractor (see apps/tiktok-extractor/).
+ *
+ * The Android share target hands a TikTok link to the app; the browser cannot
+ * fetch tiktok.com itself (CORS) and the AI's URL context tool is blocked by
+ * TikTok, so the caption comes from this small Worker. Not a secret — the URL
+ * ships in the browser bundle; the Worker only fetches public TikTok pages.
+ *
+ * Leave it empty and the share flow degrades: a shared TikTok link still opens
+ * the AI screen, but the user has to paste the caption by hand.
+ */
+export const TIKTOK_EXTRACTOR_URL: string | undefined = import.meta.env.VITE_TIKTOK_EXTRACTOR_URL;
