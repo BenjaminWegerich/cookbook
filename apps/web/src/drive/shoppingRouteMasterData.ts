@@ -248,6 +248,12 @@ interface CurrentMasterData {
  * The three contents are fetched at once (the reads are independent; only the
  * parsing below is ordered, because items and synonyms are validated against the
  * route). All reads complete before the caller writes anything.
+ *
+ * A partial set keeps the ids of the files that do exist: the set is still
+ * re-created from the registry, but a surviving file is overwritten in place
+ * instead of a second file of the same name being created beside it. This is
+ * the rule the write path depends on — a folder with `einkaufsweg.csv` but no
+ * item table must end up with one route file, not two.
  */
 async function readCurrentMasterData(
   token: string,
@@ -259,9 +265,9 @@ async function readCurrentMasterData(
       route: allShoppingStops(),
       items: allShoppingItems(),
       synonyms: allShoppingSynonyms(),
-      routeFileId: undefined,
-      itemsFileId: undefined,
-      synonymsFileId: undefined,
+      routeFileId: files.route?.id,
+      itemsFileId: files.items?.id,
+      synonymsFileId: files.synonyms?.id,
     };
   }
   const [routeText, itemsText, synonymsText] = await Promise.all([
@@ -456,4 +462,149 @@ export async function appendShoppingSynonyms(
     mutable[variant] = item;
   }
   await writeMasterData(token, resolved.id, current, current.items, mutable);
+}
+
+/**
+ * The state of one item row as the shopping master-data screen edits it: the
+ * stop the item is bought at and the variants that name it. It is also the undo
+ * snapshot of a write, so a save and a delete return the same shape.
+ */
+export interface ShoppingItemState {
+  /** The item's stop (store + section) as it was before the write. */
+  readonly stop: ShoppingStop;
+  /** The item's own variants, in the synonym file's order, before the write. */
+  readonly variants: readonly string[];
+}
+
+/**
+ * The variants that name one item. The synonym table is keyed by variant, so
+ * this is a filter, not a second table: every variant carries its item as the
+ * value (docs/storage_format.md §10).
+ */
+function variantsForItem(synonyms: ShoppingSynonyms, item: string): string[] {
+  return Object.keys(synonyms).filter((variant) => synonyms[variant] === item);
+}
+
+/**
+ * Replaces exactly one item's variants in the synonym table and keeps every
+ * other row untouched. The item's previous rows leave first, so a variant the
+ * form removed is really gone; the new rows are then written with the user's
+ * spelling (the key is folded only for comparison, never for storage).
+ *
+ * The caller's list is the complete desired set for this item — the form owns
+ * it, and a write is never a partial patch. A variant that belongs to another
+ * item is not silently moved: the form's `validateShoppingVariant` rules that
+ * out before the write, and the serializer's round-trip check rejects a shadowed
+ * item name in any case.
+ */
+function replaceItemVariants(
+  synonyms: ShoppingSynonyms,
+  item: string,
+  variants: readonly string[],
+): ShoppingSynonyms {
+  const next: Record<string, string> = {};
+  for (const [variant, owner] of Object.entries(synonyms)) {
+    if (owner !== item) {
+      next[variant] = owner;
+    }
+  }
+  for (const variant of variants) {
+    next[variant] = item;
+  }
+  return next;
+}
+
+/**
+ * The item's current state, or a loud German failure when the row is gone. The
+ * screen edits existing rows only (decided with the user), so a missing row is
+ * not a create request: it means the authoritative file changed under the form
+ * (a spreadsheet edit, another tab) and the next save has nothing to build on.
+ */
+function requireItemState(current: CurrentMasterData, item: string): ShoppingItemState {
+  const stop = current.items[item];
+  if (stop === undefined) {
+    throw new Error(`Einkaufsartikel: „${item}“ steht nicht in den Einkaufsdaten.`);
+  }
+  return { stop, variants: variantsForItem(current.synonyms, item) };
+}
+
+/**
+ * Saves one item's stop and its complete synonym list, and writes the
+ * master-data set to Drive in one read/write cycle — the write of the „Artikel“
+ * sheet.
+ *
+ * `variants` is the complete desired set for this item: the sheet's list after
+ * the user added and removed chips. Every other item's rows and synonyms stay
+ * untouched. The route itself is not edited here, but it is written together
+ * with the other two files because the three are one set: creating the set for
+ * the first time must not leave an item table whose stops no route file
+ * describes (the next load would then fall back to the seed and hide the
+ * write).
+ *
+ * Returns the previous state for the snackbar's „Rückgängig“ (§6.5).
+ *
+ * @param token the Google Drive access token
+ * @param item the canonical item name (the row's key, not editable)
+ * @param stop the new stop; it must be one of the route's stops
+ * @param variants the item's complete synonym list, in display order
+ */
+export async function saveShoppingItem(
+  token: string,
+  item: string,
+  stop: ShoppingStop,
+  variants: readonly string[],
+): Promise<{ readonly previous: ShoppingItemState }> {
+  const folder = await listCookbookFolder(token);
+  const current = await readCurrentMasterData(token, folder);
+  const previous = requireItemState(current, item);
+  const items: Record<string, ShoppingStop> = { ...current.items, [item]: stop };
+  const synonyms = replaceItemVariants(current.synonyms, item, variants);
+  await writeMasterData(token, folder.id, current, items, synonyms);
+  return { previous };
+}
+
+/**
+ * Removes one item's row and every synonym that names it, and writes the
+ * master-data set to Drive. Removing the item row means "this is not bought any
+ * more" (docs/storage_format.md §10); the ingredient row, if the item is also
+ * an ingredient, is a separate file and stays untouched. The synonyms have to
+ * go with the row, because a variant naming an unknown item would make the next
+ * load fail.
+ *
+ * This is reversible, so it needs no confirmation — the success notice's
+ * „Rückgängig“ restores the row and its synonyms (DESIGN §6.4/§6.5).
+ */
+export async function deleteShoppingItem(
+  token: string,
+  item: string,
+): Promise<{ readonly previous: ShoppingItemState }> {
+  const folder = await listCookbookFolder(token);
+  const current = await readCurrentMasterData(token, folder);
+  const previous = requireItemState(current, item);
+  const items: Record<string, ShoppingStop> = { ...current.items };
+  delete items[item];
+  const synonyms = replaceItemVariants(current.synonyms, item, []);
+  await writeMasterData(token, folder.id, current, items, synonyms);
+  return { previous };
+}
+
+/**
+ * Puts one item row back — the inverse of `deleteShoppingItem` and of
+ * `saveShoppingItem`, used by both notices' „Rückgängig“. It adds the row when
+ * it is missing, which is the only place the app creates an item row for an
+ * existing name; the screen itself edits existing rows only.
+ *
+ * @param state the row's stop and its complete variant list as the notice
+ *   captured them when the changed write ran
+ */
+export async function restoreShoppingItem(
+  token: string,
+  item: string,
+  state: ShoppingItemState,
+): Promise<void> {
+  const folder = await listCookbookFolder(token);
+  const current = await readCurrentMasterData(token, folder);
+  const items: Record<string, ShoppingStop> = { ...current.items, [item]: state.stop };
+  const synonyms = replaceItemVariants(current.synonyms, item, state.variants);
+  await writeMasterData(token, folder.id, current, items, synonyms);
 }

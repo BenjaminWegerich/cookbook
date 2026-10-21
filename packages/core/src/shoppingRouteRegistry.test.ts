@@ -16,9 +16,11 @@ import {
   setShoppingItems,
   setShoppingRoute,
   setShoppingSynonyms,
+  shoppingItemNames,
   shoppingSections,
   shoppingStopFor,
   shoppingStores,
+  shoppingVariantsFor,
 } from './shoppingRouteRegistry.js';
 
 /**
@@ -120,5 +122,32 @@ describe('shoppingSections', () => {
   it('is empty for an unknown store', () => {
     setShoppingRoute(ROUTE);
     expect(shoppingSections('dm')).toEqual([]);
+  });
+});
+
+describe('shoppingItemNames', () => {
+  it('lists every item once, alphabetically by German collation', () => {
+    setShoppingItems({ Zwiebeln: ROUTE[0]!, Äpfel: ROUTE[0]!, Mehl: ROUTE[0]! });
+    // Umlauts sort with their base letter in German collation (ä before m),
+    // which is what a reference list expects.
+    expect(shoppingItemNames()).toEqual(['Äpfel', 'Mehl', 'Zwiebeln']);
+  });
+
+  it('is empty for an empty item table', () => {
+    setShoppingItems({});
+    expect(shoppingItemNames()).toEqual([]);
+  });
+});
+
+describe('shoppingVariantsFor', () => {
+  it('lists exactly the variants of one item', () => {
+    setShoppingSynonyms({ Möhren: 'Karotten', Zewa: 'Klopapier', Mohrrüben: 'Karotten' });
+    expect(shoppingVariantsFor('Karotten')).toEqual(['Möhren', 'Mohrrüben']);
+    expect(shoppingVariantsFor('Klopapier')).toEqual(['Zewa']);
+  });
+
+  it('is empty for an item without synonyms', () => {
+    setShoppingSynonyms(SYNONYMS);
+    expect(shoppingVariantsFor('Butter')).toEqual([]);
   });
 });

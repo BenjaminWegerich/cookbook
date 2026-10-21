@@ -100,6 +100,26 @@ export function shoppingStopFor(item: string): ShoppingStop | undefined {
 }
 
 /**
+ * The item names in the order the master-data screen lists them — alphabetical
+ * by German collation, because the file's row order carries no meaning and a
+ * reference list is looked up by name, not by position. Read-only like the
+ * table itself.
+ */
+export function shoppingItemNames(): readonly string[] {
+  return Object.keys(items).sort((left, right) => left.localeCompare(right, 'de'));
+}
+
+/**
+ * The variants that name one item, in the synonym file's order (its row order
+ * carries no meaning either). Used by the item sheet to show what the article
+ * already answers to. Empty for an item without synonyms, which is the normal
+ * state before the first confirmed suggestion.
+ */
+export function shoppingVariantsFor(item: string): readonly string[] {
+  return Object.keys(synonyms).filter((variant) => synonyms[variant] === item);
+}
+
+/**
  * The distinct stores of the route in walking order — level 1 of the shopping
  * route. This is the order the store chips are shown in (core derives, the UI
  * renders): the first stop of a store decides where the store appears, and a

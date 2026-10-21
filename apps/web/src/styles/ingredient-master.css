@@ -92,12 +92,17 @@
   line-height: var(--leading-sm);
 }
 
-/* The home screen's entry into the master data: a quiet outlined action below
-   the last recipe, left-aligned like the shopping-list buttons. It is the last
-   content on the page, so the bottom padding keeps the FAB from covering it. */
+/* The home screen's entries into the master data: quiet outlined actions below
+   the last recipe, left-aligned like the shopping-list buttons. Both sibling
+   entries („Zutaten verwalten“ and „Einkaufsorte verwalten“) sit on one line on
+   a wide screen and wrap onto a second line on a phone, where two full labels
+   would not fit. The container is the last content on the page, so the bottom
+   padding keeps the FAB from covering it. */
 .master-entry {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-start;
+  gap: var(--space-3);
   margin-block-start: var(--space-7);
   /* The entry is the last content on the page: keep it clear of the phone's
      gesture bar and give the fixed FAB's corner some breathing room. */

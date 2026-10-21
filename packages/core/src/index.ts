@@ -17,6 +17,8 @@
  *   synonym table and the store/section lists the pickers are built from —
  *   implemented (src/shoppingRouteRegistry.ts; seed data in
  *   src/shoppingRouteData.ts, compiled by scripts/generate-shopping-route.mjs)
+ * - the synonym rule of the shopping master-data screen — implemented
+ *   (src/shoppingVariantForm.ts)
  * - the shopping list's item identity at read time — deriving a line's name
  *   field, resolving it to an item (or a variant) and suggesting similar item
  *   names — implemented (docs/shopping_item_identity.md, src/shoppingSort.ts)
@@ -48,6 +50,7 @@ export * from './shoppingRouteCsv.js';
 export * from './shoppingSort.js';
 export * from './shoppingRouteData.js';
 export * from './shoppingRouteRegistry.js';
+export * from './shoppingVariantForm.js';
 export * from './subRecipePlan.js';
 
 /** Version of the core module, kept in sync with packages/core/package.json. */

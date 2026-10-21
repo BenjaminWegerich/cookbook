@@ -28,6 +28,7 @@ import AiCreateSheet, {
 } from './components/AiCreateSheet';
 import IngredientMaster, { type IngredientMasterHandle } from './components/IngredientMaster';
 import ManageIngredientsButton from './components/ManageIngredientsButton';
+import ManageShoppingPlacesButton from './components/ManageShoppingPlacesButton';
 import RecipeEditor, { type RecipeEditorHandle } from './components/RecipeEditor';
 import { newRecipeDraftWithTitle } from './components/recipeDrafts';
 import RecipeList from './components/RecipeList';
@@ -37,6 +38,7 @@ import RecipeOverview, {
   type RecipeOverviewTarget,
 } from './components/RecipeOverview';
 import ShoppingListSelect from './components/ShoppingListSelect';
+import ShoppingPlaces, { type ShoppingPlacesHandle } from './components/ShoppingPlaces';
 import ShoppingSortSelect, { type SortResolution } from './components/ShoppingSortSelect';
 import Snackbar from './components/Snackbar';
 import SubRecipeSelect from './components/SubRecipeSelect';
@@ -72,6 +74,7 @@ import './styles/shopping-sort-select.css';
 import './styles/pantry-select.css';
 import './styles/editor.css';
 import './styles/ingredient-master.css';
+import './styles/shopping-places.css';
 import './styles/snackbar.css';
 
 /**
@@ -86,6 +89,8 @@ import './styles/snackbar.css';
  * not simply a sibling of the list (see shoppingFlowRef).
  * 'ingredients' is the ingredient master-data screen
  * (components/IngredientMaster), a place of its own over the list.
+ * 'shoppingPlaces' is the shopping master-data screen (components/ShoppingPlaces)
+ * beside it: the article rows with their stops and synonyms.
  */
 type TopScreen =
   | 'editor'
@@ -96,7 +101,8 @@ type TopScreen =
   | 'pantrySub'
   | 'pantry'
   | 'sort'
-  | 'ingredients';
+  | 'ingredients'
+  | 'shoppingPlaces';
 
 /**
  * Which AI task the sheet runs while it is the visible 'ai' screen: create a new
@@ -387,6 +393,15 @@ function App() {
   /** Browser-Back consumer of the ingredient master-data screen. */
   const ingredientsHandleRef = useRef<IngredientMasterHandle | null>(null);
   /**
+   * The shopping master-data screen („Einkaufsorte“) is open — the sibling place
+   * of the ingredient screen, listing the article rows with their stops and
+   * synonyms. Its edit sheet lives inside it, so the screen carries the same
+   * kind of handle for the browser Back button.
+   */
+  const [shoppingPlacesOpen, setShoppingPlacesOpen] = useState(false);
+  /** Browser-Back consumer of the shopping master-data screen. */
+  const shoppingPlacesHandleRef = useRef<ShoppingPlacesHandle | null>(null);
+  /**
    * The shopping-list items the sort page was opened for — a snapshot taken when
    * the page opens, so the rows do not move under the user's fingers while Keep
    * state changes (the same reason the pantry step snapshots its cards).
@@ -503,17 +518,19 @@ function App() {
             ? 'sort'
             : ingredientsOpen
               ? 'ingredients'
-              : shoppingOpen
-                ? 'shopping'
-                : 'list';
+              : shoppingPlacesOpen
+                ? 'shoppingPlaces'
+                : shoppingOpen
+                  ? 'shopping'
+                  : 'list';
   /** Remembers/restores the window scroll per page (see useScrollMemory). */
   const scrollMemory = useScrollMemory(visiblePageKey);
 
   /**
    * True while the recipe list is the visible base layer. A sheet (the overview,
    * the create menu) may sit above it and keeps it rendered; a full screen —
-   * the editor, the AI screen, the shopping flow, the sort or the ingredient
-   * master data — replaces it and hides it.
+   * the editor, the AI screen, the shopping flow, the sort or either master-data
+   * screen — replaces it and hides it.
    */
   const listVisible =
     !editorOpen &&
@@ -522,7 +539,8 @@ function App() {
     !pantryOpen &&
     !pantrySubOpen &&
     !sortOpen &&
-    !ingredientsOpen;
+    !ingredientsOpen &&
+    !shoppingPlacesOpen;
 
   // Give the recipe list an own guard entry (LIST_MARKER) directly above the
   // entry the app was loaded on. The list is the bottom layer and stays the
@@ -632,6 +650,8 @@ function App() {
       // The ingredient master data is the same kind of place: mounted while it
       // is the visible page; its edit sheet is internal and dies with it.
       setIngredientsOpen(next === 'ingredients');
+      // Its sibling, the shopping master data, follows the same rule.
+      setShoppingPlacesOpen(next === 'shoppingPlaces');
       // The selection page stays mounted (hidden) while any layer of its flow is
       // above it — the overview opened from a row, the editor opened from that
       // sheet — so the checked dishes survive the detour. The flow flag is set
@@ -862,6 +882,17 @@ function App() {
         }
         navRef.current = null;
         setIngredientsOpen(false);
+        return;
+      }
+      if (top === 'shoppingPlaces') {
+        // Same rule as „Zutaten“: the article sheet consumes the first Back;
+        // the next one leaves for the list on the guard entry.
+        if (shoppingPlacesHandleRef.current?.notifyBack() === true) {
+          guardCurrentEntry();
+          return;
+        }
+        navRef.current = null;
+        setShoppingPlacesOpen(false);
         return;
       }
       if (top === 'overview' && shoppingFlowRef.current) {
@@ -2185,6 +2216,18 @@ function App() {
         />
       )}
 
+      {/* The shopping master data ("Einkaufsorte") — the sibling place of
+          „Zutaten“, listing the article rows with their stops and synonyms. Its
+          article sheet is internal, so App only needs the Back handle. */}
+      {shoppingPlacesOpen && (
+        <ShoppingPlaces
+          ref={shoppingPlacesHandleRef}
+          token={token ?? ''}
+          onClose={() => setNav(null)}
+          showSnackbar={showSnackbar}
+        />
+      )}
+
       {editorOpen ? (
         <>
           {/* The base level (recipe from the list, or the AI draft). It stays
@@ -2290,9 +2333,10 @@ function App() {
                 <p>Tippe auf das + unten rechts, um dein erstes Rezept zu schreiben.</p>
               </section>
               {/* The master data is independent of the recipe collection, so
-                  its entry stays reachable even while no recipe exists. */}
+                  its entries stay reachable even while no recipe exists. */}
               <div className="master-entry">
                 <ManageIngredientsButton onClick={() => setNav('ingredients')} />
+                <ManageShoppingPlacesButton onClick={() => setNav('shoppingPlaces')} />
               </div>
             </>
           ) : (
@@ -2315,11 +2359,12 @@ function App() {
                 shoppingSorted={shoppingSorted}
                 shoppingItems={shoppingItems}
               />
-              {/* The master data is edited rarely, so its entry sits below the
-                  last recipe rather than in a caption or the FAB menu; the
+              {/* The master data is edited rarely, so its two entries sit below
+                  the last recipe rather than in a caption or the FAB menu; the
                   same quiet outlined treatment as the shopping-list actions. */}
               <div className="master-entry">
                 <ManageIngredientsButton onClick={() => setNav('ingredients')} />
+                <ManageShoppingPlacesButton onClick={() => setNav('shoppingPlaces')} />
               </div>
             </>
           )}

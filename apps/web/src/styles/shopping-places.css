@@ -1,0 +1,56 @@
+/**
+ * Shopping master-data screen („Einkaufsorte“) — component styles.
+ *
+ * The place behind the home screen's „Einkaufsorte verwalten“ button, plus the
+ * one piece of its edit sheet that has no shared look yet: the synonym field's
+ * input + add-button row. Colours and sizes reference the tokens in
+ * styles/tokens.css; the list, rows, search and banner are the ingredient
+ * master-data screen's shared shapes.
+ */
+
+/* The screen shell: the shared reading-page cap (`.app-narrow`) plus the
+   vertical rhythm of header, search field and list. The header's own negative
+   bottom margin (see .app-header-stacked) cancels this gap, so the search
+   follows it at the header's masking padding. */
+.shopping-places {
+  display: grid;
+  gap: var(--space-5);
+  padding-block-end: var(--space-10);
+}
+
+/* The home screen's search bar, without its sticky behaviour: the screen
+   header already sticks, and a second sticky bar would take too much of a
+   phone's viewport. `::before` is the sticky bar's gap mask — not needed here. */
+.shopping-places-search {
+  position: static;
+  margin-block-end: 0;
+}
+
+.shopping-places-search::before {
+  content: none;
+}
+
+/* The row is the shared .ingredient-row exactly as „Zutaten verwalten“ draws
+   it: the article name is its only text, and the stop is edited in the sheet
+   behind it (decided with the user). No screen-specific row rule is needed. */
+
+/* The synonym field's input and its „Hinzufügen“ action on one line: the
+   input takes the free space, the button keeps its own width. Wrapping is
+   allowed for a narrow phone, where the button drops below the field rather
+   than squeezing the input to nothing. */
+.synonym-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+/* The sheet's field fill is full width by default (.field input); in this row
+   the input shares the line with the button, so it takes the free space
+   instead. The selector repeats the sheet scope so it wins over the shared
+   `.field input[type='text']` rule regardless of stylesheet order. */
+.shopping-places .synonym-add input[type='text'] {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
