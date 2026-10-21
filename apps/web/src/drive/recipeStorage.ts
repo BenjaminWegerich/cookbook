@@ -27,6 +27,7 @@ import {
   serializeRecipe,
   type Recipe,
   type RecipePhoto,
+  type RecipeType,
 } from '@cookbook/core';
 
 import { EXPORT_HOST_URL } from '../config';
@@ -36,6 +37,7 @@ import {
   deleteFile,
   getFile,
   getFileContent,
+  isDriveAuthError,
   listFilesInFolder,
   renameFile,
   updateFileWithContent,
@@ -67,6 +69,13 @@ export interface StoredRecipe {
   fileId: string;
   /** Recipe title — equals the file name without the `.md` extension (§2). */
   title: string;
+  /**
+   * The recipe's declared type (§3), read from its file while listing. Null
+   * when that read or parse failed: the recipe stays in the list (opening it
+   * reports the problem) and is ordered with the finished dishes, so a broken
+   * file never vanishes among the ingredient recipes.
+   */
+  type: RecipeType | null;
   /** The recipe's photo sibling, when one exists. */
   image?: RecipeImage;
   /**
@@ -110,6 +119,13 @@ export function recipeExportUrl(fileId: string): string {
 /**
  * Lists all recipes of the collection, sorted by title, with their optional
  * photo siblings detected (§2). Requires the Google Drive connection.
+ *
+ * Each file's declared `type` is read too (from the same content the storage
+ * layer caches for later reads): the home list puts finished dishes before
+ * ingredient recipes, and no index outside the files carries that fact. A file
+ * that cannot be read or parsed does not fail the listing — its `type` stays
+ * null and the recipe is kept visible (see {@link StoredRecipe.type}); an
+ * authentication error still fails the whole call.
  */
 export async function listRecipes(token: string): Promise<StoredRecipe[]> {
   const folderId = await ensureRecipeFolder(token);
@@ -150,12 +166,34 @@ export async function listRecipes(token: string): Promise<StoredRecipe[]> {
     recipes.push({
       fileId: file.id,
       title,
+      type: null,
       ...(imagesByBase.has(title) ? { image: imagesByBase.get(title) } : {}),
       ...(exportsByBase.has(title) ? { exportFileId: exportsByBase.get(title) } : {}),
     });
   }
-  recipes.sort((a, b) => a.title.localeCompare(b.title, 'de'));
-  return recipes;
+
+  // Read the declared type of every file in parallel: the type lives only in
+  // the file's front matter, so a listing cannot know it without reading. The
+  // content cache keeps later list calls (after a save, for example) off the
+  // network. A parse failure is logged but never hides the recipe.
+  const typedRecipes = await Promise.all(
+    recipes.map(async (recipe): Promise<StoredRecipe> => {
+      try {
+        const loaded = await readRecipe(token, recipe.fileId);
+        return { ...recipe, type: loaded.type };
+      } catch (error) {
+        if (isDriveAuthError(error)) throw error;
+        console.warn(
+          `Der Typ von "${recipe.title}" konnte nicht gelesen werden; das Rezept wird als Gericht gelistet: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return recipe;
+      }
+    }),
+  );
+  typedRecipes.sort((a, b) => a.title.localeCompare(b.title, 'de'));
+  return typedRecipes;
 }
 
 /**

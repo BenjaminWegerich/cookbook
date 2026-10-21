@@ -33,6 +33,27 @@ const SHOPPING_CAPTION_ID = 'recipe-section-shopping';
 const MEALPLAN_CAPTION_ID = 'recipe-section-mealplan';
 const COLLECTION_CAPTION_ID = 'recipe-section-collection';
 
+/**
+ * Orders the cards of "Restliche Sammlung": finished dishes first, ingredient
+ * recipes after (decided with the user), each group staying in the title order
+ * `listRecipes` established. The partition is stable and keeps the two groups
+ * together without an extra heading; a recipe whose type could not be read
+ * (`type === null`) stays with the dishes instead of disappearing among the
+ * bases (see `StoredRecipe.type`).
+ */
+function dishesBeforeIngredientRecipes(recipes: readonly StoredRecipe[]): StoredRecipe[] {
+  const dishes: StoredRecipe[] = [];
+  const ingredientRecipes: StoredRecipe[] = [];
+  for (const recipe of recipes) {
+    if (recipe.type === 'ingredient_recipe') {
+      ingredientRecipes.push(recipe);
+    } else {
+      dishes.push(recipe);
+    }
+  }
+  return [...dishes, ...ingredientRecipes];
+}
+
 interface RecipeListProps {
   /** Every recipe of the Drive collection (the "Restliche Sammlung" source). */
   recipes: StoredRecipe[];
@@ -142,7 +163,10 @@ interface RecipeListProps {
  *   The planned ones are already in the section above, so repeating them here
  *   would put the same card on one screen twice; the plan section is where a
  *   planned dish is read, changed and cooked from. With Keep off every recipe is
- *   "restlich", which is exactly what the section then shows.
+ *   "restlich", which is exactly what the section then shows. Within the
+ *   section the finished dishes come first and the ingredient recipes follow,
+ *   each group alphabetically (decided with the user): a dish is what the user
+ *   cooks, a base is what they use in one.
  *
  * Each caption carries its counter ("Essensplan (5 Einträge, davon 2 unbekannt)",
  * "Restliche Sammlung (8 Rezepte)", "Einkaufsliste (4 Einträge, davon 1
@@ -244,9 +268,11 @@ function RecipeList({
 
   const visibleRecipes = useMemo(
     () =>
-      needle === ''
-        ? remainingRecipes
-        : remainingRecipes.filter((recipe) => recipe.title.toLowerCase().includes(needle)),
+      dishesBeforeIngredientRecipes(
+        needle === ''
+          ? remainingRecipes
+          : remainingRecipes.filter((recipe) => recipe.title.toLowerCase().includes(needle)),
+      ),
     [remainingRecipes, needle],
   );
 
