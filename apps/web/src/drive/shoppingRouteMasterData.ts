@@ -3,7 +3,7 @@
  * docs/shopping_item_identity.md).
  *
  * The user's authoritative shopping master data lives in three CSV files inside
- * the Cookbook folder:
+ * the `Stammdaten` subfolder of the Cookbook folder:
  * - `einkaufsweg.csv` — the route: one row per stop (`Store;Section`); the row
  *   order is the order the shops are visited and the sections are walked;
  * - `einkaufs-artikel.csv` — the item table: one row per item
@@ -62,13 +62,13 @@ import {
   updateFileWithContent,
   type DriveFile,
 } from './driveClient';
-import { listCookbookFolder, type CookbookFolder } from './cookbookFolder';
+import { ensureCookbookArea, listCookbookFolder, type CookbookFolder } from './cookbookFolder';
 
-/** File name of the route in the Cookbook folder (user-visible). */
+/** File name of the route in the Stammdaten folder (user-visible). */
 const ROUTE_FILE_NAME = 'einkaufsweg.csv';
-/** File name of the item table in the Cookbook folder (user-visible). */
+/** File name of the item table in the Stammdaten folder (user-visible). */
 const ITEMS_FILE_NAME = 'einkaufs-artikel.csv';
-/** File name of the synonym table in the Cookbook folder (user-visible). */
+/** File name of the synonym table in the Stammdaten folder (user-visible). */
 const SYNONYMS_FILE_NAME = 'einkaufs-synonyme.csv';
 /**
  * The item table's pre-identity file name (user-visible). It is read once by
@@ -86,7 +86,7 @@ const MASTER_DATA_MIME_TYPE = 'text/csv';
  */
 let writtenSinceLoad = false;
 
-/** The master-data files found in the Cookbook folder (each optional). */
+/** The master-data files found in the Stammdaten subfolder (each optional). */
 interface MasterDataFiles {
   readonly route: DriveFile | undefined;
   readonly items: DriveFile | undefined;
@@ -118,15 +118,16 @@ function findMasterDataFiles(files: readonly DriveFile[]): MasterDataFiles {
 export async function loadShoppingRouteMasterData(token: string): Promise<void> {
   writtenSinceLoad = false;
   const folder = await listCookbookFolder(token);
-  const migrated = await migrateLegacyItemsFile(
-    token,
-    folder.id,
-    findMasterDataFiles(folder.files),
-  );
-  if (migrated) {
-    return;
+  const dataFiles = findMasterDataFiles(folder.data.files);
+  // The legacy-file migration writes into `Stammdaten`, so the folder is
+  // resolved once, only when there is something to migrate.
+  if (dataFiles.legacyItems !== undefined) {
+    const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+    if (await migrateLegacyItemsFile(token, dataFolderId, dataFiles)) {
+      return;
+    }
   }
-  const { route, items, synonyms } = findMasterDataFiles(folder.files);
+  const { route, items, synonyms } = dataFiles;
   // The route and the item table are the master data as a set: with only one of
   // the two present, they are treated as not yet created and the seed stays
   // active (the next write re-creates the set from the seed).
@@ -259,7 +260,7 @@ async function readCurrentMasterData(
   token: string,
   folder: CookbookFolder,
 ): Promise<CurrentMasterData> {
-  const files = findMasterDataFiles(folder.files);
+  const files = findMasterDataFiles(folder.data.files);
   if (files.route === undefined || files.items === undefined) {
     return {
       route: allShoppingStops(),
@@ -392,7 +393,8 @@ export async function appendShoppingItems(
     }
     mutable[existing ?? item] = stop;
   }
-  await writeMasterData(token, resolved.id, current, mutable, current.synonyms);
+  const dataFolderId = await ensureCookbookArea(token, 'data', resolved);
+  await writeMasterData(token, dataFolderId, current, mutable, current.synonyms);
 }
 
 /**
@@ -441,7 +443,7 @@ export async function appendShoppingSynonyms(
   entries: ReadonlyArray<{ variant: string; item: string }>,
   folder?: CookbookFolder,
 ): Promise<void> {
-  const files = folder === undefined ? undefined : findMasterDataFiles(folder.files);
+  const files = folder === undefined ? undefined : findMasterDataFiles(folder.data.files);
   const snapshotComplete = files?.route !== undefined && files.items !== undefined;
   // A snapshot without the shopping set cannot be trusted here: the item write
   // that runs before this call may have created the files since the snapshot
@@ -461,7 +463,8 @@ export async function appendShoppingSynonyms(
     }
     mutable[variant] = item;
   }
-  await writeMasterData(token, resolved.id, current, current.items, mutable);
+  const dataFolderId = await ensureCookbookArea(token, 'data', resolved);
+  await writeMasterData(token, dataFolderId, current, current.items, mutable);
 }
 
 /**
@@ -559,7 +562,8 @@ export async function saveShoppingItem(
   const previous = requireItemState(current, item);
   const items: Record<string, ShoppingStop> = { ...current.items, [item]: stop };
   const synonyms = replaceItemVariants(current.synonyms, item, variants);
-  await writeMasterData(token, folder.id, current, items, synonyms);
+  const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+  await writeMasterData(token, dataFolderId, current, items, synonyms);
   return { previous };
 }
 
@@ -584,7 +588,8 @@ export async function deleteShoppingItem(
   const items: Record<string, ShoppingStop> = { ...current.items };
   delete items[item];
   const synonyms = replaceItemVariants(current.synonyms, item, []);
-  await writeMasterData(token, folder.id, current, items, synonyms);
+  const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+  await writeMasterData(token, dataFolderId, current, items, synonyms);
   return { previous };
 }
 
@@ -606,5 +611,6 @@ export async function restoreShoppingItem(
   const current = await readCurrentMasterData(token, folder);
   const items: Record<string, ShoppingStop> = { ...current.items, [item]: state.stop };
   const synonyms = replaceItemVariants(current.synonyms, item, state.variants);
-  await writeMasterData(token, folder.id, current, items, synonyms);
+  const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+  await writeMasterData(token, dataFolderId, current, items, synonyms);
 }

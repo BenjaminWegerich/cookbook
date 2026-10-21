@@ -5,7 +5,8 @@
  * The built-in mappings (INGREDIENT_MAPPINGS, generated from
  * docs/ingredients.csv + docs/ingredient_unit_mappings.csv) are the default
  * seed. The web app loads the user's authoritative master data (zutaten.csv +
- * zutaten-umrechnungen.csv in the Drive Cookbook folder) at startup and
+ * zutaten-umrechnungen.csv in the Drive Cookbook folder's `Stammdaten`
+ * subfolder) at startup and
  * replaces the whole set with setIngredientMappings — the Drive files win
  * once they exist. Until then, and whenever the files are missing or
  * unreadable, the built-in seed keeps the app fully functional (autofill,

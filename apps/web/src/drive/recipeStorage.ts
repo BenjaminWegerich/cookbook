@@ -2,18 +2,19 @@
  * Recipe storage layer over Google Drive.
  *
  * Implements the storage-format conventions (docs/storage_format.md):
- * - the collection is one folder containing one `.md` file per recipe, the file
- *   name equals the recipe title (§2);
- * - an optional real photo lives as a sibling with the same basename and a
- *   `.jpg` / `.png` extension (§2);
+ * - the collection is one container folder with a `Rezepte` subfolder holding
+ *   one `.md` file per recipe, the file name equals the recipe title (§2);
+ * - the optional real photo lives in the `Bilder` subfolder with the same
+ *   basename and a `.jpg` / `.png` extension (§2);
+ * - the generated cooking view lives in the `Exporte` subfolder (§8);
  * - the rename flow (§6) is one operation: new title in the file, new file
  *   name, renamed image, and updated implicit sub-recipe uses (rows, inline
  *   text artifacts and reference names) in all other recipes (pure
  *   transformation in @cookbook/core, ./rename).
  *
- * The folder is created on first use and its id is remembered in localStorage,
- * so the app resolves to the same folder instead of guessing by name — see
- * ./cookbookFolder, which all master data shares.
+ * The container is created on first use and its id is remembered in
+ * localStorage, so the app resolves to the same folder instead of guessing by
+ * name — see ./cookbookFolder, which all master data shares.
  *
  * All writes go through a round-trip check (`serializeRecipe` + `parseRecipe`)
  * so a recipe that cannot be represented canonically never reaches Drive —
@@ -31,14 +32,13 @@ import {
 } from '@cookbook/core';
 
 import { EXPORT_HOST_URL } from '../config';
-import { ensureRecipeFolder } from './cookbookFolder';
+import { ensureCookbookArea, listCookbookFolder } from './cookbookFolder';
 import {
   createFileWithContent,
   deleteFile,
   getFile,
   getFileContent,
   isDriveAuthError,
-  listFilesInFolder,
   renameFile,
   updateFileWithContent,
   type DriveFile,
@@ -128,12 +128,15 @@ export function recipeExportUrl(fileId: string): string {
  * authentication error still fails the whole call.
  */
 export async function listRecipes(token: string): Promise<StoredRecipe[]> {
-  const folderId = await ensureRecipeFolder(token);
-  const files = await listFilesInFolder(token, folderId);
+  // One snapshot covers all three areas the listing needs: the recipe files,
+  // their photos and their exports. The container is listed once, the areas in
+  // parallel (see ./cookbookFolder).
+  const folder = await listCookbookFolder(token);
+  const files = folder.recipes.files;
 
   // Index photos by basename (first match wins; ".jpg" is preferred).
   const imagesByBase = new Map<string, RecipeImage>();
-  for (const file of files) {
+  for (const file of folder.images.files) {
     for (const extension of IMAGE_EXTENSIONS) {
       const suffix = `.${extension}`;
       if (file.name.toLowerCase().endsWith(suffix)) {
@@ -150,7 +153,7 @@ export async function listRecipes(token: string): Promise<StoredRecipe[]> {
   // can link the Keep entry at the recipe's cooking view without a second Drive
   // listing.
   const exportsByBase = new Map<string, string>();
-  for (const file of files) {
+  for (const file of folder.exports.files) {
     if (!file.name.endsWith(EXPORT_EXTENSION)) continue;
     const base = file.name.slice(0, -EXPORT_EXTENSION.length);
     if (base !== '' && !exportsByBase.has(base)) {
@@ -305,7 +308,9 @@ export async function createRecipe(
   recipe: Recipe,
   options?: RecipeWriteOptions,
 ): Promise<DriveFile> {
-  const folderId = await ensureRecipeFolder(token);
+  // `Rezepte` is the only folder a recipe write needs; it is created on the
+  // first save of an empty collection.
+  const folderId = await ensureCookbookArea(token, 'recipes');
   const content = canonicalText(recipe);
   const file = await createFileWithContent(token, {
     name: `${recipe.title}${RECIPE_EXTENSION}`,
@@ -355,9 +360,13 @@ export async function updateRecipe(
  * file itself stays the single source of truth.
  */
 export async function writeRecipeExport(token: string, recipe: Recipe): Promise<DriveFile> {
-  const folderId = await ensureRecipeFolder(token);
+  // The export lives in `Exporte`; the photo it embeds is read from `Bilder`.
+  // The snapshot gives both listings at once, and the ensure call creates the
+  // export folder on the first save of an empty collection.
+  const folder = await listCookbookFolder(token);
+  const folderId = await ensureCookbookArea(token, 'exports', folder);
+  const files = folder.exports.files;
   const fileName = `${recipe.title}${EXPORT_EXTENSION}`;
-  const files = await listFilesInFolder(token, folderId);
   const existing = files.find((file) => file.name === fileName);
   // Sub-recipe links (recipe_structure.md "The link means"): sub-recipes are
   // implicit (storage_format.md §4) — an ingredient use whose name is the
@@ -373,7 +382,7 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
     if (title === '') continue;
     links[title] = recipeExportUrl(file.id);
   }
-  const photo = await loadExportPhoto(token, recipe.title, files);
+  const photo = await loadExportPhoto(token, recipe.title, folder.images.files);
   const content = generateRecipeHtml(recipe, links, photo);
   if (existing !== undefined) {
     return updateFileWithContent(token, existing.id, {
@@ -400,7 +409,7 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
 async function loadExportPhoto(
   token: string,
   title: string,
-  files: DriveFile[],
+  files: readonly DriveFile[],
 ): Promise<RecipePhoto | undefined> {
   const file = findPhotoIn(files, title);
   if (file === undefined) return undefined;
@@ -442,7 +451,7 @@ function titleFromFileName(name: string): string {
  * Finds the photo sibling of a recipe title in a folder listing (§2: same
  * basename, `.jpg` preferred, first match wins — consistent with listRecipes).
  */
-function findPhotoIn(files: DriveFile[], title: string): DriveFile | undefined {
+function findPhotoIn(files: readonly DriveFile[], title: string): DriveFile | undefined {
   for (const extension of IMAGE_EXTENSIONS) {
     const fileName = `${title}.${extension}`;
     const match = files.find((file) => file.name.toLowerCase() === fileName.toLowerCase());
@@ -461,12 +470,15 @@ function findPhotoIn(files: DriveFile[], title: string): DriveFile | undefined {
  * deleted recipe behind with an error that would block a retry.
  */
 export async function deleteRecipe(token: string, fileId: string): Promise<void> {
-  const folderId = await ensureRecipeFolder(token);
+  // The siblings live in their own subfolders now, so the cleanup needs the
+  // snapshot rather than one folder listing.
+  const folder = await listCookbookFolder(token);
   const file = await getFile(token, fileId);
   const title = titleFromFileName(file.name);
-  const files = await listFilesInFolder(token, folderId);
-  const photo = findPhotoIn(files, title);
-  const exportFile = files.find((entry) => entry.name === `${title}${EXPORT_EXTENSION}`);
+  const photo = findPhotoIn(folder.images.files, title);
+  const exportFile = folder.exports.files.find(
+    (entry) => entry.name === `${title}${EXPORT_EXTENSION}`,
+  );
 
   // 1. The recipe file itself — this is what "deleted" means.
   await deleteFile(token, fileId);
@@ -503,14 +515,15 @@ export async function uploadRecipeImage(
   blob: Blob,
   extension: 'jpg' | 'png',
 ): Promise<void> {
-  const folderId = await ensureRecipeFolder(token);
+  // Photos live in their own subfolder; it is created on the first upload.
+  const folder = await listCookbookFolder(token);
+  const folderId = await ensureCookbookArea(token, 'images', folder);
   const file = await getFile(token, fileId);
   const title = titleFromFileName(file.name);
   const fileName = `${title}.${extension}`;
   const mimeType = extension === 'jpg' ? 'image/jpeg' : 'image/png';
 
-  const files = await listFilesInFolder(token, folderId);
-  const existing = findPhotoIn(files, title);
+  const existing = findPhotoIn(folder.images.files, title);
   if (existing !== undefined && existing.name.toLowerCase() === fileName.toLowerCase()) {
     await updateFileWithContent(token, existing.id, { name: fileName, mimeType, content: blob });
     // The freshly uploaded blob is what the file now holds — cache it so the
@@ -538,11 +551,10 @@ export async function uploadRecipeImage(
  * photo is a no-op.
  */
 export async function removeRecipeImage(token: string, fileId: string): Promise<void> {
-  const folderId = await ensureRecipeFolder(token);
+  const folder = await listCookbookFolder(token);
   const file = await getFile(token, fileId);
   const title = titleFromFileName(file.name);
-  const files = await listFilesInFolder(token, folderId);
-  const photo = findPhotoIn(files, title);
+  const photo = findPhotoIn(folder.images.files, title);
   if (photo !== undefined) {
     invalidateRecipePhoto(photo.id);
     await deleteFile(token, photo.id);
@@ -621,9 +633,11 @@ export async function saveRecipe(
 
     // 3. Rename the HTML export in place (same Drive file id), so existing
     //    shared links keep working; the content is regenerated in step 4.
-    const folderId = await ensureRecipeFolder(token);
-    const files = await listFilesInFolder(token, folderId);
-    const oldExport = files.find((entry) => entry.name === `${current.title}${EXPORT_EXTENSION}`);
+    const folder = await listCookbookFolder(token);
+    const exportFiles = folder.exports.files;
+    const oldExport = exportFiles.find(
+      (entry) => entry.name === `${current.title}${EXPORT_EXTENSION}`,
+    );
     if (oldExport !== undefined) {
       const oldExportContent = await getFileContent(token, oldExport.id);
       await renameFile(token, oldExport.id, `${recipe.title}${EXPORT_EXTENSION}`);
@@ -662,7 +676,9 @@ export async function saveRecipe(
       // rollback can restore it in place (same pattern as step 3 for the
       // renamed recipe's own export). A recipe without an export yet leaves a
       // regenerated export behind on rollback — cosmetic only, links work.
-      const oldExport = files.find((file) => file.name === `${updated.title}${EXPORT_EXTENSION}`);
+      const oldExport = exportFiles.find(
+        (file) => file.name === `${updated.title}${EXPORT_EXTENSION}`,
+      );
       const oldExportContent =
         oldExport !== undefined ? await getFileContent(token, oldExport.id) : undefined;
       await updateRecipe(token, entry.fileId, updated);

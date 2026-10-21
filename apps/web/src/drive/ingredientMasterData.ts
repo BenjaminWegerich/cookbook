@@ -2,7 +2,7 @@
  * Drive persistence for the ingredient master data.
  *
  * The user's authoritative ingredient master data lives in two CSV files
- * inside the Cookbook folder:
+ * inside the `Stammdaten` subfolder of the Cookbook folder:
  * - `zutaten.csv` — the ingredient list: one row per ingredient
  *   (`Ingredient;Singular;Plural;Base Unit;Reorder Point`), where the two cells
  *   after the name are the optional display forms for a count („1 Karotte“ /
@@ -45,11 +45,11 @@ import {
   updateFileWithContent,
   type DriveFile,
 } from './driveClient';
-import { listCookbookFolder, type CookbookFolder } from './cookbookFolder';
+import { ensureCookbookArea, listCookbookFolder, type CookbookFolder } from './cookbookFolder';
 
-/** File name of the ingredient list in the Cookbook folder (user-visible). */
+/** File name of the ingredient list in the Stammdaten folder (user-visible). */
 const LIST_FILE_NAME = 'zutaten.csv';
-/** File name of the AU mappings in the Cookbook folder (user-visible). */
+/** File name of the AU mappings in the Stammdaten folder (user-visible). */
 const MAPPINGS_FILE_NAME = 'zutaten-umrechnungen.csv';
 /** MIME type of the master data files. */
 const MASTER_DATA_MIME_TYPE = 'text/csv';
@@ -71,8 +71,8 @@ let writtenSinceLoad = false;
 export async function loadIngredientMasterData(token: string): Promise<void> {
   writtenSinceLoad = false;
   const folder = await listCookbookFolder(token);
-  const listFile = folder.files.find((entry) => entry.name === LIST_FILE_NAME);
-  const mappingsFile = folder.files.find((entry) => entry.name === MAPPINGS_FILE_NAME);
+  const listFile = folder.data.files.find((entry) => entry.name === LIST_FILE_NAME);
+  const mappingsFile = folder.data.files.find((entry) => entry.name === MAPPINGS_FILE_NAME);
   // The Drive master data is authoritative as a pair: with only one of the
   // two files present, the files are treated as not yet created and the seed
   // stays active (the next addition re-creates both files).
@@ -105,8 +105,8 @@ function findMasterDataFiles(folder: CookbookFolder): {
   mappingsFile: DriveFile | undefined;
 } {
   return {
-    listFile: folder.files.find((entry) => entry.name === LIST_FILE_NAME),
-    mappingsFile: folder.files.find((entry) => entry.name === MAPPINGS_FILE_NAME),
+    listFile: folder.data.files.find((entry) => entry.name === LIST_FILE_NAME),
+    mappingsFile: folder.data.files.find((entry) => entry.name === MAPPINGS_FILE_NAME),
   };
 }
 
@@ -252,7 +252,10 @@ export async function appendIngredientMasterData(
       })),
     },
   };
-  await writeMasterDataFiles(token, resolved.id, listFile, mappingsFile, extended);
+  // The pair lives in `Stammdaten`; the folder is created when the pair is
+  // written for the first time (the read above already resolved the snapshot).
+  const dataFolderId = await ensureCookbookArea(token, 'data', resolved);
+  await writeMasterDataFiles(token, dataFolderId, listFile, mappingsFile, extended);
   // Mark the registry state as newer than any in-flight load (see the guard
   // in loadIngredientMasterData) before publishing it.
   writtenSinceLoad = true;
@@ -370,7 +373,8 @@ export async function updateIngredientMasterData(
     entries: sorted,
   };
   const next: IngredientMappings = { ...current, [name]: nextEntry };
-  await writeMasterDataFiles(token, folder.id, listFile, mappingsFile, next);
+  const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+  await writeMasterDataFiles(token, dataFolderId, listFile, mappingsFile, next);
   // Publish after the files were written, so the UI never shows a state Drive
   // did not accept (the same order the append and rename paths use).
   writtenSinceLoad = true;
@@ -424,7 +428,8 @@ export async function renameIngredientMasterData(
   const renamed: IngredientMappings = Object.fromEntries(
     Object.entries(current).map(([name, entry]) => [name === oldName ? newName : name, entry]),
   );
-  await writeMasterDataFiles(token, folder.id, listFile, mappingsFile, renamed);
+  const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+  await writeMasterDataFiles(token, dataFolderId, listFile, mappingsFile, renamed);
   writtenSinceLoad = true;
   setIngredientMappings(renamed);
   return true;

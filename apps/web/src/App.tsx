@@ -121,6 +121,19 @@ type AiScreen = { mode: 'create'; prompt?: string } | { mode: 'edit'; recipe: St
 const SCREEN_MARKER = 'above-list';
 const LIST_MARKER = 'recipe-list';
 
+/** How many stray file names the leftover warning lists before it counts the rest. */
+const STRAY_FILE_PREVIEW = 5;
+
+/**
+ * The readable name list of the leftover warning: the first few names, then a
+ * count of the rest, so a forgotten folder full of files stays one line.
+ */
+function strayFileList(names: readonly string[]): string {
+  const shown = names.slice(0, STRAY_FILE_PREVIEW).join(', ');
+  const rest = names.length - STRAY_FILE_PREVIEW;
+  return rest > 0 ? `${shown} und ${rest} weitere` : shown;
+}
+
 /**
  * The stable "no recipe is planned" set: used while Keep is off or its state is
  * not loaded yet, so the "Restliche Sammlung" section never has to test for null
@@ -241,6 +254,12 @@ function App() {
   /** Non-fatal warning when the Drive master data could not be loaded; the
    *  built-in seed keeps the app functional (see ingredientMasterData.ts). */
   const [masterDataWarning, setMasterDataWarning] = useState<string | null>(null);
+  /**
+   * Collection files that still lie directly in the Cookbook root instead of in
+   * one of the four subfolders. The app cannot read them there, so the list is
+   * shown as a warning after startup (see cookbookFolder.ts).
+   */
+  const [strayFiles, setStrayFiles] = useState<readonly string[]>([]);
   /** Editor state: `editorOpen` switches the screen, `editorTarget` is the
    *  opened recipe or null for a new recipe. */
   const [editorOpen, setEditorOpen] = useState(false);
@@ -723,6 +742,17 @@ function App() {
         if (isDriveAuthError(err)) return; // re-auth hook handles it
         setMasterDataWarning(err instanceof Error ? err.message : String(err));
       });
+    // Files left in the Cookbook root are invisible to the app. The snapshot is
+    // shared with the list load above (see listCookbookFolder), so this costs no
+    // extra Drive request in the common case.
+    void listCookbookFolder(token)
+      .then((folder) => {
+        if (!cancelled) setStrayFiles(folder.strayFiles);
+      })
+      .catch(() => {
+        // The recipe list already reports a failed listing; a missing leftover
+        // hint is not worth a second message (auth errors are handled above).
+      });
     return () => {
       cancelled = true;
     };
@@ -1027,6 +1057,7 @@ function App() {
     setRecipes(null);
     setError(null);
     setMasterDataWarning(null);
+    setStrayFiles([]);
     await handleConnect({ silent: true });
   }, [handleConnect]);
 
@@ -2287,6 +2318,12 @@ function App() {
           {/* No screen header any more (decided with the user): the search field
               alone opens the screen, and the two section captions below carry
               what the title bar used to say — the heading and the counters. */}
+          {token && strayFiles.length > 0 && (
+            <p className="master-data-warning" role="alert">
+              {`Im Cookbook-Ordner liegen noch Dateien außerhalb der Unterordner: ${strayFileList(strayFiles)}. Die App liest nur in Rezepte, Exporte, Bilder und Stammdaten — verschiebe diese Dateien in den passenden Unterordner.`}
+            </p>
+          )}
+
           {token && masterDataWarning !== null && (
             <p className="master-data-warning" role="alert">
               {`Stammdaten konnten nicht geladen werden — es werden die eingebauten Daten verwendet. (${masterDataWarning})`}

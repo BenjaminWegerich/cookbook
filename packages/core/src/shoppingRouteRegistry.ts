@@ -7,8 +7,9 @@
  * SEED_SHOPPING_SYNONYMS, generated from docs/shopping_route.csv +
  * docs/shopping_items.csv + docs/shopping_synonyms.csv) is the default. The web
  * app loads the user's authoritative master data (einkaufsweg.csv +
- * einkaufs-artikel.csv + einkaufs-synonyme.csv in the Drive Cookbook folder) at
- * startup and replaces all three with setShoppingRoute / setShoppingItems /
+ * einkaufs-artikel.csv + einkaufs-synonyme.csv in the Drive Cookbook folder's
+ * `Stammdaten` subfolder) at startup and replaces all three with
+ * setShoppingRoute / setShoppingItems /
  * setShoppingSynonyms — the Drive files win once they exist. Until then, and
  * whenever the files are missing or unreadable, the seed keeps the app fully
  * functional (the pickers in the new-ingredient sheet, and the aisle sort).

@@ -20,7 +20,7 @@
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3';
 /** MIME type of Google Drive folders. */
-const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
+export const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 
 /** Metadata of a file in Google Drive. */
 export interface DriveFile {
@@ -131,12 +131,24 @@ export async function findFoldersByName(token: string, name: string): Promise<Dr
   return data.files;
 }
 
-/** Creates a folder with the given name and returns its metadata. */
-export async function createFolder(token: string, name: string): Promise<DriveFile> {
+/**
+ * Creates a folder with the given name and returns its metadata.
+ *
+ * Without `parentId` the folder lands in the account's My Drive root — that is
+ * how the Cookbook container itself is created. The four collection subfolders
+ * pass their parent, so a folder never appears beside the collection by mistake.
+ */
+export async function createFolder(
+  token: string,
+  name: string,
+  parentId?: string,
+): Promise<DriveFile> {
+  const metadata: Record<string, unknown> = { name, mimeType: FOLDER_MIME_TYPE };
+  if (parentId !== undefined) metadata.parents = [parentId];
   return driveRequest(token, '/files', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, mimeType: FOLDER_MIME_TYPE }),
+    body: JSON.stringify(metadata),
   });
 }
 

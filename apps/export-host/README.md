@@ -11,7 +11,9 @@ in-app browser: the cooking view's size picker and the step navigation work ther
 points at the deployment's `/exec` URL.
 
 The sections below stay as the runbook — for a redeployment, a second cookbook account, or
-recovery after the deployment is lost.
+recovery after the deployment is lost. After changing `Code.gs`, redeploy it (*Deploy → Manage
+deployments → Edit → New version → Deploy*); the `/exec` URL stays the same, so the build
+variable needs no change.
 
 ## Why it exists
 
@@ -37,7 +39,8 @@ https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?f=<exportFileId>&portion
 https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?f=<exportFileId>&menge=500g
 ```
 
-- `f` — the export file's Drive id (`<title>.html` in the Cookbook folder).
+- `f` — the export file's Drive id (`<title>.html` in `Exporte`, or directly in `Cookbook` for
+  links shared before the collection was split into subfolders).
 - `portionen` — a finished dish's serving count.
 - `menge` — an ingredient recipe's yield in the family base unit (`g` / `ml`; `kg` / `l` are
   accepted and normalized). `packages/core/src/planLink.ts` owns these names, and
@@ -50,9 +53,10 @@ whose script never runs would open at the written size instead of the planned on
 
 ## What it will serve
 
-Only a `*.html` file whose parent folder is named `Cookbook`. A known file id is not enough, so the
-service cannot be used as a general reader for the owner's Drive. Every other request answers with a
-short German error page.
+Only a `*.html` file in the `Exporte` subfolder of the folder named `Cookbook` — or directly in
+`Cookbook`, the flat location older links point into. The check looks at folder *names* and never
+descends more than one level, so a known file id is not enough and the service cannot be used as a
+general reader for the owner's Drive. Every other request answers with a short German error page.
 
 The deployed access is **anyone who has the link**, which is the same trust level as the "anyone
 with the link" Drive sharing the export would need — the URL is unguessable, and the file ids in it

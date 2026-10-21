@@ -75,14 +75,15 @@
 
 ### Recipe storage
 
-- Markdown + YAML files, one per recipe, in Google Drive
-  (see [storage_format.md](storage_format.md)).
+- Markdown + YAML files, one per recipe, in the `Rezepte` subfolder of the Drive `Cookbook`
+  folder (see [storage_format.md](storage_format.md)).
 - Sample recipes live in the repository's `examples/` folder (canonical
   format, validated by the core test suite); they can be copied into the
-  Drive "Cookbook" folder to develop against a populated collection.
+  `Rezepte` subfolder of the Drive "Cookbook" folder to develop against a populated
+  collection.
 - Single source of truth, read by the web app, the HTML export, and (later) the backend
   module and the Gemini for Home preparation.
-- Ingredient master data lives in two CSV files in the same Drive folder — `zutaten.csv`
+- Ingredient master data lives in two CSV files in the `Stammdaten` subfolder — `zutaten.csv`
   (ingredient list: name + base unit + reorder point + the optional Singular/Plural display
   forms) and `zutaten-umrechnungen.csv` (AU mappings), in the canonical formats of
   docs/ingredients.csv + docs/ingredient_unit_mappings.csv: the app loads both into the core
@@ -92,7 +93,7 @@
   appends to both files and re-registers them. The split keeps ingredient-level fields (name,
   base unit, reorder point, display forms) in one row per ingredient, separate from the AU
   mappings.
-- Where an item is bought is a separate master-data set in the same Drive folder —
+- Where an item is bought is a separate master-data set in the same `Stammdaten` subfolder —
   `einkaufsweg.csv` (the route: store + section per row, in walking order),
   `einkaufs-artikel.csv` (the item table: item → store + section — the identity of everything
   buyable and the only place a route is kept) and `einkaufs-synonyme.csv` (the synonym table:
@@ -111,8 +112,8 @@
   assignment first reads the authoritative file content from Drive and only then writes
   the set, so a spreadsheet edit made meanwhile is not overwritten. A save that writes
   both sets (creating an ingredient stores its item row and then its ingredient row)
-  resolves and lists the Cookbook folder once and shares that snapshot between the two
-  writes; independent file reads and uploads run in parallel, while no write starts
+  resolves the Cookbook folder and lists its subfolders once and shares that snapshot between
+  the two writes; independent file reads and uploads run in parallel, while no write starts
   before every read of its set has finished. The snapshot carries only file ids and
   names — file content is always read fresh.
 - Resolving a Keep line to an item happens at read time in core
@@ -131,7 +132,8 @@
     (`packages/core/src/recipe/yieldViews.ts`), the same range the meal plan accepts.
 - The theme typeface (weights 400 and 600, latin subset) is embedded as a `data:` WOFF2, so the
   file needs no font fetch or sibling asset (`packages/core/src/recipe/embeddedFonts.ts`, generated
-  by `scripts/generate-embedded-fonts.mjs`).
+  by `scripts/generate-embedded-fonts.mjs`). A `Noto Serif Display` theme embeds both faces: the
+  display serif for the page headings and Noto Serif for the body.
 - Generated from the core logic and a recipe file, stored in Drive and regenerated automatically
   on every recipe save (updated in place, so shared links stay valid).
 - The page opens on the written size or on the size the URL asks for (`?portionen=6`,
@@ -169,8 +171,10 @@
 - The size is delivered two ways: injected as `window.__COOKBOOK_PLAN_SIZE__` (an Apps Script page
   runs in a sandbox iframe that hides the outer URL) and as a `<style>` element that shows only the
   promised view until the script takes over, so the page is right even before it runs.
-- **Fails closed on what it serves:** only a `*.html` file whose parent folder is named `Cookbook`;
-  a known file id is not enough. Deployed "execute as me, anyone with the link" — the same trust
+- **Fails closed on what it serves:** only a `*.html` file in the `Exporte` subfolder of the
+  folder named `Cookbook` (a file directly in `Cookbook` is still served, for links shared before
+  the collection was split into subfolders); a known file id is not enough, and the check never
+  descends more than one level. Deployed "execute as me, anyone with the link" — the same trust
   level as link-shared Drive files, with nothing to host and no credential in the web app.
 - The URL is the build variable `VITE_EXPORT_HOST_URL` (repository variable for the Pages build).
   Apps Script has no bundler, so `Code.gs` repeats the parameter names and the element id — they

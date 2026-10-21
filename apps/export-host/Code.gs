@@ -16,7 +16,9 @@
  *     ...&menge=500g      an ingredient recipe, in the family base unit
  *
  * What it will serve is deliberately narrow: a file must be named `*.html` and
- * live in the folder named `Cookbook`. Knowing an id is not enough.
+ * live in the `Exporte` subfolder of the folder named `Cookbook` (a file
+ * directly in `Cookbook` is still accepted, for links shared before the
+ * collection was split into subfolders). Knowing an id is not enough.
  *
  * Apps Script has no bundler, so this file cannot import the web app's core
  * module: the parameter names and the preselect element id are spelled out
@@ -24,8 +26,10 @@
  * together. Deployment: apps/export-host/README.md.
  */
 
-/** Folder a servable export must live in (apps/web/src/drive/recipeStorage.ts). */
+/** Folder a servable export must live in (apps/web/src/drive/cookbookFolder.ts). */
 var COOKBOOK_FOLDER_NAME = 'Cookbook';
+/** Subfolder of the exports (apps/web/src/drive/cookbookFolder.ts). */
+var EXPORT_SUBFOLDER_NAME = 'Exporte';
 /** Serving-count parameter (planLink.ts, PLAN_FRAGMENT_SERVINGS). */
 var SERVINGS_PARAM = 'portionen';
 /** Yield parameter (planLink.ts, PLAN_FRAGMENT_YIELD). */
@@ -59,9 +63,9 @@ function doGet(request) {
  * Reads the HTML of one servable export.
  *
  * Guards the service against being used as a general file reader: the file must
- * be an `.html` file inside the Cookbook folder. A missing id, a file from
- * another folder and a non-HTML file each answer with a German reason instead of
- * content.
+ * be an `.html` file in the Cookbook folder or its `Exporte` subfolder. A
+ * missing id, a file from another folder and a non-HTML file each answer with a
+ * German reason instead of content.
  *
  * @param {string} fileId the export's Drive file id.
  * @return {string} the file's HTML.
@@ -83,9 +87,10 @@ function readExportHtml(fileId) {
 }
 
 /**
- * True when the file's parent folder is the Cookbook folder. Checks the folder's
- * *name*, so the script needs no folder id of its own and a moved or renamed
- * folder is found again.
+ * True when the file's parent is the Cookbook folder or its `Exporte` subfolder.
+ * Checks folder *names*, so the script needs no folder id of its own and a
+ * moved or renamed folder is found again. One nesting level only: the host must
+ * not become a reader for arbitrary folders.
  *
  * @param {!DriveApp.File} file the export file.
  * @return {boolean} whether the file is servable.
@@ -93,7 +98,29 @@ function readExportHtml(fileId) {
 function isInCookbookFolder(file) {
   var parents = file.getParents();
   while (parents.hasNext()) {
-    if (parents.next().getName() === COOKBOOK_FOLDER_NAME) {
+    var parent = parents.next();
+    var name = parent.getName();
+    if (name === COOKBOOK_FOLDER_NAME) {
+      return true;
+    }
+    if (name === EXPORT_SUBFOLDER_NAME && hasParentNamed(parent, COOKBOOK_FOLDER_NAME)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * True when one of the folder's parents carries the given name.
+ *
+ * @param {!DriveApp.Folder} folder the folder to check.
+ * @param {string} name the parent name to look for.
+ * @return {boolean} whether such a parent exists.
+ */
+function hasParentNamed(folder, name) {
+  var parents = folder.getParents();
+  while (parents.hasNext()) {
+    if (parents.next().getName() === name) {
       return true;
     }
   }

@@ -2,8 +2,8 @@
  * CSV codecs for the shopping master data — the canonical format of the repo
  * seeds (docs/shopping_route.csv + docs/shopping_items.csv +
  * docs/shopping_synonyms.csv), used at runtime for the user's authoritative
- * master data in the Drive Cookbook folder (einkaufsweg.csv +
- * einkaufs-artikel.csv + einkaufs-synonyme.csv).
+ * master data in the Drive Cookbook folder's `Stammdaten` subfolder
+ * (einkaufsweg.csv + einkaufs-artikel.csv + einkaufs-synonyme.csv).
  *
  * This module owns the formats and the identity rules of the three tables and
  * nothing else: the data structures plus their parse/serialize pairs. It

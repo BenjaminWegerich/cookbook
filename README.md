@@ -77,10 +77,10 @@ This repository forms the basis of the cookbook project. The concrete technical 
 
 The `examples/` folder contains sample recipes in the canonical file format
 (docs/storage_format.md). They are manual test data you can copy into the
-Google Drive "Cookbook" folder — useful while developing features that act on
-a populated collection (e.g. the recipe-list search). Every example is
-validated by the core module's test suite, so the folder always stays in a
-loadable state.
+`Rezepte` subfolder of the Google Drive "Cookbook" folder — useful while
+developing features that act on a populated collection (e.g. the recipe-list
+search). Every example is validated by the core module's test suite, so the
+folder always stays in a loadable state.
 
 ## Documentation
 

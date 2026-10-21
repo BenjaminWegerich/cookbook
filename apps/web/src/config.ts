@@ -24,8 +24,9 @@ export const GOOGLE_CLIENT_ID: string | undefined = import.meta.env.VITE_GOOGLE_
  * the file itself and takes the size as a query parameter.
  *
  * Not a secret — the URL ships in the browser bundle — and it serves only
- * `<title>.html` files from the Cookbook folder. Leave it empty and the app
- * falls back to the Drive viewer link, which still works in a desktop browser
- * and in Chrome on Android, just without the size selection inside Keep.
+ * `<title>.html` files from the Cookbook folder's `Exporte` subfolder. Leave it
+ * empty and the app falls back to the Drive viewer link, which still works in a
+ * desktop browser and in Chrome on Android, just without the size selection
+ * inside Keep.
  */
 export const EXPORT_HOST_URL: string | undefined = import.meta.env.VITE_EXPORT_HOST_URL;

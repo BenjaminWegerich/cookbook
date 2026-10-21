@@ -30,15 +30,24 @@
 
 ## 2. File Layout and Naming
 
-- The collection is a folder (in the chosen cloud storage) containing one `.md` file
-  per recipe.
-- **File name = title**, e.g. `Shredded Tofu Wraps.md`.
+- The collection is a folder (in the chosen cloud storage) with four subfolders:
+  - `Rezepte/` — one `.md` file per recipe;
+  - `Exporte/` — the generated `<title>.html` cooking views (§8);
+  - `Bilder/` — the recipe photos;
+  - `Stammdaten/` — the CSV master data and `rezept-richtlinien.md` (§9, §10).
+
+  Nothing lives directly in the collection folder: the app reads and writes one
+  level below it. A file left in the collection root is not picked up (the app
+  reports it instead of silently ignoring it).
+- **File name = title**, e.g. `Rezepte/Shredded Tofu Wraps.md`.
   - Title characters that are invalid in file names (`/`, `\`, `:` etc.) are
     disallowed in titles; the schema validation enforces this.
-- **Image:** optional single real photo. It lives as a sibling file with the same
-  basename and a `.jpg` / `.png` extension, e.g. `Shredded Tofu Wraps.jpg`.
-  There is no `image` field in the front matter; the sibling convention carries it.
-- The canonical file and its image move together; the app treats them as one unit.
+- **Image:** optional single real photo. It lives in `Bilder/` with the same
+  basename and a `.jpg` / `.png` extension, e.g. `Bilder/Shredded Tofu Wraps.jpg`.
+  There is no `image` field in the front matter; the basename carries the link to
+  the recipe.
+- The canonical file, its image and its export move together; the app treats them
+  as one unit (a title change renames all three).
 
 ## 3. YAML Front Matter — Schema
 
@@ -300,8 +309,8 @@ prep_time: 15 min
 ## 9. Ingredient Master Data Files
 
 The collection's ingredient master data (name → display forms → base unit → reorder point →
-additional units with factors) lives in two CSV files inside the recipe folder, in the same
-canonical formats as the repo seeds (`docs/ingredients.csv` +
+additional units with factors) lives in two CSV files inside the `Stammdaten` subfolder of the
+collection folder, in the same canonical formats as the repo seeds (`docs/ingredients.csv` +
 `docs/ingredient_unit_mappings.csv`):
 
     zutaten.csv                  (ingredient list)
@@ -379,9 +388,9 @@ The files are user data like the recipes themselves — the repo CSVs are only t
 ## 10. Shopping Route, Item Table and Synonym Table
 
 The order in which shopping-list items are bought — and therefore the order in which they
-appear in the Google Keep „Einkaufsliste“ — comes from three master-data files in the recipe
-folder. A **stop** is the pair `(Store, Section)`: level 1 is the store, level 2 the section
-inside it.
+appear in the Google Keep „Einkaufsliste“ — comes from three master-data files in the
+`Stammdaten` subfolder. A **stop** is the pair `(Store, Section)`: level 1 is the store, level 2
+the section inside it.
 
     einkaufsweg.csv           (the route; the row order IS the route)
     Store;Section
