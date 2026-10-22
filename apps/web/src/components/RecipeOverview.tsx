@@ -38,9 +38,9 @@
  *    constructive action, "Eintrag ersetzen" (accent fill, growing), which
  *    opens a menu with "Bestehendes Rezept auswählen", "Rezept manuell
  *    schreiben" and "Rezept mit KI schreiben"; next to it "Abhaken"
- *    (outlined) drops the line from the meal plan. The two sit
- *    on a wrapping row, because both labels are full phrases and do not share
- *    one phone line (decided with the user). The trigger carries no caret
+ *    (outlined) drops the line from the meal plan. The two sit on a row that
+ *    may wrap: both labels are full phrases and may not share one narrow phone
+ *    line (decided with the user). The trigger carries no caret
  *    (decided with the user): this sheet marks a menu with the three-dot glyph,
  *    and "Eintrag ersetzen" names an outcome that cannot be executed without a
  *    choice, so it reads as opening a chooser the way a "Teilen" button does.
@@ -985,17 +985,14 @@ function RecipeOverview({
           )}
         </div>
 
-        {/* The action row. A recognized recipe keeps its known shape: "Jetzt
-            kochen" grows, "Einplanen"/"Umplanen" and "Mehr" stay at content
-            width. An unrecognized entry has no cook or edit action: its row
-            carries "Eintrag ersetzen" (accent, growing, opens its menu) and
-            "Abhaken" (outlined, danger) and may wrap, because both labels are
-            full phrases (see the file header). */}
-        <div
-          className={
-            target.kind === 'unknown' ? 'overview-actions is-wrapping' : 'overview-actions'
-          }
-        >
+        {/* The action row. A recognized recipe keeps its known shape: "Kochen"
+            grows, "Einplanen"/"Umplanen" and "Mehr" stay at content width, and
+            the shared 10 px action padding keeps all three on one line. An
+            unrecognized entry has no cook or edit action: its row carries
+            "Eintrag ersetzen" (accent, growing, opens its menu) and "Abhaken"
+            (outlined, danger) and may wrap, because both labels are full
+            phrases (see the file header). */}
+        <div className="overview-actions">
           {target.kind === 'unknown' ? (
             <>
               <div className="overview-more is-primary" ref={menuWrapRef}>

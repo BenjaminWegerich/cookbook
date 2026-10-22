@@ -511,8 +511,10 @@ A typeface joins the shortlist only when it meets every requirement:
 | Text | no fill, no border, muted label | navigation („Zurück") and quiet answers („Abbrechen", „Rückgängig") |
 | Add | surface fill, olive border, olive label | a creation action inside a card or list („Schritt hinzufügen", „Zutat hinzufügen", „Zutat anlegen") |
 
-**Geometry.** Action buttons: `--radius-md`, padding `--space-3` / `--space-6`, label
-`--text-md` weight 600, `--space-2` gap to an 18px symbol (`--icon-md`). Text buttons:
+**Geometry.** Action buttons: `--radius-md`, padding `--space-3` / `--space-4`, label
+`--text-md` weight 600, `--space-2` gap to an 18px symbol (`--icon-md`). The 10px inline
+step is shared by every action variant; it keeps the recipe overview's three actions on one
+phone line, and the cooking view's step bar already uses it. Text buttons:
 `--radius-sm`, padding `--space-2`, label `--text-sm`. An Add button takes the outlined
 button's geometry. An icon-only button keeps the geometry of its variant, carries an
 `aria-label`, and — where it is a −/+ stepper — keeps a circular box of `--control-height`.

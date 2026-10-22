@@ -141,24 +141,18 @@
    (the old even split put a stretched label on ~30-57 px of air per side while
    the content-sized "Mehr" had only its own padding — two different cushions on
    one row). The primary is the only item that shrinks when the viewport narrows,
-   so the secondary cushions stay constant. The label size matches the overflow
-   menu (one body step below the 18 px body size) — the row and its menu must not
-   look like two different scales. */
+   so the secondary cushions stay constant. The row uses the app's action
+   padding (10 px inline; see editor.css): the Noto switch widened the three
+   labels enough that the former 18 px no longer let them share one phone line.
+   The label size matches the overflow menu (one body step below the 18 px body
+   size) — the row and its menu must not look like two different scales. */
 .overview-actions {
   display: flex;
-  /* The row wraps (§5.1): with the plain action geometry a three-action row no
-     longer fits one narrow phone line, and nothing may overflow sideways. */
+  /* The row wraps as a last resort (§5.1): the shared 10 px action padding keeps
+     the known row's three actions on one line on a normal phone, but nothing may
+     overflow sideways on a narrower viewport. */
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-
-/* The unrecognized entry's two-button row may wrap: "Eintrag ersetzen" is a
-   full action phrase and, next to "Abhaken", may not fit one narrow phone
-   line. The primary grows on its line and the "Abhaken" action drops to a line of
-   its own instead of either label being squeezed or wrapped inside its
-   button. */
-.overview-actions.is-wrapping {
-  flex-wrap: wrap;
 }
 
 .overview-action {
@@ -170,7 +164,7 @@
      its own padding. The primary overrides this below. */
   flex: 0 0 auto;
   min-height: var(--control-height); /* §5.1: never below thumb reach */
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);

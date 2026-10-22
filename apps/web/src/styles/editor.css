@@ -26,7 +26,11 @@
  *
  * Buttons and form controls stay outside the chain: a button or text field keeps
  * its own radius wherever it sits (action buttons and text fields --radius-md,
- * text buttons and badges --radius-sm, chips pills, steppers circles).
+ * text buttons and badges --radius-sm, chips pills, steppers circles). Every
+ * action-button variant (primary, danger, outlined, add and the overview's
+ * action) shares one geometry: 8 px block / 10 px inline padding. The inline
+ * step is --space-4 rather than the former --space-6, so the recipe overview's
+ * three actions fit one phone line.
  */
 
 /* ---- Screen header ------------------------------------------------------ */
@@ -727,7 +731,7 @@
   justify-content: center;
   gap: var(--space-2);
   min-height: var(--control-height); /* §5.1: never below thumb reach */
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-danger);
   border: none;
   border-radius: var(--radius-md);
@@ -894,7 +898,7 @@
   justify-content: center;
   gap: var(--space-2);
   min-height: var(--control-height); /* §5.1: never below thumb reach */
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
@@ -914,7 +918,7 @@
   justify-content: center;
   gap: var(--space-2);
   min-height: var(--control-height); /* §5.1: never below thumb reach */
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-surface);
   border: 1px solid var(--color-olive);
   border-radius: var(--radius-md);
@@ -932,7 +936,7 @@
   justify-content: center;
   gap: var(--space-2);
   min-height: var(--control-height); /* §5.1: never below thumb reach */
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-accent);
   border: none;
   border-radius: var(--radius-md);
