@@ -58,10 +58,13 @@
  */
 
 import {
+  EN_SPACE,
   formatAQValueSlash,
   formatBQ,
   formatDecimal,
   renderAQSSlash,
+  renderAQSDisplaySlash,
+  type ArrangementDisplay,
 } from '../additionalUnits.js';
 import { optimizeUnitless } from '../quantityOptimizer.js';
 import { SERVING_COUNTS } from '../servingSizes.js';
@@ -308,11 +311,13 @@ function unitlessText(value: number, context: ToleranceContext): string {
 }
 
 /**
- * Renders the display text of a quantity/ingredient line (HTML-escaped, no
- * link). A quantity-only artifact may be unitless (`{{1/2}}`) and then renders
- * through the unitless branch (DESIGN §7).
+ * Renders the plain display text of a quantity/ingredient line (HTML-escaped,
+ * no link), keeping the arrangement's brackets. The reference readout uses this
+ * form; it stays plain muted text (DESIGN §5.11) and never splits a note. A
+ * quantity-only artifact may be unitless (`{{1/2}}`) and then renders through
+ * the unitless branch (DESIGN §7).
  */
-function displayText(
+function plainDisplayText(
   name: string | undefined,
   value: number,
   bu: Unit | undefined,
@@ -325,6 +330,60 @@ function displayText(
         : formatBQ(value, bu)
       : renderAQSSlash(name, value, bu ?? 'g', context);
   return escapeHtml(line);
+}
+
+/**
+ * Renders one arrangement display as HTML: its notes leave their brackets and
+ * follow an en space in the muted, italic `.arrangement-note` run. Step prose
+ * passes `parenthesised` instead, which keeps a regular space and the brackets
+ * (DESIGN §5.11). Every value is escaped; the surrounding markup is fixed here.
+ */
+function arrangementHtml(display: ArrangementDisplay, noteForm: 'bare' | 'parenthesised'): string {
+  return display.parts
+    .map((part) => {
+      if (part.kind === 'text') {
+        return escapeHtml(part.value);
+      }
+      const note = escapeHtml(part.value);
+      return noteForm === 'bare'
+        ? `${EN_SPACE}<span class="arrangement-note">${note}</span>`
+        : ` <span class="arrangement-note">(${note})</span>`;
+    })
+    .join('');
+}
+
+/**
+ * Renders the display HTML of a quantity/ingredient line (no link): the
+ * arrangement's note is a muted, italic aside after an en space. A quantity-only
+ * artifact may be unitless (`{{1/2}}`) and then renders through the unitless
+ * branch (DESIGN §7).
+ */
+function displayHtml(
+  name: string | undefined,
+  value: number,
+  bu: Unit | undefined,
+  context: ToleranceContext,
+): string {
+  if (name === undefined) {
+    return escapeHtml(bu === undefined ? unitlessText(value, context) : formatBQ(value, bu));
+  }
+  return arrangementHtml(renderAQSDisplaySlash(name, value, bu ?? 'g', context), 'bare');
+}
+
+/**
+ * The step prose's variant of `displayHtml`: the brackets stay and are styled
+ * with their content, separated from the sentence by a regular space.
+ */
+function artifactDisplayHtml(
+  name: string | undefined,
+  value: number,
+  bu: Unit | undefined,
+  context: ToleranceContext,
+): string {
+  if (name === undefined) {
+    return displayHtml(name, value, bu, context);
+  }
+  return arrangementHtml(renderAQSDisplaySlash(name, value, bu ?? 'g', context), 'parenthesised');
 }
 
 /**
@@ -356,7 +415,7 @@ function referenceLines(recipe: Recipe, factor: number): string[] {
   return recipe.ingredients
     .filter((ingredient) => ingredient.reference)
     .map((ingredient) =>
-      displayText(
+      plainDisplayText(
         ingredient.name,
         ingredient.quantity * factor,
         ingredient.unit,
@@ -385,7 +444,7 @@ function renderCheckRow(
   id: string,
   context: ToleranceContext,
 ): string {
-  const text = displayText(ingredient.name, value, ingredient.unit, context);
+  const text = displayHtml(ingredient.name, value, ingredient.unit, context);
   const badge = subRecipeBadge(links[ingredient.name]);
   return (
     `  <li class="check-row">` +
@@ -441,7 +500,7 @@ function renderStep(
       : `<ul class="step-rows">\n` +
         step.ingredients
           .map((ingredient) => {
-            const text = displayText(
+            const text = displayHtml(
               ingredient.name,
               ingredient.quantity * factor,
               ingredient.unit,
@@ -457,7 +516,7 @@ function renderStep(
   // an ingredient recipe carries the „Rezept" badge after its display form.
   const text = renderArtifacts(step.text, (artifact: TextArtifact) => {
     const badge = artifact.name !== undefined ? subRecipeBadge(links[artifact.name]) : '';
-    const text = displayText(
+    const text = artifactDisplayHtml(
       artifact.name,
       artifact.quantity * factor,
       artifact.unit,
@@ -1087,6 +1146,10 @@ const STYLES = `
      to the 42px floor, as in the app (§5.2). */
   .chip::before { content: ''; position: absolute; inset: -5px; }
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  /* The quiet aside of an ingredient arrangement (§5.4): the note left its
+     brackets and follows one en space, muted and italic. Step prose keeps its
+     brackets and a regular space (the span then wraps both, §5.11). */
+  .arrangement-note { color: var(--muted); font-style: italic; }
   /* Reference-ingredient readout under the size picker (amounts only, muted). */
   .reference { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-sm);
                overflow-wrap: anywhere; }

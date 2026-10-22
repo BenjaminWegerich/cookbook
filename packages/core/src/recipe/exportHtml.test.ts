@@ -12,11 +12,36 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { formatBQ, renderAQSSlash } from '../additionalUnits.js';
+import { EN_SPACE, formatBQ, renderAQSSlash, renderAQSDisplaySlash } from '../additionalUnits.js';
+import { escapeHtml } from './artifacts.js';
 import { parseRecipe } from './parse.js';
 import { generateRecipeHtml } from './exportHtml.js';
 import type { RecipePhoto } from './exportHtml.js';
 import type { Recipe } from './types.js';
+
+/**
+ * The export's HTML for one amount line: the note leaves its brackets and
+ * follows an en space in `.arrangement-note`, except in step prose, which keeps
+ * the brackets and a regular space.
+ */
+function amountHtml(
+  name: string,
+  value: number,
+  bu: string,
+  noteForm: 'bare' | 'parenthesised' = 'bare',
+): string {
+  return renderAQSDisplaySlash(name, value, bu)
+    .parts.map((part) => {
+      if (part.kind === 'text') {
+        return escapeHtml(part.value);
+      }
+      const note = escapeHtml(part.value);
+      return noteForm === 'bare'
+        ? `${EN_SPACE}<span class="arrangement-note">${note}</span>`
+        : ` <span class="arrangement-note">(${note})</span>`;
+    })
+    .join('');
+}
 
 /** A finished dish with rows, a reference and inline artifacts. */
 const WRAPS: Recipe = parseRecipe(`---
@@ -65,8 +90,8 @@ describe('generateRecipeHtml — finished dish', () => {
 
   it('scales the master list and the reference readout for an option', () => {
     // 6 → 9 servings is an exact factor of 1.5.
-    expect(html).toContain(renderAQSSlash('Tortillas', 375, 'g'));
-    expect(html).toContain(renderAQSSlash('Joghurt', 600, 'g'));
+    expect(html).toContain(amountHtml('Tortillas', 375, 'g'));
+    expect(html).toContain(amountHtml('Joghurt', 600, 'g'));
     // The written size's reference readout (amounts only, muted).
     expect(html).toContain(
       `<p class="reference size-scoped" data-servings="6">${renderAQSSlash('Tortillas', 250, 'g')}</p>`,
@@ -76,9 +101,9 @@ describe('generateRecipeHtml — finished dish', () => {
   it('renders each step with its own rows above the prose', () => {
     expect(html).toContain('<ul class="step-rows">');
     expect(html).toContain(
-      `<span class="step-ingredient">${renderAQSSlash('Tortillas', 250, 'g')}</span>`,
+      `<span class="step-ingredient">${amountHtml('Tortillas', 250, 'g')}</span>`,
     );
-    expect(html).toContain(renderAQSSlash('Béchamelsauce', 500, 'ml'));
+    expect(html).toContain(amountHtml('Béchamelsauce', 500, 'ml'));
   });
 
   it('renders inline artifacts scaled inside the prose, in slash form', () => {
@@ -86,6 +111,24 @@ describe('generateRecipeHtml — finished dish', () => {
     expect(html).toContain(renderAQSSlash('Wasser', 1500, 'ml'));
     // No raw artifact markers survive.
     expect(html).not.toContain('{{');
+  });
+
+  it('styles an arrangement note and keeps the brackets in step prose', () => {
+    const recipe = parseRecipe(`---
+title: Butter
+type: finished_dish
+servings: 2
+prep_time: 5 min
+---
+## Zubereitung
+1. - 250 g Butter
+   Butter mit {{250 g Butter}} verrühren.
+`);
+    const butterHtml = generateRecipeHtml(recipe, {});
+    // Master/step rows: no brackets, an en space and the muted note run.
+    expect(butterHtml).toContain(amountHtml('Butter', 250, 'g'));
+    // Step prose: a regular space, brackets kept, both inside the styled run.
+    expect(butterHtml).toContain(amountHtml('Butter', 250, 'g', 'parenthesised'));
   });
 
   it('links sub-recipe uses (rows and artifacts) through the „Rezept" badge', () => {
@@ -149,8 +192,8 @@ prep_time: 15 min
 
   it('scales the master list and the reference per view', () => {
     // 500 ml → 5 l is an exact factor of 10.
-    expect(html).toContain(renderAQSSlash('Milch', 3000, 'ml'));
-    expect(html).toContain(renderAQSSlash('Butter', 250, 'g'));
+    expect(html).toContain(amountHtml('Milch', 3000, 'ml'));
+    expect(html).toContain(amountHtml('Butter', 250, 'g'));
   });
 
   it('offers the chips and the stepper, with the powers of ten plus the written size', () => {
@@ -216,7 +259,7 @@ prep_time: 15 min
   it('has no serving picker and keeps stored quantities', () => {
     expect(html).not.toContain('class="serving-chip"');
     expect(html).toContain(formatBQ(500, 'ml'));
-    expect(html).toContain(renderAQSSlash('Butter', 25, 'g'));
+    expect(html).toContain(amountHtml('Butter', 25, 'g'));
   });
 
   it('shows a reference ingredient as the intro readout', () => {
@@ -230,7 +273,7 @@ prep_time: 15 min
   it('renders rows and unscaled artifacts in the steps', () => {
     expect(html).toContain('<ul class="step-rows">');
     expect(html).toContain(renderAQSSlash('Milch', 300, 'ml'));
-    expect(html).toContain(renderAQSSlash('Milch', 50, 'ml'));
+    expect(html).toContain(amountHtml('Milch', 50, 'ml'));
   });
 
   it('escapes user content', () => {

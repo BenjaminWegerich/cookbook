@@ -706,6 +706,9 @@ such action. *decided with the user*
   line or set in a smaller size to fit.
 - A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
   muted) beneath it.
+- An ingredient arrangement's parenthesized note loses its brackets: it follows one en space,
+  muted and italic (`1 Becher Joghurt␣500 g`). Step prose keeps a regular space and the brackets,
+  styled with their content (§5.11); the written shopping list keeps its bracketed wording.
 - A row whose value changed under the user marks itself and keeps the mark until it is
   confirmed: a tinted surface, a `--space-1` accent line along its leading edge and one muted
   line naming the consequence (`.pantry-row--attention`, `.pantry-attention-note`). The mark is
@@ -720,7 +723,8 @@ such action. *decided with the user*
 
 The ingredient check list is rows, not cards: one row per master ingredient — a checkbox, the
 quantity line, and (for a sub-recipe) the „Rezept" badge — separated by hairlines, the first
-row without one. A row is tappable as a whole to toggle the check.
+row without one. A row is tappable as a whole to toggle the check. An ingredient row's
+arrangement note follows one en space, muted and italic, like the app's rows.
 
 ### 5.5 Headers, titles and sticky bars
 
@@ -1015,7 +1019,9 @@ screens without changing the size keeps them.
 
 **Zubereitung.** One step at a time: the recipe-title caption, the step title „Schritt x von y"
 with the theme's divider below it (§5.5), the step's own bulleted ingredient rows followed by
-the step prose, and the bottom bar. The size picker is absent here.
+the step prose, and the bottom bar. The size picker is absent here. The step prose keeps a
+quantity mention's brackets and a regular space; the brackets and their content read muted and
+italic, so the sentence's punctuation stays visible.
 
 **The footer** „Erstellt mit Cookbook" (the Cookbook brand mark beside the words) sits at the
 bottom of the intro screen, left-aligned, above the fixed bottom bar; it scrolls with the

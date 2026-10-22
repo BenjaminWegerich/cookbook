@@ -30,8 +30,9 @@ import {
   formatDecimal,
   insertArtifact,
   optimizeUnitless,
-  renderAQS,
+  renderAQSDisplay,
   splitArtifacts,
+  type ArrangementDisplay,
   type TextArtifact,
 } from '@cookbook/core';
 
@@ -46,6 +47,26 @@ function splitSegments(step: string): Segment[] {
       ? { type: 'text', value: segment.value }
       : { type: 'artifact', artifact: segment.artifact, stored: artifactToText(segment.artifact) },
   );
+}
+
+/**
+ * Appends an artifact's ingredient mention to its chip. Step prose is the one
+ * place that keeps the arrangement's brackets: the note stands in a regular
+ * space and the brackets are part of the styled aside, so the sentence's
+ * punctuation stays visible in the muted, italic look (DESIGN §5.11).
+ */
+function appendArtifactDisplay(target: HTMLElement, display: ArrangementDisplay): void {
+  for (const part of display.parts) {
+    if (part.kind === 'text') {
+      target.appendChild(document.createTextNode(part.value));
+      continue;
+    }
+    target.appendChild(document.createTextNode(' '));
+    const note = document.createElement('span');
+    note.className = 'arrangement-note';
+    note.textContent = `(${part.value})`;
+    target.appendChild(note);
+  }
 }
 
 /** Serializes one DOM node back into the step string (recursive). */
@@ -192,24 +213,33 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
             : {}),
           ...(recipeTolerance !== undefined ? { recipe: recipeTolerance } : {}),
         };
+        // The chip is a flex row of content and its remove button; keeping the
+        // mention in one child span lets the note sit inline inside the phrase
+        // instead of becoming a flex item of its own.
+        const content = document.createElement('span');
+        content.className = 'step-artifact-content';
         if (segment.artifact.name === undefined) {
           if (segment.artifact.unit === undefined) {
             const unitless = optimizeUnitless(segment.artifact.quantity, artifactContext);
-            span.textContent =
+            content.textContent =
               unitless.notation === undefined
                 ? formatDecimal(unitless.value)
                 : formatAQValue(unitless.value);
           } else {
-            span.textContent = formatBQ(segment.artifact.quantity, segment.artifact.unit);
+            content.textContent = formatBQ(segment.artifact.quantity, segment.artifact.unit);
           }
         } else {
-          span.textContent = renderAQS(
-            segment.artifact.name,
-            segment.artifact.quantity,
-            segment.artifact.unit ?? 'g',
-            artifactContext,
+          appendArtifactDisplay(
+            content,
+            renderAQSDisplay(
+              segment.artifact.name,
+              segment.artifact.quantity,
+              segment.artifact.unit ?? 'g',
+              artifactContext,
+            ),
           );
         }
+        span.appendChild(content);
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'artifact-remove';

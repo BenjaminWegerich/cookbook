@@ -105,7 +105,8 @@ import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientShee
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityInput from './QuantityInput';
 import ToleranceChips from './ToleranceChips';
-import { safeRenderAQS } from './ingredientDisplay';
+import ArrangementLine from './ArrangementLine';
+import { safeRenderAQSDisplay } from './ingredientDisplay';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -2516,12 +2517,14 @@ function RecipeEditor({
                             }
                           >
                             <span className="ingredient-line">
-                              {safeRenderAQS(
-                                ingredient.name,
-                                ingredient.quantity,
-                                ingredient.unit,
-                                draft.tolerance !== undefined ? { recipe: draft.tolerance } : {},
-                              )}
+                              <ArrangementLine
+                                display={safeRenderAQSDisplay(
+                                  ingredient.name,
+                                  ingredient.quantity,
+                                  ingredient.unit,
+                                  draft.tolerance !== undefined ? { recipe: draft.tolerance } : {},
+                                )}
+                              />
                               {isNewName && (
                                 <span className="ingredient-tag tag-new">
                                   <NewReleasesIcon className="tag-icon" optical={20} />
@@ -2724,12 +2727,14 @@ function RecipeEditor({
                   return (
                     <li key={ingredient.name} className="ingredient-row">
                       <span className="ingredient-line">
-                        {safeRenderAQS(
-                          ingredient.name,
-                          ingredient.quantity,
-                          ingredient.unit,
-                          draft.tolerance !== undefined ? { recipe: draft.tolerance } : {},
-                        )}
+                        <ArrangementLine
+                          display={safeRenderAQSDisplay(
+                            ingredient.name,
+                            ingredient.quantity,
+                            ingredient.unit,
+                            draft.tolerance !== undefined ? { recipe: draft.tolerance } : {},
+                          )}
+                        />
                         {isNewName && (
                           <span className="ingredient-tag tag-new">
                             <NewReleasesIcon className="tag-icon" optical={20} />

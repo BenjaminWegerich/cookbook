@@ -54,6 +54,7 @@ import {
   type ShoppingStop,
 } from '@cookbook/core';
 
+import ArrangementLine from './ArrangementLine';
 import IngredientMappingsField from './IngredientMappingsField';
 import QuantityInput from './QuantityInput';
 import ToleranceChips from './ToleranceChips';
@@ -499,7 +500,7 @@ function NewIngredientSheet({
         <div className="field">
           <p className="field-hint">Vorschau</p>
           <p className="aqs-preview" aria-live="polite">
-            {reorder.preview}
+            <ArrangementLine display={reorder.previewDisplay} />
           </p>
         </div>
 

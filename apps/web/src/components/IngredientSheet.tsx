@@ -45,13 +45,14 @@ import {
   masterIngredientNames,
   mappingsFor,
   optimizeUnitless,
-  renderAQS,
+  renderAQSDisplay,
   type Ingredient,
   type TextArtifact,
   type ToleranceContext,
   type Unit,
 } from '@cookbook/core';
 
+import ArrangementLine from './ArrangementLine';
 import QuantityInput, { type QuantityFamily } from './QuantityInput';
 import { LinkIcon, PlusIcon, TrashIcon } from './icons';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
@@ -415,11 +416,15 @@ function IngredientSheet({
           <span className="field-label">Vorschau</span>
           {/* Live preview of the display form (§2). */}
           <p className="aqs-preview" aria-live="polite">
-            {trimmedName !== '' && validName
-              ? renderAQS(trimmedName, quantity, unit ?? 'g', tolerance)
-              : unit !== undefined
-                ? formatBQ(quantity, unit)
-                : unitlessPreview()}
+            {trimmedName !== '' && validName ? (
+              <ArrangementLine
+                display={renderAQSDisplay(trimmedName, quantity, unit ?? 'g', tolerance)}
+              />
+            ) : unit !== undefined ? (
+              formatBQ(quantity, unit)
+            ) : (
+              unitlessPreview()
+            )}
           </p>
         </div>
 

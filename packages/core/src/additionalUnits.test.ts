@@ -16,12 +16,19 @@ import {
   masterIngredientNames,
   NNBSP,
   renderAQS,
+  renderAQSDisplay,
   renderAQSSlash,
+  renderPantryChipDisplay,
   resolveReorderPoint,
   selectAQ,
+  splitArrangementNotes,
 } from './additionalUnits.js';
 import { ADDITIONAL_UNITS, NUMBER_SCHEMES } from './additionalUnitsData.js';
-import { resetIngredientMappings, setIngredientMappings, allIngredientMappings } from './ingredientRegistry.js';
+import {
+  resetIngredientMappings,
+  setIngredientMappings,
+  allIngredientMappings,
+} from './ingredientRegistry.js';
 
 /** The typographic space of every displayed quantity. */
 const NB = NNBSP;
@@ -108,6 +115,48 @@ describe('renderAQS (optimizer-backed)', () => {
   });
 });
 
+describe('arrangement notes', () => {
+  it('splits the note out for styled display and keeps the written line', () => {
+    expect(renderAQSDisplay('Joghurt', 500, 'g')).toEqual({
+      text: `1${NB}Becher Joghurt (500${NB}g)`,
+      parts: [
+        { kind: 'text', value: `1${NB}Becher Joghurt` },
+        { kind: 'note', value: `500${NB}g` },
+      ],
+    });
+  });
+
+  it('keeps the base form as one text run', () => {
+    expect(renderAQSDisplay('Mehl', 250, 'g')).toEqual({
+      text: `250${NB}g Mehl`,
+      parts: [{ kind: 'text', value: `250${NB}g Mehl` }],
+    });
+  });
+
+  it('does not read parentheses in an ingredient name as a note', () => {
+    // The template has no brackets, so the name stays part of the plain text.
+    expect(renderAQSDisplay('Test (bio)', 250, 'g').parts).toEqual([
+      { kind: 'text', value: `250${NB}g Test (bio)` },
+    ]);
+  });
+
+  it('splits the note in the template, not in the rendered line', () => {
+    expect(splitArrangementNotes('<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Abtropfgewicht)')).toEqual([
+      { kind: 'text', template: '<AQ><NNBSP><AU> <IN> ' },
+      { kind: 'note', template: '<BQ><NNBSP><BU> Abtropfgewicht' },
+    ]);
+  });
+
+  it('splits the pantry chip’s note although the chip hides the name', () => {
+    const display = renderPantryChipDisplay('Joghurt', 400, 'g');
+    expect(display.text).toBe(`⅚${NB}Becher (400${NB}g)`);
+    expect(display.parts).toEqual([
+      { kind: 'text', value: `⅚${NB}Becher` },
+      { kind: 'note', value: `400${NB}g` },
+    ]);
+  });
+});
+
 describe('formatting', () => {
   it('formats the new AQ glyphs 5/8 and 5/6', () => {
     expect(formatAQ('5/8')).toBe('⅝');
@@ -128,6 +177,10 @@ describe('resolveReorderPoint', () => {
     const result = resolveReorderPoint('Joghurt', allIngredientMappings().Joghurt, 250, 'g');
     expect(result.storedValue).toBe(250);
     expect(result.preview).toBe(`½${NB}Becher Joghurt (250${NB}g)`);
+    expect(result.previewDisplay.parts).toEqual([
+      { kind: 'text', value: `½${NB}Becher Joghurt` },
+      { kind: 'note', value: `250${NB}g` },
+    ]);
   });
 
   it('keeps the entered amount for a bare ingredient', () => {
@@ -142,6 +195,10 @@ describe('resolveReorderPoint', () => {
   it('keeps the unbegrenzt form for infinite stock', () => {
     expect(resolveReorderPoint('Wasser', allIngredientMappings().Wasser, Infinity, 'ml')).toEqual({
       preview: 'unbegrenzt Wasser',
+      previewDisplay: {
+        text: 'unbegrenzt Wasser',
+        parts: [{ kind: 'text', value: 'unbegrenzt Wasser' }],
+      },
       storedValue: Infinity,
     });
   });

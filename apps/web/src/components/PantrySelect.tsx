@@ -33,17 +33,19 @@
  * **One ingredient is two lines** (decided with the user):
  *
  * 1. the *need and the purchase*, side by side: left what the selected dishes
- *    need together, as its plain base form — the name and the exact, unrounded
- *    amount (core's `needText`); right, smaller, the amount to buy behind a
- *    shopping-cart symbol — the amount in the
- *    ingredient's shopping unit with its count rounded to the nearest AQ ladder
+ *    need together, in the ingredient's familiar reading but always naming that
+ *    exact amount (core's `needText`: an exact unit only when its count really
+ *    brings the need home, an approximate unit as its count plus the
+ *    authoritative base amount, otherwise the plain base form); right, smaller,
+ *    the amount to buy behind a shopping-cart symbol — the amount in the
+ *    ingredient's shopping unit with its count rounded to the nearest AQ table
  *    value regardless of the unit's number scheme (core's `pantryReading`);
  * 2. the *stock chips*: one row of the stock values where the bought amount
- *    changes — the package thresholds for a shopping unit, ladder steps
- *    otherwise (core's `suggestedStocks`) — labelled with both units (core's
- *    `renderPantryChip`), led by a shelf symbol and shown in increasing order.
- *    The chip that covers the whole need carries a leading check and reads
- *    olive. Only as many
+ *    changes — the package thresholds for an exact shopping unit, clean BQ
+ *    values otherwise (core's `suggestedStocks`) — labelled with both units
+ *    (core's `renderPantryChip`), led by a shelf symbol and shown in increasing
+ *    order. The chip that covers the whole need carries a leading check and
+ *    reads olive. Only as many
  *    chips as fit on one row are shown; the rest hide behind the "andere" chip,
  *    which opens the keyboard on the Vorrat's base-quantity field. A typed
  *    value that is no suggestion then shows as an additional chip with an edit
@@ -94,14 +96,16 @@ import type { ReactNode, Ref } from 'react';
 import {
   auDisplayName,
   buyAmount,
+  EN_SPACE,
   formatBQ,
   formatPantryAq,
   needText,
   NNBSP,
   pantryReading,
-  renderPantryChip,
+  renderPantryChipDisplay,
   renderPantryLine,
   shoppingUnitOf,
+  splitArrangementNotes,
   stockPrefill,
   suggestedStocks,
   type AdditionalUnit,
@@ -109,6 +113,7 @@ import {
 } from '@cookbook/core';
 
 import { bottomLevelNeedsFor, type ShoppingInputs } from '../keep/shoppingBundle';
+import ArrangementLine from './ArrangementLine';
 import LeaveConfirmSheet from './LeaveConfirmSheet';
 import { CheckIcon, ShelfIcon, ShoppingCartIcon } from './icons';
 import StockChips, { type StockChip } from './StockChips';
@@ -224,6 +229,11 @@ interface PantryState {
  * placeholders; `<BQ><NNBSP><BU>` is grouped into one node so the number and its
  * unit stay inside a single tap target. `unitLabel` is the unit's singular or
  * plural display form for the shown count (`auDisplayName`).
+ *
+ * The arrangement's parenthesized note is split out exactly like the recipe
+ * rows do (only the written shopping list keeps the brackets): it follows one en
+ * space in the muted, italic `.arrangement-note` run. Its tappable base amount
+ * stays inside that run and inherits the look.
  */
 function renderArrangement(
   au: AdditionalUnit,
@@ -232,36 +242,53 @@ function renderArrangement(
   bqNode: ReactNode,
   bu: string,
 ): ReactNode {
-  const template = au.arrangement
-    .replaceAll('<BQ><NNBSP><BU>', '<BQBU>')
-    .replaceAll('<BQ> <BU>', '<BQBU>')
-    // The pantry shows the ingredient name elsewhere on the row, so both name
-    // placeholders drop out: <IN> (canonical) and <INF> (count form).
-    .replaceAll('<INF>', '')
-    .replaceAll('<IN>', '')
-    // A name-less arrangement drops the name placeholder and its leading space,
-    // leaving a double space before the base quantity's parenthesis — collapse
-    // it like core's own name-less renderer does.
-    .replaceAll('  ', ' ');
-  const parts = template.split(/(<AQ>|<AU>|<BQBU>|<BQ>|<BU>|<NNBSP>)/g);
-  return parts.map((part, index) => {
-    switch (part) {
-      case '<AQ>':
-        return <Fragment key={index}>{aqNode}</Fragment>;
-      case '<AU>':
-        return <Fragment key={index}>{unitLabel}</Fragment>;
-      case '<BQBU>':
-      case '<BQ>':
-        return <Fragment key={index}>{bqNode}</Fragment>;
-      // A base unit not adjacent to its quantity (no arrangement in the seed
-      // separates them): the family unit alone is the honest fallback.
-      case '<BU>':
-        return <Fragment key={index}>{bu}</Fragment>;
-      case '<NNBSP>':
-        return <Fragment key={index}>{NNBSP}</Fragment>;
-      default:
-        return <Fragment key={index}>{part}</Fragment>;
-    }
+  const templateParts = splitArrangementNotes(au.arrangement);
+  return templateParts.map((part, partIndex) => {
+    const template = part.template
+      .replaceAll('<BQ><NNBSP><BU>', '<BQBU>')
+      .replaceAll('<BQ> <BU>', '<BQBU>')
+      // The pantry shows the ingredient name elsewhere on the row, so both name
+      // placeholders drop out: <IN> (canonical) and <INF> (count form).
+      .replaceAll('<INF>', '')
+      .replaceAll('<IN>', '')
+      // A name-less arrangement drops the name placeholder and its leading space,
+      // leaving a double space before the base quantity's parenthesis — collapse
+      // it like core's own name-less renderer does.
+      .replaceAll('  ', ' ');
+    // The space before the bracket gives way to the display's en space.
+    const next = templateParts[partIndex + 1];
+    const pieces = (next?.kind === 'note' ? template.replace(/\s+$/, '') : template).split(
+      /(<AQ>|<AU>|<BQBU>|<BQ>|<BU>|<NNBSP>)/g,
+    );
+    const nodes = pieces.map((piece, index) => {
+      switch (piece) {
+        case '<AQ>':
+          return <Fragment key={index}>{aqNode}</Fragment>;
+        case '<AU>':
+          return <Fragment key={index}>{unitLabel}</Fragment>;
+        case '<BQBU>':
+        case '<BQ>':
+          return <Fragment key={index}>{bqNode}</Fragment>;
+        // A base unit not adjacent to its quantity (no arrangement in the seed
+        // separates them): the family unit alone is the honest fallback.
+        case '<BU>':
+          return <Fragment key={index}>{bu}</Fragment>;
+        case '<NNBSP>':
+          return <Fragment key={index}>{NNBSP}</Fragment>;
+        default:
+          return <Fragment key={index}>{piece}</Fragment>;
+      }
+    });
+    return part.kind === 'note' ? (
+      // The en space lives inside the note run: .pantry-amount is a flex row,
+      // where a lone whitespace text node would become an empty flex item.
+      <span className="arrangement-note" key={partIndex}>
+        {EN_SPACE}
+        {nodes}
+      </span>
+    ) : (
+      <Fragment key={partIndex}>{nodes}</Fragment>
+    );
   });
 }
 
@@ -581,7 +608,11 @@ function PantrySelect({
         ? null
         : {
             value: customValue,
-            label: renderPantryChip(need.ingredient, customValue, need.baseUnit),
+            label: (
+              <ArrangementLine
+                display={renderPantryChipDisplay(need.ingredient, customValue, need.baseUnit)}
+              />
+            ),
           };
     // The suggested stock values as chips, each labelled with both units. The
     // custom value is left out so it never duplicates the edit chip below.
@@ -589,7 +620,11 @@ function PantrySelect({
       .filter((value) => value !== customValue)
       .map((value) => ({
         value,
-        label: renderPantryChip(need.ingredient, value, need.baseUnit),
+        label: (
+          <ArrangementLine
+            display={renderPantryChipDisplay(need.ingredient, value, need.baseUnit)}
+          />
+        ),
         // The largest suggestion (core rounds the need to the thousandth) means
         // "I have the whole quantity on stock" — mark it complete so StockChips
         // leads that chip with a check. `value > 0` keeps the degenerate
@@ -678,7 +713,9 @@ function PantrySelect({
                 </span>
               ) : stock > 0 ? (
                 <span className="pantry-amount">
-                  {renderPantryChip(need.ingredient, stock, need.baseUnit)}
+                  <ArrangementLine
+                    display={renderPantryChipDisplay(need.ingredient, stock, need.baseUnit)}
+                  />
                 </span>
               ) : (
                 <span className="pantry-dash">—</span>
@@ -703,7 +740,7 @@ function PantrySelect({
               value={stock}
               baseUnit={need.baseUnit}
               customChip={customChip}
-              // Without a shopping unit the suggestions are ladder stops, not
+              // Without a shopping unit the suggestions are BQ amounts, not
               // package thresholds: the typed-value entry ("andere") must always
               // stay reachable, so it is kept visible instead of hiding behind an
               // overflow.

@@ -738,6 +738,15 @@
   color: var(--color-ink-muted);
 }
 
+/* The quiet aside of an ingredient arrangement ("1 Becher Joghurt␣500 g",
+   DESIGN §5.4): muted and italic, separated from the line by one en space. The
+   separator comes from ArrangementLine; step prose keeps its brackets and a
+   regular space and still uses this look for the brackets' content (§5.11). */
+.arrangement-note {
+  color: var(--color-ink-muted);
+  font-style: italic;
+}
+
 /* ---- Danger zone (delete) ------------------------------------------------ */
 
 /* Danger zone (delete): the delete button and its "Abbrechen" sit next to each

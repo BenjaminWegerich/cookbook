@@ -28,6 +28,7 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { formatDecimal } from '@cookbook/core';
 
@@ -37,7 +38,12 @@ import { parseInput, roundThousandths } from './pantryInput';
 /** One suggested stock value and its label ("1 Becher (400 g)", "600 g", "0"). */
 export interface StockChip {
   readonly value: number;
-  readonly label: string;
+  /**
+   * The chip's reading ("1 Becher (400 g)", "600 g", "0"). It is a ReactNode
+   * because a pantry chip's arrangement note is a muted, italic run split out of
+   * the line (`ArrangementLine`); the cooking step's chips pass plain strings.
+   */
+  readonly label: ReactNode;
   /**
    * True when this chip selects the whole need (nothing left to buy): the
    * "I have the entire quantity on stock" option. The chip is rendered with a
@@ -66,9 +72,10 @@ interface StockChipsProps {
   customChip: StockChip | null;
   /**
    * Whether the "andere" chip stays visible even when every suggestion fits on
-   * one row. The parent sets this for ingredients **without** a shopping unit:
-   * there the suggestions are ladder stops rather than package thresholds, so
-   * the typed-value entry must always be reachable without an overflow first.
+   * one row. The parent sets this for ingredients **without an exact shopping
+   * unit**: there the suggestions are BQ amounts rather than package
+   * thresholds, so the typed-value entry must always be reachable without an
+   * overflow first.
    */
   alwaysShowAndere?: boolean;
   /** Reports a suggestion chip that was tapped. */

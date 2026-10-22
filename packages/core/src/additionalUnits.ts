@@ -47,6 +47,14 @@ import type { ToleranceContext } from './tolerance.js';
  */
 export const NNBSP = '\u202F';
 
+/**
+ * En space (U+2002) that separates a display line from its note (§4): the web
+ * app and the HTML export put it before the muted, italic note that used to
+ * stand in parentheses. A step text keeps a regular space and its brackets
+ * instead (docs/DESIGN.md §5.11).
+ */
+export const EN_SPACE = '\u2002';
+
 /** Additional units by name (names are unique — validated by the generator). */
 const AU_BY_NAME: ReadonlyMap<string, AdditionalUnit> = new Map(
   ADDITIONAL_UNITS.map((au) => [au.name, au]),
@@ -423,6 +431,134 @@ export function renderArrangementTemplate(arrangement: string, values: Arrangeme
   );
 }
 
+/** One raw run of an arrangement template, split at its parentheses (§4). */
+export interface ArrangementTemplatePart {
+  /** A text run, or the inner template of a parenthesized note. */
+  readonly kind: 'text' | 'note';
+  /** The run's template, with the note's parentheses removed. */
+  readonly template: string;
+}
+
+/**
+ * Splits an arrangement template at its parenthesized notes (§4). The note
+ * parts hold what stands *inside* the brackets, so a display can drop the
+ * brackets and style that text on its own. Nested brackets are not part of the
+ * arrangement grammar; the first `)` closes the note. An unclosed `(` is left
+ * in the text (nothing can be lifted out), and parentheses that do not appear in
+ * the template never split a rendered line — an ingredient name may itself
+ * contain brackets without being mistaken for a note.
+ */
+export function splitArrangementNotes(arrangement: string): readonly ArrangementTemplatePart[] {
+  const parts: ArrangementTemplatePart[] = [];
+  let text = '';
+  let note: string | null = null;
+  for (const char of arrangement) {
+    if (note === null) {
+      if (char === '(') {
+        if (text !== '') {
+          parts.push({ kind: 'text', template: text });
+          text = '';
+        }
+        note = '';
+      } else {
+        text += char;
+      }
+    } else if (char === ')') {
+      parts.push({ kind: 'note', template: note });
+      note = null;
+    } else {
+      note += char;
+    }
+  }
+  // An unclosed bracket stays literal text: there is no complete note to lift
+  // out, and silently dropping the rest of the arrangement would lose content.
+  if (note !== null) {
+    text += `(${note}`;
+  }
+  if (text !== '') {
+    parts.push({ kind: 'text', template: text });
+  }
+  return parts;
+}
+
+/** One rendered run of an arrangement line (§4). */
+export type ArrangementDisplayPart =
+  | { readonly kind: 'text'; readonly value: string }
+  | { readonly kind: 'note'; readonly value: string };
+
+/** A rendered arrangement line with its notes split out for styled display (§4). */
+export interface ArrangementDisplay {
+  /**
+   * The line exactly as written, notes in parentheses. This is the wording the
+   * written shopping list keeps; the app and the cooking view render `parts`.
+   */
+  readonly text: string;
+  /**
+   * The line's runs, in order. A note holds the trimmed text inside its
+   * parentheses — the caller supplies the separator (an en space, or a regular
+   * space and brackets in step prose).
+   */
+  readonly parts: readonly ArrangementDisplayPart[];
+}
+
+/**
+ * Renders an arrangement as styled display runs (§4): every parenthesized note
+ * is lifted out of its brackets, so the caller can show it muted and italic
+ * after an en space. `text` keeps the written form with brackets, so the
+ * shopping list and every other plain-text consumer are unchanged.
+ */
+export function renderArrangementDisplay(
+  arrangement: string,
+  values: ArrangementValues,
+): ArrangementDisplay {
+  const templateParts = splitArrangementNotes(arrangement);
+  const parts: ArrangementDisplayPart[] = [];
+  templateParts.forEach((part, index) => {
+    const rendered = renderArrangementTemplate(part.template, values);
+    if (part.kind === 'note') {
+      const note = rendered.trim();
+      if (note !== '') {
+        parts.push({ kind: 'note', value: note });
+      }
+      return;
+    }
+    // The space that used to separate the line from its bracket gives way to
+    // the caller's separator; the note already carries the only free space.
+    const next = templateParts[index + 1];
+    const value = next?.kind === 'note' ? rendered.replace(/\s+$/, '') : rendered;
+    if (value !== '') {
+      parts.push({ kind: 'text', value });
+    }
+  });
+  return {
+    text: renderArrangementTemplate(arrangement, values),
+    // A line that renders to nothing still needs one run a caller can render.
+    parts: parts.length === 0 ? [{ kind: 'text', value: '' }] : parts,
+  };
+}
+
+/** The plain base form as a display line (no arrangement, no note). */
+function baseFormDisplay(ingredient: string, bq: number, bu: string): ArrangementDisplay {
+  const text = `${formatBQ(bq, bu)} ${ingredient}`;
+  return { text, parts: [{ kind: 'text', value: text }] };
+}
+
+/**
+ * Collapses the double spaces left by an empty `<IN>` in a draft arrangement
+ * ("1 Becher  (160 g)"), in the written text and in every display run alike.
+ */
+function collapseDisplaySpaces(display: ArrangementDisplay): ArrangementDisplay {
+  const collapse = (value: string): string => value.replaceAll('  ', ' ');
+  return {
+    text: collapse(display.text),
+    parts: display.parts.map((part) =>
+      part.kind === 'note'
+        ? { kind: 'note', value: collapse(part.value) }
+        : { kind: 'text', value: collapse(part.value) },
+    ),
+  };
+}
+
 /**
  * Renders the selected unit's arrangement with the placeholders substituted
  * (§4). Shared by renderAQS (a registered ingredient) and resolveReorderPoint
@@ -442,14 +578,14 @@ function renderSelectedAQ(
   shownBq: number,
   formatAq: (aq: string) => string,
   entry?: AuSelectableEntry,
-): string {
+): ArrangementDisplay {
   // The count that drives the display forms of both the unit and the ingredient.
   const count = aqToNumber(selected.aq);
   // <INF> is the ingredient in its count form („1 Karotte“ / „2 Karotten“),
   // falling back to the canonical name for an invariant or unknown name. The
   // lookup is registry-backed unless the caller passed a (draft) entry.
   const ingredientFormText = ingredientForm(entry ?? mappingsFor(ingredient), count) ?? ingredient;
-  const line = renderArrangementTemplate(selected.au.arrangement, {
+  const display = renderArrangementDisplay(selected.au.arrangement, {
     aq: formatAq(selected.aq),
     // <AU> renders the singular or plural display form of the count (§3).
     au: auDisplayName(selected.au, count),
@@ -460,7 +596,7 @@ function renderSelectedAQ(
   });
   // The create form can preview an entry before a name is typed; the
   // arrangement would then leave a dangling space ("1 Becher  (160 g)").
-  return ingredient === '' ? line.replaceAll('  ', ' ') : line;
+  return ingredient === '' ? collapseDisplaySpaces(display) : display;
 }
 
 /**
@@ -475,13 +611,13 @@ function renderOptimizedAQ(
   bu: string,
   formatAq: (aq: string) => string,
   entry?: AuSelectableEntry,
-): string {
+): ArrangementDisplay {
   const selected = result.aq!;
   const count = selected.value;
   // <INF> is the ingredient in its count form („1 Karotte“ / „2 Karotten“),
   // falling back to the canonical name for an invariant or unknown name.
   const ingredientFormText = ingredientForm(entry ?? mappingsFor(ingredient), count) ?? ingredient;
-  const line = renderArrangementTemplate(selected.au.arrangement, {
+  const display = renderArrangementDisplay(selected.au.arrangement, {
     aq: formatAq(selected.notation),
     au: auDisplayName(selected.au, count),
     ingredient,
@@ -491,7 +627,7 @@ function renderOptimizedAQ(
   });
   // The create form can preview an entry before a name is typed; the
   // arrangement would then leave a dangling space ("1 Becher  (160 g)").
-  return ingredient === '' ? line.replaceAll('  ', ' ') : line;
+  return ingredient === '' ? collapseDisplaySpaces(display) : display;
 }
 
 /**
@@ -516,6 +652,21 @@ export function renderAQS(
   bu: string,
   context: ToleranceContext = {},
 ): string {
+  return renderAQSDisplay(ingredient, bq, bu, context).text;
+}
+
+/**
+ * The web app's display runs for `renderAQS` (§4): the same line, with every
+ * parenthesized arrangement note split out so it can be rendered muted and
+ * italic after an en space. The written shopping list keeps `renderAQS`'s
+ * bracketed `text`.
+ */
+export function renderAQSDisplay(
+  ingredient: string,
+  bq: number,
+  bu: string,
+  context: ToleranceContext = {},
+): ArrangementDisplay {
   return renderAQSWith(ingredient, bq, bu, formatAQ, context);
 }
 
@@ -530,11 +681,24 @@ export function renderAQSSlash(
   bu: string,
   context: ToleranceContext = {},
 ): string {
+  return renderAQSDisplaySlash(ingredient, bq, bu, context).text;
+}
+
+/**
+ * The cooking view's display runs for `renderAQSSlash` (§4): the slash-form AQ
+ * with the arrangement notes split out for styled rendering.
+ */
+export function renderAQSDisplaySlash(
+  ingredient: string,
+  bq: number,
+  bu: string,
+  context: ToleranceContext = {},
+): ArrangementDisplay {
   return renderAQSWith(ingredient, bq, bu, formatAQSlash, context);
 }
 
 /**
- * The shared core of `renderAQS` and `renderAQSSlash`: selects the additional
+ * The shared core of the four public AQS renderers: selects the additional
  * quantity, then renders the arrangement with the caller's fraction formatter.
  */
 function renderAQSWith(
@@ -543,11 +707,11 @@ function renderAQSWith(
   bu: string,
   formatAq: (aq: string) => string,
   context: ToleranceContext,
-): string {
+): ArrangementDisplay {
   const result = optimizeQuantity(bq, mappingsFor(ingredient), bu, context);
   if (result.aq === undefined) {
     // Metric-only winner or fallback: the plain base form, no AQ.
-    return `${formatBQ(result.bq, bu)} ${ingredient}`;
+    return baseFormDisplay(ingredient, result.bq, bu);
   }
   return renderOptimizedAQ(ingredient, result, bu, formatAq);
 }
@@ -615,14 +779,8 @@ export function renderQuantityText(ingredient: string, bq: number, bu: string): 
     if (au.exact && Math.abs(value * mapping.factor - bq) > AMOUNT_EPSILON) {
       continue;
     }
-    return renderSelectedAQ(
-      ingredient,
-      { aq, au, factor: mapping.factor },
-      bu,
-      bq,
-      formatAQ,
-      entry,
-    );
+    return renderSelectedAQ(ingredient, { aq, au, factor: mapping.factor }, bu, bq, formatAQ, entry)
+      .text;
   }
   return base;
 }
@@ -700,7 +858,7 @@ export function renderUnitCount(
     shownBq,
     formatAQ,
     entry,
-  );
+  ).text;
 }
 
 /**
@@ -786,9 +944,24 @@ function renderPantryText(
   bu: string,
   entry?: AuSelectableEntry,
 ): string {
+  return renderPantryDisplay(ingredient, reading, bu, entry).text;
+}
+
+/**
+ * The display runs of a pantry reading (§4): the same line `renderPantryText`
+ * writes, with the arrangement's note split out. The pantry sheet styles the
+ * note like every other arrangement; the Keep write keeps the bracketed text.
+ */
+function renderPantryDisplay(
+  ingredient: string,
+  reading: PantryReading,
+  bu: string,
+  entry?: AuSelectableEntry,
+): ArrangementDisplay {
   if (reading.au === null || reading.aq === null) {
     const base = formatBQ(reading.bq, bu);
-    return ingredient === '' ? base : `${base} ${ingredient}`;
+    const text = ingredient === '' ? base : `${base} ${ingredient}`;
+    return { text, parts: [{ kind: 'text', value: text }] };
   }
   return renderSelectedAQ(
     ingredient,
@@ -825,6 +998,22 @@ export function renderPantryChip(ingredient: string, bq: number, bu: string): st
 }
 
 /**
+ * The pantry chip's display runs (§4): `renderPantryChip`'s line with the
+ * arrangement note split out, so the stock chips show the same styled note as
+ * the sheet's amount lines. An empty stock stays the plain "0".
+ */
+export function renderPantryChipDisplay(
+  ingredient: string,
+  bq: number,
+  bu: string,
+): ArrangementDisplay {
+  if (!(bq > 0)) {
+    return { text: '0', parts: [{ kind: 'text', value: '0' }] };
+  }
+  return renderPantryDisplay('', pantryReading(ingredient, bq, bu), bu, mappingsFor(ingredient));
+}
+
+/**
  * Renders a pantry reading with the ingredient name ("1 ¼ Becher Mehl (500 g)"),
  * or the base form ("500 g Mehl") — the exact line the Keep write carries, so
  * the sheet can never show a different wording than the list gets.
@@ -835,8 +1024,13 @@ export function renderPantryLine(ingredient: string, bq: number, bu: string): st
 
 /** The resolved create-form reorder point: its preview line and the value to store. */
 export interface ReorderPointResolution {
-  /** The display line for the chosen stock level ("1 Becher Creme Fraiche (160 g)"). */
+  /** The written line for the chosen stock level ("1 Becher Creme Fraiche (160 g)"). */
   readonly preview: string;
+  /**
+   * The same line as display runs (§4): the arrangement's note split out for
+   * the muted, italic rendering the sheets use.
+   */
+  readonly previewDisplay: ArrangementDisplay;
   /** The base quantity to store in the master data (0, a positive amount, or Infinity). */
   readonly storedValue: number;
 }
@@ -874,8 +1068,10 @@ export function resolveReorderPoint(
   bu: string,
 ): ReorderPointResolution {
   if (bq === Infinity) {
+    const text = ingredient === '' ? 'unbegrenzt' : `unbegrenzt ${ingredient}`;
     return {
-      preview: ingredient === '' ? 'unbegrenzt' : `unbegrenzt ${ingredient}`,
+      preview: text,
+      previewDisplay: { text, parts: [{ kind: 'text', value: text }] },
       storedValue: Infinity,
     };
   }
@@ -885,7 +1081,12 @@ export function resolveReorderPoint(
   });
   if (result === null || result.aq === undefined) {
     const base = formatBQ(bq, bu);
-    return { preview: ingredient === '' ? base : `${base} ${ingredient}`, storedValue: bq };
+    const text = ingredient === '' ? base : `${base} ${ingredient}`;
+    return {
+      preview: text,
+      previewDisplay: { text, parts: [{ kind: 'text', value: text }] },
+      storedValue: bq,
+    };
   }
   // An exact unit defines the stock amount (whole packages); a non-integer
   // count already produced a whole-gram/millilitre BQ in the optimizer. An
@@ -893,8 +1094,6 @@ export function resolveReorderPoint(
   // stays.
   const storedValue = result.aq.au.exact ? result.bq : bq;
   const previewResult: OptimizedQuantity = { ...result, bq: storedValue };
-  return {
-    preview: renderOptimizedAQ(ingredient, previewResult, bu, formatAQ, entry),
-    storedValue,
-  };
+  const previewDisplay = renderOptimizedAQ(ingredient, previewResult, bu, formatAQ, entry);
+  return { preview: previewDisplay.text, previewDisplay, storedValue };
 }

@@ -114,6 +114,10 @@
      to the 42px floor, as in the app (§5.2). */
   .chip::before { content: ''; position: absolute; inset: -5px; }
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  /* The quiet aside of an ingredient arrangement (§5.4): the note left its
+     brackets and follows one en space, muted and italic. Step prose keeps its
+     brackets and a regular space (the span then wraps both, §5.11). */
+  .arrangement-note { color: var(--muted); font-style: italic; }
   /* Reference-ingredient readout under the size picker (amounts only, muted). */
   .reference { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-sm);
                overflow-wrap: anywhere; }
@@ -267,110 +271,110 @@
   <div class="divider"></div>
 <ul class="check-list size-scoped" data-servings="1" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s0-0"><label class="qty" for="c-s0-0">40 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s0-1"><label class="qty" for="c-s0-1">3 EL Joghurt (70 g)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s0-2"><label class="qty" for="c-s0-2">1 TL Zitronensaft (3 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s0-1"><label class="qty" for="c-s0-1">3 EL Joghurt <span class="arrangement-note">70 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s0-2"><label class="qty" for="c-s0-2">1 TL Zitronensaft <span class="arrangement-note">3 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s0-3"><label class="qty" for="c-s0-3">80 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="2" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s1-0"><label class="qty" for="c-s1-0">80 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s1-1"><label class="qty" for="c-s1-1">6 EL Joghurt (150 g)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s1-1"><label class="qty" for="c-s1-1">6 EL Joghurt <span class="arrangement-note">150 g</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s1-2"><label class="qty" for="c-s1-2">5 ml Zitronensaft</label></li>
   <li class="check-row"><input type="checkbox" id="c-s1-3"><label class="qty" for="c-s1-3">150 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="3" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s2-0"><label class="qty" for="c-s2-0">120 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s2-1"><label class="qty" for="c-s2-1">8 EL Joghurt (200 g)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s2-2"><label class="qty" for="c-s2-2">2 TL Zitronensaft (7 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s2-1"><label class="qty" for="c-s2-1">8 EL Joghurt <span class="arrangement-note">200 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s2-2"><label class="qty" for="c-s2-2">2 TL Zitronensaft <span class="arrangement-note">7 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s2-3"><label class="qty" for="c-s2-3">250 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="4" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s3-0"><label class="qty" for="c-s3-0">150 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s3-1"><label class="qty" for="c-s3-1">1/2 Becher Joghurt (250 g)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s3-2"><label class="qty" for="c-s3-2">1 EL Zitronensaft (10 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s3-1"><label class="qty" for="c-s3-1">1/2 Becher Joghurt <span class="arrangement-note">250 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s3-2"><label class="qty" for="c-s3-2">1 EL Zitronensaft <span class="arrangement-note">10 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s3-3"><label class="qty" for="c-s3-3">350 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="5" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s4-0"><label class="qty" for="c-s4-0">200 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s4-1"><label class="qty" for="c-s4-1">1/2 Becher Joghurt (250 g)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s4-2"><label class="qty" for="c-s4-2">4 TL Zitronensaft (12 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s4-1"><label class="qty" for="c-s4-1">1/2 Becher Joghurt <span class="arrangement-note">250 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s4-2"><label class="qty" for="c-s4-2">4 TL Zitronensaft <span class="arrangement-note">12 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s4-3"><label class="qty" for="c-s4-3">400 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped is-written" data-servings="6" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s5-0"><label class="qty" for="c-s5-0">250 g Tortillas</label></li>
   <li class="check-row"><input type="checkbox" id="c-s5-1"><label class="qty" for="c-s5-1">400 g Joghurt</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s5-2"><label class="qty" for="c-s5-2">5 TL Zitronensaft (15 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s5-2"><label class="qty" for="c-s5-2">5 TL Zitronensaft <span class="arrangement-note">15 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s5-3"><label class="qty" for="c-s5-3">500 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="7" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s6-0"><label class="qty" for="c-s6-0">300 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s6-1"><label class="qty" for="c-s6-1">1 Becher Joghurt (500 g)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s6-2"><label class="qty" for="c-s6-2">18 ml Zitronensaft (1/2 Zitrone)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s6-1"><label class="qty" for="c-s6-1">1 Becher Joghurt <span class="arrangement-note">500 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s6-2"><label class="qty" for="c-s6-2">18 ml Zitronensaft <span class="arrangement-note">1/2 Zitrone</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s6-3"><label class="qty" for="c-s6-3">600 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="8" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s7-0"><label class="qty" for="c-s7-0">350 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s7-1"><label class="qty" for="c-s7-1">1 Becher Joghurt (500 g)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s7-2"><label class="qty" for="c-s7-2">2 EL Zitronensaft (20 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s7-1"><label class="qty" for="c-s7-1">1 Becher Joghurt <span class="arrangement-note">500 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s7-2"><label class="qty" for="c-s7-2">2 EL Zitronensaft <span class="arrangement-note">20 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s7-3"><label class="qty" for="c-s7-3">700 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="9" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s8-0"><label class="qty" for="c-s8-0">400 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s8-1"><label class="qty" for="c-s8-1">1 Becher Joghurt (500 g)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s8-2"><label class="qty" for="c-s8-2">2 EL Zitronensaft (20 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s8-1"><label class="qty" for="c-s8-1">1 Becher Joghurt <span class="arrangement-note">500 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s8-2"><label class="qty" for="c-s8-2">2 EL Zitronensaft <span class="arrangement-note">20 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s8-3"><label class="qty" for="c-s8-3">800 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="10" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s9-0"><label class="qty" for="c-s9-0">400 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s9-1"><label class="qty" for="c-s9-1">1 1/2 Becher Joghurt (750 g)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s9-2"><label class="qty" for="c-s9-2">8 TL Zitronensaft (25 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s9-1"><label class="qty" for="c-s9-1">1 1/2 Becher Joghurt <span class="arrangement-note">750 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s9-2"><label class="qty" for="c-s9-2">8 TL Zitronensaft <span class="arrangement-note">25 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s9-3"><label class="qty" for="c-s9-3">800 ml Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="12" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s10-0"><label class="qty" for="c-s10-0">500 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s10-1"><label class="qty" for="c-s10-1">1 1/2 Becher Joghurt (750 g)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s10-2"><label class="qty" for="c-s10-2">3 EL Zitronensaft (30 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s10-1"><label class="qty" for="c-s10-1">1 1/2 Becher Joghurt <span class="arrangement-note">750 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s10-2"><label class="qty" for="c-s10-2">3 EL Zitronensaft <span class="arrangement-note">30 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s10-3"><label class="qty" for="c-s10-3">1 l Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="15" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s11-0"><label class="qty" for="c-s11-0">600 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s11-1"><label class="qty" for="c-s11-1">2 Becher Joghurt (1 kg)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s11-2"><label class="qty" for="c-s11-2">4 EL Zitronensaft (40 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s11-1"><label class="qty" for="c-s11-1">2 Becher Joghurt <span class="arrangement-note">1 kg</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s11-2"><label class="qty" for="c-s11-2">4 EL Zitronensaft <span class="arrangement-note">40 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s11-3"><label class="qty" for="c-s11-3">1,2 l Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="18" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s12-0"><label class="qty" for="c-s12-0">800 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s12-1"><label class="qty" for="c-s12-1">2 1/2 Becher Joghurt (1,25 kg)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s12-2"><label class="qty" for="c-s12-2">5 EL Zitronensaft (50 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s12-1"><label class="qty" for="c-s12-1">2 1/2 Becher Joghurt <span class="arrangement-note">1,25 kg</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s12-2"><label class="qty" for="c-s12-2">5 EL Zitronensaft <span class="arrangement-note">50 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s12-3"><label class="qty" for="c-s12-3">1,5 l Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="20" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s13-0"><label class="qty" for="c-s13-0">800 g Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s13-1"><label class="qty" for="c-s13-1">3 Becher Joghurt (1,5 kg)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s13-2"><label class="qty" for="c-s13-2">5 EL Zitronensaft (50 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s13-1"><label class="qty" for="c-s13-1">3 Becher Joghurt <span class="arrangement-note">1,5 kg</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s13-2"><label class="qty" for="c-s13-2">5 EL Zitronensaft <span class="arrangement-note">50 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s13-3"><label class="qty" for="c-s13-3">1,5 l Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="22" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s14-0"><label class="qty" for="c-s14-0">1 kg Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s14-1"><label class="qty" for="c-s14-1">3 Becher Joghurt (1,5 kg)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s14-2"><label class="qty" for="c-s14-2">6 EL Zitronensaft (60 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s14-1"><label class="qty" for="c-s14-1">3 Becher Joghurt <span class="arrangement-note">1,5 kg</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s14-2"><label class="qty" for="c-s14-2">6 EL Zitronensaft <span class="arrangement-note">60 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s14-3"><label class="qty" for="c-s14-3">2 l Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="25" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s15-0"><label class="qty" for="c-s15-0">1 kg Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s15-1"><label class="qty" for="c-s15-1">3 Becher Joghurt (1,5 kg)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s15-2"><label class="qty" for="c-s15-2">6 EL Zitronensaft (60 ml)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s15-1"><label class="qty" for="c-s15-1">3 Becher Joghurt <span class="arrangement-note">1,5 kg</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s15-2"><label class="qty" for="c-s15-2">6 EL Zitronensaft <span class="arrangement-note">60 ml</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s15-3"><label class="qty" for="c-s15-3">2 l Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="28" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s16-0"><label class="qty" for="c-s16-0">1 kg Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s16-1"><label class="qty" for="c-s16-1">4 Becher Joghurt (2 kg)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s16-2"><label class="qty" for="c-s16-2">70 ml Zitronensaft (2 Zitronen)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s16-1"><label class="qty" for="c-s16-1">4 Becher Joghurt <span class="arrangement-note">2 kg</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s16-2"><label class="qty" for="c-s16-2">70 ml Zitronensaft <span class="arrangement-note">2 Zitronen</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s16-3"><label class="qty" for="c-s16-3">2,5 l Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 <ul class="check-list size-scoped" data-servings="30" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-s17-0"><label class="qty" for="c-s17-0">1,2 kg Tortillas</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s17-1"><label class="qty" for="c-s17-1">4 Becher Joghurt (2 kg)</label></li>
-  <li class="check-row"><input type="checkbox" id="c-s17-2"><label class="qty" for="c-s17-2">70 ml Zitronensaft (2 Zitronen)</label></li>
+  <li class="check-row"><input type="checkbox" id="c-s17-1"><label class="qty" for="c-s17-1">4 Becher Joghurt <span class="arrangement-note">2 kg</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-s17-2"><label class="qty" for="c-s17-2">70 ml Zitronensaft <span class="arrangement-note">2 Zitronen</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-s17-3"><label class="qty" for="c-s17-3">2,5 l Béchamelsauce</label><a class="badge" href="./sample-bechamel.html" target="_blank" rel="noopener"><svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false"><path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>Rezept</a></li>
 </ul>
 </section>
@@ -390,8 +394,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">3 EL Joghurt (70 g)</span></li>
-  <li><span class="step-ingredient">1 TL Zitronensaft (3 ml)</span></li>
+  <li><span class="step-ingredient">3 EL Joghurt <span class="arrangement-note">70 g</span></span></li>
+  <li><span class="step-ingredient">1 TL Zitronensaft <span class="arrangement-note">3 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -414,7 +418,7 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">6 EL Joghurt (150 g)</span></li>
+  <li><span class="step-ingredient">6 EL Joghurt <span class="arrangement-note">150 g</span></span></li>
   <li><span class="step-ingredient">5 ml Zitronensaft</span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
@@ -438,8 +442,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">8 EL Joghurt (200 g)</span></li>
-  <li><span class="step-ingredient">2 TL Zitronensaft (7 ml)</span></li>
+  <li><span class="step-ingredient">8 EL Joghurt <span class="arrangement-note">200 g</span></span></li>
+  <li><span class="step-ingredient">2 TL Zitronensaft <span class="arrangement-note">7 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -462,8 +466,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">1/2 Becher Joghurt (250 g)</span></li>
-  <li><span class="step-ingredient">1 EL Zitronensaft (10 ml)</span></li>
+  <li><span class="step-ingredient">1/2 Becher Joghurt <span class="arrangement-note">250 g</span></span></li>
+  <li><span class="step-ingredient">1 EL Zitronensaft <span class="arrangement-note">10 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -486,8 +490,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">1/2 Becher Joghurt (250 g)</span></li>
-  <li><span class="step-ingredient">4 TL Zitronensaft (12 ml)</span></li>
+  <li><span class="step-ingredient">1/2 Becher Joghurt <span class="arrangement-note">250 g</span></span></li>
+  <li><span class="step-ingredient">4 TL Zitronensaft <span class="arrangement-note">12 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -511,7 +515,7 @@
   <div class="step" data-step="3">
 <ul class="step-rows">
   <li><span class="step-ingredient">400 g Joghurt</span></li>
-  <li><span class="step-ingredient">5 TL Zitronensaft (15 ml)</span></li>
+  <li><span class="step-ingredient">5 TL Zitronensaft <span class="arrangement-note">15 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -534,8 +538,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">1 Becher Joghurt (500 g)</span></li>
-  <li><span class="step-ingredient">18 ml Zitronensaft (1/2 Zitrone)</span></li>
+  <li><span class="step-ingredient">1 Becher Joghurt <span class="arrangement-note">500 g</span></span></li>
+  <li><span class="step-ingredient">18 ml Zitronensaft <span class="arrangement-note">1/2 Zitrone</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -558,8 +562,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">1 Becher Joghurt (500 g)</span></li>
-  <li><span class="step-ingredient">2 EL Zitronensaft (20 ml)</span></li>
+  <li><span class="step-ingredient">1 Becher Joghurt <span class="arrangement-note">500 g</span></span></li>
+  <li><span class="step-ingredient">2 EL Zitronensaft <span class="arrangement-note">20 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -582,8 +586,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">1 Becher Joghurt (500 g)</span></li>
-  <li><span class="step-ingredient">2 EL Zitronensaft (20 ml)</span></li>
+  <li><span class="step-ingredient">1 Becher Joghurt <span class="arrangement-note">500 g</span></span></li>
+  <li><span class="step-ingredient">2 EL Zitronensaft <span class="arrangement-note">20 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -606,8 +610,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">1 1/2 Becher Joghurt (750 g)</span></li>
-  <li><span class="step-ingredient">8 TL Zitronensaft (25 ml)</span></li>
+  <li><span class="step-ingredient">1 1/2 Becher Joghurt <span class="arrangement-note">750 g</span></span></li>
+  <li><span class="step-ingredient">8 TL Zitronensaft <span class="arrangement-note">25 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -630,8 +634,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">1 1/2 Becher Joghurt (750 g)</span></li>
-  <li><span class="step-ingredient">3 EL Zitronensaft (30 ml)</span></li>
+  <li><span class="step-ingredient">1 1/2 Becher Joghurt <span class="arrangement-note">750 g</span></span></li>
+  <li><span class="step-ingredient">3 EL Zitronensaft <span class="arrangement-note">30 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -654,8 +658,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">2 Becher Joghurt (1 kg)</span></li>
-  <li><span class="step-ingredient">4 EL Zitronensaft (40 ml)</span></li>
+  <li><span class="step-ingredient">2 Becher Joghurt <span class="arrangement-note">1 kg</span></span></li>
+  <li><span class="step-ingredient">4 EL Zitronensaft <span class="arrangement-note">40 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -678,8 +682,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">2 1/2 Becher Joghurt (1,25 kg)</span></li>
-  <li><span class="step-ingredient">5 EL Zitronensaft (50 ml)</span></li>
+  <li><span class="step-ingredient">2 1/2 Becher Joghurt <span class="arrangement-note">1,25 kg</span></span></li>
+  <li><span class="step-ingredient">5 EL Zitronensaft <span class="arrangement-note">50 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -702,8 +706,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">3 Becher Joghurt (1,5 kg)</span></li>
-  <li><span class="step-ingredient">5 EL Zitronensaft (50 ml)</span></li>
+  <li><span class="step-ingredient">3 Becher Joghurt <span class="arrangement-note">1,5 kg</span></span></li>
+  <li><span class="step-ingredient">5 EL Zitronensaft <span class="arrangement-note">50 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -726,8 +730,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">3 Becher Joghurt (1,5 kg)</span></li>
-  <li><span class="step-ingredient">6 EL Zitronensaft (60 ml)</span></li>
+  <li><span class="step-ingredient">3 Becher Joghurt <span class="arrangement-note">1,5 kg</span></span></li>
+  <li><span class="step-ingredient">6 EL Zitronensaft <span class="arrangement-note">60 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -750,8 +754,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">3 Becher Joghurt (1,5 kg)</span></li>
-  <li><span class="step-ingredient">6 EL Zitronensaft (60 ml)</span></li>
+  <li><span class="step-ingredient">3 Becher Joghurt <span class="arrangement-note">1,5 kg</span></span></li>
+  <li><span class="step-ingredient">6 EL Zitronensaft <span class="arrangement-note">60 ml</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -774,8 +778,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">4 Becher Joghurt (2 kg)</span></li>
-  <li><span class="step-ingredient">70 ml Zitronensaft (2 Zitronen)</span></li>
+  <li><span class="step-ingredient">4 Becher Joghurt <span class="arrangement-note">2 kg</span></span></li>
+  <li><span class="step-ingredient">70 ml Zitronensaft <span class="arrangement-note">2 Zitronen</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>
@@ -798,8 +802,8 @@
   </div>
   <div class="step" data-step="3">
 <ul class="step-rows">
-  <li><span class="step-ingredient">4 Becher Joghurt (2 kg)</span></li>
-  <li><span class="step-ingredient">70 ml Zitronensaft (2 Zitronen)</span></li>
+  <li><span class="step-ingredient">4 Becher Joghurt <span class="arrangement-note">2 kg</span></span></li>
+  <li><span class="step-ingredient">70 ml Zitronensaft <span class="arrangement-note">2 Zitronen</span></span></li>
 </ul>
     <p class="step-text">Joghurt mit Zitronensaft verrühren und würzen.</p>
   </div>

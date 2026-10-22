@@ -130,6 +130,13 @@ If no AQ candidate fits, the base form `<BQ> <BU> <IN>` is shown (`400 g Joghurt
 The BQ/AQ values are selected by the optimizer, not read from a stored BQ; in the
 fallback the BQ is `V0` itself.
 
+A parenthesized group in an arrangement is a **note**. The app and the cooking
+view render it without brackets, muted and italic, after one en space:
+`1 Becher Joghurt␣500 g`. The written shopping list keeps the written form with
+brackets (`1 Becher Joghurt (500 g)`). Step prose is the exception: it keeps a
+regular space and the brackets, styled muted and italic together with their
+content (`(500 g)`), because the sentence's punctuation must stay visible.
+
 ## 5. Number schemes
 
 - A **number scheme** is a named subset of the AQ values. The columns live in

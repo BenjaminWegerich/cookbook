@@ -31,6 +31,7 @@ import { useRef, useState } from 'react';
 
 import { resolveReorderPoint, type IngredientEntry } from '@cookbook/core';
 
+import ArrangementLine from './ArrangementLine';
 import IngredientMappingsField from './IngredientMappingsField';
 import QuantityInput from './QuantityInput';
 import ToleranceChips from './ToleranceChips';
@@ -324,7 +325,7 @@ function EditIngredientSheet({
         <div className="field">
           <p className="field-hint">Vorschau</p>
           <p className="aqs-preview" aria-live="polite">
-            {reorder.preview}
+            <ArrangementLine display={reorder.previewDisplay} />
           </p>
         </div>
 
