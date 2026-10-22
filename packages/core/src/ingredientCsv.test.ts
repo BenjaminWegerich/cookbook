@@ -14,37 +14,37 @@ import {
 
 /** The canonical ingredient list (docs format) as a fixture. */
 const LIST_TEXT = [
-  'Ingredient;Singular;Plural;Base Unit;Reorder Point',
-  'Joghurt;;;g;0',
-  'Zucker;;;g;1000',
-  'Milch;;;ml;0',
-  'Cashews;Cashew;Cashews;g;inf',
+  'Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point',
+  'Joghurt;;;g;;0',
+  'Zucker;;;g;0.25;1000',
+  'Milch;;;ml;;0',
+  'Cashews;Cashew;Cashews;g;;inf',
 ].join('\n');
 
 const LIST: IngredientList = {
   Joghurt: { bu: 'g', reorderPoint: 0 },
-  Zucker: { bu: 'g', reorderPoint: 1000 },
+  Zucker: { bu: 'g', reorderPoint: 1000, tolerance: 0.25 },
   Milch: { bu: 'ml', reorderPoint: 0 },
   Cashews: { bu: 'g', reorderPoint: Infinity, singular: 'Cashew', plural: 'Cashews' },
 };
 
 /** The canonical AU mappings (docs format, dot decimals) as a fixture. */
 const MAPPINGS_TEXT = [
-  'Ingredient;Additional Unit;Conversion Factor;Priority',
-  'Joghurt;Becher;400;1',
-  'Joghurt;Esslöffel;24;2',
-  'Zucker;Esslöffel;12;1',
-  'Zucker;Teelöffel;4;2',
+  'Ingredient;Additional Unit;Conversion Factor',
+  'Joghurt;Becher;500',
+  'Joghurt;Esslöffel;23.71373706',
+  'Zucker;Esslöffel;13.33521432',
+  'Zucker;Teelöffel;4.216965034',
 ].join('\n');
 
 const MAPPINGS: IngredientMappingsByIngredient = {
   Joghurt: [
-    { au: 'Becher', factor: 400, priority: 1 },
-    { au: 'Esslöffel', factor: 24, priority: 2 },
+    { au: 'Becher', factor: 500 },
+    { au: 'Esslöffel', factor: 23.71373706 },
   ],
   Zucker: [
-    { au: 'Esslöffel', factor: 12, priority: 1 },
-    { au: 'Teelöffel', factor: 4, priority: 2 },
+    { au: 'Esslöffel', factor: 13.33521432 },
+    { au: 'Teelöffel', factor: 4.216965034 },
   ],
 };
 
@@ -54,16 +54,17 @@ const MERGED: IngredientMappings = {
     bu: 'g',
     reorderPoint: 0,
     entries: [
-      { au: 'Becher', factor: 400, priority: 1 },
-      { au: 'Esslöffel', factor: 24, priority: 2 },
+      { au: 'Becher', factor: 500 },
+      { au: 'Esslöffel', factor: 23.71373706 },
     ],
   },
   Zucker: {
     bu: 'g',
     reorderPoint: 1000,
+    tolerance: 0.25,
     entries: [
-      { au: 'Esslöffel', factor: 12, priority: 1 },
-      { au: 'Teelöffel', factor: 4, priority: 2 },
+      { au: 'Esslöffel', factor: 13.33521432 },
+      { au: 'Teelöffel', factor: 4.216965034 },
     ],
   },
   Milch: { bu: 'ml', reorderPoint: 0, entries: [] },
@@ -71,7 +72,7 @@ const MERGED: IngredientMappings = {
 };
 
 describe('parseIngredientListCsv', () => {
-  it('parses the canonical format', () => {
+  it('parses the canonical format including the optional tolerance', () => {
     expect(parseIngredientListCsv(LIST_TEXT)).toEqual(LIST);
   });
 
@@ -87,29 +88,36 @@ describe('parseIngredientListCsv', () => {
       singular: 'Cashew',
       plural: 'Cashews',
     });
-    // No empty strings travel through the parsed shape for an invariant name
-    // (Zucker, Milch, Butter) — the key is simply absent.
     expect(parseIngredientListCsv(LIST_TEXT).Zucker).not.toHaveProperty('singular');
     expect(parseIngredientListCsv(LIST_TEXT).Zucker).not.toHaveProperty('plural');
   });
 
   it('rejects a half-filled Singular/Plural pair', () => {
-    // One form alone would silently fall back to the name on the other side.
     expect(() =>
       parseIngredientListCsv(
-        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;inf', 'Cashews;Cashew;;g;inf'),
+        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;;inf', 'Cashews;Cashew;;g;;inf'),
       ),
     ).toThrow(/unvollständiges Singular\/Plural-Paar/);
     expect(() =>
       parseIngredientListCsv(
-        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;inf', 'Cashews;;Cashews;g;inf'),
+        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;;inf', 'Cashews;;Cashews;g;;inf'),
       ),
     ).toThrow(/unvollständiges Singular\/Plural-Paar/);
   });
 
+  it('parses the pre-tolerance five-column header with no tolerance', () => {
+    const legacy = [
+      'Ingredient;Singular;Plural;Base Unit;Reorder Point',
+      'Joghurt;;;g;0',
+      'Zucker;;;g;1000',
+    ].join('\n');
+    expect(parseIngredientListCsv(legacy)).toEqual({
+      Joghurt: { bu: 'g', reorderPoint: 0 },
+      Zucker: { bu: 'g', reorderPoint: 1000 },
+    });
+  });
+
   it('parses the legacy three-column header with invariant names', () => {
-    // Files written before the display-form columns existed keep loading; the
-    // next serialization upgrades them (see the round-trip test below).
     const legacy = ['Ingredient;Base Unit;Reorder Point', 'Joghurt;g;0', 'Zucker;g;1000'].join(
       '\n',
     );
@@ -120,8 +128,6 @@ describe('parseIngredientListCsv', () => {
   });
 
   it('parses the legacy two-column header with the neutral reorder point 0', () => {
-    // Files written before the reorder-point column existed keep loading; the
-    // next serialization upgrades them (see the round-trip test below).
     const legacy = ['Ingredient;Base Unit', 'Joghurt;g', 'Zucker;g'].join('\n');
     expect(parseIngredientListCsv(legacy)).toEqual({
       Joghurt: { bu: 'g', reorderPoint: 0 },
@@ -132,53 +138,56 @@ describe('parseIngredientListCsv', () => {
   it('parses the infinity token case-insensitively', () => {
     expect(
       parseIngredientListCsv(
-        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;inf', 'Cashews;Cashew;Cashews;g;INF'),
+        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;;inf', 'Cashews;Cashew;Cashews;g;;INF'),
       ),
     ).toEqual(LIST);
   });
 
+  it('rejects an empty or invalid tolerance', () => {
+    expect(() =>
+      parseIngredientListCsv(LIST_TEXT.replace('Zucker;;;g;0.25;1000', 'Zucker;;;g;1.5;1000')),
+    ).toThrow(/ungültige Toleranz/);
+    expect(() =>
+      parseIngredientListCsv(LIST_TEXT.replace('Zucker;;;g;0.25;1000', 'Zucker;;;g;viel;1000')),
+    ).toThrow(/ungültige Toleranz/);
+  });
+
   it('rejects an empty reorder point (the field is mandatory)', () => {
     expect(() =>
-      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;;;g;0', 'Joghurt;;;g;')),
+      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;;;g;;0', 'Joghurt;;;g;;')),
     ).toThrow(/leerer Meldebestand/);
   });
 
   it('rejects a negative or non-numeric reorder point', () => {
     expect(() =>
-      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;;;g;0', 'Joghurt;;;g;-5')),
+      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;;;g;;0', 'Joghurt;;;g;;-5')),
     ).toThrow(/ungültiger Meldebestand/);
     expect(() =>
-      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;;;g;0', 'Joghurt;;;g;viel')),
+      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;;;g;;0', 'Joghurt;;;g;;viel')),
     ).toThrow(/ungültiger Meldebestand/);
   });
 
   it('throws on a row with too many columns', () => {
-    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nCashews;;;g;0;extra`)).toThrow(
+    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nCashews;;;g;;0;extra`)).toThrow(
       /unerwartete Spaltenzahl/,
     );
   });
 
-  it('throws on an empty file', () => {
+  it('throws on an empty file or an unexpected header', () => {
     expect(() => parseIngredientListCsv('')).toThrow(/leer/);
-  });
-
-  it('throws on an unexpected header', () => {
     expect(() => parseIngredientListCsv('A;B\n1;2')).toThrow(/Kopfzeile/);
   });
 
-  it('throws on an unknown base unit', () => {
-    expect(() => parseIngredientListCsv(LIST_TEXT.replace(';g;inf', ';kg;inf'))).toThrow(
+  it('throws on an unknown base unit or a duplicate ingredient', () => {
+    expect(() => parseIngredientListCsv(LIST_TEXT.replace(';g;;inf', ';kg;;inf'))).toThrow(
       /unbekannte Basis-Einheit "kg"/,
     );
-  });
-
-  it('throws on a duplicate ingredient name', () => {
-    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nJoghurt;;;ml;0`)).toThrow(/doppelte Zutat/);
+    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nJoghurt;;;ml;;0`)).toThrow(/doppelte Zutat/);
   });
 });
 
 describe('parseIngredientMappingsCsv', () => {
-  it('parses the canonical format (dot decimals, priorities per row)', () => {
+  it('parses the canonical format (no priority column)', () => {
     expect(parseIngredientMappingsCsv(MAPPINGS_TEXT)).toEqual(MAPPINGS);
   });
 
@@ -188,80 +197,64 @@ describe('parseIngredientMappingsCsv', () => {
   });
 
   it('normalizes German comma decimals to dots', () => {
-    const text = MAPPINGS_TEXT.replace('400;1', '400,0;1');
-    expect(parseIngredientMappingsCsv(text).Joghurt?.[0]?.factor).toBe(400);
+    const text = MAPPINGS_TEXT.replace('500\n', '500,0\n');
+    expect(parseIngredientMappingsCsv(text).Joghurt?.[0]?.factor).toBe(500);
   });
 
-  it('does not expect an exactness column (that flag lives on the units)', () => {
-    // The exactness of a unit is master data of the unit itself
-    // (docs/additional_units.csv, `Unit Exact`), not of the mapping: the file
-    // stays a pure overlay and the serializer never adds such a column.
-    const text = MAPPINGS_TEXT.replaceAll('400;1', '400;1;yes');
-    expect(() => parseIngredientMappingsCsv(text)).toThrow(/unerwartete Spaltenzahl/);
-    expect(serializeIngredientMappingsCsv(MAPPINGS)).not.toContain('yes');
+  it('parses a legacy file with the obsolete Priority column and ignores it', () => {
+    const legacy = [
+      'Ingredient;Additional Unit;Conversion Factor;Priority',
+      'Joghurt;Becher;500;1',
+      'Zucker;Esslöffel;13.33521432;2',
+    ].join('\n');
+    expect(parseIngredientMappingsCsv(legacy)).toEqual({
+      Joghurt: [{ au: 'Becher', factor: 500 }],
+      Zucker: [{ au: 'Esslöffel', factor: 13.33521432 }],
+    });
   });
 
   it('throws on a row with too many columns', () => {
     expect(() =>
-      parseIngredientMappingsCsv(`${MAPPINGS_TEXT}\nZucker;Esslöffel;12;1;extra`),
+      parseIngredientMappingsCsv(`${MAPPINGS_TEXT}\nZucker;Esslöffel;12;1`),
     ).toThrow(/unerwartete Spaltenzahl/);
   });
 
-  it('throws on an empty file', () => {
+  it('throws on an empty file or an unexpected header', () => {
     expect(() => parseIngredientMappingsCsv('')).toThrow(/leer/);
-  });
-
-  it('throws on an unexpected header', () => {
     expect(() => parseIngredientMappingsCsv('A;B;C;D\n1;2;3;4')).toThrow(/Kopfzeile/);
   });
 
   it('throws on an unknown additional unit', () => {
     expect(() =>
-      parseIngredientMappingsCsv(
-        MAPPINGS_TEXT.replace('Joghurt;Esslöffel;24;2', 'Joghurt;Pfund;24;2'),
-      ),
+      parseIngredientMappingsCsv(MAPPINGS_TEXT.replace('Joghurt;Esslöffel', 'Joghurt;Pfund')),
     ).toThrow(/unbekannte Zusatz-Einheit "Pfund"/);
   });
 
   it('throws on a non-positive factor', () => {
     expect(() =>
-      parseIngredientMappingsCsv(
-        MAPPINGS_TEXT.replace('Zucker;Teelöffel;4;2', 'Zucker;Teelöffel;0;2'),
-      ),
+      parseIngredientMappingsCsv(MAPPINGS_TEXT.replace('Zucker;Teelöffel;4.216965034', 'Zucker;Teelöffel;0')),
     ).toThrow(/ungültiger Umrechnungsfaktor/);
   });
 
   it('throws on a duplicate unit per ingredient', () => {
     expect(() =>
       parseIngredientMappingsCsv(
-        MAPPINGS_TEXT.replace('Zucker;Teelöffel;4;2', 'Zucker;Esslöffel;4;2'),
+        MAPPINGS_TEXT.replace('Zucker;Teelöffel;4.216965034', 'Zucker;Esslöffel;4.216965034'),
       ),
     ).toThrow(/doppelte Umrechnung/);
   });
 
-  it('throws on a duplicate priority per ingredient', () => {
-    expect(() =>
-      parseIngredientMappingsCsv(
-        MAPPINGS_TEXT.replace('Zucker;Teelöffel;4;2', 'Zucker;Teelöffel;4;1'),
-      ),
-    ).toThrow(/doppelte Priorität/);
-  });
-
-  it('throws on a non-integer priority', () => {
-    expect(() =>
-      parseIngredientMappingsCsv(
-        MAPPINGS_TEXT.replace('Zucker;Teelöffel;4;2', 'Zucker;Teelöffel;4;1.5'),
-      ),
-    ).toThrow(/Priorität/);
+  it('throws when an ingredient maps to two shopping units', () => {
+    const text = [
+      'Ingredient;Additional Unit;Conversion Factor',
+      'Mehl;Packung (unteilbar);1000',
+      'Mehl;Becher;500',
+    ].join('\n');
+    expect(() => parseIngredientMappingsCsv(text)).toThrow(/mehr als eine Einkaufs-Einheit/);
   });
 });
 
 describe('comma-separated spreadsheet exports', () => {
-  // The user's master data is edited in a spreadsheet, and spreadsheet apps
-  // export "CSV" comma-separated in an English locale. The header row decides
-  // the delimiter (csv.ts), so such a file loads instead of failing with
-  // „unerwartete Kopfzeile“ — and the next write restores the canonical
-  // semicolon form, because that is the only form the serializers emit.
   it('parses a comma-separated mappings file', () => {
     expect(parseIngredientMappingsCsv(MAPPINGS_TEXT.replaceAll(';', ','))).toEqual(MAPPINGS);
   });
@@ -271,30 +264,26 @@ describe('comma-separated spreadsheet exports', () => {
   });
 
   it('keeps a quoted German decimal comma inside its cell', () => {
-    // The spreadsheet quotes a cell that contains the delimiter; unquoted, the
-    // factor would split into two cells and the row would be reported as
-    // having the wrong column count.
     const comma = [
-      'Ingredient,Additional Unit,Conversion Factor,Priority',
-      'Joghurt,Becher,"1,5",1',
+      'Ingredient,Additional Unit,Conversion Factor',
+      'Joghurt,Becher,"1,5"',
     ].join('\n');
     expect(parseIngredientMappingsCsv(comma)).toEqual({
-      Joghurt: [{ au: 'Becher', factor: 1.5, priority: 1 }],
+      Joghurt: [{ au: 'Becher', factor: 1.5 }],
     });
   });
 
   it('reads quoted header cells and a trailing empty cell like a spreadsheet writes them', () => {
     const comma = [
-      '"Ingredient","Additional Unit","Conversion Factor","Priority",',
-      'Joghurt,Becher,400,1,',
+      '"Ingredient","Additional Unit","Conversion Factor",',
+      'Joghurt,Becher,500,',
     ].join('\n');
     expect(parseIngredientMappingsCsv(comma)).toEqual({
-      Joghurt: [{ au: 'Becher', factor: 400, priority: 1 }],
+      Joghurt: [{ au: 'Becher', factor: 500 }],
     });
   });
 
   it('writes the canonical semicolon form again after reading a comma file', () => {
-    // The file heals itself on the next write instead of staying comma-separated.
     expect(
       serializeIngredientMappingsCsv(
         parseIngredientMappingsCsv(MAPPINGS_TEXT.replaceAll(';', ',')),
@@ -303,16 +292,6 @@ describe('comma-separated spreadsheet exports', () => {
     expect(serializeIngredientListCsv(parseIngredientListCsv(LIST_TEXT.replaceAll(';', ',')))).toBe(
       `${LIST_TEXT}\n`,
     );
-  });
-
-  it('still reports the file\u2019s own header when no accepted header matches', () => {
-    // The message shows the comma header verbatim — the visible hint for a file
-    // whose header matches no accepted format (here: a renamed column).
-    expect(() =>
-      parseIngredientMappingsCsv(
-        'Ingredient,Additional Unit,Factor,Priority\nJoghurt,Becher,400,1',
-      ),
-    ).toThrow(/unerwartete Kopfzeile "Ingredient,Additional Unit,Factor,Priority"/);
   });
 });
 
@@ -334,7 +313,7 @@ describe('mergeIngredientMasterData', () => {
   });
 
   it('throws when a mapping references an ingredient that is not in the list', () => {
-    const withOrphan = { ...MAPPINGS, Käse: [{ au: 'Esslöffel', factor: 12, priority: 1 }] };
+    const withOrphan = { ...MAPPINGS, Käse: [{ au: 'Esslöffel', factor: 12 }] };
     expect(() => mergeIngredientMasterData(LIST, withOrphan)).toThrow(/nicht in der Zutaten-Liste/);
   });
 });
@@ -354,26 +333,25 @@ describe('serializeIngredientListCsv and serializeIngredientMappingsCsv', () => 
   });
 
   it('writes the canonical inf token for an infinite reorder point', () => {
-    expect(serializeIngredientListCsv(LIST)).toContain('Cashews;Cashew;Cashews;g;inf');
-    // A user typing the JavaScript spelling is not the canonical form.
+    expect(serializeIngredientListCsv(LIST)).toContain('Cashews;Cashew;Cashews;g;;inf');
     expect(() =>
       parseIngredientListCsv(
-        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;inf', 'Cashews;Cashew;Cashews;g;Infinity'),
+        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;;inf', 'Cashews;Cashew;Cashews;g;;Infinity'),
       ),
     ).toThrow(/ungültiger Meldebestand/);
   });
 
-  it('upgrades a legacy three-column file to the current five-column format', () => {
+  it('upgrades a legacy three-column file to the current six-column format', () => {
     const legacy = 'Ingredient;Base Unit;Reorder Point\nJoghurt;g;0\n';
     expect(serializeIngredientListCsv(parseIngredientListCsv(legacy))).toBe(
-      'Ingredient;Singular;Plural;Base Unit;Reorder Point\nJoghurt;;;g;0\n',
+      'Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point\nJoghurt;;;g;;0\n',
     );
   });
 
-  it('upgrades a legacy two-column file to the current five-column format', () => {
+  it('upgrades a legacy two-column file to the current six-column format', () => {
     const legacy = 'Ingredient;Base Unit\nJoghurt;g\n';
     expect(serializeIngredientListCsv(parseIngredientListCsv(legacy))).toBe(
-      'Ingredient;Singular;Plural;Base Unit;Reorder Point\nJoghurt;;;g;0\n',
+      'Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point\nJoghurt;;;g;;0\n',
     );
   });
 });
@@ -383,7 +361,6 @@ describe('splitIngredientMasterData (inverse of merge)', () => {
     const { list, mappings } = splitIngredientMasterData(MERGED);
     expect(list).toEqual(LIST);
     expect(mappings).toEqual(MAPPINGS);
-    // split → serialize → parse → merge reproduces the registry exactly.
     const reparsed = mergeIngredientMasterData(
       parseIngredientListCsv(serializeIngredientListCsv(list)),
       parseIngredientMappingsCsv(serializeIngredientMappingsCsv(mappings)),

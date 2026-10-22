@@ -33,10 +33,21 @@ export type Unit = 'g' | 'kg' | 'ml' | 'l';
 export interface Ingredient {
   /** German ingredient name (data language, CODING_CONVENTIONS.md). */
   name: string;
-  /** Base quantity in the family unit; must be a standard number (ladder value). */
+  /**
+   * The unrounded target amount in the family unit (the V0 of
+   * docs/recipe_scaling_algorithm.md). Any positive finite number is allowed;
+   * BQ/AQ values are display conveniences computed at render time and never
+   * stored.
+   */
   quantity: number;
   /** Stored base unit: g or ml (kg/l appear only in display), §4. */
   unit: Unit;
+  /**
+   * Optional per-quantity tolerance in [0, 1] (the most specific level of the
+   * cascade). Absent = inherit the ingredient / recipe / global default. Stored
+   * as a trailing `{tolerance: 0.8}` tag on the ingredient row.
+   */
+  tolerance?: number;
 }
 
 /**
@@ -122,9 +133,18 @@ export interface Recipe {
    * Allowed on both recipe types.
    */
   theme?: RecipeTheme;
-  /** finished_dish only: integer standard number (ladder value), e.g. 6. */
+  /**
+   * Optional recipe-level tolerance in [0, 1] (docs/recipe_scaling_algorithm.md
+   * §4.1). Absent = the global default 0.5. Ingredient and per-quantity
+   * settings override it.
+   */
+  tolerance?: number;
+  /** finished_dish only: an allowed serving count (servingSizes.ts), e.g. 6. */
   servings?: number;
-  /** ingredient_recipe only: standard number in the base unit. */
+  /**
+   * ingredient_recipe only: the unrounded written yield in `yield_unit`. Any
+   * positive number is allowed; the export bakes the allowed BQ views around it.
+   */
   yield?: number;
   /** ingredient_recipe only: the base unit of `yield`. */
   yield_unit?: Unit;

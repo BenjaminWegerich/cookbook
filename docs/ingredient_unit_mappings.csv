@@ -1,21 +1,214 @@
-Ingredient;Additional Unit;Conversion Factor;Priority
-Joghurt;Becher;400;1
-Joghurt;Esslöffel;24;2
-Joghurt;Teelöffel;7.5;3
-Zucker;Esslöffel;12;1
-Zucker;Teelöffel;4;2
-Mehl;Packung (unteilbar);1000;1
-Mehl;Becher;150;2
-Mehl;Esslöffel;10;3
-Butter;Esslöffel;10;1
-Milch;Becher;250;1
-Milch;Esslöffel;15;2
-Sahne;Becher;200;1
-Olivenöl;Esslöffel;10;1
-Olivenöl;Teelöffel;3;2
-Zitronensaft;Esslöffel;15;1
-Honig;Esslöffel;21;1
-Haferflocken;Becher;100;1
-Haferflocken;Esslöffel;10;2
-Karotten;Stück (ZE zuerst);80;1
-Aquafaba;Stück (BE zuerst, exakt);180;1
+Ingredient;Additional Unit;Conversion Factor
+Äpfel;Stück (ZE zuerst);181.6
+Aquafaba;Stück (BE zuerst, exakt);180
+Aquafaba;Esslöffel;10
+Aquafaba;Teelöffel;3
+Auberginen;Stück (ZE zuerst);339.5
+Avocados;Stück (ZE zuerst);249.8
+Backpulver;Päckchen;15
+Backpulver;Esslöffel;10
+Backpulver;Teelöffel;3
+Birnen;Stück (ZE zuerst);206.5
+Blumenkohl;Stück (ZE zuerst);1172.7
+Brokkoli;Stück (ZE zuerst);347.1
+Butter;Packung (teilbar);250
+Chiliflocken;Esslöffel;7
+Chiliflocken;Teelöffel;2
+Currypulver;Esslöffel;6
+Currypulver;Teelöffel;2
+Eisbergsalat;Stück (ZE zuerst);721.1
+Fenchel;Stück (ZE zuerst);286.3
+frische Petersilie;Zweig;1
+frischer Dill;Zweig;1.8
+frischer Kerbel;Zweig;1
+frischer Knoblauch;Stück (ZE zuerst);4
+frischer Liebstöckel;Zweig;1
+frischer Majoran;Zweig;3
+frischer Oregano;Zweig;3
+frischer Rosmarin;Zweig;2.5
+frischer Salbei;Zweig;3
+frischer Schnittlauch;Esslöffel;3
+frischer Schnittlauch;Teelöffel;1
+frischer Thymian;Zweig;3
+frisches Basilikum;Zweig;4
+frisches Basilikum;Blatt;0.1
+frisches Koriandergrün;Zweig;1
+Frühlingszwiebeln;Stück (ZE zuerst);29.2
+ganze Gewürznelken;Esslöffel;5.623413252
+ganze Gewürznelken;Teelöffel;1.77827941
+gehackte Tomaten;Dose (Gesamtgewicht);400
+gekochte Kichererbsen;Dose (Abtropfgewicht);240
+gekochte Kichererbsen mit Aquafaba;Dose (Gesamtgewicht);400
+gekochte Kidneybohnen;Dose (Abtropfgewicht);240
+gekochte weiße Bohnen;Dose (Abtropfgewicht);250
+gemahlene Gewürznelken;Esslöffel;6.493816316
+gemahlene Gewürznelken;Teelöffel;2.053525026
+gemahlene Koriandersamen;Esslöffel;4.216965034
+gemahlene Koriandersamen;Teelöffel;1.333521432
+gemahlene Kurkuma;Esslöffel;6.493816316
+gemahlene Kurkuma;Teelöffel;2.053525026
+gemahlene Muskatnuss;Esslöffel;10
+gemahlene Muskatnuss;Teelöffel;3.16227766
+gemahlener Ingwer;Esslöffel;6.493816316
+gemahlener Ingwer;Teelöffel;2.053525026
+gemahlener Kardamom;Esslöffel;6.493816316
+gemahlener Kardamom;Teelöffel;2.053525026
+gemahlener Kreuzkümmel;Esslöffel;5.121908158
+gemahlener Kreuzkümmel;Teelöffel;1.619689575
+getrockneter Liebstöckel;Esslöffel;4.216965034
+getrockneter Liebstöckel;Teelöffel;1.333521432
+gemahlener Pfeffer;Esslöffel;17.7827941
+gemahlener Pfeffer;Teelöffel;5.623413252
+Gemüsebrühe-Pulver;Esslöffel;10
+Gemüsebrühe-Pulver;Teelöffel;3.16227766
+geräuchertes Paprikapulver;Esslöffel;5.496908158
+geräuchertes Paprikapulver;Teelöffel;1.738274987
+gerebelter Kerbel;Esslöffel;1.539926526
+gerebelter Kerbel;Teelöffel;0.486967525
+gerebelter Majoran;Esslöffel;1.539926526
+gerebelter Majoran;Teelöffel;0.486967525
+gerebelter Oregano;Esslöffel;2.371373706
+gerebelter Oregano;Teelöffel;0.749894209
+gerebelter Salbei;Esslöffel;2.371373706
+gerebelter Salbei;Teelöffel;0.749894209
+gerebelter Thymian;Esslöffel;3.16227766
+gerebelter Thymian;Teelöffel;1
+geriebener Käse;Packung (unteilbar);150
+getrockneter Dill;Esslöffel;3.16227766
+getrockneter Dill;Teelöffel;1
+getrockneter Rosmarin;Esslöffel;4.869675252
+getrockneter Rosmarin;Teelöffel;1.539926526
+Gluten;Esslöffel;8.7
+Gluten;Teelöffel;2.751181564
+granulierter Knoblauch;Esslöffel;10
+granulierter Knoblauch;Teelöffel;3.16227766
+Grapefruits;Stück (ZE zuerst);393.5
+Grapefruitsaft;Stück (BE zuerst);202.8463836
+Grapefruitsaft;Esslöffel;10
+Grapefruitsaft;Teelöffel;3.16227766
+Grapefruitschale;Stück (BE zuerst);10.83
+Grapefruitschale;Esslöffel;5.623413252
+Grapefruitschale;Teelöffel;1.77827941
+grobkörniges Salz;Esslöffel;10
+grobkörniges Salz;Teelöffel;3.16227766
+Hefeflocken;Esslöffel;4.216965034
+Hefeflocken;Teelöffel;1.333521432
+Karotten;Stück (ZE zuerst);62.1
+Kartoffeln;Stück (ZE zuerst);89.5
+Kirschtomaten;Stück (ZE zuerst);11.3
+Knollensellerie;Stück (ZE zuerst);876.8
+Kopfsalat;Stück (ZE zuerst);348.3
+Limetten;Stück (ZE zuerst);65
+Limettensaft;Stück (BE zuerst);31.6227766
+Limettensaft;Esslöffel;10
+Limettensaft;Teelöffel;3.16227766
+Limettenschale;Stück (BE zuerst);1.333521432
+Limettenschale;Esslöffel;5.623413252
+Limettenschale;Teelöffel;1.77827941
+Mehl;Packung (unteilbar);1000
+Mais;Dose (Abtropfgewicht);285
+Milch;Packung (unteilbar);1000
+Milch;Esslöffel;10
+Milch;Teelöffel;3.16227766
+Naturtofu;Packung (teilbar);200
+Öl;Esslöffel;10
+Öl;Teelöffel;3.16227766
+Orangen;Stück (ZE zuerst);225.5
+Orangensaft;Stück (BE zuerst);86.59643234
+Orangensaft;Esslöffel;10
+Orangensaft;Teelöffel;3.16227766
+Orangenschale;Stück (BE zuerst);5.623413252
+Orangenschale;Esslöffel;5.623413252
+Orangenschale;Teelöffel;1.77827941
+Paprikas;Stück (ZE zuerst);206.5624698
+Pfirsiche;Stück (ZE zuerst);136.1
+Räuchertofu;Packung (teilbar);200
+rote Beete;Stück (ZE zuerst);155.5
+Rotkohl;Stück (ZE zuerst);1842.5
+Kochsahne;Packung (unteilbar);200
+Salz;Esslöffel;16.07094682
+Salz;Teelöffel;5.08207961
+Schalotten;Stück (ZE zuerst);32
+scharfes Paprikapulver;Esslöffel;5.496908158
+scharfes Paprikapulver;Teelöffel;1.738274987
+Schlagsahne;Becher;200
+Schlagsahne;Esslöffel;10
+Schlagsahne;Teelöffel;3.16227766
+Senf;Esslöffel;17.7827941
+Senf;Teelöffel;5.623413252
+Sojasauce;Esslöffel;10
+Sojasauce;Teelöffel;3.16227766
+Speisestärke;Esslöffel;10
+Speisestärke;Teelöffel;3.16227766
+Spitzkohl;Stück (ZE zuerst);1000
+Stangensellerie;Stück (ZE zuerst);56
+Strauchtomaten;Stück (ZE zuerst);110
+süßes Paprikapulver;Esslöffel;5.496908158
+süßes Paprikapulver;Teelöffel;1.738274987
+Tomatenmark;Tube;200
+Tomatenmark;Esslöffel;15.39926526
+Tomatenmark;Teelöffel;4.869675252
+Trockenbackhefe;Esslöffel;7.498942093
+Trockenbackhefe;Teelöffel;2.371373706
+Vanilleextrakt;Esslöffel;10
+Vanilleextrakt;Teelöffel;3.16227766
+Weißkohl;Stück (ZE zuerst);1906
+Wodka;Esslöffel;10
+Wodka;Teelöffel;3.16227766
+gemahlener Zimt;Esslöffel;6.493816316
+gemahlener Zimt;Teelöffel;2.053525026
+Zitronen;Stück (ZE zuerst);115
+Zitronensaft;Stück (BE zuerst);36.51741273
+Zitronensaft;Esslöffel;10
+Zitronensaft;Teelöffel;3.16227766
+Zitronenschale;Stück (BE zuerst);3.16227766
+Zitronenschale;Esslöffel;5.623413252
+Zitronenschale;Teelöffel;1.77827941
+Zucchini;Stück (ZE zuerst);209.6
+Zucker;Packung (unteilbar);1000
+Zucker;Esslöffel;13.33521432
+Zucker;Teelöffel;4.216965034
+Zwetschgen;Stück (ZE zuerst);38.8
+Zwiebeln;Stück (ZE zuerst);82.8
+Wasser;Esslöffel;10
+Wasser;Teelöffel;3.16227766
+Kakaopulver;Esslöffel;10
+Kakaopulver;Teelöffel;3.16227766
+Leinsamen;Esslöffel;6.493816316
+Leinsamen;Teelöffel;2.053525026
+weißer Sesam;Esslöffel;6.493816316
+weißer Sesam;Teelöffel;2.053525026
+schwarzer Sesam;Esslöffel;6.493816316
+schwarzer Sesam;Teelöffel;2.053525026
+Kürbiskerne;Esslöffel;6.493816316
+Kürbiskerne;Teelöffel;2.053525026
+getrocknete Soja-Steaks;Stück (ZE zuerst);60
+passierte Tomaten;Flasche;700
+Crème fraîche;Becher;150
+Penne rigate;Packung (teilbar);500
+Joghurt;Becher;500
+Joghurt;Esslöffel;23.71373706
+Joghurt;Teelöffel;7.498942093
+Mayonnaise;Esslöffel;23.71373706
+Mayonnaise;Teelöffel;7.498942093
+Kokosmilch;Dose (Gesamtgewicht);400
+rote Linsen;Packung (teilbar);500
+Linsen;Packung (teilbar);500
+Olivenöl;Esslöffel;10
+Olivenöl;Teelöffel;3.16227766
+Apfelessig;Esslöffel;10
+Apfelessig;Teelöffel;3
+Hokkaido-Kürbis;Stück (ZE zuerst);1500
+Feta;Packung (teilbar);150
+Walnusskerne;Packung (unteilbar);200
+Ahornsirup;Flasche;375
+Ahornsirup;Esslöffel;10
+Ahornsirup;Teelöffel;3
+brauner Zucker;Esslöffel;13.33521432
+brauner Zucker;Teelöffel;4.216965034
+Gemüsebrühe;Glas;400
+Gemüsebrühe;Esslöffel;10
+Gemüsebrühe;Teelöffel;3
+Reis;Packung (halbierbar);1000
+Rosinen;Packung (halbierbar);250
+Sojaschnetzel;Packung (halbierbar);150

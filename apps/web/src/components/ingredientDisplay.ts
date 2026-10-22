@@ -6,7 +6,7 @@
  * copy could drift into a different arrangement or unit form.
  */
 
-import { NNBSP, renderAQS, type Unit } from '@cookbook/core';
+import { NNBSP, renderAQS, type ToleranceContext, type Unit } from '@cookbook/core';
 
 /**
  * `renderAQS` with a defensive fallback: an ingredient whose display form
@@ -16,9 +16,14 @@ import { NNBSP, renderAQS, type Unit } from '@cookbook/core';
  * deliberately built here rather than through `formatBQ`, because it must never
  * throw again.
  */
-export function safeRenderAQS(name: string, quantity: number, unit: Unit): string {
+export function safeRenderAQS(
+  name: string,
+  quantity: number,
+  unit: Unit,
+  context: ToleranceContext = {},
+): string {
   try {
-    return renderAQS(name, quantity, unit);
+    return renderAQS(name, quantity, unit, context);
   } catch {
     return `${quantity}${NNBSP}${unit} ${name}`;
   }

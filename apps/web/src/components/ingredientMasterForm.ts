@@ -13,29 +13,23 @@
 
 import { ADDITIONAL_UNITS, formatDecimal, type IngredientEntry } from '@cookbook/core';
 
-/** One mapping row of a master-data form: the raw factor + priority of one AU. */
+/** One mapping row of a master-data form: the raw factor of one AU. */
 export interface MappingRow {
   au: string;
   /** The trimmed factor input; "" = row skipped. */
   factorRaw: string;
-  /** The trimmed priority input; "" = not yet entered. */
-  priorityRaw: string;
 }
 
-/** The two raw input records of a form, keyed by additional-unit name. */
+/** The raw factor inputs of a form, keyed by additional-unit name. */
 export interface MappingFormState {
   /** Factor inputs keyed by additional-unit name; empty string = row skipped. */
   factors: Record<string, string>;
-  /** Priority inputs keyed by additional-unit name; empty string = not set. */
-  priorities: Record<string, string>;
 }
 
 /** One filled, valid mapping row handed to the persistence layer. */
 export interface MappingEntry {
   au: string;
   factor: number;
-  /** Positive integer, unique per ingredient; 1 = most preferred. */
-  priority: number;
 }
 
 /**
@@ -48,28 +42,18 @@ export function parseFactor(raw: string): number {
 }
 
 /**
- * Parses a priority input. Returns NaN for empty/invalid input; non-integer
- * values ("2,5") stay non-integers so the validation can reject them.
- */
-export function parsePriority(raw: string): number {
-  return Number(raw.trim().replace(',', '.'));
-}
-
-/**
  * The form's initial input records for an existing entry: its saved mappings,
  * as the strings the inputs show. Factors are formatted with the German
  * decimal comma (the display-layer rule, docs/CODING_CONVENTIONS.md), so a
  * stored 7.5 reads as "7,5" in the field. An ingredient without additional
- * units yields two empty records, so every known unit starts as a blank row.
+ * units yields an empty record, so every known unit starts as a blank row.
  */
 export function mappingFormFromEntry(entry: Pick<IngredientEntry, 'entries'>): MappingFormState {
   const factors: Record<string, string> = {};
-  const priorities: Record<string, string> = {};
   for (const mapping of entry.entries) {
     factors[mapping.au] = formatDecimal(mapping.factor);
-    priorities[mapping.au] = String(mapping.priority);
   }
-  return { factors, priorities };
+  return { factors };
 }
 
 /**
@@ -77,65 +61,60 @@ export function mappingFormFromEntry(entry: Pick<IngredientEntry, 'entries'>): M
  * is also the order the grid renders them. A row with no factor is skipped by
  * `mappingEntriesFromRows`; the blank rows exist so the user can fill them.
  */
-export function buildMappingRows(
-  factors: Record<string, string>,
-  priorities: Record<string, string>,
-): MappingRow[] {
+export function buildMappingRows(factors: Record<string, string>): MappingRow[] {
   return ADDITIONAL_UNITS.map((unit) => ({
     au: unit.name,
     factorRaw: (factors[unit.name] ?? '').trim(),
-    priorityRaw: (priorities[unit.name] ?? '').trim(),
   }));
 }
 
 /**
- * The rows that carry a mapping, sorted by ascending priority (the registry
- * invariant, see additionalUnitsData.ts). A row whose factor is empty is not a
- * mapping and is left out; the caller validates the rows before saving.
+ * The rows that carry a mapping. A row whose factor is empty is not a mapping
+ * and is left out; the caller validates the rows before saving.
  */
 export function mappingEntriesFromRows(rows: readonly MappingRow[]): MappingEntry[] {
   return rows
     .filter((row) => row.factorRaw !== '')
-    .map((row) => ({
-      au: row.au,
-      factor: parseFactor(row.factorRaw),
-      priority: parsePriority(row.priorityRaw),
-    }))
-    .sort((a, b) => a.priority - b.priority);
+    .map((row) => ({ au: row.au, factor: parseFactor(row.factorRaw) }));
 }
 
 /**
  * Validates the filled mapping rows. Returns a German error message, or null
- * when the rows are ready to save. The messages are the same ones the Drive
- * parser uses (core ingredientCsv.ts), so a form mistake reads like a file
- * mistake would.
+ * when the rows are ready to save. The messages mirror the Drive parser
+ * (core ingredientCsv.ts), so a form mistake reads like a file mistake would.
+ *
+ * The app allows at most **one shopping unit per ingredient** (decided with
+ * the user): the shopping list needs one unambiguous unit to buy in.
  */
 export function validateMappingRows(rows: readonly MappingRow[]): string | null {
-  const priorityByAu = new Map<number, string>();
+  let shoppingUnit: string | null = null;
   for (const row of rows) {
-    if (row.factorRaw === '') {
-      // Skipped row; a priority without a factor is a user mistake worth flagging.
-      if (row.priorityRaw !== '') {
-        return `Bitte für „${row.au}“ auch einen Faktor angeben (Priorität ist bereits gesetzt).`;
-      }
-      continue;
-    }
+    if (row.factorRaw === '') continue;
     const factor = parseFactor(row.factorRaw);
     if (!Number.isFinite(factor) || factor <= 0) {
       return `Der Faktor für „${row.au}“ muss eine positive Zahl sein.`;
     }
-    if (row.priorityRaw === '') {
-      return `Bitte eine Priorität für „${row.au}“ angeben (1 = bevorzugt).`;
+    const unit = ADDITIONAL_UNITS.find((candidate) => candidate.name === row.au);
+    if (unit?.shoppingUnit === true) {
+      if (shoppingUnit !== null) {
+        return `„${shoppingUnit}“ und „${row.au}“ sind beide Einkaufs-Einheiten — pro Zutat ist genau eine erlaubt.`;
+      }
+      shoppingUnit = row.au;
     }
-    const priority = parsePriority(row.priorityRaw);
-    if (!Number.isInteger(priority) || priority <= 0) {
-      return `Die Priorität für „${row.au}“ muss eine positive ganze Zahl sein.`;
-    }
-    const existing = priorityByAu.get(priority);
-    if (existing !== undefined) {
-      return `„${existing}“ und „${row.au}“ haben beide die Priorität ${priority} — jede Umrechnung braucht eine eindeutige Priorität.`;
-    }
-    priorityByAu.set(priority, row.au);
+  }
+  return null;
+}
+
+/**
+ * Validates the optional ingredient-level tolerance: empty = inherit, otherwise
+ * a number in [0, 1] (docs/recipe_scaling_algorithm.md §4.1).
+ */
+export function validateTolerance(raw: string): string | null {
+  const text = raw.trim();
+  if (text === '') return null;
+  const value = Number(text.replace(',', '.'));
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    return 'Die Toleranz muss eine Zahl zwischen 0 und 1 sein oder leer bleiben.';
   }
   return null;
 }

@@ -2,16 +2,14 @@
  * Additional-quantity selection and display
  * (docs/additional_quantity_specifications.md).
  *
- * Given an ingredient, its stored base quantity (bq) and base unit (bu), this
+ * Given an ingredient, its unrounded target (V0) and base unit (bu), this
  * module decides whether an additional quantity specification (AQS) applies and
- * renders the display line. The additional quantity is always computed from the
- * stored base quantity — it is never stored, authored, or scaled directly
- * (§1): after scaling, the display is simply recomputed from the scaled bq.
+ * renders the display line. The target is stored in the recipe; the BQ/AQ pair
+ * is a display convenience computed by `quantityOptimizer.ts` on every render.
  *
- * Selection (§6): the ingredient's mappings are tried in ascending priority
- * order; for each, raw = bq ÷ factor is rounded to the nearest AQ ladder value
- * (§6.1, tie → larger) and checked against the unit's number scheme; the first
- * mapping whose AQ passes is selected. If none passes, the base form is shown.
+ * Selection: the optimizer scores every compatible unit and every
+ * scheme-allowed AQ value (docs/recipe_scaling_algorithm.md §5–§6); the old
+ * priority scan is gone. If no candidate fits, the plain base form is shown.
  *
  * Exactness (§6.3): a unit marked exact in the master data fixes the base
  * amount per unit (a 400 g Becher, a 200 g Block). For those, the shown base
@@ -19,9 +17,9 @@
  * never contradict each other; approximate units (a carrot varies in weight)
  * keep showing the stored/scaled base quantity.
  *
- * The AQ ladder values are the fraction column of the standard number ladder
- * (docs/quantity_scaling.md §2); they live in ./aqLadder.ts, which derives them
- * from LADDER_RUNGS so that the ladder table stays the single source of truth.
+ * The AQ values live in the generated `quantityData.ts` (docs/AQs.csv). The
+ * legacy `aqLadder.ts` is kept only for the shopping/pantry helpers until their
+ * migration; the recipe display uses the optimizer directly.
  *
  * Naming: identifiers use the spec's abbreviations for the domain terms — aq
  * (additional quantity), au (additional unit), bq (base quantity), bu (base
@@ -36,8 +34,9 @@ import {
   type AdditionalUnit,
   type IngredientEntry,
 } from './additionalUnitsData.js';
-import { pos } from './ladder.js';
 import { allIngredientMappings, mappingsFor } from './ingredientRegistry.js';
+import { optimizeQuantity, type OptimizedQuantity } from './quantityOptimizer.js';
+import type { ToleranceContext } from './tolerance.js';
 
 /**
  * Narrow no-break space (U+202F), substituted for the <NNBSP> placeholder
@@ -99,54 +98,36 @@ export interface AdditionalQuantity {
  * mapping rows — can be rendered from directly (see selectAQForEntry,
  * renderSelectedAQ and resolveReorderPoint).
  */
-export type AuSelectableEntry = Pick<IngredientEntry, 'bu' | 'entries' | 'singular' | 'plural'>;
+export type AuSelectableEntry = Pick<
+  IngredientEntry,
+  'bu' | 'entries' | 'singular' | 'plural' | 'tolerance'
+>;
 
 /**
- * Selects the additional quantity specification for an explicit entry (§6).
+ * Selects the additional quantity specification for an explicit entry — the
+ * optimizer-backed replacement of the old priority scan.
  *
- * Mappings are evaluated in ascending priority order (the caller passes them
- * pre-sorted); the first mapping whose rounded AQ passes its number scheme wins.
- * An entry whose base unit differs from `bu` has no applicable AQS (§7) — the
- * conversion factor is expressed in the ingredient's fixed base unit.
+ * The optimizer scores every compatible unit and every scheme-allowed AQ
+ * value; a null result means no AQ candidate won, so the caller renders the
+ * base form. The tolerance context is passed through unchanged (quantity /
+ * ingredient / recipe); the entry's own tolerance is the ingredient level.
  *
- * This is the registry-independent core of selectAQ: the create form passes its
- * unsaved draft mappings here so the preview already reflects them.
- *
- * @param entry the ingredient's base unit + AU mappings, or undefined when the
- *   name is not registered
- * @param bq stored/entered base quantity — must be a standard ladder value (§3,
- *   else throws)
- * @param bu base unit the quantity is expressed in (g / kg / ml / l)
- * @returns the selected AQ + AU, or null when no AQS applies (base form)
+ * @param entry the ingredient's base unit, tolerance and AU mappings, or
+ *   undefined when the name is not registered
+ * @param bq the unrounded target V0 in `bu`
+ * @param bu the base unit family the target is expressed in (g / ml)
+ * @param context optional quantity/ingredient/recipe tolerance overrides
+ * @returns the selected AQ + AU, or null when the base form is the winner
  */
 export function selectAQForEntry(
   entry: AuSelectableEntry | undefined,
   bq: number,
   bu: string,
+  context: ToleranceContext = {},
 ): AdditionalQuantity | null {
-  // Rejects non-standard base quantities (§3): they do not exist in the app.
-  pos(bq);
-  // No entry (unregistered name) or a mismatched base unit — and bare
-  // ingredients (empty entries) — have no AQS (§7): base form only.
-  if (entry === undefined || entry.bu !== bu) {
-    return null;
-  }
-  for (const mapping of entry.entries) {
-    const aq = roundToAQ(bq / mapping.factor);
-    if (aq === null) {
-      continue;
-    }
-    const au = AU_BY_NAME.get(mapping.au);
-    if (au === undefined) {
-      // Unreachable with generator-validated data (mappings reference existing units).
-      continue;
-    }
-    const allowed = NUMBER_SCHEMES[au.numberScheme] ?? EMPTY_SCHEME;
-    if (allowed.includes(aq)) {
-      return { aq, au, factor: mapping.factor };
-    }
-  }
-  return null;
+  const result = optimizeQuantity(bq, entry, bu, context);
+  if (result.aq === undefined) return null;
+  return { aq: result.aq.notation, au: result.aq.au, factor: result.aq.factor };
 }
 
 /**
@@ -154,12 +135,17 @@ export function selectAQForEntry(
  * (§6) — the registry-backed shorthand of selectAQForEntry.
  *
  * @param ingredient ingredient name (key into INGREDIENT_MAPPINGS)
- * @param bq stored base quantity — must be a standard ladder value (§3, else throws)
+ * @param bq the unrounded target V0 (any positive finite number)
  * @param bu stored base unit (g / kg / ml / l)
  * @returns the selected AQ + AU, or null when no AQS applies (base form)
  */
-export function selectAQ(ingredient: string, bq: number, bu: string): AdditionalQuantity | null {
-  return selectAQForEntry(mappingsFor(ingredient), bq, bu);
+export function selectAQ(
+  ingredient: string,
+  bq: number,
+  bu: string,
+  context: ToleranceContext = {},
+): AdditionalQuantity | null {
+  return selectAQForEntry(mappingsFor(ingredient), bq, bu, context);
 }
 
 /**
@@ -198,6 +184,17 @@ export const BASE_UNIT_TOKENS: readonly string[] = [
 ];
 
 /**
+ * Formats a base quantity number for display: at most two decimals, German
+ * comma, no trailing zeros. Two decimals are enough for the optimizer's exact
+ * `q·c` values and for the unrounded fallback target, while hiding binary
+ * floating-point noise (e.g. 166.66666666666666 → "166,67"). The stored value is
+ * never rounded — this is a display formatter only.
+ */
+function formatQuantityNumber(value: number): string {
+  return formatDecimal(Math.round(value * 100) / 100);
+}
+
+/**
  * The numeric part of `formatBQ` on its own: the base quantity with the German
  * decimal comma and the kg / l switch at 1000, but **without the unit**.
  * `formatBQ` builds on it; it exists on its own for callers that want the number
@@ -205,12 +202,12 @@ export const BASE_UNIT_TOKENS: readonly string[] = [
  */
 export function formatBQNumber(bq: number, bu: string): string {
   if (bu === 'g' && bq >= 1000) {
-    return formatDecimal(bq / 1000);
+    return formatQuantityNumber(bq / 1000);
   }
   if (bu === 'ml' && bq >= 1000) {
-    return formatDecimal(bq / 1000);
+    return formatQuantityNumber(bq / 1000);
   }
-  return formatDecimal(bq);
+  return formatQuantityNumber(bq);
 }
 
 /**
@@ -254,9 +251,11 @@ const AQ_GLYPHS: Readonly<Record<string, string>> = {
   '3/8': '\u215C', // ⅜
   '2/5': '\u2156', // ⅖
   '1/2': '\u00BD', // ½
+  '5/8': '\u215D', // ⅝
   '3/5': '\u2157', // ⅗
   '2/3': '\u2154', // ⅔
   '3/4': '\u00BE', // ¾
+  '5/6': '\u215A', // ⅚
   '7/8': '\u215E', // ⅞
 };
 
@@ -265,7 +264,7 @@ const AQ_GLYPHS: Readonly<Record<string, string>> = {
  * of §8: glyphs for the proper fractions and a narrow no-break space between
  * the integer and the glyph of a mixed number ("1 ¼"). Whole AQ values pass
  * through unchanged. A fraction without a glyph (none exists today) keeps its
- * canonical form so a new ladder row never renders as garbage.
+ * canonical form so a new AQ row never renders as garbage.
  */
 export function formatAQ(aq: string): string {
   const glyph = AQ_GLYPHS[aq];
@@ -294,8 +293,9 @@ export function formatAQSlash(aq: string): string {
 
 /**
  * Formats a numeric AQ value in the §8 typography (0.25 → "¼", 1.25 → "1 ¼").
- * Used for unitless inline quantities, which are AQ ladder values. Throws when
- * `value` is not an AQ value — non-standard numbers do not exist in the app.
+ * Used for unitless inline quantities that are AQ values. Throws when `value`
+ * is not an AQ value; callers with an arbitrary target use `optimizeUnitless`
+ * first.
  */
 export function formatAQValue(value: number): string {
   return formatAQ(aqNotation(value));
@@ -464,6 +464,37 @@ function renderSelectedAQ(
 }
 
 /**
+ * Renders an optimizer result with the selected unit's arrangement. Shared by
+ * `renderAQS`, `renderAQSSlash` and the reorder-point preview. The shown BQ is
+ * the optimizer's BQ: for an exact unit that is `q·c`, for a non-exact or
+ * metric-only candidate a value from the BQ table, and for a fallback `V0`.
+ */
+function renderOptimizedAQ(
+  ingredient: string,
+  result: OptimizedQuantity,
+  bu: string,
+  formatAq: (aq: string) => string,
+  entry?: AuSelectableEntry,
+): string {
+  const selected = result.aq!;
+  const count = selected.value;
+  // <INF> is the ingredient in its count form („1 Karotte“ / „2 Karotten“),
+  // falling back to the canonical name for an invariant or unknown name.
+  const ingredientFormText = ingredientForm(entry ?? mappingsFor(ingredient), count) ?? ingredient;
+  const line = renderArrangementTemplate(selected.au.arrangement, {
+    aq: formatAq(selected.notation),
+    au: auDisplayName(selected.au, count),
+    ingredient,
+    ingredientForm: ingredientFormText,
+    bq: result.bq,
+    bu,
+  });
+  // The create form can preview an entry before a name is typed; the
+  // arrangement would then leave a dangling space ("1 Becher  (160 g)").
+  return ingredient === '' ? line.replaceAll('  ', ' ') : line;
+}
+
+/**
  * Renders the full display line for an ingredient (§4): the selected unit's
  * arrangement template with <AQ> <AU> <IN> <INF> <BQ> <BU> and <NNBSP> (U+202F)
  * substituted, or the base form "<BQ> <BU> <IN>" when no AQS applies. The AQ
@@ -474,13 +505,18 @@ function renderSelectedAQ(
  * so rounding the AQ to the nearest fraction of that unit would contradict the
  * shown count ("8 Blöcke (1,5 kg)"). For exact units the shown base quantity is
  * therefore derived from the rounded AQ instead (AQ × factor), even when the
- * result is not a ladder value. Approximate units (a carrot varies in weight)
+ * result is not a table value. Approximate units (a carrot varies in weight)
  * keep the stored/scaled value, which is the preferred reading there: the
  * rounding stays visible in the count only. Storage and scaling are untouched
  * either way.
  */
-export function renderAQS(ingredient: string, bq: number, bu: string): string {
-  return renderAQSWith(ingredient, bq, bu, formatAQ);
+export function renderAQS(
+  ingredient: string,
+  bq: number,
+  bu: string,
+  context: ToleranceContext = {},
+): string {
+  return renderAQSWith(ingredient, bq, bu, formatAQ, context);
 }
 
 /**
@@ -488,8 +524,13 @@ export function renderAQS(ingredient: string, bq: number, bu: string): string {
  * but the additional quantity renders in the slash form (`formatAQSlash`)
  * instead of the web app's fraction glyphs.
  */
-export function renderAQSSlash(ingredient: string, bq: number, bu: string): string {
-  return renderAQSWith(ingredient, bq, bu, formatAQSlash);
+export function renderAQSSlash(
+  ingredient: string,
+  bq: number,
+  bu: string,
+  context: ToleranceContext = {},
+): string {
+  return renderAQSWith(ingredient, bq, bu, formatAQSlash, context);
 }
 
 /**
@@ -501,14 +542,14 @@ function renderAQSWith(
   bq: number,
   bu: string,
   formatAq: (aq: string) => string,
+  context: ToleranceContext,
 ): string {
-  const selected = selectAQ(ingredient, bq, bu);
-  if (selected === null) {
-    return `${formatBQ(bq, bu)} ${ingredient}`;
+  const result = optimizeQuantity(bq, mappingsFor(ingredient), bu, context);
+  if (result.aq === undefined) {
+    // Metric-only winner or fallback: the plain base form, no AQ.
+    return `${formatBQ(result.bq, bu)} ${ingredient}`;
   }
-  // Exact unit (§6.3): the count is the source of truth for the shown amount.
-  const shownBq = selected.au.exact ? aqToNumber(selected.aq) * selected.factor : bq;
-  return renderSelectedAQ(ingredient, selected, bu, shownBq, formatAq);
+  return renderOptimizedAQ(ingredient, result, bu, formatAq);
 }
 
 /**
@@ -529,8 +570,8 @@ const AMOUNT_EPSILON = 1e-6;
  *
  * - the quantity need not be a standard number (a need is a sum over dishes; a
  *   stock comes from the reorder point or from a keyboard), so nothing throws
- *   and the additional quantity is only ever *displayed* as the nearest ladder
- *   fraction (§6.1);
+ *   and the additional quantity is only ever *displayed* as the nearest AQ
+ *   fraction;
  * - an **exact** unit applies only when its count really brings that amount home.
  *   For a recipe row it is the point of an exact unit that the count restates the
  *   amount (§6.3: 350 g of yoghurt shows as "1 Becher Joghurt (400 g)"), but a
@@ -544,7 +585,7 @@ const AMOUNT_EPSILON = 1e-6;
  * mappings to look up, so the base amount stands alone ("600 g").
  *
  * @param ingredient the ingredient name for the arrangement's <IN>
- * @param bq the quantity to name, in `bu` (need not be a ladder value)
+ * @param bq the quantity to name, in `bu` (need not be a table value)
  * @param bu the base unit family (g / ml) — or any other unit of a stored file
  */
 export function renderQuantityText(ingredient: string, bq: number, bu: string): string {
@@ -623,7 +664,7 @@ export function shoppingUnitFor(
 /**
  * Renders a **whole-number** count of one additional unit for the shopping list
  * ("3 Blöcke Tofu (600 g)"): the unit's arrangement with an integer count in
- * place of the ladder-rounded AQ of §6. The count is never rounded here — the
+ * place of the optimizer-selected AQ. The count is never rounded here — the
  * shopping list rounds it *up* to whole packages, which is the caller's rule
  * (`shoppingRow` in ../shoppingList).
  *
@@ -664,12 +705,12 @@ export function renderUnitCount(
 
 /**
  * The count a pantry amount reads as (components/PantrySelect — the "auf
- * Vorrat" and "kaufen" readings): the nearest AQ ladder value, ignoring the
+ * Vorrat" and "kaufen" readings): the nearest AQ value, ignoring the
  * unit's number scheme, so the amount is always named in the ingredient's
  * shopping unit ("⅕ Packung" for 200 g of a 1000 g pack) rather than dropping
- * the unit. An empty amount reads 0; a count beyond the ladder's top (1000) is
+ * the unit. An empty amount reads 0; a count beyond the table's top (30) is
  * rounded to a whole number, like a recipe count above its scheme. A raw count
- * between 0 and the ladder's floor reads 0 too — no fraction exists below ⅒,
+ * between 0 and the table's floor reads 0 too — no fraction exists below ⅛,
  * and "no pack" is the honest reading of a sliver of a pack.
  */
 function roundPantryCount(raw: number): number {
@@ -684,7 +725,7 @@ function roundPantryCount(raw: number): number {
  * ingredient's shopping unit, with its two linked numeric readings — the
  * additional quantity (the count) and the base quantity (the grams /
  * millilitres). Used for both the "auf Vorrat" (stock) and "kaufen" (buy)
- * amounts, which share the same nearest-ladder reading.
+ * amounts, which share the same nearest-AQ reading.
  */
 export interface PantryReading {
   /** The shopping unit the amount is counted in, or null (the base form). */
@@ -701,7 +742,7 @@ export interface PantryReading {
  * The pantry sheet's reading of one base quantity (the "auf Vorrat" stock or
  * the "kaufen" amount, components/PantrySelect): the amount in the ingredient's
  * **shopping unit**, with the additional quantity rounded to the nearest AQ
- * ladder value regardless of the unit's number scheme.
+ * AQ value regardless of the unit's number scheme.
  *
  * Unlike a recipe line (§6.3), the shown base quantity is the amount itself:
  * the two tappable readings are linked by the factor, and the grams/millilitres
@@ -721,15 +762,15 @@ export function pantryReading(ingredient: string, bq: number, bu: string): Pantr
 }
 
 /**
- * Formats the count of a pantry reading (`PantryReading.aq`): a ladder value in
- * the §8 glyph typography ("1 ¼"), 0 and whole counts beyond the ladder as
+ * Formats the count of a pantry reading (`PantryReading.aq`): an AQ value in
+ * the §8 glyph typography ("1 ¼"), 0 and whole counts beyond the table as
  * plain decimal numbers ("0", "2000").
  */
 export function formatPantryAq(aq: number): string {
   return isAQValue(aq) ? formatAQ(aqNotation(aq)) : formatDecimal(aq);
 }
 
-/** Canonical notation of a pantry count (ladder form, or plain for 0 / whole). */
+/** Canonical notation of a pantry count (AQ form, or plain for 0 / whole). */
 function pantryAqNotation(aq: number): string {
   return isAQValue(aq) ? aqNotation(aq) : String(aq);
 }
@@ -796,7 +837,7 @@ export function renderPantryLine(ingredient: string, bq: number, bu: string): st
 export interface ReorderPointResolution {
   /** The display line for the chosen stock level ("1 Becher Creme Fraiche (160 g)"). */
   readonly preview: string;
-  /** The base quantity to store in the master data (0, a ladder value, or Infinity). */
+  /** The base quantity to store in the master data (0, a positive amount, or Infinity). */
   readonly storedValue: number;
 }
 
@@ -815,15 +856,15 @@ export interface ReorderPointResolution {
  * The three stock levels of the master data (docs/storage_format.md §9):
  * - `0` — only ever bought for a recipe; the base form is shown ("0 g …");
  * - `Infinity` — infinite stock (water); the preview reads "unbegrenzt …";
- * - a positive ladder value — the entered base quantity, snapped as described
- *   above when an exact unit is selected.
+ * - a positive base quantity — the entered target, snapped as described above
+ *   when an exact unit is selected.
  *
  * The mappings come from the caller rather than the registry so the create form
  * can preview its unsaved rows.
  *
  * @param ingredient the ingredient name for the preview ("" = not yet named)
  * @param entry the draft or registered entry (undefined = no mappings yet)
- * @param bq the entered reorder point: 0, a ladder value, or Infinity
+ * @param bq the entered reorder point: 0, a positive base quantity, or Infinity
  * @param bu the base unit family (g / ml)
  */
 export function resolveReorderPoint(
@@ -838,15 +879,22 @@ export function resolveReorderPoint(
       storedValue: Infinity,
     };
   }
-  // 0 is a valid reorder point but not a ladder value (§3): no AU applies.
-  const selected = bq === 0 ? null : selectAQForEntry(entry, bq, bu);
-  if (selected === null) {
+  // 0 is a valid reorder point but not a positive target: no AU applies.
+  const result = bq === 0 ? null : optimizeQuantity(bq, entry, bu, {
+    ingredient: entry?.tolerance,
+  });
+  if (result === null || result.aq === undefined) {
     const base = formatBQ(bq, bu);
     return { preview: ingredient === '' ? base : `${base} ${ingredient}`, storedValue: bq };
   }
-  const storedValue = selected.au.exact ? aqToNumber(selected.aq) * selected.factor : bq;
+  // An exact unit defines the stock amount (whole packages); a non-integer
+  // count already produced a whole-gram/millilitre BQ in the optimizer. An
+  // approximate unit only changes the count reading, so the entered amount
+  // stays.
+  const storedValue = result.aq.au.exact ? result.bq : bq;
+  const previewResult: OptimizedQuantity = { ...result, bq: storedValue };
   return {
-    preview: renderSelectedAQ(ingredient, selected, bu, storedValue, formatAQ, entry),
+    preview: renderOptimizedAQ(ingredient, previewResult, bu, formatAQ, entry),
     storedValue,
   };
 }

@@ -31,7 +31,7 @@ import {
   type MealPlanRecipeInfo,
 } from './mealPlan.js';
 import type { PlannedAmount } from './planLink.js';
-import { YIELD_VIEW_STEPS, yieldViewQuantities } from './recipe/yieldViews.js';
+import { yieldViewQuantities } from './recipe/yieldViews.js';
 
 /** Narrow no-break space (U+202F) — the app's number/unit separator. */
 const NNBSP = '\u202F';
@@ -342,9 +342,9 @@ describe('plannedAmountFitsRecipe', () => {
     ).toBe(false);
   });
 
-  it('rejects a yield that is not a ladder value', () => {
+  it('skips the range check when the caller does not know the written yield', () => {
     expect(plannedAmountFitsRecipe({ kind: 'yield', quantity: 499, baseUnit: 'g' }, G_RECIPE)).toBe(
-      false,
+      true,
     );
   });
 
@@ -358,26 +358,26 @@ describe('plannedAmountFitsRecipe', () => {
   });
 
   it('accepts a yield inside the baked range of the written yield', () => {
-    // 500 g is written; ±2 decades reach 5 g … 50 kg (recipe/yieldViews.ts).
-    expect(
-      plannedAmountFitsRecipe({ kind: 'yield', quantity: 5, baseUnit: 'g' }, G_RECIPE_500),
-    ).toBe(true);
-    expect(
-      plannedAmountFitsRecipe({ kind: 'yield', quantity: 50000, baseUnit: 'g' }, G_RECIPE_500),
-    ).toBe(true);
+    // 500 g is written; ±1 decade reaches 50 g … 5 kg (recipe/yieldViews.ts).
     expect(
       plannedAmountFitsRecipe({ kind: 'yield', quantity: 50, baseUnit: 'g' }, G_RECIPE_500),
     ).toBe(true);
+    expect(
+      plannedAmountFitsRecipe({ kind: 'yield', quantity: 500, baseUnit: 'g' }, G_RECIPE_500),
+    ).toBe(true);
+    expect(
+      plannedAmountFitsRecipe({ kind: 'yield', quantity: 5000, baseUnit: 'g' }, G_RECIPE_500),
+    ).toBe(true);
   });
 
-  it('rejects a yield outside the baked range, even a ladder value', () => {
-    // 2,5 g is one rung below the export's lowest baked view (5 g); 100 kg is
-    // one decade above its highest (50 kg). The link could not open either.
+  it('rejects a yield outside the baked range, even an allowed BQ value', () => {
+    // 25 g is below the export's lowest baked view (50 g); 10 kg is above its
+    // highest (5 kg). The link could not open either.
     expect(
-      plannedAmountFitsRecipe({ kind: 'yield', quantity: 2.5, baseUnit: 'g' }, G_RECIPE_500),
+      plannedAmountFitsRecipe({ kind: 'yield', quantity: 25, baseUnit: 'g' }, G_RECIPE_500),
     ).toBe(false);
     expect(
-      plannedAmountFitsRecipe({ kind: 'yield', quantity: 100000, baseUnit: 'g' }, G_RECIPE_500),
+      plannedAmountFitsRecipe({ kind: 'yield', quantity: 10000, baseUnit: 'g' }, G_RECIPE_500),
     ).toBe(false);
   });
 
@@ -400,28 +400,28 @@ describe('plannedAmountFitsRecipe', () => {
     );
   });
 
-  it('refuses a size against a written yield that is not a ladder value', () => {
-    // A hand-edited recipe file (docs/quantity_scaling.md §3): one malformed
-    // recipe must not throw and take the whole meal-plan list down.
+  it('accepts a baked BQ size against an arbitrary written yield', () => {
+    // The written yield may be any positive number; the views are the allowed
+    // BQs in its band. 500 g is an allowed BQ inside the band of 499 g.
     expect(
       plannedAmountFitsRecipe(
         { kind: 'yield', quantity: 500, baseUnit: 'g' },
         { ...G_RECIPE, yieldQuantity: 499 },
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
 describe('yieldViewQuantities', () => {
-  it('bakes the written yield and ±2 decades around it', () => {
+  it('bakes the allowed BQ values within ±1 decade around the written yield', () => {
     const quantities = yieldViewQuantities(500);
-    expect(quantities).toHaveLength(2 * YIELD_VIEW_STEPS + 1);
-    expect(quantities[0]).toBe(5);
-    expect(quantities[quantities.length - 1]).toBe(50000);
+    expect(quantities).toHaveLength(65);
+    expect(quantities[0]).toBe(50);
+    expect(quantities[quantities.length - 1]).toBe(5000);
     expect(quantities).toContain(500);
   });
 
-  it('returns the ladder values ascending and without duplicates', () => {
+  it('returns the allowed BQ values ascending and without duplicates', () => {
     const quantities = yieldViewQuantities(250);
     for (let index = 1; index < quantities.length; index++) {
       expect(quantities[index]!).toBeGreaterThan(quantities[index - 1]!);

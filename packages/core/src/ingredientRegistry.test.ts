@@ -18,7 +18,7 @@ afterEach(() => {
 
 describe('ingredient registry', () => {
   it('starts with the built-in seed', () => {
-    expect(masterIngredientNames()).toEqual(Object.keys(INGREDIENT_MAPPINGS).sort());
+    expect(masterIngredientNames()).toEqual(Object.keys(INGREDIENT_MAPPINGS).sort((a, b) => a.localeCompare(b, 'de')));
     expect(mappingsFor('Joghurt')).toEqual(INGREDIENT_MAPPINGS.Joghurt);
     expect(mappingsFor('Unbekannt')).toBeUndefined();
   });
@@ -29,20 +29,20 @@ describe('ingredient registry', () => {
         bu: 'g',
         reorderPoint: 0,
         entries: [
-          { au: 'Becher', factor: 200, priority: 1 },
-          { au: 'EL', factor: 12, priority: 2 },
+          { au: 'Becher', factor: 200 },
+          { au: 'EL', factor: 12 },
         ],
       },
     });
     expect(masterIngredientNames()).toEqual(['Käse']);
-    expect(mappingsFor('Käse')?.entries[0]).toEqual({ au: 'Becher', factor: 200, priority: 1 });
+    expect(mappingsFor('Käse')?.entries[0]).toEqual({ au: 'Becher', factor: 200 });
     // The built-in names are gone — the Drive file is authoritative.
     expect(mappingsFor('Joghurt')).toBeUndefined();
   });
 
   it('serves selectAQ/renderAQS for a registered ingredient', () => {
     setIngredientMappings({
-      Käse: { bu: 'g', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200, priority: 1 }] },
+      Käse: { bu: 'g', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200 }] },
     });
     const selected = selectAQ('Käse', 400, 'g');
     expect(selected).not.toBeNull();
@@ -65,7 +65,7 @@ describe('ingredient registry', () => {
 
   it('renders the base form when no scheme passes for a registered ingredient', () => {
     setIngredientMappings({
-      Pfeffer: { bu: 'g', reorderPoint: 0, entries: [{ au: 'TL', factor: 3, priority: 1 }] },
+      Pfeffer: { bu: 'g', reorderPoint: 0, entries: [{ au: 'TL', factor: 3 }] },
     });
     // 500 g ÷ 3 g per TL ≈ 167 → rounds to a ladder value far above the
     // integers_up_to_10 scheme → no AQS passes, the base form is shown.
@@ -74,7 +74,7 @@ describe('ingredient registry', () => {
 
   it('resetIngredientMappings restores the seed', () => {
     setIngredientMappings({
-      Käse: { bu: 'g', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200, priority: 1 }] },
+      Käse: { bu: 'g', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200 }] },
     });
     resetIngredientMappings();
     expect(allIngredientMappings()).toEqual(INGREDIENT_MAPPINGS);

@@ -60,16 +60,17 @@ The app writes YAML through a serializer; hand-written files are validated on re
 |---|---|---|---|
 | `title` | string | yes | Unique within the whole collection; the stable identifier (see §6). Example: `Shredded Tofu Wraps`. |
 | `type` | enum | yes | `finished_dish` or `ingredient_recipe` — never derived, set by the author. |
-| `description` | string | no | A single paragraph; may suggest side dishes or other uses. |
+| `description` | string | no | A single paragraph; may suggest side dishes or other uses, and may be phrased as a continuation of the title (e.g. `Bauernfrühstück / mit Kartoffeln, Karotten und Tofu`). |
 | `prep_time` | string | yes | Free-text display value, e.g. `25 min`, `1 h 30 min`. The editor offers the standard values 1/3/5/10/15/20/30/45 min and 1/1.5/2/3/6/12/24/48 h as chips. |
 | `total_time` | string | no | Only if it is larger than `prep_time`. |
+| `tolerance` | number | no | Display preference in [0, 1] (docs/recipe_scaling_algorithm.md §4). Absent = inherit the ingredient / global value. Five UI chips: 0, 0.25, 0.5, 0.75, 1. |
 
 ### Type-specific fields
 
 | `type` | Required fields | Forbidden | Notes |
 |---|---|---|---|
-| `finished_dish` | `servings` | `yield`, `yield_unit` | `servings`: integer, a standard number (ladder value). Example: `6` — not `11`. |
-| `ingredient_recipe` | `yield`, `yield_unit` | `servings` | `yield`: number, a standard number; `yield_unit`: `g` or `ml` (the authorable family units). Example: `yield: 500`, `yield_unit: ml`. |
+| `finished_dish` | `servings` | `yield`, `yield_unit` | `servings`: one of the allowed serving counts `1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 22, 25, 28, 30`. Example: `6` — not `11`. |
+| `ingredient_recipe` | `yield`, `yield_unit` | `servings` | `yield`: any positive number (stored target `V0`); `yield_unit`: `g` or `ml`. Example: `yield: 500`, `yield_unit: ml`. |
 
 Additional fields:
 
@@ -126,14 +127,16 @@ layout). The rows are written in a natural, amount-first phrase:
 ```
 
 - **Row grammar:** `- MENGE EINHEIT NAME` (e.g. `- 250 g Reis`,
-  `- 400 ml Kokosmilch`). The quantity must be a standard number (ladder value)
-  in the ingredient's family unit; the row is the only way an ingredient enters
-  the recipe's lists.
+  `- 400 ml Kokosmilch`). The quantity is the unrounded target `V0`: any positive
+  finite number in the ingredient's family unit. A row may end with an optional
+  tolerance tag: `- 250 g Reis {tolerance: 0.8}`. The row is the only way an
+  ingredient enters the recipe's lists.
 - The **master ingredient list is derived** from the rows of all steps (§7.1):
   - order = order of first use across the steps (each step's rows in their order);
-  - an ingredient used several times appears **once, with the total amount**
-    (sum rounded to the nearest ladder rung — the sum of two standard numbers
-    is not necessarily a standard number);
+  - an ingredient used several times appears **once, with the total of the rows'
+    displayed BQs** (not the sum of their exact targets; the practical amounts
+    the cook reads are what add up). The sum is kept at millionth precision to
+    remove floating-point noise;
   - rows with the same name but different base units stay separate.
 - **Inline artifacts** are display-only quantity mentions *inside the step text*
   (never counted toward any list, but scaled with the serving count at display
@@ -151,17 +154,18 @@ layout). The rows are written in a natural, amount-first phrase:
     count, e.g. a number of pieces); an ingredient mention always carries a unit.
     All variants scale with the number of servings and render code-styled, with
     the l/kg display form where a unit is present.
-  - **A unitless count uses its own standard numbers — the AQ ladder**
-    (docs/quantity_scaling.md §2, docs/additional_quantity_specifications.md
-    §6.1): the distinct fractions 1/10 … 1000. It is stored in the canonical AQ
-    fraction notation (`{{1/3}}`, `{{1+1/4}}`, `{{3}}`) and displayed with the
-    fraction typography. Scaling moves it along the AQ ladder. An artifact that
-    carries a unit is a base quantity and stays on the BQ ladder.
+  - **A unitless count is an unrounded target.** Any positive number is allowed
+    (a decimal or a fraction). AQ values keep their canonical fraction notation
+    (`{{1/3}}`, `{{1+1/4}}`, `{{3}}`); other counts are stored as decimals. The
+    display uses the AQ table (BQ-only branch) and the tolerance cascade
+    `artifact ?? recipe ?? global` (docs/quantity_scaling.md §8). An artifact
+    may carry a tolerance suffix: `{{1/2|t=0.8}}`.
+  - An artifact that carries a unit is a base quantity: its `MENGE` is the
+    unrounded target and its display uses the normal optimizer.
   - **Canonical values are g/ml with `.` decimals.** Hand-written files may use
     German comma decimals, fractions and `kg`/`l` (`{{1,5 l Wasser}}`,
     `- 0,2 kg Reis`); the parser normalizes them on read (comma → dot, kg/l →
-    g/ml ×1000, unitless count → canonical AQ fraction). Non-standard numbers
-    remain validation errors.
+    g/ml ×1000). Non-positive or malformed values remain validation errors.
   - A malformed `{{…}}` block is a validation error — never silently treated as prose.
 - **Reference role** (size anchor, both recipe types): stored as a front-matter
   list of ingredient names, `reference: [Tortillas]` (any number of entries). It
@@ -175,7 +179,7 @@ layout). The rows are written in a natural, amount-first phrase:
   title like any ingredient). The HTML export renders such uses as links to the
   sub-recipe's own export file (see the HTML share export in ARCHITECTURE.md);
   renaming the recipe updates them together (§6).
-- The additional-unit display ("1 Becher Joghurt (400 g)") is never stored; it
+- The additional-unit display ("1 Becher Joghurt (500 g)") is never stored; it
   is computed at display time from the master data.
 
 ## 5. Markdown Body — Preparation Steps
@@ -238,9 +242,10 @@ the file. Two levels:
   types, required/forbidden fields per `type`); an `ingredients` field is rejected
   (it is derived from the step rows, §4).
 - `title` is non-empty and file-name-safe.
-- `servings` / `yield` / every row and artifact `Menge` is a standard number:
-  `pos(v)` on the quantity ladder must succeed
-  (see [quantity_scaling.md](quantity_scaling.md) §3); a non-ladder value is rejected.
+- `servings` must be one of the allowed serving counts; `yield` and every row /
+  artifact `Menge` must be a positive finite number (`V0`). There is no ladder
+  membership check anymore. A `tolerance`, when present at any level, must be in
+  [0, 1].
 - Row syntax, step structure and the artifacts of each step are validated (issue
   paths `steps[i].ingredients[j]…` and `steps[i].text`). A row without a name or
   quantity, a step whose prose is missing, and prose starting with `- ` are errors.
@@ -314,23 +319,27 @@ collection folder, in the same canonical formats as the repo seeds (`docs/ingred
 `docs/ingredient_unit_mappings.csv`):
 
     zutaten.csv                  (ingredient list)
-    Ingredient;Singular;Plural;Base Unit;Reorder Point
-    Joghurt;;;g;0
-    Cashews;Cashew;Cashews;g;0
+    Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point
+    Joghurt;;;g;;0
+    Cashews;Cashew;Cashews;g;;0
 
     zutaten-umrechnungen.csv     (AU mappings; an ingredient without additional
-    Ingredient;Additional Unit;Conversion Factor;Priority   units has no rows here)
-    Joghurt;Becher;400;1
+    Ingredient;Additional Unit;Conversion Factor   units has no rows here)
+    Joghurt;Becher;500
 
 The ingredient list is the authoritative source of ingredient names, their fixed base
-unit, their reorder point and their display forms — one row per ingredient, so further
-ingredient-level fields can be added as columns later. Where an item is bought is
-deliberately not such a column: it is the separate shopping-route pair of §10, whose name
-set also covers items that are not ingredients at all.
+unit, their optional tolerance, their reorder point and their display forms — one row per
+ingredient, so further ingredient-level fields can be added as columns later. Where an
+item is bought is deliberately not such a column: it is the separate shopping-route pair
+of §10, whose name set also covers items that are not ingredients at all.
+
+The `Tolerance` cell is optional: empty = inherit the recipe / global value; otherwise
+a number in [0, 1]. It is the ingredient level of the cascade
+(docs/recipe_scaling_algorithm.md §4.1).
 
 The reorder point is the base-unit (g/ml) quantity that is definitely on stock directly
 after a shopping trip, independent of the meal plan. It is a mandatory cell and need not
-be a ladder value: `0` = the ingredient is only ever bought for a recipe; a positive
+be a table value: `0` = the ingredient is only ever bought for a recipe; a positive
 number = that much is on stock even without a planned recipe (1000 g of flour means the
 shopping list is refilled once the last pack is opened, outside the app); `inf` = infinite
 stock (realistically only water). It is the last column, so a spreadsheet round-trip — which
@@ -349,13 +358,15 @@ plural states the pair in full („Haferflocken“ → `Haferflocke;Haferflocken
 `Karotte;Karotten`). The pair is atomic — a row with only one of the two cells is rejected
 with a German error, because the empty side would silently fall back to the canonical name.
 A file written before these columns existed (header `Ingredient;Base Unit;Reorder Point`)
-still loads with every name invariant, and the next write adds both columns.
+still loads with every name invariant, and the next write adds both columns. A file
+written before `Tolerance` existed (header `Ingredient;Singular;Plural;Base Unit;Reorder
+Point`) also loads; the tolerance is unset and the next write adds the column.
 
 An **ingredient recipe** (a sub-recipe) has its row here too, like any other ingredient. Its
 reorder point is the amount of the finished product that is on hand — cooked and kept, e.g.
 sauce in the freezer. It prefills the cooking step „Vorräte auswählen, Teil 1:
 Zutaten-Rezepte", which cooks `required − stock` of the sub-recipe (see
-[quantity_scaling.md](quantity_scaling.md) §6); an ingredient recipe that is not registered
+[quantity_scaling.md](quantity_scaling.md) §7 / §9); an ingredient recipe that is not registered
 here simply starts from the neutral reorder point 0 and is cooked in full.
 
 New ingredients are created in the web app („Neue Zutat anlegen“) with a stock picker
@@ -367,7 +378,14 @@ additional_quantity_specifications.md §6.3). „∞“ in the picker stores `in
 
 The mappings file is a pure overlay; an ingredient without additional units (e.g.
 Cashews) exists only in the list and always renders in the base form (see
-additional_quantity_specifications.md §4).
+additional_quantity_specifications.md §4). There is no per-ingredient priority anymore:
+the optimizer scores every compatible unit. The app allows **at most one shopping unit
+per ingredient**; a second mapping whose unit is flagged `Shopping Unit = yes` is
+rejected with a German error.
+
+The allowed **base and additional quantities** and their number schemes are
+repo-global master data ([BQs.csv](BQs.csv), [AQs.csv](AQs.csv)), not user Drive
+data: they describe the app's display tables, not an ingredient.
 
 The additional **units** themselves — display arrangement, number scheme, the
 `Unit Exact` flag (see additional_quantity_specifications.md §6.3), the `Shopping Unit`
@@ -458,8 +476,8 @@ ids.
 ## 11. Relationship to Other Documents
 
 - [recipe_structure.md](recipe_structure.md) — logical model this encoding implements.
-- [quantity_scaling.md](quantity_scaling.md) — why quantities/servings/yields must be
-  ladder values, and how scaling consumes the stored base quantities.
+- [quantity_scaling.md](quantity_scaling.md) — how the stored target `V0` is scaled and
+  how the optimizer chooses the displayed BQ/AQ; tolerance, yields and export views.
 - [additional_quantity_specifications.md](additional_quantity_specifications.md) —
   what is *not* stored here (additional units are computed at display time).
 - [recipe_structure.md](recipe_structure.md) — the authoritative logical model these files

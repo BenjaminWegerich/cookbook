@@ -13,7 +13,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { formatBQ, renderAQSSlash } from '../additionalUnits.js';
-import { difference, scale } from '../ladder.js';
 import { parseRecipe } from './parse.js';
 import { generateRecipeHtml } from './exportHtml.js';
 import type { RecipePhoto } from './exportHtml.js';
@@ -65,9 +64,9 @@ describe('generateRecipeHtml — finished dish', () => {
   });
 
   it('scales the master list and the reference readout for an option', () => {
-    const delta = difference(WRAPS.servings!, 9);
-    expect(html).toContain(renderAQSSlash('Tortillas', scale(250, delta), 'g'));
-    expect(html).toContain(renderAQSSlash('Joghurt', scale(400, delta), 'g'));
+    // 6 → 9 servings is an exact factor of 1.5.
+    expect(html).toContain(renderAQSSlash('Tortillas', 375, 'g'));
+    expect(html).toContain(renderAQSSlash('Joghurt', 600, 'g'));
     // The written size's reference readout (amounts only, muted).
     expect(html).toContain(
       `<p class="reference size-scoped" data-servings="6">${renderAQSSlash('Tortillas', 250, 'g')}</p>`,
@@ -83,9 +82,8 @@ describe('generateRecipeHtml — finished dish', () => {
   });
 
   it('renders inline artifacts scaled inside the prose, in slash form', () => {
-    const delta = difference(WRAPS.servings!, 6);
-    // Option 6: the {{1500 ml Wasser}} artifact renders as its display form.
-    expect(html).toContain(renderAQSSlash('Wasser', scale(1500, delta), 'ml'));
+    // Option 6 is the written size, so the {{1500 ml Wasser}} artifact is unscaled.
+    expect(html).toContain(renderAQSSlash('Wasser', 1500, 'ml'));
     // No raw artifact markers survive.
     expect(html).not.toContain('{{');
   });
@@ -137,12 +135,12 @@ prep_time: 15 min
 
   const html = generateRecipeHtml(sauce);
 
-  it('bakes one view per yield rung, ±2 decades around the written yield', () => {
+  it('bakes the allowed BQ views within ±1 decade around the written yield', () => {
     expect(html.match(/class="check-list size-scoped/g) ?? []).toHaveLength(65);
     expect(html).toContain(`data-yield="500" data-yield-label="${formatBQ(500, 'ml')}"`);
-    // The extremes of the range: 5 ml and 50 l.
-    expect(html).toContain('data-yield="5"');
-    expect(html).toContain(`data-yield="50000" data-yield-label="${formatBQ(50000, 'ml')}"`);
+    // The extremes of the range: 50 ml and 5 l.
+    expect(html).toContain('data-yield="50"');
+    expect(html).toContain(`data-yield="5000" data-yield-label="${formatBQ(5000, 'ml')}"`);
   });
 
   it('marks the written yield as the fallback view', () => {
@@ -150,14 +148,14 @@ prep_time: 15 min
   });
 
   it('scales the master list and the reference per view', () => {
-    const delta = difference(sauce.yield!, 5000); // 500 ml → 5 l
-    expect(html).toContain(renderAQSSlash('Milch', scale(300, delta), 'ml'));
-    expect(html).toContain(renderAQSSlash('Butter', scale(25, delta), 'g'));
+    // 500 ml → 5 l is an exact factor of 10.
+    expect(html).toContain(renderAQSSlash('Milch', 3000, 'ml'));
+    expect(html).toContain(renderAQSSlash('Butter', 250, 'g'));
   });
 
   it('offers the chips and the stepper, with the powers of ten plus the written size', () => {
     expect(html).toContain('class="chip yield-chip active" data-yield="500"');
-    expect(html).toContain('class="chip yield-chip" data-yield="10000"');
+    expect(html).toContain('class="chip yield-chip" data-yield="1000"');
     expect(html).toContain('class="yield-value"');
     expect(html).toContain('class="yield-step-button yield-step-down"');
     expect(html).toContain('class="yield-step-button yield-step-up"');
@@ -186,10 +184,11 @@ prep_time: 5 min
 
   const html = generateRecipeHtml(counts);
 
-  it('scales a unitless count along the AQ ladder and shows slash-form fractions', () => {
-    // Option 6: 1/2 → 2/3, 100 → 150, 1/3 → 2/5, in the prose as plain text.
-    expect(html).toContain('Mit 2/3 und 150 und 2/5 arbeiten.');
-    // The stored option 4 shows the unscaled fractions.
+  it('scales a unitless count by the exact factor and shows slash-form fractions', () => {
+    // Option 6 (factor 1.5): 1/2 → 3/4, 100 → 150 (outside the AQ table, so a
+    // plain number), 1/3 → 1/2.
+    expect(html).toContain('Mit 3/4 und 150 und 1/2 arbeiten.');
+    // The written option 4 shows the unscaled counts.
     expect(html).toContain('Mit 1/2 und 100 und 1/3 arbeiten.');
     expect(html).not.toContain('{{');
   });

@@ -22,15 +22,23 @@ import { serializeRecipe } from '@cookbook/core';
 import type { IngredientMappings, Recipe, RecipeType } from '@cookbook/core';
 
 /**
- * Serializes the ingredient master data as `- Name (base unit)` lines. The AI
- * only needs the names (to reuse them) and the base unit family (g/ml, so it
- * writes the right unit); the additional-unit conversions are display data the
- * AI never writes.
+ * Serializes the ingredient master data as `- Name (base unit[, tolerance])`
+ * lines. The AI only needs the names (to reuse them), the base unit family
+ * (g/ml, so it writes the right unit) and the ingredient-level tolerance that
+ * is already set — the prompt tells it not to repeat that value on every row.
+ * The additional-unit conversions are display data the AI never writes.
  */
 function serializeMasterData(mappings: IngredientMappings): string {
   const names = Object.keys(mappings).sort((a, b) => a.localeCompare(b, 'de'));
   if (names.length === 0) return '(keine Zutaten-Stammdaten geladen)';
-  return names.map((name) => `- ${name} (${mappings[name]!.bu})`).join('\n');
+  return names
+    .map((name) => {
+      const entry = mappings[name]!;
+      const tolerance =
+        entry.tolerance === undefined ? '' : `, Toleranz ${entry.tolerance}`;
+      return `- ${name} (${entry.bu}${tolerance})`;
+    })
+    .join('\n');
 }
 
 /** A recipe of the collection as far as the AI context needs it. */
@@ -71,7 +79,11 @@ export function buildGuidelinesText(personalRules: string): string {
 export function buildCollectionText(input: AiCollectionInput): string {
   const sections: string[] = [];
 
-  sections.push(`## Zutaten-Stammdaten\n${serializeMasterData(input.masterData)}`);
+  sections.push(
+    `## Zutaten-Stammdaten\n${serializeMasterData(input.masterData)}\n` +
+      'Die Toleranzwerte in dieser Liste sind bereits gesetzt; wiederhole sie nicht in den ' +
+      'Rezeptzeilen, außer eine einzelne Menge braucht bewusst eine andere Toleranz.',
+  );
 
   const titles = input.recipes
     .map(({ recipe }) => recipe.title)

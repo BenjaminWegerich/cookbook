@@ -26,7 +26,7 @@
  *   selects it too;
  * - once a recipe is picked and its file has been read, the familiar size input
  *   for the recipe type — the serving chips for a finished dish, the
- *   QuantityPicker (suggested chips + ladder stepper) for an ingredient recipe —
+ *   ValueStepper (suggested chips + baked views) for an ingredient recipe —
  *   starting on the size the recipe is written in, exactly like "Einplanen", so
  *   an untouched size replaces the entry with the dish as it stands;
  * - below the size input, the recipe's reference ingredients scaled to the
@@ -48,9 +48,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import {
-  difference,
-  integerLadderValues,
-  scale,
+  SERVING_COUNTS,
+  defaultYieldView,
+  formatBQ,
   writtenPlannedAmount,
   yieldViewQuantities,
   type PlannedAmount,
@@ -58,17 +58,16 @@ import {
 } from '@cookbook/core';
 
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
-import QuantityPicker from './QuantityPicker';
+import ValueStepper from './ValueStepper';
 import { safeRenderAQS } from './ingredientDisplay';
 import { CloseIcon, SearchIcon } from './icons';
 
 /**
- * The serving options of a finished dish: the same integer standard numbers
- * 1–30 the editor offers and the meal plan accepts (mealPlan.ts). They cover
+ * The serving options of a finished dish: the same allowed serving counts the editor offers and the meal plan accepts (mealPlan.ts). They cover
  * every value the plan can carry, so the dish needs no stepper — exactly like
  * the meal-plan overlay's size input.
  */
-const SERVING_OPTIONS = integerLadderValues(1, 30);
+const SERVING_OPTIONS = SERVING_COUNTS;
 
 /**
  * How many suggestions the field offers at once. The same cap the ingredient
@@ -211,7 +210,15 @@ function ReplaceRecipeSheet({
         if (loaded.type === 'finished_dish') {
           setServings(written.kind === 'servings' ? written.servings : 1);
         } else {
-          setYieldQuantity(written.kind === 'yield' ? written.quantity : 1000);
+          const writtenYield = written.kind === 'yield' ? written.quantity : 1000;
+          const views = loaded.yield === undefined ? [] : yieldViewQuantities(loaded.yield);
+          setYieldQuantity(
+            views.includes(writtenYield)
+              ? writtenYield
+              : loaded.yield !== undefined
+                ? defaultYieldView(loaded.yield)
+                : 1000,
+          );
         }
       })
       .catch((err) => {
@@ -245,6 +252,14 @@ function ReplaceRecipeSheet({
     details !== null && !isDish && details.yield !== undefined
       ? yieldViewQuantities(details.yield)
       : null;
+  /** The default view is the written yield when it is a BQ value. */
+  const defaultYield =
+    details !== null && details.yield !== undefined
+      ? defaultYieldView(details.yield)
+      : yieldQuantity;
+  /** A stale previous yield falls back to the default view. */
+  const effectiveYield =
+    bakedYields !== null && !bakedYields.includes(yieldQuantity) ? defaultYield : yieldQuantity;
 
   /** The size the user picked, in the shape the write needs. */
   const planned: PlannedAmount | null =
@@ -252,7 +267,7 @@ function ReplaceRecipeSheet({
       ? null
       : details.type === 'finished_dish'
         ? { kind: 'servings', servings }
-        : { kind: 'yield', quantity: yieldQuantity, baseUnit: family };
+        : { kind: 'yield', quantity: effectiveYield, baseUnit: family };
 
   /**
    * The reference ingredients scaled by the same step as everything else
@@ -260,15 +275,23 @@ function ReplaceRecipeSheet({
    * the same readout the meal-plan overlay shows below its size input.
    */
   const writtenSize = details === null ? undefined : isDish ? details.servings : details.yield;
-  const deltaX =
-    writtenSize === undefined ? 0 : difference(writtenSize, isDish ? servings : yieldQuantity);
+  const factor =
+    writtenSize === undefined ? 1 : (isDish ? servings : effectiveYield) / writtenSize;
   const references =
     details === null
       ? []
       : details.ingredients
           .filter((ingredient) => ingredient.reference)
           .map((ingredient) =>
-            safeRenderAQS(ingredient.name, scale(ingredient.quantity, deltaX), ingredient.unit),
+            safeRenderAQS(
+              ingredient.name,
+              ingredient.quantity * factor,
+              ingredient.unit,
+              {
+                ...(ingredient.tolerance !== undefined ? { quantity: ingredient.tolerance } : {}),
+                ...(details.tolerance !== undefined ? { recipe: details.tolerance } : {}),
+              },
+            ),
           );
 
   /**
@@ -437,13 +460,12 @@ function ReplaceRecipeSheet({
             // chosen here — no Gewicht/Volumen switch.
             <div className="field">
               <span className="field-label">Menge</span>
-              <QuantityPicker
-                value={yieldQuantity}
+              <ValueStepper
+                value={effectiveYield}
+                values={bakedYields ?? [effectiveYield]}
                 onChange={setYieldQuantity}
-                family={family}
-                {...(bakedYields !== null
-                  ? { min: bakedYields[0]!, max: bakedYields[bakedYields.length - 1]! }
-                  : {})}
+                format={(candidate) => formatBQ(candidate, family)}
+                ariaLabel="Menge"
               />
             </div>
           ))}

@@ -343,6 +343,36 @@
   font-weight: 600;
 }
 
+/* Free quantity input (QuantityInput): the value is typed, not stepped, so the
+   field keeps the stepper's centred value typography and gets the shared field
+   fill. The +/− buttons stay for quick magnitude changes. */
+.quantity-input {
+  width: 100%;
+  max-width: 180px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: 600;
+}
+
+/* The tolerance chips plus the optional „Standard“ reset. */
+.tolerance-control {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.tolerance-reset {
+  padding: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
 /* ---- Step editor (contenteditable with artifacts) -------------------------- */
 
 /* The step's prose field. A step card is a card, so the field takes the shared
@@ -975,17 +1005,17 @@
 }
 
 /* Caption row and input rows of the manual AU mappings share one column grid:
-   unit name · Menge · Priorität. Both numeric columns are fixed-width instead
-   of stretching — the values are short (a factor like "7,5", a priority like
-   "1"), and a full-width Menge field would dominate the row while saying
-   nothing. The first column sizes to the widest unit name (max-content) so
-   words like "Packung" are never clipped. The three heading cells and each
-   unit's three cells are direct children of the one .factor-grid, so a single
-   grid keeps every row aligned. Column gap is --space-3, row gap --space-2
-   to reproduce the .field rhythm the separate rows previously inherited. */
+   unit name · Menge. The numeric column is fixed-width instead of stretching —
+   the values are short (a factor like "7,5"), and a full-width field would
+   dominate the row while saying nothing. The first column sizes to the widest
+   unit name (max-content) so words like "Packung" are never clipped. The two
+   heading cells and each unit's two cells are direct children of the one
+   .factor-grid, so a single grid keeps every row aligned. Column gap is
+   --space-3, row gap --space-2 to reproduce the .field rhythm the separate
+   rows previously inherited. Per-ingredient priorities are gone. */
 .factor-grid {
   display: grid;
-  grid-template-columns: max-content 4.5rem 4.5rem;
+  grid-template-columns: max-content 4.5rem;
   column-gap: var(--space-3);
   row-gap: var(--space-2);
   align-items: center;
@@ -999,7 +1029,7 @@
 
 /* Tighter inline padding than the generic .field inputs: inside a 4.5 rem
    column the standard --space-4 gutter would leave very little room for the
-   digits themselves. Right-aligned because both columns hold numbers only
+   digits themselves. Right-aligned because the column holds numbers only
    (DESIGN.md §5.3). */
 .factor-grid input {
   width: 100%;

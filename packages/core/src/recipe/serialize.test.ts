@@ -60,6 +60,40 @@ describe('serializeRecipe', () => {
     expect(reparsed.ingredients).toEqual(makeDish().ingredients);
   });
 
+  it('round-trips the recipe-level and per-quantity tolerance', () => {
+    const recipe = makeDish({
+      tolerance: 0.75,
+      steps: [
+        {
+          ingredients: [{ name: 'Tortillas', quantity: 250, unit: 'g', tolerance: 0.8 }],
+          text: 'Tortillas im Ofen erwärmen.',
+        },
+      ],
+      ingredients: [{ name: 'Tortillas', quantity: 250, unit: 'g', tolerance: 0.8 }],
+    });
+    const text = serializeRecipe(recipe);
+    expect(text).toContain('tolerance: 0.75');
+    expect(text).toContain('- 250 g Tortillas {tolerance: 0.8}');
+    const reparsed = parseRecipe(text);
+    expect(reparsed.tolerance).toBe(0.75);
+    expect(reparsed.steps[0]!.ingredients[0]!.tolerance).toBe(0.8);
+  });
+
+  it('round-trips an artifact-level tolerance suffix', () => {
+    // Omit the reference rather than setting it to undefined (the model uses
+    // exact optional properties, and the default reference would not occur in
+    // this step).
+    const { reference: _ignored, ...withoutReference } = makeDish();
+    const recipe = {
+      ...withoutReference,
+      steps: [{ ingredients: [], text: 'Mit {{1/2|t=0.8}} mischen.' }],
+    };
+    const text = serializeRecipe(recipe);
+    expect(text).toContain('{{1/2|t=0.8}}');
+    const reparsed = parseRecipe(text);
+    expect(reparsed.steps[0]!.text).toBe('Mit {{1/2|t=0.8}} mischen.');
+  });
+
   it('writes inline artifacts in the canonical form inside the prose', () => {
     const recipe = makeDish({
       steps: [

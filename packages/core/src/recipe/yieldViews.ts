@@ -1,67 +1,69 @@
 /**
  * The yield views of an ingredient-recipe HTML export.
  *
- * An ingredient recipe has no serving count; its size is a yield in the
- * recipe's own family unit (`g` / `ml`). The exported cooking view therefore
- * offers yields instead of servings — and the meal plan's promised size has to
- * be one the export can actually show, or the link in the Keep line would open
- * the wrong amount.
+ * A finished dish has a serving count and pre-bakes one view per allowed
+ * serving count. An ingredient recipe has a written yield instead; its views are
+ * the allowed BQ values in a band around that yield (decided with the user).
+ * The band is **±1 decade** (`written/10 … written*10`), which keeps the number
+ * of views roughly at the old export size (~65–96) while covering every
+ * realistic use. The written yield itself may be any positive number; if it is
+ * not a BQ value, the nearest allowed BQ is the default view, because only BQ
+ * values are baked (decided with the user).
  *
- * One rule serves both sides so they cannot drift:
- *
- * - the export bakes every ladder rung within ±`YIELD_VIEW_DECADES` decades of
- *   the recipe's *written* yield (`yieldViewQuantities`), so the offered range
- *   moves with the recipe instead of being a global bound;
- * - the meal plan accepts a planned yield only inside that same range
- *   (`yieldViewFitsWrittenYield`), which is why `mealPlanEntryText` can always
- *   select the exact view it promised.
- *
- * ±2 decades = ±32 rungs: a recipe written at 500 g is planned and cooked
- * between 5 g and 50 kg (the app's own quantity pool narrows that further),
- * which covers every realistic use; the file grows by the extra views, not by
- * any logic, so decision 7's "no runtime scaling" still holds.
+ * The export and the meal plan share this module, so the meal plan can only
+ * promise a size the export really contains.
  */
 
-import { STEPS_PER_DECADE, pos, roundedBQ } from '../ladder.js';
+import { allowedBQValuesInRange, nearestAllowedBQ } from '../quantityValues.js';
 
-/** Rungs covered in each direction around the written yield: ±2 decades. */
-export const YIELD_VIEW_DECADES = 2;
-/** The same range as a number of ladder steps (±32). */
-export const YIELD_VIEW_STEPS = YIELD_VIEW_DECADES * STEPS_PER_DECADE;
+/** Decades covered in each direction around the written yield. */
+export const YIELD_VIEW_DECADES = 1;
 
 /**
- * Every yield the export of an ingredient recipe bakes a view for: the ladder
- * rungs from `pos(writtenYield) − YIELD_VIEW_STEPS` to `+ YIELD_VIEW_STEPS`,
- * ascending, in the family base unit. The written yield itself sits in the
- * middle (it is a ladder rung by definition), so the unscaled view is always
- * among them.
+ * Every yield the export of an ingredient recipe bakes a view for: all allowed
+ * BQ values in `[written/10, written*10]`, ascending, plus the nearest allowed
+ * BQ when that band is empty (a yield below 0.1). The written yield itself is
+ * included when it is a BQ value; when it is not, the nearest BQ is the default
+ * view (there is no exact written view, because only BQ values are baked).
  *
- * `writtenYield` must be a ladder value; the recipe validator guarantees that
- * for a stored recipe (docs/storage_format.md §3).
+ * `writtenYield` may be any positive finite number; the parser validates that.
  */
 export function yieldViewQuantities(writtenYield: number): number[] {
-  const center = pos(writtenYield);
-  const quantities: number[] = [];
-  for (let x = center - YIELD_VIEW_STEPS; x <= center + YIELD_VIEW_STEPS; x++) {
-    quantities.push(roundedBQ(x));
+  if (!(writtenYield > 0) || !Number.isFinite(writtenYield)) {
+    throw new Error(`yieldViewQuantities: ${writtenYield} is not a positive finite number`);
   }
-  return quantities;
+  const values = allowedBQValuesInRange(writtenYield / 10, writtenYield * 10).map(
+    (entry) => entry.value,
+  );
+  if (values.length === 0) {
+    return [nearestAllowedBQ(writtenYield)];
+  }
+  return values;
+}
+
+/**
+ * The default view of an ingredient recipe: the written yield when it is a BQ
+ * value, otherwise the allowed BQ value nearest to it (ties toward the larger
+ * value). The export marks this view as written, so the recipe opens at the
+ * closest amount it can actually show.
+ */
+export function defaultYieldView(writtenYield: number): number {
+  return nearestAllowedBQ(writtenYield);
 }
 
 /**
  * True when a planned yield has a baked view in the export of the recipe
- * written at `writtenYield` — i.e. when the two rungs are at most
- * `YIELD_VIEW_STEPS` apart.
- *
- * Both values must be ladder values in the same family unit; the caller checks
- * the unit (see `plannedAmountFitsRecipe`). A value that is not on the ladder
- * (a hand-edited recipe file, docs/quantity_scaling.md §3) answers `false`
- * instead of throwing: one malformed recipe must not take the whole meal-plan
- * list down with it.
+ * written at `writtenYield` — i.e. when it is one of `yieldViewQuantities`.
+ * Both values must be in the same family unit; the caller checks the unit (see
+ * `plannedAmountFitsRecipe`). A malformed value answers false instead of
+ * throwing, so one bad meal-plan entry cannot take the list down.
  */
 export function yieldViewFitsWrittenYield(plannedYield: number, writtenYield: number): boolean {
+  if (!(plannedYield > 0) || !Number.isFinite(plannedYield)) return false;
   try {
-    return Math.abs(pos(plannedYield) - pos(writtenYield)) <= YIELD_VIEW_STEPS;
+    return yieldViewQuantities(writtenYield).some(
+      (value) => Math.abs(value - plannedYield) < 1e-9,
+    );
   } catch {
     return false;
   }

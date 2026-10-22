@@ -1,350 +1,238 @@
 # Additional Quantity Specifications (Unit Display)
 
-> Defines how ingredient quantities are displayed: every ingredient is stored with
-> a **base quantity specification** only ("400 g"), and the app may additionally
-> render an **additional quantity specification** ("1 Becher") at display time.
-> This is the authoritative spec for that logic. Related documents:
-> [quantity_scaling.md](quantity_scaling.md) (the quantity ladder and scaling),
-> [standard_numbers.csv](standard_numbers.csv) (the ladder table),
-> [recipe_structure.md](recipe_structure.md) (recipe structure).
+> Defines how an ingredient's target amount is displayed: the optimizer chooses a
+> **base quantity** (BQ, metric `g`/`ml`) and optionally an **additional quantity**
+> (AQ, a household or packaging unit). Related documents:
+> [quantity_scaling.md](quantity_scaling.md) (scaling, optimizer, tolerance),
+> [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md) (the scoring model),
+> [AQs.csv](AQs.csv) / [BQs.csv](BQs.csv) (the allowed values),
+> [recipe_structure.md](recipe_structure.md) (recipe model).
 
-## 1. Core Idea
+## 1. Core idea
 
-- An ingredient is **stored** with exactly two parts: its name and its base
-  quantity specification (e.g. "400 g"). The base quantity is always a standard
-  number (a rounded BQ ladder value, see [quantity_scaling.md](quantity_scaling.md)).
-- At **display time**, the app *may* additionally show an additional quantity
-  specification (e.g. "1 Becher") in front of or around the base specification:
-  "1 Becher Joghurt (400 g)".
-- The additional quantity specification is **always computed from the stored base
-  quantity** — it is never stored, never authored, and never scaled directly.
-  After scaling, the display is simply recomputed from the scaled base quantity.
-  The shown base quantity in the same line is the stored value, except for an
-  **exact** unit, where it is derived from the rounded additional quantity
-  (§6.3) — again without storing anything.
-- Every additional unit has a chance to apply: its additional quantity is
-  computed from the base quantity, rounded to the nearest **AQ ladder value**
-  (a fraction, see [quantity_scaling.md](quantity_scaling.md) §2), and checked
-  against the **number scheme**. The mappings are evaluated in order of
-  **priority** (1 = best first), and the first one that applies is used.
-- Fractions replace decimals for additional units because counting units are
-  more natural in fractions ("1/2 Apfel", "1+1/4 Becher") than in decimals
-  ("0.5 Apfel", "1.25 Becher").
+- A recipe stores only the **unrounded target `V0`** in the ingredient's family
+  unit (`g` or `ml`). It never stores a second unit.
+- At **display time** the app runs the deterministic optimizer. It may show:
+  - a BQ alone (`"400 g Joghurt"`), or
+  - a BQ plus an AQ (`"1 Becher Joghurt (500 g)"`).
+- The BQ and AQ are **display values**. They are not written back to the recipe.
+  The stored `V0` remains the target for scaling, shopping and export.
+- An AQ is only considered when its value is allowed by the unit's **number
+  scheme**. The scheme applies to exact and non-exact units alike.
+- The optimizer can choose a BQ that differs from `V0` (for example `V0 = 450 g`
+  may display as `1 Becher (500 g)`). That is deliberate: the display is the
+  practical reading, while `V0` stays the exact target. If no candidate fits, the
+  plain base form with `V0` is shown.
+- The **tolerance** (`λ`, five chips) shifts the balance between metric accuracy
+  and practical measures; it never changes `V0` (see
+  [quantity_scaling.md](quantity_scaling.md) §5).
 
 ## 2. Terminology
 
 | Term | Definition | Example |
 |---|---|---|
 | Ingredient name | The ingredient itself. | "Joghurt" |
-| Base quantity specification (BQS) | The stored amount together with its base unit. | "400 g" |
-| Base quantity (BQ) | The numeric amount of the BQS; always a rounded BQ ladder value. | 400 |
-| Base unit (BU) | The unit of the BQS: g / kg / ml / l. | g |
-| Additional quantity specification (AQS) | The computed display form added to the BQS. | "1 Becher" |
-| Additional quantity (AQ) | The numeric value of the AQS; an AQ ladder value (fraction) after rounding. | 1+1/4 |
-| Additional unit (AU) | The unit the AQS is expressed in. Defines the display arrangement, the number scheme, the singular/plural display forms, and whether it is a shopping unit. | Becher |
+| Base quantity specification (BQS) | The displayed amount together with its base unit. | "500 g" |
+| Base quantity (BQ) | The numeric amount of the BQS; an allowed BQ value or an exact unit's `q·c`. | 500 |
+| Base unit (BU) | The unit of the BQS: g / ml (kg / l are display forms from 1000). | g |
+| Additional quantity specification (AQS) | The displayed household/package part. | "1 Becher" |
+| Additional quantity (AQ) | The numeric count of the AQS; an allowed AQ value. | 1 |
+| Additional unit (AU) | The unit the AQS is expressed in; defines arrangement, scheme, display forms, exactness and shopping flag. | Becher |
 
-The abbreviations (BQS, BQ, BU, AQS, AQ, AU) are conversational shorthand only;
-the full English terms above are the canonical names. Concrete identifiers for
-storage (table, column, or file names) are deliberately **not** defined here —
-they belong to the implementation phase.
+The abbreviations (BQS, BQ, BU, AQS, AQ, AU) are conversational shorthand; the
+full English terms are canonical. Concrete identifiers belong to the
+implementation.
 
-## 3. Master Data (Conceptual)
+## 3. Master data
 
-The logic is driven by three master-data entities. Their concrete storage design is decided:
-the master data lives in four CSV tables in the repository — `docs/number_schemes.csv` (scheme
-matrix), `docs/additional_units.csv` (units with arrangement, scheme, exactness and the
-shopping-unit flag), `docs/ingredients.csv` (ingredient list with base unit),
-`docs/ingredient_unit_mappings.csv` (mappings with factor and priority) — and is compiled into a
-TypeScript module by `scripts/generate-additional-data.mjs`, which validates cross-references and
-guards the scheme matrix against drift from the ladder's AQ column (see
-[ARCHITECTURE.md](ARCHITECTURE.md)).
+The display logic is driven by four repository tables, compiled into
+`packages/core/src/additionalUnitsData.ts` / `quantityData.ts`:
 
-1. **Additional units** — each AU has:
-   - a **name** ("Becher"),
-   - **display forms** (`Singular`, `Plural`, see §3.2): the form shown in place
-     of the name for a count of one / above one,
-   - a **display arrangement** (see §4),
-   - a **number scheme** (see §5),
-   - an **exactness flag** (`Unit Exact`, see §6.3): `yes` when the unit fixes
-     the base amount by definition (a 400 g Becher, a 200 g Block), `no` when
-     the factor is only a measured average (a carrot of roughly 80 g),
-   - a **shopping-unit flag** (`Shopping Unit`, see §3.1): `yes` when ingredients
-     are bought in this unit (a Becher), `no` when the unit is only a recipe
-     measure (TL, EL).
-2. **Ingredient–additional-unit mappings** — for each ingredient and each AU
-   mapped to it:
-   - a **conversion factor**: the amount of base unit per one additional unit
-     (e.g. 400 g per Becher for Joghurt),
-   - a **priority**: a positive integer, where **1 = most preferred** (see §7).
-   The ingredient list is the authoritative set of ingredient names and base
-   units. An ingredient may have **no additional units** at all (e.g. Cashews)
-   and then always renders in the base form (§4).
-3. **Number schemes** — named subsets of the AQ ladder values (see §5).
+1. **[BQs.csv](BQs.csv)** — the allowed metric values and their clumsiness
+   penalties. `1 … 95` are explicit; above 95 the decade rule generates
+   `10 … 95 × 10^k` (see [quantity_scaling.md](quantity_scaling.md) §3).
+2. **[AQs.csv](AQs.csv)** — the allowed counts (`1/8 … 30`), their penalties and
+   the number-scheme columns. A `1` marks the value as allowed by that scheme.
+3. **[additional_units.csv](additional_units.csv)** — one row per unit:
+   - canonical **name** (the key mappings reference),
+   - **Singular** / **Plural** display forms (both empty for an invariant unit),
+   - **Arrangement** (display template, §4),
+   - **Number Scheme** (a column in `AQs.csv`, §5),
+   - **Unit Exact** (`yes` / `no`, default `yes`, §6.3),
+   - **Shopping Unit** (`yes` / `no`, mandatory, §3.1).
+4. **[ingredient_unit_mappings.csv](ingredient_unit_mappings.csv)** — one row per
+   ingredient–unit pair: `Ingredient;Additional Unit;Conversion Factor`
+   (base-unit amount per one unit). There is **no priority column** anymore; the
+   optimizer scores every compatible unit.
 
-### 3.1 Shopping Unit
+The ingredient list ([ingredients.csv](ingredients.csv) /
+`zutaten.csv`) supplies the fixed base unit, the display forms, the optional
+ingredient-level tolerance and the reorder point. An ingredient without mappings
+(e.g. Cashews) has no AQ and always uses the base form.
 
-- The **shopping-unit flag** (`Shopping Unit` in `docs/additional_units.csv`) states whether
-  ingredients are bought in this unit: `yes` for a unit that names a purchase ("Becher",
-  "Packung"), `no` for a unit that is only a recipe measure ("TL", "EL"). The cell is mandatory
-  — a unit without the flag is a master-data error, so a new unit can never silently default
-  into or out of the shopping list (unlike `Unit Exact`, which defaults to `yes`).
-- The flag is a property of the **unit**, not of the ingredient or the mapping, and it drives
-  the shopping-list flow. It does **not** affect the display in any way: AQS selection (§6),
-  exactness (§6.3) and rendering (§4) ignore it, and a shopping unit is converted and displayed
-  like any other AU.
-- **One unit, one meaning — distinct names for variants.** A unit is identified by its **name**:
-  the mappings reference it by name and the runtime registry keys units by name, so two rows
-  sharing one name are ambiguous (and rejected by the generator). The rare unit that is a
-  shopping unit for some ingredients but not for others is therefore modelled as **two units
-  with distinct names**, one `yes` and one `no`. This mirrors the exact/approximate rule of §6.3:
-  the flag belongs to the unit, so two meanings need two units.
+### 3.1 Shopping unit
 
-### 3.2 Singular and Plural Forms
+- The **Shopping Unit** flag states whether ingredients are bought in this unit:
+  `yes` for a purchase unit (Becher, Packung), `no` for a pure recipe measure
+  (TL, EL).
+- The flag is a property of the **unit**, not of the mapping. It does not affect
+  display selection; it only tells the shopping list which unit to buy in.
+- **Exactly one shopping unit per ingredient.** The app allows at most one
+  mapping whose unit is flagged `Shopping Unit = yes`; the generator and the
+  runtime CSV parser reject a second one. The shopping list therefore has one
+  unambiguous purchase unit. An ingredient with no shopping unit is bought in
+  its family unit.
+- Because the flag belongs to the unit, two meanings need two units with
+  distinct names (e.g. a shopping `Becher` and a non-shopping variant if one is
+  ever needed). The seed does not need such a variant: every ingredient with
+  multiple mappings has at most one shopping mapping.
 
-- A unit's **name** is canonical: it is the identity the mappings file references and the
-  runtime registry keys units by. The display line does not always show it, though — a count
-  above one needs the plural in German („2 Packungen Mehl (2 kg)“) — so the unit carries two
-  **display forms** (`Singular`, `Plural` in `docs/additional_units.csv`).
-- The two cells sit directly after the name they belong to and are **display data only**: they
-  never appear in the mappings file, never identify a unit and never key the registry. Like the
-  ingredient list's `Singular`/`Plural` columns ([storage_format.md](storage_format.md) §9),
-  they are an atomic pair — both filled for a unit with a count form, both empty for an
-  **invariant** one, whose canonical name then serves for every count. A half-filled pair is a
-  master-data error and rejected by the generator.
-- A canonical name may carry a **qualifier** that distinguishes variants of one word
-  („Packung (teilbar)“, „Dose (Abtropfgewicht)“, „Stück (ZE zuerst)“). It is a key, never the
-  display: the display forms carry the word the user sees („Packung“/„Packungen“,
-  „Dose“/„Dosen“, „Stück“/„Stück“), so a qualifier must always come with a filled pair —
-  otherwise `<AU>` would put the qualifier itself on the display line.
-- The substitution happens in the arrangement renderer (§4): `<AU>` renders the **plural** form
-  when the additional quantity is **above one** and the unit has one, and the **singular** form
-  (or the canonical name for an invariant unit) otherwise. A fraction below one stays singular
-  („½ Packung“); a mixed number above one is plural („1 ½ Packungen“).
-- `Additional Unit` stays the key: the rare unit that must be both a shopping and a
-  non-shopping unit is still modelled as two units with distinct names (§3.1), and the variants
-  may carry different display forms. Adding or correcting a form never touches a mapping or an
-  ingredient.
+### 3.2 Singular and plural forms
 
-## 4. Display Arrangement
+- A unit's **name** is canonical: the key the mappings reference and the
+  registry uses. The **Singular** / **Plural** cells are display data only.
+- Both cells are filled for a unit with a count form (`Packung` / `Packungen`),
+  both empty for an **invariant** unit (its canonical name serves for every
+  count). A half-filled pair is a master-data error.
+- A qualifier in the canonical name (`Packung (teilbar)`) is a key, never the
+  display; such a unit must state its display pair.
+- `<AU>` renders the **plural** form when the count is above one and the unit
+  has one, otherwise the **singular** form (or the canonical name for an
+  invariant unit). A fraction below one stays singular (`½ Packung`); a mixed
+  number above one is plural (`1 ½ Packungen`).
 
-- Each AU defines the **arrangement**: the order in which the components of the
-  display line appear, plus the punctuation (spaces, parentheses).
-- Arrangements are written as templates with the following placeholders:
+## 4. Display arrangement
 
-  | Placeholder | Component |
-  |---|---|
-  | `<AQ>` | additional quantity |
-  | `<AU>` | additional unit — its singular or plural display form for the count (§3.2) |
-  | `<IN>` | ingredient name — always the canonical name |
-  | `<INF>` | ingredient name — its singular or plural display form for the count (see below) |
-  | `<BQ>` | base quantity |
-  | `<BU>` | base unit (kg / l from 1000 up, see §8) |
-  | `<NNBSP>` | narrow no-break space (U+202F) — the space between a number and its unit |
+Each unit defines an **arrangement**: the order of the parts and the punctuation.
 
-- Everything that is **not** one of these placeholders is **free text** and is
-  rendered unchanged: literal words, punctuation, commas and spacing all stand as
-  written („ca. <AQ> <AU> <IN>, gestrichen“). `<BQ>` and `<BU>` may therefore also
-  stand apart, separated by free text or a plain space, instead of forming the
-  usual `<BQ><NNBSP><BU>` run.
-- **Two name placeholders, one shared form.** `<IN>` always renders the canonical
-  ingredient name — the identity recipes, the mappings and the item table use.
-  `<INF>` renders the ingredient's Singular/Plural display form
-  ([storage_format.md](storage_format.md) §9) and falls back to the canonical name
-  when the pair is empty (Zucker, Milch). Inside `<INF>`, the **count decides**
-  which form appears, exactly as it does for `<AU>`: one arrangement yields „1
-  Stück Karotte“ (singular) and „2 Stück Karotten“ (plural). A count above one
-  takes the plural, so `0` and a fraction below one stay singular — the same rule
-  as the unit forms.
-- Example — "Becher": `<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)` →
-  "1 Becher Joghurt (400 g)".
-- `<AU>` follows the count (§3.2): "2 Packungen Mehl (2 kg)" for a unit with a
-  plural form, "2 Becher Joghurt (800 g)" for an invariant one. `<INF>` follows it
-  the same way: `<AQ><NNBSP><AU> <INF> (<BQ><NNBSP><BU>)` yields "1 Stück Karotte
-  (80 g)" and "2 Stück Karotten (160 g)".
-- Example — "Zitrone" (for Zitronensaft): `<BQ><NNBSP><BU> <IN> (<AQ><NNBSP><AU>)`
-  → "15 ml Zitronensaft (½ Zitrone)".
-- If **no** AQS applies, the ingredient is rendered in the standard base form
-  `<BQ> <BU> <IN>` (number and unit joined by U+202F, §8): "200 g Joghurt",
-  "800 ml Wasser". Its name is the canonical one — a base amount is not a count,
-  so no display form applies there.
-- The base quantity is shown with its **exact stored/scaled value** — except for
-  an **exact** unit (§6.3), whose factor defines the base amount: there the shown
-  base quantity is derived from the rounded additional quantity instead. The
-  rounding described in §6 never changes the **stored** base quantity.
+| Placeholder | Component |
+|---|---|
+| `<AQ>` | additional quantity |
+| `<AU>` | additional unit — singular or plural form for the count |
+| `<IN>` | ingredient name — canonical |
+| `<INF>` | ingredient name — singular/plural form for the count |
+| `<BQ>` | base quantity |
+| `<BU>` | base unit (kg / l from 1000 up) |
+| `<NNBSP>` | narrow no-break space (U+202F) |
 
-## 5. Number Schemes
+Everything that is not a placeholder is free text and passes through unchanged.
+`<BQ>` and `<BU>` may stand apart; `<IN>` and `<INF>` are two name placeholders
+(canonical vs. count form). `<INF>` falls back to the canonical name when the
+pair is empty; the count above one selects the plural.
 
-- A **number scheme** is a named subset of the AQ ladder values (the fraction
-  forms, see [quantity_scaling.md](quantity_scaling.md) §2). It answers the
-  question: which additional quantities may be displayed for an AU?
-- Example — `only_integers`: every AQ value that is a whole number (1, 2, 3, …)
-  is allowed; every other AQ value is not.
-- Further schemes are ordinary master data, e.g.:
-  - `halves` — AQ values that are whole or half (1/2, 1, 1+1/2, 2, 2+1/2, …);
-  - `quarters` — AQ values that are whole, quarter, or half (1/4, 1/2, 3/4, 1,
-    1+1/4, …);
-  - `fractions` — every AQ value (e.g. 2/5, 3/8, 2/3).
-  The mechanism is identical for all of them.
-- The number scheme is the **first gatekeeper** of AQS applicability: an AQS
-  applies only if its (rounded) additional quantity is a member of the scheme.
+Examples:
 
-## 6. Selection Algorithm
+- `<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)` → `1 Becher Joghurt (500 g)`
+- `<BQ><NNBSP><BU> <IN> (<AQ><NNBSP><AU>)` → `15 ml Zitronensaft (½ Zitrone)` (for a mapping with a 30 ml lemon and a halves scheme; the seed uses a different factor)
+- `<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Abtropfgewicht)` → `1 Dose Kichererbsen (240 g Abtropfgewicht)`
 
-For every ingredient, at display time:
+If no AQ candidate fits, the base form `<BQ> <BU> <IN>` is shown (`400 g Joghurt`).
+The BQ/AQ values are selected by the optimizer, not read from a stored BQ; in the
+fallback the BQ is `V0` itself.
 
-1. Take the stored base quantity BQ and base unit BU.
-2. Iterate over the ingredient's AU mappings in **ascending order of priority
-   value** (1 = best first; see §7). For each mapping (conversion factor c):
-   1. compute `raw = BQ ÷ c`;
-   2. **round `raw` to the nearest AQ ladder value** → AQ (see §6.1);
-   3. if AQ **is allowed** by the AU's number scheme, **select this AU and
-      stop**; otherwise continue with the next mapping.
-   Priority ties must not occur in master data; if they do, the order between
-   them is implementation-defined but must be deterministic.
-3. Render the display line using the selected AU's arrangement (§4): the shown
-   base quantity is the stored value, or — for an exact unit — the value derived
-   from the rounded AQ (§6.3). If no AU applies, render the base form (§4).
+## 5. Number schemes
 
-### 6.1 Rounding to the Nearest AQ Ladder Value
+- A **number scheme** is a named subset of the AQ values. The columns live in
+  [AQs.csv](AQs.csv); no separate scheme file exists.
+- The scheme is the **first gatekeeper**: only scheme-allowed values enter the
+  optimizer. It applies to exact and non-exact units.
+- Current schemes: `integers_up_to_10`, `halves_and_integers_up_to_30`,
+  `all_fractions_and_integers_up_to_30`, `integers_up_to_30`,
+  `quarters_halves_and_integers_up_to_30`. No scheme allows a count above 30.
+- The scheme names are referenced by `Number Scheme` in
+  [additional_units.csv](additional_units.csv); the generator fails on an
+  unknown name or a scheme cell other than `1` / `0` / empty.
 
-- The additional quantity is rounded to the nearest **AQ ladder value** — the
-  fraction column of [standard_numbers.csv](standard_numbers.csv) — measured by
-  absolute difference on the value scale. The AQ values are the "standard
-  numbers" for additional units.
-- The AQ values are defined for x = −16 … 48 (0.1 … 1000, see
-  [quantity_scaling.md](quantity_scaling.md) §2). A computed `raw` **below the
-  smallest AQ value (1/10) or above the largest (1000)** yields **no additional
-  quantity** — the ingredient is rendered in its base form (§4). (Example:
-  20 g Joghurt with 1 Becher = 400 g → `raw = 0.05` → "20 g Joghurt".)
-- Example: 500 g Joghurt with 1 Becher = 400 g → `raw = 1.25` → the nearest
-  AQ values are 1+1/4 (difference 0) and 1+1/2 (difference 0.25) → AQ = **1+1/4**
-  → the scheme `only_integers` rejects 1+1/4 → no AQS → "500 g Joghurt".
-- If a computed value lies exactly between two neighboring AQ values, the
-  **larger** value is chosen. (This tie is extremely rare in practice; the rule
-  is deterministic.)
+## 6. Selection and exactness
 
-### 6.2 Worked Examples
+The detailed formula is in
+[recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md) §5–§6 and
+[quantity_scaling.md](quantity_scaling.md) §6. In short, the optimizer evaluates
+metric-only BQs, exact-unit AQs (where `BQ = q·c`) and non-exact BQ/AQ pairs,
+scores each candidate and picks the best; ties use higher BQ, higher AQ, then the
+unit name. Candidate values are limited to `V0·(1 ± 0.5)`.
 
-The examples use the seed master data that ships with the implementation (see the CSV tables
-in §3); further examples arrive with more ingredient mappings. In that seed, Becher is
-**exact** (`Unit Exact = yes`) while EL and TL are **approximate** (`no`) — a spoon is heaped
-or level depending on the ingredient, so its average factor must not overrule the weighed
-amount (§6.3).
+### 6.1 Exact vs. approximate units
 
-| Ingredient | Stored BQ | AU (factor) | raw | rounded AQ | scheme allows? | Displayed |
-|---|---|---|---|---|---|---|
-| Joghurt | 400 g | Becher (400 g), p1 | 1 | 1 | `halves_and_integers_up_to_30` ✓ | "1 Becher Joghurt (400 g)" |
-| Joghurt | 200 g | Becher (400 g), p1 | 0.5 | 1/2 | ✓ (half) | "1/2 Becher Joghurt (200 g)" |
-| Joghurt | 600 g (scaled) | Becher (400 g), p1 | 1.5 | 1+1/2 | ✓ (half) | "1+1/2 Becher Joghurt (600 g)" |
-| Joghurt | 500 g | Becher p1 → EL (24 g) p2 → TL (7.5 g) p3 | 1.25 → 20.83 → 66.67 | 1+1/4 → 20 → 70 | ✗ (not half/integer) → ✗ (20 > 10) → ✗ (70 > 10) | "500 g Joghurt" |
-| Joghurt | 25 g | Becher p1 → EL p2 → TL p3 | 0.0625 → 1.04 | — → 1 | ✗ (< 1/10) → ✓ | "1 EL Joghurt (25 g)" (§6.3, EL approximate) |
-| Joghurt | 8 g | Becher p1 → EL p2 → TL p3 | 0.02 → 0.33 → 1.07 | — → 1/3 → 1 | ✗ (< 1/10) → ✗ (not integer) → ✓ | "1 TL Joghurt (8 g)" (§6.3, TL approximate) |
+- **Exact (`Unit Exact = yes`)** — the physical package fixes the amount
+  (`1 Becher = 500 g`, `1 Block = 200 g`). The AQ count is the source of truth:
+  the displayed BQ is `AQ × factor`, even when that is not a BQ-table value.
+  The BQ table is not consulted. When the AQ count is **non-integer**, the
+  displayed BQ is rounded to whole grams/millilitres (`1/3` of a 1000 g pack →
+  `333 g`); an integer count keeps the exact product (including a fractional
+  factor, e.g. `1 × 7.5 g = 7.5 g`).
+- **Approximate (`Unit Exact = no`)** — the factor is a measured average (a
+  carrot, a spoon). The optimizer selects a BQ from the BQ table and an AQ from
+  the scheme; the conflict penalty keeps them close. Both are display values;
+  the stored `V0` is unchanged.
 
-The last two rows show the approximate case of §6.3: the count is rounded ("1 EL" instead of
-1.04 EL), but the stored weight stays the authoritative reading, so the shown amount remains
-25 g / 8 g rather than 1 × 24 g / 1 × 7.5 g.
+The old rule “the stored base quantity is always shown” no longer applies: the
+display shows the selected BQ (or `V0` in the fallback). Storage and scaling are
+untouched either way.
 
-### 6.3 Exact vs. Approximate Units
+### 6.2 Worked examples
 
-- The selection algorithm derives the AQ from the stored base quantity, so the
-  two can **contradict each other** whenever the rounding moves the AQ: a
-  ladder value of 1500 g with 1 Block = 200 g gives "7+1/2 Blöcke" → rounded to
-  "8 Blöcke", but the displayed base quantity stayed "1500 g" → "8 Blöcke Tofu
-  (1,5 kg)", although 8 blocks weigh 1.6 kg.
-- Whether that contradiction is acceptable depends on the **unit**, not on the
-  ingredient or the mapping — which is why the master data carries the flag on
-  the unit (`docs/additional_units.csv`, `Unit Exact`; default `yes`):
-  - **exact (`yes`)** — the unit *defines* the base amount: a physical package
-    (1 Becher = 400 g, 1 Block = 200 g). Here the **shown count is the source of
-    truth**: the shown base quantity is recomputed as `AQ × factor`, even when
-    the result is **not a ladder value** ("8 Blöcke Tofu (1,6 kg)").
-  - **approximate (`no`)** — the factor is a measured average: a carrot weighs
-    roughly 80 g but varies. Here the **stored/scaled base quantity stays the
-    source of truth** and keeps being displayed; the rounded count is the
-    convenience reading ("250 g Karotte (3 Karotten)").
-- The flag affects the **display only**. The stored base quantity is never
-  rewritten, so it stays a ladder value, scaling stays closed over the ladder
-  (quantity_scaling.md §3), and the merge/summing rules are untouched. The exact
-  derivation happens after selection and outside scaling.
-- **One exception: the ingredient master data's reorder point**
-  (storage_format.md §9). It names a stock state, not a recipe amount, and stock
-  comes in whole packages — so when an exact unit applies, the create form stores
-  the exact amount (a 160 g Becher turns a picked 150 g into a stored 160 g). The
-  reorder point is not part of a recipe, so scaling and the merge rules are
-  unaffected.
-- Reference table for an exact unit with factor 200 (1 Block = 200 g), showing
-  the stored amount, the rounded count and the shown amount:
+Seed data: Joghurt has a 500 g Becher (exact, halves scheme), 23.71 g EL and
+7.50 g TL (approximate, integers up to 10).
 
-  | Stored BQ | raw | rounded AQ | shown BQ (AQ × 200 g) | Displayed |
-  |---|---|---|---|---|
-  | 200 g | 1 | 1 | 200 g | "1 Block Tofu (200 g)" |
-  | 600 g | 3 | 3 | 600 g | "3 Block Tofu (600 g)" |
-  | 900 g | 4.5 | 5 | 1000 g | "5 Block Tofu (1 kg)" |
-  | 1500 g (scaled) | 7.5 | 8 | 1600 g | "8 Block Tofu (1,6 kg)" |
+| Ingredient | `V0` | Result | Why |
+|---|---|---|---|
+| Joghurt | 500 g | `1 Becher Joghurt (500 g)` | exact count 1, perfect |
+| Joghurt | 250 g | `½ Becher Joghurt (250 g)` | exact count ½, perfect |
+| Joghurt | 750 g | `1 ½ Becher Joghurt (750 g)` | exact count 1½, perfect |
+| Joghurt | 400 g | `400 g Joghurt` | metric BQ 400 beats 1 Becher (500 g) on the balanced weights |
+| Mehl | 250 g | `250 g Mehl` | `Packung (unteilbar)` allows integers only; ¼ is rejected |
+| Mehl | 1000 g | `1 Packung Mehl (1 kg)` | exact count 1 |
+| Joghurt | 25 g | `1 EL Joghurt (25 g)` | Becher count 0.05 is below the AQ floor; EL count ≈1 passes |
+| Joghurt | 8 g | `1 TL Joghurt (8 g)` | EL count ≈0.34 fails the integer scheme; TL count ≈1 passes |
 
-  With an exact unit the shown amount can therefore differ from the stored one by
-  at most half an AQ step. That is the deliberate trade-off: the display never
-  contradicts itself, at the price of showing a weight that the recipe does not
-  store.
+The last two rows show an approximate unit: the count is a convenience; the
+shown BQ is the optimizer's selected BQ. The stored `V0` stays 25 g / 8 g.
 
-- If an ingredient's factor is only approximate, mark the unit `no` — or, when
-  the same unit name would otherwise have to be both, define a **separate unit**
-  for the exact case (e.g. "EL" vs. "EL gestrichen"): the flag is a property of
-  the unit, so two different meanings need two units. The same reading applies to
-  the shopping-unit flag, and the variants there need distinct names too (§3.1).
-- The seed follows that reading: **Becher is exact**, **EL and TL are
-  approximate** (a spoon is heaped or level depending on the ingredient). An
-  empty `Unit Exact` cell means `yes`, so a newly added unit is exact unless the
-  master data says otherwise — deliberate, because a new unit is usually a
-  package or container whose amount is fixed; a measured average must be marked
-  `no`.
+### 6.3 Exactness and the shopping list
 
-## 7. Priority
+The exact flag affects display only. The stored `V0` is never rewritten by
+display selection. The one historical exception — snapping the **reorder point**
+to a whole package in the ingredient master data — is a stock-state rule and
+remains in the master-data form; it is not part of recipe scaling.
 
-- Every ingredient–AU mapping has a **priority**: a positive integer where
-  **1 = most preferred**.
-- Priority defines the **evaluation order**: the mappings are tried in ascending
-  order of priority value, and the first one whose additional quantity passes
-  its number scheme is used. Mappings with a higher priority value are therefore
-  never evaluated once a better one has applied — no separate selection step is
-  needed.
-- Example: 15 ml of an ingredient with mappings EL (priority 1, 15 ml) and
-  TL (priority 2, 5 ml): EL is tried first, its AQ (1) passes the scheme, so the
-  app shows "1 EL …" and TL is never evaluated.
+## 7. No priority; one shopping unit
 
-## 8. Consequences and Rules
+- Per-ingredient priorities are gone. The optimizer is the only selection rule;
+  a higher-priority unit is not tried first.
+- The shopping list still needs one purchase unit, so the master data allows at
+  most one mapping to a `Shopping Unit = yes` unit. This is the only remaining
+  “preference” between units.
+- The shopping list uses the purchase unit and rounds *up* to whole packages; it
+  does not use the optimizer's display AQ. That code is scheduled for its own
+  migration (see [quantity_scaling.md](quantity_scaling.md) §9).
 
-- The AQS is recomputed after every scaling step; it never influences scaling
-  (scaling operates on the base quantity only).
-- The rules apply uniformly to every displayed ingredient: regular ingredients,
-  sub-recipe ingredients, and reference ingredients alike.
-- The conversion factor of a mapping is expressed in the ingredient's base unit
-  (e.g. 400 g per Becher for Joghurt); an ingredient's base unit is fixed.
-- **Display conversion of the base quantity (decided with the user):** quantities
-  are *stored* in the ingredient's family unit `g` or `ml` (see
-  [storage_format.md](storage_format.md) §4); from 1000 up, the display switches
-  to `kg` / `l` ("1 kg", "1.2 kg") — also inside the AQS arrangement
-  ("3 Becher Joghurt (1.2 kg)"). The stored value is never changed by this.
-- This spec fixes only the canonical AQ value (e.g. 1+1/4; the "+" marks a mixed
-  number — one and a quarter). The display typography is implemented in core
-  (`formatAQ` / `formatAQValue`): a proper fraction uses the Unicode fraction
-  glyphs (⅒ ⅑ ⅛ ⅙ ⅕ ¼ ⅓ ⅜ ⅖ ½ ⅗ ⅔ ¾ ⅞), a mixed number is written as integer +
-  narrow no-break space (U+202F) + glyph ("1 ¼"), and whole AQ values stay as
-  they are. `renderAQS` applies it to the additional quantity; unitless inline
-  counts use it for their own display.
-- For an **exact** unit (§6.3), the AQS is the authoritative part of the line:
-  its base quantity is derived from the AQ, not read from the recipe. The stored
-  value stays untouched and is unchanged by the flag.
+## 8. Consequences and rules
 
-## 9. Relationship to Other Documents
+- The AQS is recomputed after every scaling step; it never influences scaling.
+  Scaling changes `V0`; the optimizer is a display layer on top.
+- The rules apply uniformly to step rows, the master list, reference ingredients
+  and inline artifacts. A unitless artifact uses only the BQ-only branch (no
+  ingredient, no AU); see [quantity_scaling.md](quantity_scaling.md) §8.
+- A mapping's factor is expressed in the ingredient's fixed base unit (`g` or
+  `ml`); an ingredient's base unit never changes.
+- Base quantities display in the family unit, switching to `kg` / `l` at 1000.
+  Number and unit are joined by U+202F.
+- AQ notation: proper fractions use the Unicode glyphs (`⅒ ⅑ ⅛ ⅙ ¼ ⅓ ⅜ ⅖ ½ ⅗ ⅔ ¾ ⅝ ⅚ ⅞`);
+  a mixed number is integer + U+202F + glyph (`1 ¼`); whole counts stay as they
+  are. The cooking view uses the slash form (`1/2`, `1 1/4`).
+- A tolerance in [0, 1] can be set per quantity, per ingredient and per recipe;
+  the global default is 0.5. See [quantity_scaling.md](quantity_scaling.md) §5
+  for the cascade and the storage format.
 
-- [quantity_scaling.md](quantity_scaling.md) — the quantity ladder and scaling;
-  the AQS logic builds on the standard numbers and is applied after scaling.
-- [standard_numbers.csv](standard_numbers.csv) — the ladder table; the rounded
-  AQ column is binding for the additional quantity.
-- [recipe_structure.md](recipe_structure.md) — recipe structure; its "Ingredients
-  List" section specifies that only the base quantity is stored and that no
-  second unit is ever authored. This document specifies how that base quantity
-  is displayed.
-- [README.md](../README.md) — feature overview ("Ingredient-specific additional
-  units").
+## 9. Relationship to other documents
+
+- [quantity_scaling.md](quantity_scaling.md) — scaling, the optimizer, tolerance,
+  BQ decade rule, yields and export views.
+- [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md) — the scoring
+  formulas and candidate rules.
+- [AQs.csv](AQs.csv) / [BQs.csv](BQs.csv) — the allowed values and schemes.
+- [recipe_structure.md](recipe_structure.md) — the recipe model and the stored
+  target `V0`.
+- [storage_format.md](storage_format.md) — the canonical fields and the tolerance
+  annotations.

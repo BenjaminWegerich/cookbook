@@ -580,7 +580,7 @@ exception: it renders at `--text-md`, because the larger size is what shows the 
 *decided with the user*
 
 **A chip row wraps, and it is never a scroll container.** A row whose chips are an ordered
-ladder of amounts — the pantry sheet's stock chips — fits itself to one line instead: it
+set of amounts — the pantry sheet's stock chips — fits itself to one line instead: it
 measures its own width, keeps the leading chips that fit beside one reserved slot, and hides
 the rest behind that slot. *decided with the user*
 

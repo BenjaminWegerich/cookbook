@@ -28,8 +28,8 @@
  * - the heading names the action with the recipe ("<Titel> einplanen" /
  *   "<Titel> umplanen");
  * - the size input is the editor's own control for the recipe type — the
- *   serving chips for a finished dish, the QuantityPicker (suggested chips +
- *   ladder stepper) for an ingredient recipe;
+ *   serving chips for a finished dish, the ValueStepper (suggested chips +
+ *   baked views) for an ingredient recipe;
  * - below it one small muted line shows the recipe's reference ingredients
  *   scaled to the selected size: the sanity check described in
  *   docs/recipe_structure.md ("the reference ingredient's amount moves by the
@@ -71,9 +71,9 @@
 import { useState } from 'react';
 
 import {
-  difference,
-  integerLadderValues,
-  scale,
+  SERVING_COUNTS,
+  defaultYieldView,
+  formatBQ,
   writtenPlannedAmount,
   yieldViewQuantities,
   type PlannedAmount,
@@ -81,17 +81,17 @@ import {
 } from '@cookbook/core';
 
 import { CheckBoxIcon } from './icons';
-import QuantityPicker from './QuantityPicker';
+import ValueStepper from './ValueStepper';
 import { safeRenderAQS } from './ingredientDisplay';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /**
- * The serving options of a finished dish: the same integer standard numbers
- * 1–30 the editor offers and the meal plan accepts (mealPlan.ts). They cover
- * every value the plan can carry, so the dish needs no stepper — exactly like
- * the editor's Portionen field.
+ * The serving options of a finished dish: the same allowed counts the editor
+ * offers and the meal plan accepts (servingSizes.ts). They cover every value
+ * the plan can carry, so the dish needs no stepper — exactly like the editor's
+ * Portionen field.
  */
-const SERVING_OPTIONS = integerLadderValues(1, 30);
+const SERVING_OPTIONS = SERVING_COUNTS;
 
 /** Which meal-plan action the overlay runs (see the file header). */
 export type MealPlanSheetMode = 'plan' | 'replan';
@@ -174,53 +174,69 @@ function MealPlanSheet({
       : written.kind === 'yield'
         ? written.quantity
         : 1000;
+  /**
+   * The yields the recipe's export bakes a view for (allowed BQ values within
+   * ±1 decade of the written yield, core's recipe/yieldViews.ts). The picker is
+   * bounded by it, so every size offered here is one the Keep entry's link can
+   * really open; the core's fit check refuses anything outside it too.
+   */
+  const bakedYields =
+    isDish || recipe.yield === undefined ? null : yieldViewQuantities(recipe.yield);
+  /** The view the recipe opens at: the written yield when it is a BQ value. */
+  const defaultYield =
+    recipe.yield === undefined ? initialYield : defaultYieldView(recipe.yield);
+
   /** Selected serving count (finished dish). */
   const [servings, setServings] = useState(initialServings);
   /** Selected yield in the family unit (ingredient recipe). */
-  const [yieldQuantity, setYieldQuantity] = useState(initialYield);
+  const [yieldQuantity, setYieldQuantity] = useState(() =>
+    bakedYields !== null && bakedYields.includes(initialYield) ? initialYield : defaultYield,
+  );
   /** True while the write is running — both buttons are unavailable then. */
   const [busy, setBusy] = useState(false);
   /** Reason the write failed, shown next to the buttons (null = no failure). */
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * The yields the recipe's export bakes a view for (±2 decades around the
-   * written yield, core's recipe/yieldViews.ts). The picker is bounded by it, so
-   * every size offered here is one the Keep entry's link can really open; the
-   * core's fit check refuses anything outside it too.
-   */
-  const bakedYields =
-    isDish || recipe.yield === undefined ? null : yieldViewQuantities(recipe.yield);
-
+  /** The effective yield: a stale previous size falls back to the default view. */
+  const effectiveYield =
+    bakedYields !== null && !bakedYields.includes(yieldQuantity) ? defaultYield : yieldQuantity;
   /** The size the user picked. */
-  const selectedSize = isDish ? servings : yieldQuantity;
+  const selectedSize = isDish ? servings : effectiveYield;
   /** The size the recipe is written in — the scale reference. */
   const writtenSize = isDish ? recipe.servings : recipe.yield;
   /**
-   * Ladder-step difference between the written and the selected size. A recipe
+   * Exact scale factor between the written and the selected size. A recipe
    * that states no size (invalid, so normally impossible) keeps the references
    * unscaled instead of guessing.
    */
-  const deltaX = writtenSize === undefined ? 0 : difference(writtenSize, selectedSize);
+  const factor = writtenSize === undefined ? 1 : selectedSize / writtenSize;
 
   /**
    * True when the chosen size differs from the one the overlay opened on (in
    * replan mode: the size the plan states). It decides whether "Übernehmen" has
    * anything to write — not whether it can be pressed (§5.1).
    */
-  const sizeChanged = isDish ? servings !== initialServings : yieldQuantity !== initialYield;
+  const sizeChanged = isDish ? servings !== initialServings : effectiveYield !== initialYield;
 
   /** The selection in the shape the write needs (and the core's formatter reads). */
   const planned: PlannedAmount = isDish
     ? { kind: 'servings', servings }
-    : { kind: 'yield', quantity: yieldQuantity, baseUnit: family };
+    : { kind: 'yield', quantity: effectiveYield, baseUnit: family };
 
-  // Reference ingredients scaled by the same step as everything else
+  // Reference ingredients scaled by the same factor as everything else
   // (docs/recipe_structure.md): the display is the sanity check of the choice.
   const references = recipe.ingredients
     .filter((ingredient) => ingredient.reference)
     .map((ingredient) =>
-      safeRenderAQS(ingredient.name, scale(ingredient.quantity, deltaX), ingredient.unit),
+      safeRenderAQS(
+        ingredient.name,
+        ingredient.quantity * factor,
+        ingredient.unit,
+        {
+          ...(ingredient.tolerance !== undefined ? { quantity: ingredient.tolerance } : {}),
+          ...(recipe.tolerance !== undefined ? { recipe: recipe.tolerance } : {}),
+        },
+      ),
     );
 
   /**
@@ -299,13 +315,12 @@ function MealPlanSheet({
           // quantity is chosen here — no Gewicht/Volumen switch.
           <div className="field">
             <span className="field-label">Menge</span>
-            <QuantityPicker
-              value={yieldQuantity}
+            <ValueStepper
+              value={effectiveYield}
+              values={bakedYields ?? [effectiveYield]}
               onChange={setYieldQuantity}
-              family={family}
-              {...(bakedYields !== null
-                ? { min: bakedYields[0]!, max: bakedYields[bakedYields.length - 1]! }
-                : {})}
+              format={(candidate) => formatBQ(candidate, family)}
+              ariaLabel="Menge"
             />
           </div>
         )}

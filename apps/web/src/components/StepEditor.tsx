@@ -27,7 +27,9 @@ import {
   artifactToText,
   formatAQValue,
   formatBQ,
+  formatDecimal,
   insertArtifact,
+  optimizeUnitless,
   renderAQS,
   splitArtifacts,
   type TextArtifact,
@@ -149,6 +151,8 @@ interface StepEditorProps {
   describedBy?: string;
   /** Marks the step invalid while its error text is on screen (§5.3). */
   invalid?: boolean;
+  /** The recipe-level tolerance for artifact previews. */
+  recipeTolerance?: number;
 }
 
 /**
@@ -157,7 +161,7 @@ interface StepEditorProps {
  * externally (artifact insert/remove).
  */
 const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEditor(
-  { value, onChange, onArtifactEdit, onEnterNext, describedBy, invalid },
+  { value, onChange, onArtifactEdit, onEnterNext, describedBy, invalid, recipeTolerance },
   ref,
 ) {
   const divRef = useRef<HTMLDivElement | null>(null);
@@ -182,16 +186,30 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         span.contentEditable = 'false';
         span.dataset.artifact = segment.stored;
         span.title = 'Antippen zum Bearbeiten';
-        span.textContent =
-          segment.artifact.name === undefined
-            ? segment.artifact.unit === undefined
-              ? formatAQValue(segment.artifact.quantity)
-              : formatBQ(segment.artifact.quantity, segment.artifact.unit)
-            : renderAQS(
-                segment.artifact.name,
-                segment.artifact.quantity,
-                segment.artifact.unit ?? 'g',
-              );
+        const artifactContext = {
+          ...(segment.artifact.tolerance !== undefined
+            ? { quantity: segment.artifact.tolerance }
+            : {}),
+          ...(recipeTolerance !== undefined ? { recipe: recipeTolerance } : {}),
+        };
+        if (segment.artifact.name === undefined) {
+          if (segment.artifact.unit === undefined) {
+            const unitless = optimizeUnitless(segment.artifact.quantity, artifactContext);
+            span.textContent =
+              unitless.notation === undefined
+                ? formatDecimal(unitless.value)
+                : formatAQValue(unitless.value);
+          } else {
+            span.textContent = formatBQ(segment.artifact.quantity, segment.artifact.unit);
+          }
+        } else {
+          span.textContent = renderAQS(
+            segment.artifact.name,
+            segment.artifact.quantity,
+            segment.artifact.unit ?? 'g',
+            artifactContext,
+          );
+        }
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'artifact-remove';
@@ -226,7 +244,7 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         placeCaretAfter(target);
       }
     }
-  }, [value]);
+  }, [value, recipeTolerance]);
 
   // Initial render; re-render only when the value changed externally (the DOM
   // is authoritative while the user types — re-rendering would lose the caret).

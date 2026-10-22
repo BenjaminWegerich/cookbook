@@ -37,6 +37,23 @@ export const SEED_SHOPPING_ITEMS: ShoppingItems = {
   Klopapier: { store: 'dm', section: 'Drogerie' },
   Seife: { store: 'dm', section: 'Drogerie' },
   Blumen: { store: 'Blumenladen', section: 'Blumen' },
+  'Hokkaido-Kürbis': { store: 'Lidl', section: 'Obst und Gemüse' },
+  Feta: { store: 'REWE', section: 'Molkerei' },
+  Walnüsse: { store: 'Lidl', section: 'Trockensortiment' },
+  Ahornsirup: { store: 'dm', section: 'Drogerie' },
+  Wasser: { store: 'Lidl', section: 'Obst und Gemüse' },
+  Trockenhefe: { store: 'Lidl', section: 'Trockensortiment' },
+  Walnusskerne: { store: 'Lidl', section: 'Trockensortiment' },
+  Hackfleisch: { store: 'Lidl', section: 'Molkerei' },
+  'gekochte Kidneybohnen mit Aquafaba': { store: 'Lidl', section: 'Trockensortiment' },
+  'brauner Zucker': { store: 'Lidl', section: 'Trockensortiment' },
+  Gemüsebrühe: { store: 'REWE', section: 'Trockensortiment' },
+  Reis: { store: 'REWE', section: 'Trockensortiment' },
+  Rosinen: { store: 'Lidl', section: 'Trockensortiment' },
+  Sojaschnetzel: { store: 'REWE', section: 'Trockensortiment' },
+  Tahin: { store: 'dm', section: 'Drogerie' },
+  Süßkartoffeln: { store: 'Lidl', section: 'Obst und Gemüse' },
+  Tortillas: { store: 'REWE', section: 'Trockensortiment' },
 };
 
 /** The seed synonym table: variant text → item name (docs/shopping_synonyms.csv). */

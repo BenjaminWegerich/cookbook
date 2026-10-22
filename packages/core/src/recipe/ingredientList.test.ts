@@ -18,12 +18,12 @@ describe('mergeIngredientUses', () => {
     expect(result).toEqual([{ name: 'Joghurt', quantity: 400, unit: 'g' }]);
   });
 
-  it('rounds a non-ladder sum to the nearest ladder rung (400 + 750 = 1150 → 1200)', () => {
+  it('keeps a non-standard sum exact (400 + 750 = 1150)', () => {
     const result = mergeIngredientUses([
       { name: 'Joghurt', quantity: 400, unit: 'g' },
       { name: 'Joghurt', quantity: 750, unit: 'g' },
     ]);
-    expect(result).toEqual([{ name: 'Joghurt', quantity: 1200, unit: 'g' }]);
+    expect(result).toEqual([{ name: 'Joghurt', quantity: 1150, unit: 'g' }]);
   });
 
   it('keeps same-name entries with different units separate', () => {
@@ -76,6 +76,25 @@ describe('deriveIngredients', () => {
       { name: 'Joghurt', quantity: 400, unit: 'g' },
       { name: 'Zitronensaft', quantity: 15, unit: 'ml' },
     ]);
+  });
+
+  it('sums the displayed BQs, not the exact targets', () => {
+    // Each 450 g Joghurt row displays as 1 Becher (500 g); the master list is
+    // 1000 g, not the exact 900 g.
+    const roundedRows: Step[] = [
+      { ingredients: [{ name: 'Joghurt', quantity: 450, unit: 'g' }], text: 'A.' },
+      { ingredients: [{ name: 'Joghurt', quantity: 450, unit: 'g' }], text: 'B.' },
+    ];
+    expect(deriveIngredients(roundedRows)).toEqual([{ name: 'Joghurt', quantity: 1000, unit: 'g' }]);
+  });
+
+  it('uses the rounded exact-unit BQ when summing', () => {
+    // 1/3 of a 200 g pack displays as 67 g; two rows make 134 g.
+    const exactRows: Step[] = [
+      { ingredients: [{ name: 'Naturtofu', quantity: 66.67, unit: 'g' }], text: 'A.' },
+      { ingredients: [{ name: 'Naturtofu', quantity: 66.67, unit: 'g' }], text: 'B.' },
+    ];
+    expect(deriveIngredients(exactRows)).toEqual([{ name: 'Naturtofu', quantity: 134, unit: 'g' }]);
   });
 
   it('flags the merged entries whose name is in the reference list', () => {

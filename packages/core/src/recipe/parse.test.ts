@@ -410,16 +410,16 @@ prep_time: 15 min
 });
 
 describe('parseRecipe — reference validation (§4)', () => {
-  it('rejects non-integer and non-ladder servings', () => {
+  it('rejects fractional and non-allowed servings', () => {
     const fractional = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 1.5\n---\n## Zubereitung\n1. x\n',
     );
-    expectIssueAt(fractional, 'servings', 'ganze Zahl');
+    expectIssueAt(fractional, 'servings', 'erlaubte Portionszahl');
 
-    const notLadder = parseIssues(
+    const notAllowed = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 11\n---\n## Zubereitung\n1. x\n',
     );
-    expectIssueAt(notLadder, 'servings', 'Standardwert');
+    expectIssueAt(notAllowed, 'servings', 'erlaubte Portionszahl');
   });
 
   it('allows any number of reference names (no cap) and rejects duplicates', () => {
@@ -469,14 +469,15 @@ describe('parseRecipe — reference validation (§4)', () => {
 });
 
 describe('parseRecipe — rows and artifacts validation (§4)', () => {
-  it('rejects non-ladder and non-positive row quantities', () => {
-    const notLadder = parseIssues(
+  it('accepts any positive row quantity and rejects zero', () => {
+    const arbitrary = parseRecipe(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
         '---\n## Zubereitung\n1. - 450 g Mehl\n   Vermengen.\n',
     );
-    expectIssueAt(notLadder, 'steps[0].ingredients[0]', 'Standardwert');
+    // The row target is 450 g, but the master list sums the *displayed* BQ
+    // (500 g: the clean 500 BQ beats the clumsy 450 one on the balanced weights).
+    expect(arbitrary.ingredients[0]).toEqual({ name: 'Mehl', quantity: 500, unit: 'g' });
 
-    // A zero amount is not a valid amount-first phrase at all.
     const zero = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
         '---\n## Zubereitung\n1. - 0 g Mehl\n   Vermengen.\n',
@@ -504,42 +505,38 @@ describe('parseRecipe — rows and artifacts validation (§4)', () => {
     expectIssueAt(noQuantity, 'steps[0].ingredients[0]', 'keine gültige Zutaten-Zeile');
   });
 
-  it('rejects malformed and non-ladder inline artifacts in step text', () => {
+  it('rejects malformed inline artifacts and accepts arbitrary amounts', () => {
     const malformed = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
         '---\n## Zubereitung\n1. Mit {{100 g}} und {{irgendwas}} mischen.\n',
     );
     expectIssueAt(malformed, 'steps[0].text', 'Ungültiger Mengen-Baustein');
 
-    const notLadder = parseIssues(
+    const arbitrary = parseRecipe(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
         '---\n## Zubereitung\n1. Mit {{450 g}} Mehl mischen.\n',
     );
-    expectIssueAt(notLadder, 'steps[0].text', 'Standardwert');
+    expect(arbitrary.steps[0]!.text).toContain('{{450 g}}');
   });
 
-  it('validates unitless artifacts against the AQ ladder and keeps AQ fractions', () => {
-    // AQ values (and their fraction spelling) are the standard numbers of a
-    // unitless count; the text is normalized to the canonical fraction.
+  it('accepts arbitrary unitless counts and keeps AQ spellings readable', () => {
+    // AQ values keep their canonical fraction spelling; any other positive
+    // count is stored as a decimal (the target is unrounded).
     const recipe = parseRecipe(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
-        '---\n## Zubereitung\n1. Mit {{1/3}} und {{1,25}} und {{0.5}} mischen.\n',
+        '---\n## Zubereitung\n1. Mit {{1/3}} und {{1,25}} und {{0.5}} und {{1.2}} mischen.\n',
     );
-    expect(recipe.steps[0]!.text).toBe('Mit {{1/3}} und {{1+1/4}} und {{1/2}} mischen.');
-
-    // A BQ-only value is no longer a unitless standard number.
-    const bqOnly = parseIssues(
-      '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
-        '---\n## Zubereitung\n1. Mit {{1.2}} mischen.\n',
+    expect(recipe.steps[0]!.text).toBe(
+      'Mit {{1/3}} und {{1+1/4}} und {{1/2}} und {{1.2}} mischen.',
     );
-    expectIssueAt(bqOnly, 'steps[0].text', 'Standardwert');
 
-    // An artifact with a unit stays on the BQ ladder: the AQ fraction 1/3 is invalid there.
-    const aqWithUnit = parseIssues(
+    // An artifact with a unit is a plain positive target; the fraction 1/3 g
+    // is stored as its decimal form.
+    const withUnit = parseRecipe(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
         '---\n## Zubereitung\n1. Mit {{1/3 g}} Mehl mischen.\n',
     );
-    expectIssueAt(aqWithUnit, 'steps[0].text', 'Standardwert');
+    expect(withUnit.steps[0]!.text).toContain('{{0.333333 g}}');
   });
 
   it('rejects a step whose prose starts with "- "', () => {
@@ -603,7 +600,7 @@ describe('parseRecipe — body validation (§5)', () => {
 
   it('collects several independent problems in one call', () => {
     const issues = parseIssues(
-      '---\ntype: dessert\nservings: 11\nprep_time: 10 min\n---\n## Zubereitung\n1. - 450 g Mehl\n   Vermengen.\n',
+      '---\ntype: dessert\nservings: 11\nprep_time: 10 min\n---\n## Zubereitung\n1. - 0 g Mehl\n   Vermengen.\n',
     );
     // Invalid type: per-type checks (e.g. servings) are deliberately skipped so
     // the type problem stays the precise error; independent checks still run.

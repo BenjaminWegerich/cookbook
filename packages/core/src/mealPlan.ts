@@ -42,9 +42,9 @@
  * Together the number and its unit must form a size that *fits* the recipe:
  *
  * - a finished dish takes a serving count, and that count must be one of the
- *   ladder's integer standard numbers 1–30 (docs/recipe_structure.md, "Servings" — the
+ *   allowed serving counts (servingSizes.ts; docs/recipe_structure.md, "Servings" — the
  *   same options the exported cooking view offers);
- * - an ingredient recipe takes a yield as a ladder value in the recipe's own
+ * - an ingredient recipe takes a yield in the recipe's own
  *   family unit: `g` / `kg` for a `g` yield, `ml` / `l` for an `ml` yield
  *   (docs/storage_format.md §3), and inside the range the export actually bakes
  *   (recipe/yieldViews.ts) — a size whose view does not exist would be a
@@ -71,8 +71,8 @@
  */
 
 import { NNBSP, formatBQ, formatDecimal } from './additionalUnits.js';
-import { integerLadderValues, pos } from './ladder.js';
 import { convertYieldUnit, plannedFromUrl, withPlanSize, type PlannedAmount } from './planLink.js';
+import { isServingCount } from './servingSizes.js';
 import { yieldViewFitsWrittenYield } from './recipe/yieldViews.js';
 import type { RecipeType, Unit } from './recipe/types.js';
 
@@ -142,9 +142,6 @@ const TRAILING_LINK =
 
 /** Serving words accepted for a finished dish, singular and plural. */
 const SERVING_UNITS = new Set(['portion', 'portionen', 'person', 'personen']);
-
-/** The serving options of a finished dish: integer standard numbers 1–30. */
-const SERVING_COUNTS: ReadonlySet<number> = new Set(integerLadderValues(1, 30));
 
 /**
  * Splits a text without a link into its recipe-title candidate and the optional
@@ -280,11 +277,11 @@ export interface MealPlanRecipeInfo {
  * dish and takes the recipe as it is. Anything else must be a value in the
  * recipe's own form:
  *
- * - `servings` on a finished dish, one of the integer standard numbers 1–30;
- * - `yield` on an ingredient recipe, in the recipe's own family base unit, a
- *   ladder value (a size off the ladder cannot be scaled deterministically,
- *   docs/quantity_scaling.md §3) and within the export's baked range, so the
- *   entry's link can open exactly that amount.
+ * - `servings` on a finished dish, one of the allowed serving counts
+ *   (servingSizes.ts);
+ * - `yield` on an ingredient recipe, in the recipe's own family base unit and
+ *   one of the export's baked BQ views, so the entry's link can open exactly
+ *   that amount.
  */
 export function plannedAmountFitsRecipe(
   planned: PlannedAmount | null,
@@ -294,7 +291,7 @@ export function plannedAmountFitsRecipe(
     return true;
   }
   if (planned.kind === 'servings') {
-    return recipe.type === 'finished_dish' && SERVING_COUNTS.has(planned.servings);
+    return recipe.type === 'finished_dish' && isServingCount(planned.servings);
   }
   if (recipe.type !== 'ingredient_recipe' || recipe.yieldUnit === undefined) {
     return false;
@@ -302,14 +299,8 @@ export function plannedAmountFitsRecipe(
   if (planned.baseUnit !== recipe.yieldUnit) {
     return false;
   }
-  try {
-    pos(planned.quantity);
-  } catch {
-    // Not a ladder value (e.g. "499 g"): the size cannot be scaled.
-    return false;
-  }
   return recipe.yieldQuantity === undefined
-    ? true
+    ? planned.quantity > 0 && Number.isFinite(planned.quantity)
     : yieldViewFitsWrittenYield(planned.quantity, recipe.yieldQuantity);
 }
 
@@ -326,7 +317,7 @@ export function plannedAmountFitsRecipe(
  */
 export function formatPlannedAmount(planned: PlannedAmount): string {
   if (planned.kind === 'servings') {
-    // Serving counts are the integer standard numbers 1–30 (SERVING_COUNTS).
+    // Serving counts are the allowed integer values (servingSizes.ts).
     const word = planned.servings === 1 ? 'Portion' : 'Portionen';
     return `${formatDecimal(planned.servings)}${NNBSP}${word}`;
   }
@@ -462,7 +453,7 @@ export function existingPlanLink(
  * and is left alone.
  *
  * Deliberately broader than the card recognition: the fit check (recipe type,
- * family unit, ladder value, baked range) decides what can be *scaled*, not what
+ * family unit, baked range) decides what can be *scaled*, not what
  * is a duplicate. And the caller passes every Keep item, checked ones included —
  * a ticked-off line is hidden from the card view but is still a duplicate in
  * Keep. The returned texts are trimmed, because the comparison is on the content

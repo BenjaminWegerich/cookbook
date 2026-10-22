@@ -21,16 +21,24 @@
 
 import { stringify } from 'yaml';
 
+import { formatStoredNumber } from '../quantityValues.js';
+import { isTolerance } from '../tolerance.js';
 import type { Recipe, RecipeTheme, Unit } from './types.js';
 
 /** Returns the canonical text of a quantity row / artifact base ("250 g"). */
 function quantityText(quantity: number, unit: Unit): string {
-  return `${quantity} ${unit}`;
+  return `${formatStoredNumber(quantity)} ${unit}`;
 }
 
 /** Returns the canonical text of one step row ("250 g Tortillas"). */
-function rowToText(name: string, quantity: number, unit: Unit): string {
-  return `${quantityText(quantity, unit)} ${name}`;
+function rowToText(
+  name: string,
+  quantity: number,
+  unit: Unit,
+  tolerance?: number,
+): string {
+  const tag = tolerance === undefined ? '' : ` {tolerance: ${formatStoredNumber(tolerance)}}`;
+  return `${quantityText(quantity, unit)} ${name}${tag}`;
 }
 
 /**
@@ -65,6 +73,12 @@ function buildFrontMatter(recipe: Recipe): Record<string, unknown> {
   // yield for an ingredient recipe, §4) and are written for both types.
   if (recipe.reference !== undefined && recipe.reference.length > 0) {
     frontMatter.reference = recipe.reference;
+  }
+  // The recipe-level tolerance is optional (docs/recipe_scaling_algorithm.md
+  // §4.1); absent = the global default. It sits after the reference names,
+  // matching the field order documented for the AI rules.
+  if (recipe.tolerance !== undefined) {
+    frontMatter.tolerance = recipe.tolerance;
   }
   frontMatter.prep_time = recipe.prep_time;
   if (recipe.total_time !== undefined) frontMatter.total_time = recipe.total_time;
@@ -136,6 +150,11 @@ export function serializeRecipe(recipe: Recipe): string {
           `serializeRecipe: ingredient quantity must be a positive finite number, got ${ingredient.quantity}`,
         );
       }
+      if (ingredient.tolerance !== undefined && !isTolerance(ingredient.tolerance)) {
+        throw new Error(
+          `serializeRecipe: ingredient tolerance must be in [0, 1], got ${ingredient.tolerance}`,
+        );
+      }
     }
   }
   if (/[\r\n]/.test(recipe.title)) {
@@ -149,12 +168,21 @@ export function serializeRecipe(recipe: Recipe): string {
   if (recipe.yield !== undefined && !Number.isFinite(recipe.yield)) {
     throw new Error(`serializeRecipe: yield must be finite, got ${recipe.yield}`);
   }
+  if (recipe.tolerance !== undefined && !isTolerance(recipe.tolerance)) {
+    throw new Error(`serializeRecipe: tolerance must be in [0, 1], got ${recipe.tolerance}`);
+  }
 
   const frontMatter = stringify(buildFrontMatter(recipe), { indent: 2 });
   const stepLines = recipe.steps.map((step, index) => {
     const number = index + 1;
     const rows = step.ingredients.map(
-      (ingredient) => `   - ${rowToText(ingredient.name, ingredient.quantity, ingredient.unit)}`,
+      (ingredient) =>
+        `   - ${rowToText(
+          ingredient.name,
+          ingredient.quantity,
+          ingredient.unit,
+          ingredient.tolerance,
+        )}`,
     );
     if (rows.length === 0) {
       return `${number}. ${step.text}`;
@@ -166,6 +194,7 @@ export function serializeRecipe(recipe: Recipe): string {
       step.ingredients[0]!.name,
       step.ingredients[0]!.quantity,
       step.ingredients[0]!.unit,
+      step.ingredients[0]!.tolerance,
     )}\n${continuation.length > 0 ? `${continuation}\n` : ''}   ${step.text}`;
   });
   const body = `## Zubereitung\n${stepLines.join('\n')}\n`;

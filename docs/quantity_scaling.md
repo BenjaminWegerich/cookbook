@@ -1,224 +1,243 @@
-# Quantity Scaling (Ladder Logic)
+# Quantity Scaling and Display Optimization
 
-> Defines how ingredient quantities change when a recipe is scaled to a different
-> number of servings / yield. Related documents:
-> [standard_numbers.csv](standard_numbers.csv) (the ladder table),
-> [recipe_structure.md](recipe_structure.md) (recipe structure), and
+> Defines how a recipe's ingredient amounts scale and how the app chooses the
+> displayed BQ/AQ representation. The scoring model is specified in
+> [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md); this document
+> records the project-specific decisions, the master data and the integration
+> with the recipe format. Related documents:
 > [additional_quantity_specifications.md](additional_quantity_specifications.md)
-> (display of quantities with additional units).
+> (display arrangements, exact/approximate units), [recipe_structure.md](recipe_structure.md)
+> (recipe model), [storage_format.md](storage_format.md) (file format).
 
-## 1. Core Idea
+## 1. Core idea
 
-- Scaling a recipe **never multiplies ingredient quantities by a single factor**.
-  Instead:
-  1. The current target and the requested target (number of people for finished
-     dishes, yield for ingredient recipes) are located on a fixed **ladder of
-     standard numbers**.
-  2. The difference of their ladder positions gives an integer **step count Δx**.
-  3. **Every ingredient quantity moves by the same Δx steps** up or down the ladder.
-- Example: 4 and 6 people are 2 rungs apart on the ladder (4 at rung x = 10,
-  6 at rung x = 12). Scaling from 4 to 6 people therefore moves every quantity
-  2 steps: 400 ml → 600 ml, and 5 tbsp → 7 tbsp — not 7.5, which a fixed factor
-  of 1.5 would produce.
-- The ladder values serve two purposes:
-  - a **consistent relative increase** between neighboring rungs: each step
-    multiplies the quantity by 10^(1/16) ≈ 1.155 (≈ +15.5 %);
-  - **round, practical numbers** that coincide with common packaging sizes
-    for ingredients.
-- Every rung carries two practical forms — a decimal (for base quantities and
-  serving counts) and a fraction (for additional-unit display); see §2.
+- A **recipe stores the unrounded target amount `V0`** for every ingredient use,
+  in the ingredient's metric family unit (`g` or `ml`). Any positive finite
+  number is allowed; there is no ladder of standard values anymore.
+- **BQ and AQ are display values.** For every render, the app runs the
+  deterministic optimizer over `V0`, the ingredient's additional-unit mappings
+  and the effective tolerance. The result is either:
+  - a **BQ** from the allowed base-quantity table, optionally with an **AQ** from
+    the allowed additional-quantity table (a household or packaging unit), or
+  - the **plain base form** with `V0`, when no candidate fits.
+- The optimizer never changes a stored amount. Scaling is
+  `V0' = V0 × factor`, where the factor is the exact ratio between the requested
+  and the written recipe size (servings or yield). Nothing is rounded to a
+  ladder rung.
+- The master ingredient list stores the **sum of the step rows' displayed BQs**,
+  not the sum of their exact targets. Those are the amounts the cook reads on
+  the rows; summing the targets would disagree with them. The sum is kept at
+  millionth precision only to remove floating-point noise, then optimized for
+  display like any other target.
 
-## 2. The Ladder (Standard Numbers)
+This replaces the old quantity ladder. The old `docs/standard_numbers.csv`, the
+`packages/core/src/ladder.ts` / `ladderData.ts` modules and the legacy
+`aqLadder.ts` bridge remain only for the shopping/pantry code until its
+migration; the recipe, editor, export and meal plan use the optimizer.
 
-- For every integer step index x the ladder has:
-  - **exact(x) = 10^(x/16)** (i.e. 1 · 10^(x/16)) — the geometric basis;
-    x = 0 → 1, x = 16 → 10, x = 32 → 100, x = −16 → 0.1;
-  - **rounded_BQ(x)** — a hand-picked round, practical decimal number per rung
-    (chosen to match common packaging sizes); used for the base quantity
-    (g / kg / ml / l) and for serving counts;
-  - **rounded_AQ(x)** — a hand-picked fraction per rung; used to display
-    additional quantities (Becher, Packung, Stück, …) and as the standard numbers
-    of unitless inline counts (§7).
-- The **rounded BQ value is the value that is stored, scaled, and used as base
-  quantity** for every ingredient that carries a unit. The rounded AQ value is
-  used for display (§7) and — for a unitless inline count, which has no base
-  unit — as that count's stored and scaled standard number. The exact column
-  exists solely to define the geometric spacing.
-- The reference table (x = −16 … 48, i.e. 0.1 … 1000) lives in
-  [docs/standard_numbers.csv](standard_numbers.csv), with columns
-  `Exact Number; Rounded Number for BQ; Rounded Number for AQ`.
-- The ladder is **scale-invariant** in its exact and rounded BQ forms: the same
-  relative pattern repeats every 16 steps, scaled by 10:
-  - exact(x + 16) = 10 · exact(x)
-  - rounded_BQ(x + 16) = 10 · rounded_BQ(x)
-  - rounded_BQ(x − 16) = rounded_BQ(x) / 10
-- The table therefore defines the entire (infinite) ladder in both directions for
-  the exact and BQ forms; any rung can be generated on demand (e.g. x = 49 →
-  exact 1154.8 → rounded_BQ 1200; x = −17 → exact 0.0866 → rounded_BQ 0.09).
-- **The AQ fraction forms are NOT scale-invariant.** They are hand-picked for the
-  human scale (0.1 … 10) and defined only for x = −16 … 48; from x = 16 up they
-  coincide with the BQ integers (10, 12, 15, …). AQ is therefore a pure table
-  lookup (§8) — no decade rule applies to it.
-- Rounded values of one decade (x = 0 … 16):
+## 2. Master data
 
-  | x  | exact | rounded BQ | rounded AQ |
-  |----|-------|------------|------------|
-  | 0  | 1     | 1          | 1          |
-  | 1  | 1.15  | 1.2        | 1+1/4      |
-  | 2  | 1.33  | 1.5        | 1+1/2      |
-  | 3  | 1.54  | 1.8        | 1+3/4      |
-  | 4  | 1.78  | 2          | 2          |
-  | 5  | 2.05  | 2.2        | 2+1/4      |
-  | 6  | 2.37  | 2.5        | 2+1/2      |
-  | 7  | 2.74  | 2.8        | 2+3/4      |
-  | 8  | 3.16  | 3          | 3          |
-  | 9  | 3.65  | 3.5        | 3+1/2      |
-  | 10 | 4.22  | 4          | 4          |
-  | 11 | 4.87  | 5          | 5          |
-  | 12 | 5.62  | 6          | 6          |
-  | 13 | 6.49  | 7          | 7          |
-  | 14 | 7.5   | 8          | 8          |
-  | 15 | 8.66  | 9          | 9          |
-  | 16 | 10    | 10         | 10         |
+Four tables drive the optimizer:
 
-  Below 1 the AQ forms are proper fractions: 1/10, 1/9, 1/8, 1/6, 1/6, 1/5, 1/4,
-  1/4, 1/3, 3/8, 2/5, 1/2, 3/5, 2/3, 3/4, 7/8 (see the CSV for all rungs).
+| Table | Purpose |
+|---|---|
+| [BQs.csv](BQs.csv) | Allowed base quantities and their clumsiness penalties. |
+| [AQs.csv](AQs.csv) | Allowed additional quantities, penalties, and the number-scheme columns. |
+| [additional_units.csv](additional_units.csv) | Unit identity, display forms, arrangement, number scheme, exactness, shopping flag. |
+| [ingredient_unit_mappings.csv](ingredient_unit_mappings.csv) | Ingredient → compatible additional unit and its conversion factor. |
 
-  Each decade above or below multiplies / divides the exact and BQ values by 10
-  (1, 1.2, 1.5, 1.8, 2, …, 10, 12, 15, 18, 20, …, 100, 120, 150, 180, 200, …).
-  The AQ fractions do not repeat this way (see above).
+`docs/ingredients.csv` holds the ingredient list (base unit, optional tolerance,
+reorder point, display forms). `docs/additional_units.csv` and the ingredient
+mappings are compiled into `packages/core/src/additionalUnitsData.ts`;
+`BQs.csv` and `AQs.csv` are compiled into `packages/core/src/quantityData.ts`.
 
-## 3. Standard Numbers Only (Restriction)
+There is **no per-ingredient priority** anymore. The optimizer scores every
+compatible unit. The shopping list needs exactly one unit to buy in, so an
+ingredient may map to at most one unit flagged `Shopping Unit = yes`; the master
+data validator enforces that.
 
-- **Non-standard numbers do not exist in the app.** Every value that is authored
-  or chosen must be a rounded BQ ladder value:
-  - ingredient quantities: the author enters 400 or 500 ml — 450 is not allowed;
-  - serving counts: the author / scaler chooses 10 or 12 servings — 11 is not allowed;
-  - yields of ingredient recipes: same rule.
-- Consequences:
-  - `pos(v)` is a plain table lookup; no rounding, approximation, or tie-breaking
-    is ever needed;
-  - the ladder is **closed under scaling**: moving any ladder value by any integer
-    number of steps always yields another ladder value.
-- Implementation: restrict the UI to ladder values (e.g. a stepper that jumps rung
-  by rung, or a picker of valid values) and/or validate input against the ladder,
-  rejecting invalid values.
+## 3. Allowed base quantities (BQ)
 
-## 4. Scaling Algorithm
+[BQs.csv](BQs.csv) lists the values `1 … 95` explicitly, each with a penalty
+`R_BQ ∈ [0, 1]` (`0` = clean, `1` = awkward).
 
-1. Determine the current target A and the requested target B:
-   - finished-dish recipe: A = current number of people, B = requested number of
-     people (both standard numbers);
-   - ingredient recipe: A = yield in base units, B = requested yield
-     (standard numbers).
-2. Step count: **Δx = pos(B) − pos(A)** — an integer (negative for scaling down,
-   0 for no change).
-3. For every ingredient with base quantity q: **q′ = rounded(pos(q) + Δx)**.
-4. The whole recipe uses one common Δx. The effective multiplier is 10^(Δx/16),
-   i.e. the target ratio B/A quantized to a whole number of steps.
+Above 95 the table continues by the **decade rule**: the `10 … 95` block is
+multiplied by powers of ten, and the penalty is copied from the base value.
 
-### Worked examples
+- `100 = 10 × 10`, penalty `0`
+- `110 = 11 × 10`, penalty `0.66`
+- `950 = 95 × 10`, penalty `1`
+- `1000 = 10 × 100`, penalty `0`
+- `1100 = 11 × 100`, penalty `0.66`
 
-- 4 → 6 people (pos(4) = 10, pos(6) = 12, Δx = +2):
-  - 400 ml → rung 42 → +2 → rung 44 → **600 ml**;
-  - 5 tbsp → 7 tbsp (stored as the base-unit equivalent, e.g. 50 ml → 70 ml).
-- 4 → 5 people (Δx = +1): 5 tbsp → **6 tbsp** (replaces the mathematical 6.25;
-  matches the README example).
-- 6 → 9 people (pos(6) = 12, pos(9) = 15, Δx = +3): 700 g → rung 45 → +3 →
-  rung 48 → **1000 g**.
-- Scale down, 6 → 4 people (Δx = −2): 600 ml → **400 ml**.
+Values that are not in the `10 … 95` block (for example `96 … 99`, `105`,
+`111`) do not exist. The table starts at `1`; a `V0` below `1` has no BQ
+candidate and is shown in the plain base form unless an exact unit fits.
 
-## 5. Reference Ingredients
+`allowedBQValuesInRange(min, max)` in
+[quantityValues.ts](../packages/core/src/quantityValues.ts) expands the table for
+candidate generation; `isAllowedBQ` / `bqPenalty` answer membership and penalty.
 
-- A reference ingredient is an ordinary ingredient as far as scaling is concerned:
-  it moves by the same common Δx and is displayed as a sanity check — e.g.
-  "9 Personen (1000 g Nudeln)" when scaling "6 Personen (700 g Nudeln)" to 9 people.
-  The same holds for a reference ingredient of an ingredient recipe: it anchors
-  the yield (e.g. "500 ml (300 ml Milch)") and moves with the sub-recipe when the
-  sub-recipe is scaled to a required amount (§6).
-- The portion size (finished dish) or yield (ingredient recipe) is authored
-  exclusively from its own field; the reference ingredient only visualizes the result.
+## 4. Allowed additional quantities (AQ) and number schemes
 
-## 6. Ingredient Recipes and Sub-Recipes
+[AQs.csv](AQs.csv) lists the allowed counts (`1/8 … 30`) with their penalties and
+one column per number scheme. A `1` marks the value as allowed by that scheme.
 
-- An ingredient recipe scaled on its own follows the same rule with its yield:
-  Δx = pos(requested yield) − pos(yield).
-- A sub-recipe linked from a parent recipe (e.g. Béchamelsauce inside Lasagne):
-  1. The parent's scaled amount q′ (a ladder value) is the **required amount**. Several
-     parents add up: it is the exact sum of their scaled uses and therefore not necessarily a
-     rung;
-  2. the shopping flow decides how much is **cooked**:
-     `cook = roundToRung(required − stock)`, with `stock = min(required, reorder point)` as the
-     prefill (the reorder point is [storage_format.md](storage_format.md) §9). The nearest rung
-     wins, ties toward the larger value; a stock that covers the requirement means `cook = 0`
-     and no ingredient of the sub-recipe is needed. The rung is what keeps the step count below
-     an integer — and it is the size the sub-recipe's own export opens at;
-  3. the sub-recipe scales by Δx_sub = pos(cook) − pos(sub-recipe yield);
-  4. its ingredients move by Δx_sub and feed the shopping list; the sub-recipes among them are
-     decided the same way, one level further down.
-- Example: Béchamelsauce yields 500 ml from 300 ml Milch. Lasagne scaled 6 → 9
-  people (Δx = +3) requires 800 ml Béchamelsauce (500 ml → rung 43 → +3 → rung 46
-  → 800 ml). The sub-recipe scales by Δx_sub = pos(800) − pos(500) = 46 − 43 = +3,
-  so Milch moves 300 ml (rung 40) → rung 43 → **500 ml** on the shopping list.
-  With 800 ml of the sauce already on hand nothing is cooked and no milk is needed;
-  with 500 ml on hand, 300 ml are cooked and the milk stays at 300 ml.
+The scheme is the **first gatekeeper** of an AQ candidate: only values allowed by
+the unit's `Number Scheme` enter the optimizer, for `EXACT` and `NON_EXACT` units
+alike. The clumsiness penalty of the surviving value still scores. This is what
+prevents a quarter of an `unteilbar` pack: its scheme allows integers only.
 
-## 7. Units and Display
+The current schemes are:
 
-- The ladder operates on the stored base quantity (g / kg / ml / l). Scaling never
-  changes the unit or the base-unit semantics.
-- Display conversions (kg ↔ g, l ↔ ml, and ingredient-specific additional units
-  such as Becher, EL, Packung, Stück) happen afterwards at display time and are
-  outside this specification (see
-  [additional_quantity_specifications.md](additional_quantity_specifications.md)).
-  Example: a scaled 1000 g may be displayed as "1 kg" or "1 Packung", depending
-  on the ingredient's additional-unit mappings.
-- When an additional unit applies, its quantity is displayed in the AQ fraction
-  typography (e.g. "1 ½ Becher"), never as a decimal; the canonical value behind
-  it is the fraction form ("1+1/2", see
-  [additional_quantity_specifications.md](additional_quantity_specifications.md) §8).
-- A **unitless inline count** (`{{1/2}}`, storage_format.md §4) carries no base
-  unit, so its standard numbers are the AQ values instead of the BQ values. The
-  AQ ladder is the ordered set of *distinct* AQ fractions (1/10 … 1000, no
-  decade rule); scaling a count moves it by Δx whole AQ steps and clamps at the
-  ladder ends. The stored value stays an AQ standard number.
+| Scheme | Membership |
+|---|---|
+| `integers_up_to_10` | Whole AQ values 1 … 10. |
+| `halves_and_integers_up_to_30` | Whole and half AQ values up to 30. |
+| `all_fractions_and_integers_up_to_30` | Every AQ value up to 30. |
+| `integers_up_to_30` | Whole AQ values up to 30 (as present in the table). |
+| `quarters_halves_and_integers_up_to_30` | Quarter, half and whole AQ values up to 30. |
 
-## 8. Implementation Notes (Deterministic, Table-Driven)
+No scheme allows a count above `30`. The scheme matrix lives in `AQs.csv`, so a
+new AQ value and its memberships are one edit, not two files.
 
-- No AI and no floating-point rounding of results: the step count is an integer,
-  positions are table lookups, and results are table values.
-- Represent the ladder as a lookup keyed by x. Because of the periodicity rule
-  (§2), the exact and BQ forms can be generated beyond the table; the AQ
-  fraction forms exist only for x = −16 … 48 and are a plain table lookup.
-  The CSV is the authoritative source for x = −16 … 48.
+## 5. Tolerance
+
+Tolerance `λ ∈ [0, 1]` is a **display preference**, not a scale factor:
+
+- `λ = 0` (“Sehr genau”): prefer metric accuracy; awkward numbers and metric-only
+  output are acceptable.
+- `λ = 1` (“Sehr praktisch”): prefer clean household/package measures; small
+  culinary deviations are acceptable.
+- `λ = 1` **never** means that a target may be doubled or halved. `V0` is
+  unchanged.
+
+The effective value is resolved through the cascade:
 
 ```
-# exact(x)      = 10^(x/16)
-# rounded_BQ(x) = table lookup; outside the table via rounded_BQ(x+16) = 10·rounded_BQ(x)
-# rounded_AQ(x) = table lookup; defined only for x = −16 … 48
-
-def pos(v):                       # v is a standard number (rounded BQ ladder value)
-    return x such that rounded_BQ(x) == v   # normalize decades first if v < 0.1 or v > 1000
-
-def scale(amount, delta_x):       # amount is a standard number
-    return rounded(pos(amount) + delta_x)
-
-def scale_recipe(recipe, new_target):
-    delta_x = pos(new_target) - pos(recipe.target)   # target = servings or yield
-    for each ingredient ing in recipe.ingredients:
-        ing.amount = scale(ing.amount, delta_x)
+quantity (row / artifact) ?? ingredient ?? recipe ?? global default (0.5)
 ```
 
-- Validation (per §3): `pos(v)` must always succeed; an unknown v means invalid
-  input and must be rejected before any scaling happens.
+The ingredient level does not apply to unitless artifacts (they have no
+ingredient). The UI offers five chips: `0`, `0.25`, `0.5`, `0.75`, `1`; an
+unset level inherits. The global default is the code constant
+`DEFAULT_TOLERANCE = 0.5` in
+[tolerance.ts](../packages/core/src/tolerance.ts).
 
-## 9. Relationship to Other Documents
+Storage:
 
-- [standard_numbers.csv](standard_numbers.csv) — the ladder table; the rounded
-  BQ column is binding for storage and scaling, the rounded AQ column for
-  additional-unit display.
-- [recipe_structure.md](recipe_structure.md) — recipe structure; its examples are
-  ladder-consistent ("× 1.5 → 750 ml" is now "6 → 9 people → 800 ml";
-  "1050 g Nudeln" is now "1000 g Nudeln").
-- [README.md](../README.md) — feature description; its example
-  (5 tbsp → 6 tbsp for 4 → 5 people) matches this spec.
+| Level | Where | Format |
+|---|---|---|
+| Quantity | ingredient row | trailing `{tolerance: 0.8}`; artifacts use `{{1/2\|t=0.8}}` |
+| Ingredient | `zutaten.csv` / `docs/ingredients.csv` | `Tolerance` column before `Reorder Point` |
+| Recipe | YAML front matter | `tolerance: 0.7` |
+| Global | code | `DEFAULT_TOLERANCE = 0.5` |
+
+Recipe- and especially quantity-level overrides are meant for exceptions; the
+ingredient master data can carry the ingredient's usual setting.
+
+## 6. Scoring and selection
+
+The full formulas are in [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md)
+§5–§6. The runtime parameters are fixed:
+
+- `p = 0.5` (user proportion, `USER_PROPORTION_P`);
+- `ε_max = 0.5` (candidate search cutoff, `EPSILON_MAX`);
+- exact weights `W_exact = (0.70, 0.20, 0.05, 0.05)`;
+- practical weights `W_practical = (0.20, 0.30, 0.35, 0.15)`.
+
+The optimizer evaluates three branches:
+
+1. **EXACT unit** — the package count fixes the BQ: `BQ = q_AQ × c_u`. The BQ
+   table is not consulted; `P_conflict = 0` and `R_BQ = 0`. When the AQ is
+   **non-integer**, the derived BQ is rounded to whole grams/millilitres for
+   display (`1/3` of a 1000 g pack → `333 g`, not `333,33 g`). The unrounded
+   `q_AQ × c_u` stays the accuracy reference for the score.
+2. **NON_EXACT unit** — BQ and AQ are selected independently; a conflict penalty
+   applies when they disagree.
+3. **Metric-only** — a BQ from the table, no AQ. The missing-AQ penalty applies.
+
+Candidates are limited to `V0 × (1 ± ε_max)`. A non-exact pair is skipped when
+its BQ/AQ conflict exceeds `ε_max`. If **no** candidate exists, the renderer uses
+the plain base form with `V0` and no AQ; it never throws.
+
+Ties within `1e-5` are broken by the strict hierarchy: higher BQ, then higher AQ
+(`None = −1`), then the alphabetically first unit name (`None = ""`, German
+collation).
+
+Examples:
+
+- `250 g` with a `1000 g` `Packung (unteilbar)` (scheme: integers) cannot be
+  `1/4 Packung`; the metric BQ `250 g` wins.
+- The same amount with `Packung (teilbar)` (all fractions) may be
+  `1/4 Packung (250 g)`.
+- `250 g` Joghurt with a `500 g` Becher may be `1/2 Becher (250 g)`.
+- `0.5 g` has no BQ candidate; it is shown as `0,5 g`.
+
+## 7. Scaling a recipe
+
+A recipe's written size is either its serving count (`finished_dish`) or its
+yield (`ingredient_recipe`). For a requested size `T`:
+
+```
+factor = T / writtenSize
+V0'    = V0 × factor          // exact, no ladder step
+```
+
+Every ingredient use and every inline artifact is scaled with the same factor.
+The optimizer runs on `V0'`; the stored recipe is never rewritten by viewing or
+exporting it.
+
+### Servings
+
+A finished dish may have one of the fixed serving counts
+`1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 22, 25, 28, 30` (the old integer
+standard numbers). The HTML export pre-bakes one view per count.
+
+### Yields and export views
+
+An ingredient recipe's written yield may be **any positive number** (it is
+stored as `V0`), but only BQ values are baked into the export. The export views
+are all allowed BQ values in the band `writtenYield / 10 … writtenYield × 10`
+(±1 decade), plus the nearest allowed BQ if that band contains none. For a
+500 ml yield this gives 65 views (50 ml … 5 l), including 500 ml.
+
+The view the export opens on is the written yield when it is a BQ value,
+otherwise the allowed BQ nearest to it. The meal plan accepts only a baked view,
+so its link can always open exactly the size it promised.
+
+## 8. Unitless inline artifacts
+
+A unitless artifact (`{{1/2}}`) has no base unit and no ingredient. It uses the
+same scoring idea with only the **BQ-only branch**, applied to the AQ table as
+the primary number table: the count is chosen by accuracy and roundness, with no
+additional unit. The tolerance cascade is `artifact ?? recipe ?? global`; there
+is no ingredient level.
+
+If no AQ value fits `ε_max`, the artifact keeps its unrounded count. AQ values
+keep their canonical notation (`{{1/2}}`, `{{1+1/4}}`); other positive counts are
+stored as decimals.
+
+## 9. Legacy shopping code (migration status)
+
+The shopping list, sub-recipe cooking and pantry/stock code still use the old
+ladder (`ladder.ts`, `ladderData.ts`, `standard_numbers.csv`). They are being
+migrated separately; until then, their internal amounts may still be snapped to
+ladder rungs. The recipe/editor/export/meal-plan path does not use those
+modules.
+
+## 10. Implementation map
+
+| Concern | Module |
+|---|---|
+| BQ/AQ tables and schemes | `packages/core/src/quantityData.ts` (generated from `docs/BQs.csv` + `docs/AQs.csv`) |
+| Membership, decade rule, formatting | `packages/core/src/quantityValues.ts` |
+| Optimizer | `packages/core/src/quantityOptimizer.ts` |
+| Tolerance | `packages/core/src/tolerance.ts` |
+| Serving counts | `packages/core/src/servingSizes.ts` |
+| Display arrangements | `packages/core/src/additionalUnits.ts` |
+| Export views | `packages/core/src/recipe/exportHtml.ts`, `yieldViews.ts` |
+| Data generators | `packages/core/scripts/generate-quantity-data.mjs`, `generate-additional-data.mjs` |
+
+Run `npm run generate:quantity` and `npm run generate:additional` from
+`packages/core` after changing the corresponding CSVs.

@@ -6,7 +6,8 @@
  * - the optional Singular/Plural display forms (the pair is atomic);
  * - the reorder point („Vorrat“), with the same picker and the same live
  *   preview as the create sheet;
- * - the additional-unit mappings (factor + unique priority per unit).
+ * - the additional-unit mappings (a factor per unit; no per-ingredient priority);
+ * - the optional ingredient-level tolerance (five chips).
  *
  * The canonical name and the base unit are deliberately not fields. Recipes,
  * inline mentions and the mappings file key on the name; the base unit decides
@@ -31,7 +32,8 @@ import { useRef, useState } from 'react';
 import { resolveReorderPoint, type IngredientEntry } from '@cookbook/core';
 
 import IngredientMappingsField from './IngredientMappingsField';
-import QuantityPicker from './QuantityPicker';
+import QuantityInput from './QuantityInput';
+import ToleranceChips from './ToleranceChips';
 import {
   buildMappingRows,
   displayFormsFromValues,
@@ -86,10 +88,8 @@ function EditIngredientSheet({
   const [factors, setFactors] = useState<Record<string, string>>(
     () => mappingFormFromEntry(entry).factors,
   );
-  /** Priority inputs keyed by additional-unit name; empty string = not set. */
-  const [priorities, setPriorities] = useState<Record<string, string>>(
-    () => mappingFormFromEntry(entry).priorities,
-  );
+  /** Ingredient-level tolerance; undefined = inherit the recipe / global value. */
+  const [tolerance, setTolerance] = useState<number | undefined>(entry.tolerance);
   /**
    * True after the first failed save attempt. Before it, the form is pristine
    * (the entry is valid by construction), so no error is shown; after it, the
@@ -103,7 +103,7 @@ function EditIngredientSheet({
   /** The mapping group, focused when its rows hold the first problem. */
   const mappingFieldRef = useRef<HTMLDivElement>(null);
 
-  const rows = buildMappingRows(factors, priorities);
+  const rows = buildMappingRows(factors);
   const displayError = validateDisplayForms(singular, plural);
   const mappingError = validateMappingRows(rows);
   const showDisplayError = attempted && displayError !== null;
@@ -116,16 +116,12 @@ function EditIngredientSheet({
   const showSummary = showDisplayError && showMappingError;
 
   /**
-   * The rows that would actually be saved (a finite positive factor and a
-   * positive-integer priority). The preview resolves against exactly these, so
-   * a half-typed row neither shows up in the preview nor changes the value.
+   * The rows that would actually be saved (a finite positive factor). The
+   * preview resolves against exactly these, so a half-typed row neither shows
+   * up in the preview nor changes the value.
    */
   const entries = mappingEntriesFromRows(rows).filter(
-    (entry_) =>
-      Number.isFinite(entry_.factor) &&
-      entry_.factor > 0 &&
-      Number.isInteger(entry_.priority) &&
-      entry_.priority > 0,
+    (entry_) => Number.isFinite(entry_.factor) && entry_.factor > 0,
   );
 
   /**
@@ -139,6 +135,7 @@ function EditIngredientSheet({
     singular: singular.trim() === '' ? undefined : singular.trim(),
     plural: plural.trim() === '' ? undefined : plural.trim(),
     entries,
+    ...(tolerance !== undefined ? { tolerance } : {}),
   };
 
   /** The reorder point as it will read and be stored (exact units snap it). */
@@ -178,6 +175,7 @@ function EditIngredientSheet({
       plural: forms.plural,
       reorderPoint: reorder.storedValue,
       entries,
+      tolerance,
     });
   };
 
@@ -274,17 +272,12 @@ function EditIngredientSheet({
           <span className="field-label" id="mapping-field-label">
             Zusatz-Einheiten <span className="optional-mark">(optional)</span>
           </span>
-          <p className="field-hint">Menge in {bu}, Priorität 1 = bevorzugt.</p>
+          <p className="field-hint">Menge in {bu}.</p>
           <IngredientMappingsField
             bu={bu}
             factors={factors}
-            priorities={priorities}
             onFactorChange={(au, value) => {
               setFactors((current) => ({ ...current, [au]: value }));
-              markEdited();
-            }}
-            onPriorityChange={(au, value) => {
-              setPriorities((current) => ({ ...current, [au]: value }));
               markEdited();
             }}
           />
@@ -295,12 +288,28 @@ function EditIngredientSheet({
           )}
         </div>
 
+        {/* Ingredient-level tolerance: a display preference, not a scale. */}
+        <div className="field">
+          <span className="field-label">Toleranz</span>
+          <p className="field-hint">
+            Standard erbt die Rezept- bzw. globale Einstellung.
+          </p>
+          <ToleranceChips
+            value={tolerance}
+            onChange={(next) => {
+              setTolerance(next);
+              markEdited();
+            }}
+            ariaLabel="Toleranz der Zutat"
+          />
+        </div>
+
         {/* The reorder point: what is on the shelf after a shopping trip. Same
             picker as the create sheet, with 0 and ∞; the preview below resolves
             against this form's unsaved display forms and mappings. */}
         <div className="field">
           <span className="field-label">Vorrat</span>
-          <QuantityPicker
+          <QuantityInput
             value={reorderPoint}
             onChange={(next) => {
               setReorderPoint(next);

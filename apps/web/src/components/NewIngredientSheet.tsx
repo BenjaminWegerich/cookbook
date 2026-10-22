@@ -4,9 +4,9 @@
  * Opened from the ingredient sheet ("Neue Zutat anlegen") when the typed name
  * is neither in the master data nor an ingredient recipe. It collects the
  * master-data fields (name, base unit g/ml, the reorder point, the shopping
- * stop, and an optional factor + priority per known additional unit — Becher /
- * EL / TL; the mappings are all optional: an ingredient without additional
- * units is valid) and hands them to the parent, which persists them to the
+ * stop, and an optional factor per known additional unit — Becher / EL / TL;
+ * the mappings are all optional: an ingredient without additional units is
+ * valid) and hands them to the parent, which persists them to the
  * Drive master data (ingredientMasterData.ts +
  * shoppingRouteMasterData.ts). After saving, the ingredient sheet re-appears
  * with the name now valid; the recipe addition is confirmed there separately
@@ -21,17 +21,19 @@
  * holds no stops at all: then there is nothing to choose, the sheet says so and
  * the ingredient is created without a shopping stop (decided with the user).
  *
- * The reorder point is picked with the same QuantityPicker as a recipe quantity
- * (suggested chips + stepper) and previewed as the ingredient line it will
+ * The reorder point is picked with the free QuantityInput (suggested chips +
+ * adaptive stepper) and previewed as the ingredient line it will
  * produce. The preview resolves against the *unsaved* mapping rows of this form,
  * so adding a Becher mapping updates the line immediately; an exact unit snaps
  * the stored value to its amount (core resolveReorderPoint,
  * docs/storage_format.md §9). Its default is 0 ("only ever bought for a
  * recipe"); "∞" selects infinite stock.
  *
- * Every mapping carries an explicit priority (1 = most preferred, unique per
- * ingredient, §7 of the AQS spec). As a convenience the mappings of an
- * existing ingredient with the same base-unit family can be copied in as a
+ * Every mapping is a conversion factor only: the optimizer scores every
+ * compatible unit, and the app allows at most one shopping unit per ingredient.
+ * The ingredient-level tolerance is optional (five chips; "Standard" inherits
+ * the recipe / global value). As a convenience the mappings of an existing
+ * ingredient with the same base-unit family can be copied in as a
  * starting point ("Von bekannter Zutat übernehmen", a text-autocomplete like
  * the ingredient sheet's name selector) and then edited / extended — factors
  * are expressed in the ingredient's own base unit, so only same-family
@@ -53,11 +55,13 @@ import {
 } from '@cookbook/core';
 
 import IngredientMappingsField from './IngredientMappingsField';
-import QuantityPicker from './QuantityPicker';
+import QuantityInput from './QuantityInput';
+import ToleranceChips from './ToleranceChips';
 import {
   buildMappingRows,
   mappingEntriesFromRows,
   validateMappingRows,
+  validateTolerance,
   type MappingRow,
 } from './ingredientMasterForm';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
@@ -66,8 +70,6 @@ import { useSaveShortcut } from '../hooks/useSaveShortcut';
 export interface NewIngredientEntry {
   au: string;
   factor: number;
-  /** Positive integer, unique per ingredient; 1 = most preferred. */
-  priority: number;
 }
 
 interface NewIngredientSheetProps {
@@ -85,6 +87,7 @@ interface NewIngredientSheetProps {
     bu: string,
     reorderPoint: number,
     entries: NewIngredientEntry[],
+    tolerance: number | undefined,
     stop: ShoppingStop | null,
   ) => void;
   /** Called when the user edits any form field — the parent forgets the
@@ -101,7 +104,11 @@ const BASE_UNITS = ['g', 'ml'] as const;
  * empty/duplicate name first, then the first invalid mapping row. It is the
  * single source of truth for both the save attempt and the live error text.
  */
-function currentSaveErrorMessage(name: string, rows: MappingRow[]): string | null {
+function currentSaveErrorMessage(
+  name: string,
+  rows: MappingRow[],
+  toleranceRaw: string,
+): string | null {
   const trimmed = name.trim();
   if (trimmed === '') {
     return 'Bitte einen Namen angeben.';
@@ -109,7 +116,7 @@ function currentSaveErrorMessage(name: string, rows: MappingRow[]): string | nul
   if (masterIngredientNames().includes(trimmed)) {
     return `„${trimmed}“ existiert bereits in der Stammdatenliste.`;
   }
-  return validateMappingRows(rows);
+  return validateMappingRows(rows) ?? validateTolerance(toleranceRaw);
 }
 
 /**
@@ -166,8 +173,10 @@ function NewIngredientSheet({
   const [reorderPoint, setReorderPoint] = useState(0);
   /** Factor inputs keyed by additional-unit name; empty string = row skipped. */
   const [factors, setFactors] = useState<Record<string, string>>({});
-  /** Priority inputs keyed by additional-unit name; empty string = not set. */
-  const [priorities, setPriorities] = useState<Record<string, string>>({});
+  /** Ingredient-level tolerance; undefined = inherit the recipe / global value. */
+  const [tolerance, setTolerance] = useState<number | undefined>(undefined);
+  /** The five-chip control is not a text field; this keeps the shared validator happy. */
+  const toleranceRaw = tolerance === undefined ? '' : String(tolerance);
   /** The copy-source autocomplete text ("" = nothing typed); applying resets it. */
   const [copyQuery, setCopyQuery] = useState('');
   /** The chosen store — level 1 of the shopping route; null = nothing picked. */
@@ -207,26 +216,18 @@ function NewIngredientSheet({
   });
 
   /** The filled rows in AU order (Becher, EL, TL). */
-  const mappingRows = buildMappingRows(factors, priorities);
+  const mappingRows = buildMappingRows(factors);
 
-  /**
-   * The rows that carry a mapping, in the order the parent will persist them
-   * (ascending priority — matches the registry invariant).
-   */
+  /** The rows that carry a mapping, in the order the parent will persist them. */
   const entries: NewIngredientEntry[] = mappingEntriesFromRows(mappingRows);
 
   /**
-   * The rows that would actually be saved (a finite positive factor and a
-   * positive-integer priority). The reorder-point preview resolves against
-   * exactly these, so a half-typed row neither shows up in the preview nor
-   * changes the stored value.
+   * The rows that would actually be saved (a finite positive factor). The
+   * reorder-point preview resolves against exactly these, so a half-typed row
+   * neither shows up in the preview nor changes the stored value.
    */
   const validEntries = entries.filter(
-    (entry) =>
-      Number.isFinite(entry.factor) &&
-      entry.factor > 0 &&
-      Number.isInteger(entry.priority) &&
-      entry.priority > 0,
+    (entry) => Number.isFinite(entry.factor) && entry.factor > 0,
   );
 
   /**
@@ -235,7 +236,11 @@ function NewIngredientSheet({
    * mappings from its argument, so the ingredient need not exist in the
    * registry yet).
    */
-  const draftEntry = { bu, entries: validEntries };
+  const draftEntry = {
+    bu,
+    entries: validEntries,
+    ...(tolerance !== undefined ? { tolerance } : {}),
+  };
 
   /**
    * The reorder point as it will read and be stored. An exact unit snaps the
@@ -285,7 +290,8 @@ function NewIngredientSheet({
    * different problem is only announced by the next save attempt. The order is
    * the form's order: name, mapping rows, then the „Einkauf“ field.
    */
-  const saveErrorNow = currentSaveErrorMessage(trimmedName, mappingRows) ?? shoppingError;
+  const saveErrorNow =
+    currentSaveErrorMessage(trimmedName, mappingRows, toleranceRaw) ?? shoppingError;
   const shownLocalError = localError !== null && localError === saveErrorNow ? localError : null;
 
   /** Reports a form edit to the parent (drops the stale Drive error). */
@@ -318,13 +324,10 @@ function NewIngredientSheet({
       return;
     }
     const nextFactors = { ...factors };
-    const nextPriorities = { ...priorities };
     for (const mapping of entry.entries) {
       nextFactors[mapping.au] = formatDecimal(mapping.factor);
-      nextPriorities[mapping.au] = String(mapping.priority);
     }
     setFactors(nextFactors);
-    setPriorities(nextPriorities);
     markEdited();
   };
 
@@ -363,7 +366,7 @@ function NewIngredientSheet({
       return;
     }
     setLocalError(null);
-    onSave(trimmedName, bu, reorder.storedValue, entries, chosenStop);
+    onSave(trimmedName, bu, reorder.storedValue, entries, tolerance, chosenStop);
   };
 
   // Ctrl+S is the keyboard equivalent of the „Speichern" button. The sheet is
@@ -447,15 +450,28 @@ function NewIngredientSheet({
           <IngredientMappingsField
             bu={bu}
             factors={factors}
-            priorities={priorities}
             onFactorChange={(au, value) => {
               setFactors((current) => ({ ...current, [au]: value }));
               markEdited();
             }}
-            onPriorityChange={(au, value) => {
-              setPriorities((current) => ({ ...current, [au]: value }));
+          />
+        </div>
+
+        {/* The ingredient-level tolerance is a preference for the display
+            optimizer; "Standard" inherits the recipe / global value. */}
+        <div className="field">
+          <span className="field-label">Toleranz</span>
+          <p className="field-hint">
+            Standard erbt die Rezept- bzw. globale Einstellung. Nur setzen, wenn diese Zutat
+            bewusst genauer oder praktischer dargestellt werden soll.
+          </p>
+          <ToleranceChips
+            value={tolerance}
+            onChange={(next) => {
+              setTolerance(next);
               markEdited();
             }}
+            ariaLabel="Toleranz der Zutat"
           />
         </div>
 
@@ -464,7 +480,7 @@ function NewIngredientSheet({
             preview below resolves against the mapping rows above — unsaved. */}
         <div className="field">
           <span className="field-label">Vorrat</span>
-          <QuantityPicker
+          <QuantityInput
             value={reorderPoint}
             onChange={(next) => {
               setReorderPoint(next);

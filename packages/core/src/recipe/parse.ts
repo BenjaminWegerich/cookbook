@@ -35,9 +35,9 @@
 
 import { parseDocument } from 'yaml';
 
-import { isAQValue } from '../aqLadder.js';
-import { pos } from '../ladder.js';
-import { parseIngredientPhrase, replaceArtifacts } from './artifacts.js';
+import { parseArtifactContent, parseIngredientPhrase, replaceArtifacts } from './artifacts.js';
+import { isServingCount } from '../servingSizes.js';
+import { isTolerance } from '../tolerance.js';
 import { deriveIngredients } from './ingredientList.js';
 import { isHexColor, THEME_FONT_SHORTLIST } from './theme.js';
 import { RecipeParseError } from './types.js';
@@ -65,6 +65,8 @@ const INVALID_TITLE_CHARS = /[/\\:*?"<>|]/;
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 /** Any `{{ … }}` block in a step — candidates for malformed artifacts. */
 const CURLY_BLOCK_RE = /\{\{([^{}]*)\}\}/g;
+/** Optional trailing per-quantity tolerance tag on an ingredient row. */
+const ROW_TOLERANCE_RE = /\s*\{tolerance:\s*([0-9]*[.,]?[0-9]+)\}\s*$/;
 
 const UNITS: readonly Unit[] = ['g', 'kg', 'ml', 'l'];
 
@@ -75,6 +77,7 @@ const COMMON_FIELDS: ReadonlySet<string> = new Set([
   'description',
   'reference',
   'theme',
+  'tolerance',
   'prep_time',
   'total_time',
 ]);
@@ -197,27 +200,46 @@ function readTheme(
 }
 
 /**
- * Records a value problem for `path`: positivity/finiteness, the integer
- * requirement for servings (§3), and the ladder membership (§7.1).
+ * Records a value problem for `path`: a quantity is any positive finite number
+ * (the unrounded target V0). There is no ladder membership check anymore.
  */
-function checkLadderValue(
+function checkPositiveQuantity(
   value: number,
   path: string,
   issues: ValidationIssue[],
-  integerOnly: boolean,
 ): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    issues.push({ path, message: 'Der Wert muss eine positive Zahl sein.' });
+  }
+}
+
+/**
+ * Validates a serving count against the allowed integer set (servingSizes.ts).
+ * The set is deliberately small so the HTML export can pre-bake one view per
+ * serving count.
+ */
+function checkServingCount(value: number, path: string, issues: ValidationIssue[]): void {
   if (!Number.isFinite(value) || value <= 0) {
     issues.push({ path, message: 'Der Wert muss eine positive Zahl sein.' });
     return;
   }
-  if (integerOnly && !Number.isInteger(value)) {
-    issues.push({ path, message: 'Der Wert muss eine ganze Zahl sein.' });
-    return;
+  if (!isServingCount(value)) {
+    issues.push({
+      path,
+      message:
+        `"${value}" ist keine erlaubte Portionszahl ` +
+        `(erlaubt: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 22, 25, 28, 30).`,
+    });
   }
-  try {
-    pos(value);
-  } catch {
-    issues.push({ path, message: `"${value}" ist kein Standardwert (Leiterwert).` });
+}
+
+/**
+ * Validates an optional tolerance cell / front-matter value: a number in
+ * [0, 1]. An absent value is not passed here.
+ */
+function checkTolerance(value: number, path: string, issues: ValidationIssue[]): void {
+  if (!isTolerance(value)) {
+    issues.push({ path, message: `Die Toleranz muss eine Zahl zwischen 0 und 1 sein (gefunden: ${value}).` });
   }
 }
 
@@ -277,7 +299,7 @@ function parsePhrase(
     issues.push({ path, message: 'Der Zutatenname darf kein "|" enthalten.' });
     return null;
   }
-  checkLadderValue(parsed.quantity, path, issues, false);
+  checkPositiveQuantity(parsed.quantity, path, issues);
   return parsed as Ingredient;
 }
 
@@ -344,7 +366,7 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     } else if (typeof servingsValue !== 'number') {
       issues.push({ path: 'servings', message: '"servings" muss eine Zahl sein.' });
     } else {
-      checkLadderValue(servingsValue, 'servings', issues, true);
+      checkServingCount(servingsValue, 'servings', issues);
       servings = servingsValue;
     }
   } else if (type === 'ingredient_recipe') {
@@ -354,7 +376,7 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     } else if (typeof yieldRaw !== 'number') {
       issues.push({ path: 'yield', message: '"yield" muss eine Zahl sein.' });
     } else {
-      checkLadderValue(yieldRaw, 'yield', issues, false);
+      checkPositiveQuantity(yieldRaw, 'yield', issues);
       yieldValue = yieldRaw;
     }
     const yieldUnitValue = data['yield_unit'];
@@ -430,6 +452,20 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   // Theme (§3, DESIGN §4.8): the recipe's optional visual skin for the export.
   const theme = readTheme(data, issues);
 
+  // Recipe-level tolerance (docs/recipe_scaling_algorithm.md §4.1): optional,
+  // number in [0, 1]; absent = the global default. The ingredient and
+  // per-quantity levels override it.
+  let tolerance: number | undefined;
+  const toleranceValue = data['tolerance'];
+  if (toleranceValue !== undefined) {
+    if (typeof toleranceValue !== 'number') {
+      issues.push({ path: 'tolerance', message: '"tolerance" muss eine Zahl sein.' });
+    } else {
+      checkTolerance(toleranceValue, 'tolerance', issues);
+      tolerance = toleranceValue;
+    }
+  }
+
   if (title === undefined || type === undefined || prepTime === undefined) {
     // The problems are already recorded; the recipe cannot be built.
     return undefined;
@@ -445,6 +481,7 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     ...(totalTime !== undefined ? { total_time: totalTime } : {}),
     ...(reference !== undefined ? { reference } : {}),
     ...(theme !== undefined ? { theme } : {}),
+    ...(tolerance !== undefined ? { tolerance } : {}),
     ...(servings !== undefined ? { servings } : {}),
     ...(yieldValue !== undefined ? { yield: yieldValue } : {}),
     ...(yieldUnit !== undefined ? { yield_unit: yieldUnit } : {}),
@@ -454,54 +491,73 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
 }
 
 /**
+ * Splits an optional trailing `{tolerance: 0.8}` tag off an ingredient row.
+ * The tag is the quantity-level step of the tolerance cascade; `{…}` is not
+ * allowed in an ingredient name, so the suffix is unambiguous.
+ */
+function extractRowTolerance(
+  content: string,
+  path: string,
+  issues: ValidationIssue[],
+): { phrase: string; tolerance?: number } {
+  const match = ROW_TOLERANCE_RE.exec(content);
+  if (match === null) {
+    // A malformed tag would otherwise be swallowed into the name (or rejected
+    // by the phrase grammar with a less precise message). Name the problem.
+    if (/\{tolerance\s*:/.test(content)) {
+      issues.push({
+        path,
+        message: 'Ungültige Toleranz an der Zutaten-Zeile (erwartet z. B. "{tolerance: 0.8}").',
+      });
+    }
+    return { phrase: content };
+  }
+  const tolerance = Number(match[1]!.replace(',', '.'));
+  if (!isTolerance(tolerance)) {
+    issues.push({
+      path,
+      message: `Die Toleranz muss eine Zahl zwischen 0 und 1 sein (gefunden: ${match[1]}).`,
+    });
+    return { phrase: content.slice(0, match.index).trimEnd() };
+  }
+  return { phrase: content.slice(0, match.index).trimEnd(), tolerance };
+}
+
+/**
  * Parses one row line ("- 250 g Reis") into a canonical Ingredient. Records
- * issues on the given path.
+ * issues on the given path. A trailing `{tolerance: …}` tag becomes the
+ * per-quantity tolerance.
  */
 function parseRow(line: string, path: string, issues: ValidationIssue[]): Ingredient | null {
   const content = line.trim().replace(/^-\s+/, '');
-  const parsed = parsePhrase(content, true, path, issues);
+  const { phrase, tolerance } = extractRowTolerance(content, path, issues);
+  const parsed = parsePhrase(phrase, true, path, issues);
   if (parsed === null) return null;
   if (parsed.name === undefined) return null; // unreachable with requireName
-  return parsed;
+  return tolerance === undefined ? parsed : { ...parsed, tolerance };
 }
 
 /**
  * Validates the artifacts of one step text and normalizes them to the
  * canonical family form (kg/l and German comma decimals → g/ml + '.',
- * unitless counts → canonical AQ fractions).
+ * unitless counts → AQ notation where possible, optional `|t=` tolerance).
+ *
+ * Any positive finite quantity is allowed; the old ladder membership check is
+ * gone because recipes store the unrounded target. The display optimizer later
+ * decides which BQ/AQ value represents it.
  */
 function validateAndNormalizeText(text: string, path: string, issues: ValidationIssue[]): string {
   for (const match of text.matchAll(CURLY_BLOCK_RE)) {
     const content = match[1] ?? '';
-    const parsed = parseIngredientPhrase(content);
+    const parsed = parseArtifactContent(content);
     if (parsed === null) {
       issues.push({
         path,
-        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}}, {{100}} oder {{1/2}}).`,
+        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}}, {{100}}, {{1/2}} oder {{1/2|t=0.8}}).`,
       });
       continue;
     }
-    // A unitless quantity-only mention is a *count*: its standard numbers are
-    // the AQ ladder (fractions 1/10 … 1000, docs/additional_quantity_
-    // specifications.md §6.1). Every artifact that carries a unit is a base
-    // quantity and uses the BQ ladder (§7.1).
-    let isStandard: boolean;
-    if (parsed.unit === undefined) {
-      isStandard = isAQValue(parsed.quantity);
-    } else {
-      try {
-        pos(parsed.quantity);
-        isStandard = true;
-      } catch {
-        isStandard = false;
-      }
-    }
-    if (!isStandard) {
-      issues.push({
-        path,
-        message: `Die Menge in ${JSON.stringify(match[0])} ist kein Standardwert (Leiterwert).`,
-      });
-    }
+    checkPositiveQuantity(parsed.quantity, path, issues);
   }
   // Normalization: rewrite every valid artifact to the canonical text form.
   return replaceArtifacts(text, (artifact) => artifact);
@@ -706,7 +762,7 @@ export function parseRecipe(text: string): Recipe {
     throw new RecipeParseError(issues);
   }
 
-  const ingredients = deriveIngredients(steps, recipe.reference ?? []);
+  const ingredients = deriveIngredients(steps, recipe.reference ?? [], recipe.tolerance);
   // §4: every reference name must match a merged ingredient of the recipe.
   if (recipe.reference !== undefined) {
     const mergedNames = new Set(ingredients.map((ingredient) => ingredient.name));

@@ -73,7 +73,7 @@ import {
 } from 'react';
 import type { KeyboardEvent, Ref } from 'react';
 
-import { allIngredientMappings, integerLadderValues, serializeRecipe } from '@cookbook/core';
+import { SERVING_COUNTS, allIngredientMappings, serializeRecipe } from '@cookbook/core';
 import type { Recipe, RecipeType } from '@cookbook/core';
 
 import {
@@ -97,7 +97,7 @@ import { listRecipes, readRecipe } from '../drive/recipeStorage';
 import { loadRecipeGuidelines } from '../drive/personalRules';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
 import LeaveConfirmSheet from './LeaveConfirmSheet';
-import QuantityPicker from './QuantityPicker';
+import QuantityInput from './QuantityInput';
 import { EyeIcon } from './icons';
 
 /** One bubble of the chat transcript. */
@@ -132,7 +132,7 @@ export interface AiHandoff {
 
 /** Integer standard numbers 1–30 — the allowed serving counts, identical to
  *  the manual editor's Portionen chips (decision 7). */
-const SERVING_OPTIONS = integerLadderValues(1, 30);
+const SERVING_OPTIONS = SERVING_COUNTS;
 
 /** Default Portionen of a finished dish (agreed with the user). */
 const DEFAULT_SERVINGS = 6;
@@ -1071,7 +1071,7 @@ export default function AiCreateSheet({
                               Volumen
                             </button>
                           </div>
-                          <QuantityPicker
+                          <QuantityInput
                             value={yieldQuantity}
                             onChange={setYieldQuantity}
                             family={yieldUnit === 'ml' ? 'ml' : 'g'}

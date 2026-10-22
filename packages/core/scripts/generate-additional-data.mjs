@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Generates `src/additionalUnitsData.ts` from the additional-unit master data:
- *   - docs/number_schemes.csv            (AQ value × number scheme matrix)
+ *   - docs/AQs.csv                       (AQ values, penalties and the scheme columns)
  *   - docs/additional_units.csv          (units: name, arrangement, scheme, exactness, shopping flag)
- *   - docs/ingredients.csv               (ingredient list: name, base unit, reorder point, display forms)
- *   - docs/ingredient_unit_mappings.csv  (ingredient → AU: factor, priority)
+ *   - docs/ingredients.csv               (ingredient list: name, base unit, tolerance, reorder point, display forms)
+ *   - docs/ingredient_unit_mappings.csv  (ingredient → AU: factor; no priority)
  *
  * The `Singular` / `Plural` columns of docs/ingredients.csv (columns B and C,
  * directly after the name) are validated here and compiled into the optional
@@ -25,6 +25,11 @@
  * the two forms are display data only. Both cells are empty for an invariant
  * unit: the unit name then serves for every count. A half-filled pair is an
  * error (see parseDisplayForms).
+ *
+ * The `Tolerance` column of docs/ingredients.csv is optional and compiled into
+ * the `tolerance` field of the ingredient: the ingredient-level fallback of the
+ * tolerance cascade (docs/recipe_scaling_algorithm.md §4.1). Empty = inherit
+ * the recipe or the global default; a value must be in [0, 1].
  *
  * The `Reorder Point` column of docs/ingredients.csv is validated here and
  * compiled into the `reorderPoint` field of each ingredient: the quantity of
@@ -50,11 +55,14 @@
  * two units with **distinct names** (docs/additional_quantity_specifications.md
  * §3.1), never as two rows with the same name.
  *
- * The AQ values in number_schemes.csv must exactly match the AQ column of the
- * authoritative ladder table docs/standard_numbers.csv (see
- * docs/additional_quantity_specifications.md §3 and §5): the generator acts as
- * the drift guard — a mismatch fails the build with an explicit list, so
- * changing the standard numbers can never silently corrupt the schemes.
+ * The number-scheme columns live directly in docs/AQs.csv, the single source of
+ * the AQ values and their memberships. A unit references a scheme by name; the
+ * generator fails when a unit names an unknown scheme, when a scheme cell is not
+ * 1/0/empty, or when a scheme allows a count above 30.
+ *
+ * A unit identity is its name, and the app allows **one shopping unit per
+ * ingredient** (decided with the user). The mapping generator therefore fails
+ * when an ingredient maps to two units both flagged `Shopping Unit = yes`.
  *
  * Usage:
  *   npm run generate:additional   (from packages/core)
@@ -68,15 +76,15 @@
  * decimals tolerated), header row, CRLF tolerated, one optional trailing empty
  * cell per row (spreadsheet exports). Scheme cells: `1` = allowed, `0` or
  * empty = not allowed. The `Unit Exact` cell is `yes` or `no`, empty = `yes`.
- * The `Shopping Unit` cell is `yes` or `no` and must not be empty.
+ * The `Shopping Unit` cell is `yes` or `no` and must not be empty. The
+ * ingredient `Tolerance` cell is empty or a number in [0, 1].
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const LADDER_CSV = resolve(ROOT, 'docs/standard_numbers.csv');
-const SCHEMES_CSV = resolve(ROOT, 'docs/number_schemes.csv');
+const AQ_CSV = resolve(ROOT, 'docs/AQs.csv');
 const UNITS_CSV = resolve(ROOT, 'docs/additional_units.csv');
 const INGREDIENTS_CSV = resolve(ROOT, 'docs/ingredients.csv');
 const MAPPINGS_CSV = resolve(ROOT, 'docs/ingredient_unit_mappings.csv');
@@ -95,7 +103,7 @@ const UNITS_HEADER =
   'Additional Unit;Singular;Plural;Arrangement;Number Scheme;Unit Exact;Shopping Unit';
 
 /** Exact header of the ingredient list (docs/ingredients.csv). */
-const INGREDIENTS_HEADER = 'Ingredient;Singular;Plural;Base Unit;Reorder Point';
+const INGREDIENTS_HEADER = 'Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point';
 
 /** Converts a CSV cell to a number, accepting both '.' and ',' decimals. */
 function toNumber(cell) {
@@ -167,6 +175,24 @@ function parseReorderPoint(cell, ingredient) {
 }
 
 /**
+ * Parses the optional `Tolerance` cell of the ingredient list: empty = inherit
+ * the recipe / global default; otherwise a number in [0, 1]. The cell is the
+ * ingredient-level step of the tolerance cascade
+ * (docs/recipe_scaling_algorithm.md §4.1).
+ */
+function parseToleranceCell(cell, ingredient) {
+  const value = (cell ?? '').trim();
+  if (value === '') return undefined;
+  const tolerance = toNumber(value);
+  if (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 1) {
+    throw new Error(
+      `${INGREDIENTS_CSV}: invalid Tolerance '${cell}' for '${ingredient}' (use a number in [0, 1] or leave the cell empty)`,
+    );
+  }
+  return tolerance;
+}
+
+/**
  * Parses a `Singular` / `Plural` pair: the display forms used when the subject
  * is named with a count („1 Karotte“ / „2 Karotten“, „2 Packungen“). Shared by
  * the ingredient list and the additional-units table, whose two cells sit
@@ -218,90 +244,91 @@ function parseCsv(path) {
   return { header, rows };
 }
 
-/** Distinct AQ ladder values from standard_numbers.csv, in table order. */
-function ladderAqValues() {
-  const { header, rows } = parseCsv(LADDER_CSV);
-  if (
-    header[0] !== 'Exact Number' ||
-    header[1] !== 'Rounded Number for BQ' ||
-    header[2] !== 'Rounded Number for AQ'
-  ) {
-    throw new Error(`${LADDER_CSV}: unexpected header ${JSON.stringify(header)}`);
+/**
+ * Parses a canonical AQ notation (`1/2`, `1+1/4`, `3`) into its numeric value.
+ * Kept local so the generator is a standalone Node script.
+ */
+function parseAqNumber(value) {
+  const compact = value.replace(/\s+/g, '');
+  const plus = compact.indexOf('+');
+  if (plus !== -1) {
+    const integer = toNumber(compact.slice(0, plus));
+    const fraction = compact.slice(plus + 1);
+    const slash = fraction.indexOf('/');
+    return integer + toNumber(fraction.slice(0, slash)) / toNumber(fraction.slice(slash + 1));
   }
-  const seen = new Set();
-  const values = [];
-  for (const row of rows) {
-    const aq = row[2];
-    if (aq === undefined || aq === '') {
-      throw new Error(`${LADDER_CSV}: empty AQ cell in line: ${row.join(';')}`);
-    }
-    if (!seen.has(aq)) {
-      seen.add(aq);
-      values.push(aq);
-    }
+  const slash = compact.indexOf('/');
+  if (slash !== -1) {
+    return toNumber(compact.slice(0, slash)) / toNumber(compact.slice(slash + 1));
   }
-  return values;
+  return toNumber(compact);
 }
 
 /**
- * Parses the scheme matrix and validates its AQ rows against the ladder — the
- * drift guard. The emitted membership sets follow the ladder's AQ order, so
- * reordering rows in the CSV does not change the output.
+ * Reads docs/AQs.csv: the AQ values, their penalties (validated in
+ * generate-quantity-data.mjs) and the number-scheme columns. The scheme
+ * membership is emitted as canonical AQ notation strings because the legacy
+ * shopping/pantry helpers still compare notations; the new optimizer uses the
+ * numeric `AQ_SCHEMES` from quantityData.ts.
+ *
+ * The scheme names must be the same names docs/additional_units.csv references.
+ * Every scheme is a subset of the AQ rows; a scheme may not allow counts above
+ * 30 (decided with the user).
  */
-function buildSchemes(ladderAq) {
-  const { header, rows } = parseCsv(SCHEMES_CSV);
-  if (header[0] !== 'AQ Value') {
-    throw new Error(`${SCHEMES_CSV}: unexpected header ${JSON.stringify(header)}`);
+function buildAqSchemes() {
+  const { header, rows } = parseCsv(AQ_CSV);
+  if (header[0] !== 'Additional Quantity' || header[1] !== 'Clumsiness Penalty') {
+    throw new Error(`${AQ_CSV}: unexpected header ${JSON.stringify(header)}`);
   }
-  const schemeNames = header.slice(1);
+  const schemeNames = header.slice(2);
   if (schemeNames.length === 0) {
-    throw new Error(`${SCHEMES_CSV}: no number scheme columns defined`);
+    throw new Error(`${AQ_CSV}: no number scheme columns defined`);
   }
   if (new Set(schemeNames).size !== schemeNames.length) {
-    throw new Error(`${SCHEMES_CSV}: duplicate scheme column names`);
+    throw new Error(`${AQ_CSV}: duplicate scheme column names`);
   }
   for (const name of schemeNames) {
     if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) {
       throw new Error(
-        `${SCHEMES_CSV}: invalid scheme name '${name}' (use letters, digits, underscores; start with a letter)`,
+        `${AQ_CSV}: invalid scheme name '${name}' (use letters, digits, underscores; start with a letter)`,
       );
     }
   }
 
-  const rowAq = rows.map((row) => row[0]);
-  if (new Set(rowAq).size !== rowAq.length) {
-    throw new Error(`${SCHEMES_CSV}: duplicate AQ row`);
-  }
-  const missing = ladderAq.filter((aq) => !rowAq.includes(aq));
-  const extra = rowAq.filter((aq) => !ladderAq.includes(aq));
-  if (missing.length > 0 || extra.length > 0) {
-    throw new Error(
-      `${SCHEMES_CSV}: AQ rows drift from ${LADDER_CSV} — ` +
-        `missing: ${missing.join(', ') || '—'}; extra/unknown: ${extra.join(', ') || '—'}. ` +
-        `Keep the scheme table's AQ values in sync with the ladder's AQ column.`,
-    );
-  }
-
-  const byAq = new Map(rows.map((row) => [row[0], row]));
+  const seen = new Set();
+  const aqValues = [];
   const schemes = schemeNames.map((name) => ({ name, values: [] }));
-  for (const aq of ladderAq) {
-    const row = byAq.get(aq);
-    for (let col = 1; col < header.length; col++) {
+  for (const row of rows) {
+    const aq = row[0];
+    if (aq === undefined || aq === '') {
+      throw new Error(`${AQ_CSV}: empty AQ cell in line: ${row.join(';')}`);
+    }
+    const numeric = parseAqNumber(aq);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      throw new Error(`${AQ_CSV}: invalid AQ value '${aq}'`);
+    }
+    if (seen.has(numeric)) {
+      throw new Error(`${AQ_CSV}: duplicate AQ value '${aq}'`);
+    }
+    if (numeric > 30) {
+      throw new Error(`${AQ_CSV}: AQ value '${aq}' is above 30; no scheme may allow it`);
+    }
+    seen.add(numeric);
+    aqValues.push(aq);
+    for (let col = 2; col < header.length; col++) {
       const cell = row[col] ?? '';
-      if (cell === '') {
-        continue;
-      }
+      if (cell === '') continue;
       if (cell !== '1' && cell !== '0') {
         throw new Error(
-          `${SCHEMES_CSV}: invalid scheme cell '${cell}' for AQ '${aq}' (use 1, 0 or empty)`,
+          `${AQ_CSV}: invalid scheme cell '${cell}' for AQ '${aq}' (use 1, 0 or empty)`,
         );
       }
       if (cell === '1') {
-        schemes[col - 1].values.push(aq);
+        schemes[col - 2].values.push(aq);
       }
     }
   }
-  return schemes;
+  return { aqValues, schemes };
 }
 
 /** Parses the additional units table; validates arrangements, scheme refs, exactness and display forms. */
@@ -374,7 +401,7 @@ function buildIngredientList() {
   }
   const byName = new Map();
   for (const row of rows) {
-    const [ingredient, singularCell, pluralCell, bu, reorderCell] = row;
+    const [ingredient, singularCell, pluralCell, bu, toleranceCell, reorderCell] = row;
     if (ingredient === '' || bu === '') {
       throw new Error(
         `${INGREDIENTS_CSV}: empty ingredient or base unit in line: ${row.join(';')}`,
@@ -388,9 +415,11 @@ function buildIngredientList() {
     if (byName.has(ingredient)) {
       throw new Error(`${INGREDIENTS_CSV}: duplicate ingredient '${ingredient}'`);
     }
+    const tolerance = parseToleranceCell(toleranceCell, ingredient);
     byName.set(ingredient, {
       bu,
       reorderPoint: parseReorderPoint(reorderCell, ingredient),
+      ...(tolerance !== undefined ? { tolerance } : {}),
       ...parseDisplayForms(singularCell, pluralCell, ingredient, INGREDIENTS_CSV),
     });
   }
@@ -401,20 +430,25 @@ function buildIngredientList() {
 }
 
 /**
- * Parses the ingredient–AU mappings; validates references, factors and
- * priorities. The base unit is not part of this file — it comes from the
- * ingredient list, which is also the authoritative set of ingredient names: a
- * mapping for an unknown ingredient is an error, and an ingredient without
- * mappings (e.g. Cashews) is simply absent here.
+ * Parses the ingredient–AU mappings; validates references, factors and the
+ * one-shopping-unit rule. The base unit is not part of this file — it comes
+ * from the ingredient list, which is also the authoritative set of ingredient
+ * names: a mapping for an unknown ingredient is an error, and an ingredient
+ * without mappings (e.g. Cashews) is simply absent here.
+ *
+ * There is no per-ingredient priority anymore: the optimizer scores every
+ * compatible unit. The shopping list still needs exactly one unit to buy in, so
+ * an ingredient may map to at most one unit flagged `Shopping Unit = yes`.
  */
-function buildMappings(unitNames, ingredientNames) {
+function buildMappings(units, ingredientNames) {
+  const unitByName = new Map(units.map((unit) => [unit.name, unit]));
   const { header, rows } = parseCsv(MAPPINGS_CSV);
-  if (header.join(';') !== 'Ingredient;Additional Unit;Conversion Factor;Priority') {
+  if (header.join(';') !== 'Ingredient;Additional Unit;Conversion Factor') {
     throw new Error(`${MAPPINGS_CSV}: unexpected header ${JSON.stringify(header)}`);
   }
   const byIngredient = new Map();
   for (const row of rows) {
-    const [ingredient, au, factorCell, priorityCell] = row;
+    const [ingredient, au, factorCell] = row;
     if (ingredient === '') {
       throw new Error(`${MAPPINGS_CSV}: empty ingredient in line: ${row.join(';')}`);
     }
@@ -423,10 +457,11 @@ function buildMappings(unitNames, ingredientNames) {
         `${MAPPINGS_CSV}: mapping for '${ingredient}' is not in the ingredient list (${INGREDIENTS_CSV})`,
       );
     }
-    if (!unitNames.includes(au)) {
+    const unit = unitByName.get(au);
+    if (unit === undefined) {
       throw new Error(
         `${MAPPINGS_CSV}: mapping for '${ingredient}' references unknown additional unit '${au}' ` +
-          `(known: ${unitNames.join(', ')})`,
+          `(known: ${[...unitByName.keys()].join(', ')})`,
       );
     }
     const factor = toNumber(factorCell);
@@ -435,28 +470,21 @@ function buildMappings(unitNames, ingredientNames) {
         `${MAPPINGS_CSV}: invalid conversion factor '${factorCell}' for '${ingredient}' → '${au}'`,
       );
     }
-    const priority = toNumber(priorityCell);
-    if (!Number.isInteger(priority) || priority <= 0) {
-      throw new Error(
-        `${MAPPINGS_CSV}: priority must be a positive integer, got '${priorityCell}' for '${ingredient}' → '${au}'`,
-      );
-    }
     const list = byIngredient.get(ingredient) ?? [];
     if (list.some((mapping) => mapping.au === au)) {
       throw new Error(`${MAPPINGS_CSV}: duplicate mapping for '${ingredient}' → '${au}'`);
     }
-    if (list.some((mapping) => mapping.priority === priority)) {
-      throw new Error(
-        `${MAPPINGS_CSV}: duplicate priority ${priority} for '${ingredient}' (each mapping needs a unique priority)`,
-      );
-    }
-    list.push({ au, factor, priority });
+    list.push({ au, factor });
     byIngredient.set(ingredient, list);
   }
-  // Evaluation order is ascending priority (1 = most preferred, §7); sorting
-  // here keeps the runtime selection loop a plain first-hit-wins scan.
-  for (const list of byIngredient.values()) {
-    list.sort((a, b) => a.priority - b.priority);
+  for (const [ingredient, list] of byIngredient) {
+    const shoppingUnits = list.filter((mapping) => unitByName.get(mapping.au).shoppingUnit);
+    if (shoppingUnits.length > 1) {
+      throw new Error(
+        `${MAPPINGS_CSV}: '${ingredient}' maps to more than one shopping unit ` +
+          `(${shoppingUnits.map((mapping) => mapping.au).join(', ')}); the app allows exactly one`,
+      );
+    }
   }
   return byIngredient;
 }
@@ -472,7 +500,7 @@ function formatReorderPoint(value) {
 function render(units, schemes, ingredientList, mappings) {
   const lines = [];
   lines.push('/**');
-  lines.push(' * AUTO-GENERATED from docs/number_schemes.csv, docs/additional_units.csv,');
+  lines.push(' * AUTO-GENERATED from docs/AQs.csv, docs/additional_units.csv,');
   lines.push(' * docs/ingredients.csv and docs/ingredient_unit_mappings.csv by');
   lines.push(' * scripts/generate-additional-data.mjs.');
   lines.push(
@@ -510,14 +538,12 @@ function render(units, schemes, ingredientList, mappings) {
   lines.push('  readonly shoppingUnit: boolean;');
   lines.push('}');
   lines.push('');
-  lines.push('/** One ingredient–additional-unit mapping (conversion factor + priority). */');
+  lines.push('/** One ingredient–additional-unit mapping (conversion factor only). */');
   lines.push('export interface IngredientMapping {');
   lines.push('  /** Referenced additional unit name (see ADDITIONAL_UNITS). */');
   lines.push('  readonly au: string;');
   lines.push('  /** Amount of base unit per one additional unit. */');
   lines.push('  readonly factor: number;');
-  lines.push('  /** Positive integer, 1 = most preferred; unique per ingredient. */');
-  lines.push('  readonly priority: number;');
   lines.push('}');
   lines.push('');
   lines.push('/** One ingredient in the master data: base unit, reorder point and AU mappings. */');
@@ -531,6 +557,10 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push('  readonly reorderPoint: number;');
   lines.push(
+    '  /** Ingredient-level tolerance in [0, 1], or absent to inherit the recipe / global default (docs/recipe_scaling_algorithm.md §4.1). */',
+  );
+  lines.push('  readonly tolerance?: number;');
+  lines.push(
     '  /** Singular display form of the name (count 1), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */',
   );
   lines.push('  readonly singular?: string;');
@@ -539,7 +569,7 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push('  readonly plural?: string;');
   lines.push(
-    "  /** The ingredient's additional-unit mappings, ascending priority; empty = bare ingredient without additional units. */",
+    "  /** The ingredient's additional-unit mappings; empty = bare ingredient without additional units. */",
   );
   lines.push('  readonly entries: readonly IngredientMapping[];');
   lines.push('}');
@@ -569,15 +599,16 @@ function render(units, schemes, ingredientList, mappings) {
   }
   lines.push('};');
   lines.push('');
-  lines.push(
-    '/** Ingredient master data keyed by ingredient name (entries sorted by ascending priority). */',
-  );
+  lines.push('/** Ingredient master data keyed by ingredient name. */');
   lines.push('export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {');
   for (const [ingredient, entry] of ingredientList) {
     const entries = mappings.get(ingredient) ?? [];
     lines.push(`  ${JSON.stringify(ingredient)}: {`);
     lines.push(`    bu: ${JSON.stringify(entry.bu)},`);
     lines.push(`    reorderPoint: ${formatReorderPoint(entry.reorderPoint)},`);
+    if (entry.tolerance !== undefined) {
+      lines.push(`    tolerance: ${entry.tolerance},`);
+    }
     // The display forms are emitted only when the name has them, so an
     // invariant ingredient keeps the lean entry shape (no empty strings).
     if (entry.singular !== undefined) {
@@ -587,8 +618,7 @@ function render(units, schemes, ingredientList, mappings) {
     lines.push('    entries: [');
     for (const mapping of entries) {
       lines.push(
-        `      { au: ${JSON.stringify(mapping.au)}, factor: ${mapping.factor}, ` +
-          `priority: ${mapping.priority} },`,
+        `      { au: ${JSON.stringify(mapping.au)}, factor: ${mapping.factor} },`,
       );
     }
     lines.push('    ],');
@@ -599,14 +629,10 @@ function render(units, schemes, ingredientList, mappings) {
   return lines.join('\n');
 }
 
-const ladderAq = ladderAqValues();
-const schemes = buildSchemes(ladderAq);
+const { aqValues, schemes } = buildAqSchemes();
 const units = buildUnits(schemes.map((scheme) => scheme.name));
 const ingredientList = buildIngredientList();
-const mappings = buildMappings(
-  units.map((unit) => unit.name),
-  ingredientList,
-);
+const mappings = buildMappings(units, ingredientList);
 let output = render(units, schemes, ingredientList, mappings);
 try {
   // Format with Prettier (root devDependency, used by `npm run format`) so the
@@ -623,6 +649,7 @@ try {
 writeFileSync(OUT_PATH, output, 'utf8');
 const memberships = schemes.reduce((sum, scheme) => sum + scheme.values.length, 0);
 console.log(
-  `Wrote ${units.length} units, ${schemes.length} schemes (${memberships} memberships), ` +
+  `Wrote ${units.length} units, ${aqValues.length} AQ values, ` +
+    `${schemes.length} schemes (${memberships} memberships), ` +
     `${ingredientList.size} ingredient(s) to ${OUT_PATH}`,
 );

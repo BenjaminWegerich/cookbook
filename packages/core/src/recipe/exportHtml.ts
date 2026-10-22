@@ -21,9 +21,9 @@
  *
  * The allowed sizes depend on the recipe type:
  *
- * - a **finished dish** has the integer ladder serving counts 1–30 (18 options),
- *   exactly what the meal plan accepts;
- * - an **ingredient recipe** has the ladder yields within ±2 decades of its
+ * - a **finished dish** has the allowed serving counts (servingSizes.ts, 18
+ *   options), exactly what the meal plan accepts;
+ * - an **ingredient recipe** has the allowed BQ yields within ±1 decade of its
  *   written yield (`recipe/yieldViews.ts`), which is the same range the meal
  *   plan accepts — so the link in a Keep line can always open the exact amount.
  *
@@ -57,11 +57,17 @@
  * must never be able to inject markup into the exported file.
  */
 
-import { formatAQValueSlash, formatBQ, renderAQSSlash } from '../additionalUnits.js';
-import { scaleAQ } from '../aqLadder.js';
+import {
+  formatAQValueSlash,
+  formatBQ,
+  formatDecimal,
+  renderAQSSlash,
+} from '../additionalUnits.js';
+import { optimizeUnitless } from '../quantityOptimizer.js';
+import { SERVING_COUNTS } from '../servingSizes.js';
+import type { ToleranceContext } from '../tolerance.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
 import type { TextArtifact } from './artifacts.js';
-import { difference, integerLadderValues, scale } from '../ladder.js';
 import {
   PLAN_FRAGMENT_SERVINGS,
   PLAN_FRAGMENT_YIELD,
@@ -71,13 +77,9 @@ import {
 import { resolveTheme, resolveThemeFonts } from './theme.js';
 import type { ResolvedTheme } from './theme.js';
 import { displayTimeText } from './timeValues.js';
-import { yieldViewQuantities } from './yieldViews.js';
+import { defaultYieldView, yieldViewQuantities } from './yieldViews.js';
 import type { Ingredient, Recipe, Step, Unit } from './types.js';
 import { EMBEDDED_FONT_COMPANION, EMBEDDED_FONTS } from './embeddedFonts.js';
-
-/** Allowed serving options of the export: integer ladder values 1–30 (§D2). */
-const SERVING_MIN = 1;
-const SERVING_MAX = 30;
 
 /**
  * The recipe photo, encoded for embedding in the export (DESIGN §5.8). The
@@ -276,18 +278,52 @@ const LINK_ICON_SVG =
   '<svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false">' +
   '<path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>';
 
+/** The tolerance context of an ingredient use in a recipe. */
+function ingredientContext(ingredient: Ingredient, recipe: Recipe): ToleranceContext {
+  return {
+    ...(ingredient.tolerance !== undefined ? { quantity: ingredient.tolerance } : {}),
+    ...(recipe.tolerance !== undefined ? { recipe: recipe.tolerance } : {}),
+  };
+}
+
+/** The tolerance context of an inline artifact in a recipe. */
+function artifactContext(artifact: TextArtifact, recipe: Recipe): ToleranceContext {
+  return {
+    ...(artifact.tolerance !== undefined ? { quantity: artifact.tolerance } : {}),
+    ...(recipe.tolerance !== undefined ? { recipe: recipe.tolerance } : {}),
+  };
+}
+
+/**
+ * Renders a unitless inline count. It has no ingredient and no base unit, so
+ * only the “BQ only” branch applies: the count is chosen from the AQ table with
+ * the accuracy/roundness weights. If no AQ value fits, the unrounded target is
+ * shown as a decimal.
+ */
+function unitlessText(value: number, context: ToleranceContext): string {
+  const result = optimizeUnitless(value, context);
+  return result.notation === undefined
+    ? formatDecimal(result.value)
+    : formatAQValueSlash(result.value);
+}
+
 /**
  * Renders the display text of a quantity/ingredient line (HTML-escaped, no
  * link). A quantity-only artifact may be unitless (`{{1/2}}`) and then renders
- * as its AQ standard number in the slash form (DESIGN §7).
+ * through the unitless branch (DESIGN §7).
  */
-function displayText(name: string | undefined, bq: number, bu: Unit | undefined): string {
+function displayText(
+  name: string | undefined,
+  value: number,
+  bu: Unit | undefined,
+  context: ToleranceContext,
+): string {
   const line =
     name === undefined
       ? bu === undefined
-        ? formatAQValueSlash(bq)
-        : formatBQ(bq, bu)
-      : renderAQSSlash(name, bq, bu ?? 'g');
+        ? unitlessText(value, context)
+        : formatBQ(value, bu)
+      : renderAQSSlash(name, value, bu ?? 'g', context);
   return escapeHtml(line);
 }
 
@@ -315,23 +351,28 @@ function renderPhoto(photo: RecipePhoto | undefined): string {
   return `  <img class="media" src="data:${photo.mimeType};base64,${photo.base64}" alt="">\n`;
 }
 
-/** The reference ingredients of one view, scaled by the view's Δx, as text. */
-function referenceLines(recipe: Recipe, deltaX: number): string[] {
+/** The reference ingredients of one view, scaled by the view's factor, as text. */
+function referenceLines(recipe: Recipe, factor: number): string[] {
   return recipe.ingredients
     .filter((ingredient) => ingredient.reference)
     .map((ingredient) =>
-      displayText(ingredient.name, scale(ingredient.quantity, deltaX), ingredient.unit),
+      displayText(
+        ingredient.name,
+        ingredient.quantity * factor,
+        ingredient.unit,
+        ingredientContext(ingredient, recipe),
+      ),
     );
 }
 
 /** The intro's small muted reference readout, or '' when there is none. */
 function renderReferenceReadout(
   recipe: Recipe,
-  deltaX: number,
+  factor: number,
   sizeKey: string,
   sizeValue: string,
 ): string {
-  const lines = referenceLines(recipe, deltaX);
+  const lines = referenceLines(recipe, factor);
   if (lines.length === 0) return '';
   return `  <p class="reference size-scoped" ${sizeKey}="${sizeValue}">${lines.join(', ')}</p>\n`;
 }
@@ -339,11 +380,12 @@ function renderReferenceReadout(
 /** One checkable master-ingredient row (checkbox, quantity, optional badge). */
 function renderCheckRow(
   ingredient: Ingredient,
-  bq: number,
+  value: number,
   links: Readonly<Record<string, string>>,
   id: string,
+  context: ToleranceContext,
 ): string {
-  const text = displayText(ingredient.name, bq, ingredient.unit);
+  const text = displayText(ingredient.name, value, ingredient.unit, context);
   const badge = subRecipeBadge(links[ingredient.name]);
   return (
     `  <li class="check-row">` +
@@ -358,7 +400,7 @@ function renderCheckRow(
  */
 function renderCheckList(
   recipe: Recipe,
-  deltaX: number,
+  factor: number,
   links: Readonly<Record<string, string>>,
   sizeKey: string,
   sizeValue: string,
@@ -368,7 +410,13 @@ function renderCheckList(
 ): string {
   const rows = recipe.ingredients
     .map((ingredient, i) =>
-      renderCheckRow(ingredient, scale(ingredient.quantity, deltaX), links, `c-${sizeToken}-${i}`),
+      renderCheckRow(
+        ingredient,
+        ingredient.quantity * factor,
+        links,
+        `c-${sizeToken}-${i}`,
+        ingredientContext(ingredient, recipe),
+      ),
     )
     .join('\n');
   const written = isWritten ? ' is-written' : '';
@@ -382,9 +430,10 @@ function renderCheckList(
 /** One step block: its bulleted ingredient rows followed by the prose. */
 function renderStep(
   step: Step,
-  deltaX: number,
+  factor: number,
   links: Readonly<Record<string, string>>,
   n: number,
+  recipe: Recipe,
 ): string {
   const rows =
     step.ingredients.length === 0
@@ -394,8 +443,9 @@ function renderStep(
           .map((ingredient) => {
             const text = displayText(
               ingredient.name,
-              scale(ingredient.quantity, deltaX),
+              ingredient.quantity * factor,
               ingredient.unit,
+              ingredientContext(ingredient, recipe),
             );
             const badge = subRecipeBadge(links[ingredient.name]);
             return `  <li><span class="step-ingredient">${text}</span>${badge}</li>`;
@@ -406,12 +456,13 @@ function renderStep(
   // surrounding text is HTML-escaped (renderArtifacts). An artifact that names
   // an ingredient recipe carries the „Rezept" badge after its display form.
   const text = renderArtifacts(step.text, (artifact: TextArtifact) => {
-    const bq =
-      artifact.unit === undefined
-        ? scaleAQ(artifact.quantity, deltaX)
-        : scale(artifact.quantity, deltaX);
     const badge = artifact.name !== undefined ? subRecipeBadge(links[artifact.name]) : '';
-    const text = displayText(artifact.name, bq, artifact.unit);
+    const text = displayText(
+      artifact.name,
+      artifact.quantity * factor,
+      artifact.unit,
+      artifactContext(artifact, recipe),
+    );
     // A narrow no-break space in front of the badge only: without it a screen
     // reader reads the badge and the ingredient as one word; without a badge the
     // mention stays a plain word in the sentence (§7).
@@ -428,19 +479,20 @@ function renderStep(
 /** The steps of one size, wrapped for the script's size toggling. */
 function renderStepWrap(
   recipe: Recipe,
-  deltaX: number,
+  factor: number,
   links: Readonly<Record<string, string>>,
   sizeKey: string,
   sizeValue: string,
 ): string {
-  const steps = recipe.steps.map((step, i) => renderStep(step, deltaX, links, i + 1)).join('\n');
+  const steps = recipe.steps
+    .map((step, i) => renderStep(step, factor, links, i + 1, recipe))
+    .join('\n');
   return `<div class="step-wrap size-scoped" ${sizeKey}="${sizeValue}">\n${steps}\n</div>`;
 }
 
 /** The serving picker for finished dishes (DESIGN §5.2). */
 function renderServingPicker(recipe: Recipe): string {
-  const buttons = integerLadderValues(SERVING_MIN, SERVING_MAX)
-    .map((servings) => {
+  const buttons = SERVING_COUNTS.map((servings) => {
       const active = servings === recipe.servings;
       // A chip is one value of an exclusive set, so it is a radio: the checked
       // chip is the only tab stop and arrow keys move the choice (§5.2, §8).
@@ -461,20 +513,24 @@ function isPowerOfTen(value: number): boolean {
 }
 
 /**
- * The yield picker of an ingredient recipe: the editor's own control language —
- * a row of suggested chips (powers of ten plus the written size) and a −/+
- * stepper that moves exactly one ladder rung per press. Every value belongs to
- * a baked view, so a tap only toggles visibility; no scaling runs at runtime.
+ * The yield picker of an ingredient recipe: a row of suggested chips (powers of
+ * ten plus the default view) and a −/+ stepper that moves one baked view per
+ * press. Every value belongs to a baked view, so a tap only toggles visibility;
+ * no scaling runs at runtime. The default view is the written yield when it is
+ * a BQ value, otherwise the nearest allowed BQ.
  */
-function renderYieldPicker(recipe: Recipe, quantities: readonly number[]): string {
+function renderYieldPicker(
+  recipe: Recipe,
+  quantities: readonly number[],
+  activeValue: number,
+): string {
   const unit = recipe.yield_unit!;
-  const written = recipe.yield!;
   const chipValues = quantities.filter((quantity) => isPowerOfTen(quantity));
-  if (!chipValues.includes(written)) chipValues.push(written);
+  if (!chipValues.includes(activeValue)) chipValues.push(activeValue);
   chipValues.sort((a, b) => a - b);
   const chips = chipValues
     .map((quantity) => {
-      const active = quantity === written;
+      const active = quantity === activeValue;
       // Radio semantics, as in the serving picker above (§5.2, §8).
       return (
         `<button type="button" role="radio" aria-checked="${active}" tabindex="${active ? '0' : '-1'}" class="chip yield-chip${active ? ' active' : ''}" data-yield="${formatLinkQuantity(quantity)}">` +
@@ -487,7 +543,7 @@ function renderYieldPicker(recipe: Recipe, quantities: readonly number[]): strin
     `  <div class="chips" role="radiogroup" aria-label="Menge wählen">\n    ${chips}\n  </div>\n` +
     `  <div class="yield-row">\n` +
     `    <button type="button" class="yield-step-button yield-step-down" aria-label="Menge um eine Stufe verringern">${STEP_DOWN_SVG}</button>\n` +
-    `    <span class="yield-value">${escapeHtml(formatBQ(written, unit))}</span>\n` +
+    `    <span class="yield-value">${escapeHtml(formatBQ(activeValue, unit))}</span>\n` +
     `    <button type="button" class="yield-step-button yield-step-up" aria-label="Menge um eine Stufe erhöhen">${STEP_UP_SVG}</button>\n` +
     `  </div>\n`
   );
@@ -500,25 +556,24 @@ function sizeViews(
 ): { picker: string; references: string; checkLists: string; stepWraps: string } {
   if (recipe.type === 'finished_dish') {
     const picker = renderServingPicker(recipe);
-    const servings = integerLadderValues(SERVING_MIN, SERVING_MAX);
     let references = '';
     let checkLists = '';
     let stepWraps = '';
-    servings.forEach((value, index) => {
-      const deltaX = difference(recipe.servings!, value);
+    SERVING_COUNTS.forEach((value, index) => {
+      const factor = value / recipe.servings!;
       const sizeValue = String(value);
-      references += renderReferenceReadout(recipe, deltaX, 'data-servings', sizeValue);
+      references += renderReferenceReadout(recipe, factor, 'data-servings', sizeValue);
       checkLists +=
         renderCheckList(
           recipe,
-          deltaX,
+          factor,
           links,
           'data-servings',
           sizeValue,
           `s${index}`,
           value === recipe.servings,
         ) + '\n';
-      stepWraps += renderStepWrap(recipe, deltaX, links, 'data-servings', sizeValue) + '\n';
+      stepWraps += renderStepWrap(recipe, factor, links, 'data-servings', sizeValue) + '\n';
     });
     return { picker, references, checkLists, stepWraps };
   }
@@ -529,32 +584,33 @@ function sizeViews(
     return {
       picker: '',
       references: '',
-      checkLists: renderCheckList(recipe, 0, links, 'data-yield', '', 'y0', true),
-      stepWraps: renderStepWrap(recipe, 0, links, 'data-yield', ''),
+      checkLists: renderCheckList(recipe, 1, links, 'data-yield', '', 'y0', true),
+      stepWraps: renderStepWrap(recipe, 1, links, 'data-yield', ''),
     };
   }
 
   const quantities = yieldViewQuantities(recipe.yield);
-  const picker = renderYieldPicker(recipe, quantities);
+  const defaultView = defaultYieldView(recipe.yield);
+  const picker = renderYieldPicker(recipe, quantities, defaultView);
   let references = '';
   let checkLists = '';
   let stepWraps = '';
   quantities.forEach((value, index) => {
-    const deltaX = difference(recipe.yield!, value);
+    const factor = value / recipe.yield!;
     const sizeValue = formatLinkQuantity(value);
-    references += renderReferenceReadout(recipe, deltaX, 'data-yield', sizeValue);
+    references += renderReferenceReadout(recipe, factor, 'data-yield', sizeValue);
     checkLists +=
       renderCheckList(
         recipe,
-        deltaX,
+        factor,
         links,
         'data-yield',
         sizeValue,
         `y${index}`,
-        value === recipe.yield,
+        value === defaultView,
         formatBQ(value, recipe.yield_unit!),
       ) + '\n';
-    stepWraps += renderStepWrap(recipe, deltaX, links, 'data-yield', sizeValue) + '\n';
+    stepWraps += renderStepWrap(recipe, factor, links, 'data-yield', sizeValue) + '\n';
   });
   return { picker, references, checkLists, stepWraps };
 }

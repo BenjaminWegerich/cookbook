@@ -36,24 +36,28 @@
 
 ### Core logic module (framework-free TypeScript)
 
-- Quantity-scaling logic on the ladder of standard numbers
-  (see [quantity_scaling.md](quantity_scaling.md)); the ladder master data in
-  [standard_numbers.csv](standard_numbers.csv) is the single source of truth and
-  is compiled into a generated TypeScript module
-  (`packages/core/src/ladderData.ts`) via `npm run generate:ladder`
-  (packages/core/scripts/generate-ladder.mjs).
-- Additional-unit selection and display logic
-  (see [additional_quantity_specifications.md](additional_quantity_specifications.md)); the
-  master data (number schemes, additional units, ingredient list, ingredient mappings) lives in
-  `docs/number_schemes.csv`, `docs/additional_units.csv`, `docs/ingredients.csv` and
-  `docs/ingredient_unit_mappings.csv`, is validated against the ladder's AQ column and
-  compiled into a generated TypeScript module (`packages/core/src/additionalUnitsData.ts`)
-  via `npm run generate:additional` (packages/core/scripts/generate-additional-data.mjs).
-- The AQ ladder (the standard numbers for additional quantities and for unitless
-  inline counts, the distinct fractions 1/10 … 1000) in
-  `packages/core/src/aqLadder.ts`, derived from the generated ladder data. It
-  backs the §6.1 rounding, the fraction typography and the scaling of unitless
-  counts.
+- The quantity optimizer and its master data (see
+  [quantity_scaling.md](quantity_scaling.md),
+  [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md)): the allowed
+  base quantities live in `docs/BQs.csv`, the allowed additional quantities and
+  their number-scheme columns in `docs/AQs.csv`. Both are compiled into
+  `packages/core/src/quantityData.ts` via `npm run generate:quantity`
+  (`scripts/generate-quantity-data.mjs`). `quantityValues.ts` implements the
+  decade rule, membership and formatting; `quantityOptimizer.ts` implements the
+  three scoring branches, the scheme gate, the tie-break and the fallback.
+  `tolerance.ts` resolves the λ cascade and interpolates the weights;
+  `servingSizes.ts` holds the allowed serving counts.
+- Additional-unit display logic (see
+  [additional_quantity_specifications.md](additional_quantity_specifications.md)):
+  `docs/additional_units.csv` (arrangement, scheme, exactness, shopping flag,
+  display forms), `docs/ingredients.csv` (base unit, optional tolerance, reorder
+  point, display forms) and `docs/ingredient_unit_mappings.csv` (factor only; no
+  priority) are compiled into `packages/core/src/additionalUnitsData.ts` via
+  `npm run generate:additional` (`scripts/generate-additional-data.mjs`).
+- The legacy AQ bridge (`packages/core/src/aqLadder.ts`) is still used by the
+  shopping/pantry code; the recipe display uses the optimizer directly. The old
+  ladder modules (`ladder.ts`, `ladderData.ts`, `standard_numbers.csv`) remain
+  only for the shopping migration.
 - Shopping master data (see [storage_format.md](storage_format.md) §10 and
   [shopping_item_identity.md](shopping_item_identity.md)): the three CSV codecs and their
   serializers (`packages/core/src/shoppingRouteCsv.ts`), the runtime registry holding the
@@ -130,9 +134,10 @@
 
 - Self-contained HTML file with the recipe and pre-computed display values for every allowed
   size; no logic and no master data embedded, so no scaling runs at runtime.
-  - a finished dish bakes the integer ladder serving counts 1–30;
-  - an ingredient recipe bakes the ladder yields within ±2 decades of its written yield
-    (`packages/core/src/recipe/yieldViews.ts`), the same range the meal plan accepts.
+  - a finished dish bakes the allowed serving counts (servingSizes.ts);
+  - an ingredient recipe bakes the allowed BQ values within ±1 decade of its written yield
+    (`packages/core/src/recipe/yieldViews.ts`), the same range the meal plan accepts. The
+    written yield itself may be any positive number; only BQ values are baked.
 - The theme typeface (weights 400 and 600, latin subset) is embedded as a `data:` WOFF2, so the
   file needs no font fetch or sibling asset (`packages/core/src/recipe/embeddedFonts.ts`, generated
   by `scripts/generate-embedded-fonts.mjs`). A `Noto Serif Display` theme embeds both faces: the
@@ -269,9 +274,9 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   compete with the floating action button.
 - **Recognition.** An entry is a recipe when its text — without a trailing export link and
   without an optional ` (6 Portionen)`, ` (500 g)` or ` (1,5 l)` suffix — is the exact,
-  case-sensitive title of a recipe file, and a stated size fits the recipe: an integer ladder
-  value 1–30 on a finished dish, a ladder value in the recipe's own family unit on an ingredient
-  recipe, and one the recipe's export really bakes. The logic is framework-free and unit-tested
+  case-sensitive title of a recipe file, and a stated size fits the recipe: an allowed
+  serving count on a finished dish, and one of the baked BQ views in the recipe's own
+  family unit on an ingredient recipe. The logic is framework-free and unit-tested
   in `packages/core/src/mealPlan.ts`. Only entries that state a size need a recipe file read, and
   the Drive content cache makes repeated entries free. A trailing parenthetical that is not a
   size stays in the title candidate, so a recipe whose name carries it is still found; for an

@@ -32,11 +32,13 @@
  */
 
 import { aqNotation, isAQValue } from '../aqLadder.js';
+import { formatStoredNumber } from '../quantityValues.js';
+import { isTolerance } from '../tolerance.js';
 import type { Ingredient, Unit } from './types.js';
 
 /** One parsed inline artifact (ingredient or quantity-only mention). */
 export interface TextArtifact {
-  /** Base quantity; a standard number (ladder value). */
+  /** Unrounded target amount; any positive finite number. */
   quantity: number;
   /**
    * Stored base unit (g or ml after normalization). Only quantity-only
@@ -46,6 +48,13 @@ export interface TextArtifact {
   unit?: Unit;
   /** Ingredient name; absent = quantity-only artifact (`{{100 g}}`). */
   name?: string;
+  /**
+   * Optional per-artifact tolerance in [0, 1] (the quantity level of the
+   * cascade). Stored as a trailing `|t=0.8` inside the braces, e.g.
+   * `{{1/2|t=0.8}}`. Absent = inherit the recipe / global default; there is no
+   * ingredient level for a unitless count.
+   */
+  tolerance?: number;
 }
 
 /** A validated artifact with its character span inside the step text. */
@@ -140,6 +149,24 @@ export function parseIngredientPhrase(
 }
 
 /**
+ * Parses one `{{ … }}` content into an artifact, including the optional
+ * trailing `|t=0.8` tolerance suffix. Returns null when the phrase is invalid
+ * or the tolerance is outside [0, 1]; the caller reports it as a malformed
+ * artifact.
+ */
+export function parseArtifactContent(content: string): TextArtifact | null {
+  const toleranceMatch = /\|t=([0-9]*[.,]?[0-9]+)\s*$/.exec(content);
+  const phrase =
+    toleranceMatch === null ? content : content.slice(0, toleranceMatch.index).trimEnd();
+  const parsed = parseIngredientPhrase(phrase);
+  if (parsed === null) return null;
+  if (toleranceMatch === null) return parsed;
+  const tolerance = Number(toleranceMatch[1]!.replace(',', '.'));
+  if (!isTolerance(tolerance)) return null;
+  return { ...parsed, tolerance };
+}
+
+/**
  * Returns the canonical stored text of an artifact (§4).
  *
  * A unitless quantity-only artifact stores its amount in the canonical AQ
@@ -155,9 +182,13 @@ export function artifactToText(artifact: TextArtifact): string {
     artifact.unit === undefined
       ? isAQValue(artifact.quantity)
         ? aqNotation(artifact.quantity)
-        : `${artifact.quantity}`
-      : `${artifact.quantity} ${artifact.unit}`;
-  return artifact.name === undefined ? `{{${base}}}` : `{{${base} ${artifact.name}}}`;
+        : formatStoredNumber(artifact.quantity)
+      : `${formatStoredNumber(artifact.quantity)} ${artifact.unit}`;
+  const tolerance =
+    artifact.tolerance === undefined ? '' : `|t=${formatStoredNumber(artifact.tolerance)}`;
+  return artifact.name === undefined
+    ? `{{${base}${tolerance}}}`
+    : `{{${base} ${artifact.name}${tolerance}}}`;
 }
 
 /**
@@ -177,7 +208,7 @@ export function splitArtifacts(text: string): { segments: TextSegment[]; spans: 
       segments.push({ type: 'text', value: text.slice(lastIndex, index) });
     }
     const content = match[1] ?? '';
-    const artifact = parseIngredientPhrase(content);
+    const artifact = parseArtifactContent(content);
     if (artifact !== null) {
       const start = index;
       const end = index + match[0].length;

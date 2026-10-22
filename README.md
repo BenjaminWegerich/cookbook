@@ -5,8 +5,10 @@ quantity scaling, multi-unit support, optimization for smartphones, laptops
 and smart displays, and integration with Google Keep and Gemini for Home.
 
 > **Status:** v1 foundation in place. The web app (Vite + React + TypeScript) runs on
-> GitHub Pages and is connected to Google Drive via OAuth. Core functionality (scaling,
-> additional units, recipe storage) is implemented in the upcoming roadmap tasks.
+> GitHub Pages and is connected to Google Drive via OAuth. The quantity optimizer, tolerance
+> model, additional-unit display, recipe storage and HTML export are implemented. The
+> shopping list and pantry still use the legacy ladder internally; their migration is the
+> next roadmap task.
 
 ## Features
 
@@ -23,14 +25,20 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
 - Fixed additional units per ingredient (e.g., tbsp, pack, piece) with conversion to g / ml.
 - Accuracy improvements through measured values (e.g., how many grams of peel does a lemon have?).
 - Automatic selection of the fitting unit in recipes depending on quantity
-  (e.g., 50 g yogurt → 2 tbsp; 400 g yogurt → 1 cup), shown in addition to the
-  base unit (g / kg / ml / l).
+  (e.g., 250 g yogurt → ½ cup; 500 g yogurt → 1 cup), shown in addition to the
+  base unit (g / kg / ml / l). The optimizer scores every compatible unit; there
+  are no per-ingredient priorities.
 
-### 3. User-defined quantity scaling
+### 3. User-defined quantity scaling and tolerance
 
-- Scaling logic that rounds mathematically exact values to round numbers or whole packs.
-- Deterministically implemented (via preferred-number tables), not AI-based.
-- Example: 5 tbsp oil for 4 people → a practical 6 tbsp for 5 people, instead of the mathematical 6.25.
+- Recipes store the unrounded target amount; scaling uses the exact factor between the
+  written and requested size. Nothing is snapped to a ladder rung.
+- The deterministic optimizer chooses the displayed BQ/AQ from the allowed tables
+  ([BQs.csv](docs/BQs.csv), [AQs.csv](docs/AQs.csv)) and the unit's number scheme.
+- A five-chip tolerance setting (0 / 0.25 / 0.5 / 0.75 / 1) balances exact metric amounts
+  against practical household/package measures. It never changes the target amount.
+- Example: a recipe written for 4 people with 500 g yogurt, scaled to 6 people, has a
+  750 g target and may display as `1 ½ Becher (750 g)`; the metric target stays 750 g.
 
 ### 4. Layout & design
 
@@ -45,7 +53,8 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
 ### 6. Smart shopping list in Google Keep
 
 - Automatic transfer of a recipe's ingredients to the shopping list.
-- Scaling happens first (quantity for x people).
+- Scaling happens first (quantity for x people). The shopping/pantry code still uses the
+  old ladder internally and is scheduled for its own migration to the new quantity model.
 - Bundled writing from the home screen's "Einkaufsliste" caption row: the button
   "Einkaufsliste schreiben" beside that caption turns the meal plan into a selection
   view. All dishes selected there are added to the shopping list in one write, so an
@@ -72,9 +81,9 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
 
 ## Getting Started
 
-This repository forms the basis of the cookbook project. The concrete technical setup
-(programming language, frameworks, interfaces) has not been decided yet — see
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the planned components and
+The setup is decided: a Vite + React + TypeScript web app, a framework-free core
+module, Google Drive for the collection, and a small Python gateway for Google Keep.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the components and
 [docs/ROADMAP.md](docs/ROADMAP.md) for the open tasks.
 
 ## Example recipes
@@ -93,6 +102,7 @@ folder always stays in a loadable state.
 - [docs/CODING_CONVENTIONS.md](docs/CODING_CONVENTIONS.md) — binding style guidelines
 - [docs/ROADMAP.md](docs/ROADMAP.md) — open tasks and how they relate
 - [docs/storage_format.md](docs/storage_format.md) — canonical recipe file format (Markdown + YAML)
-- [docs/quantity_scaling.md](docs/quantity_scaling.md) — how quantities change when a recipe is scaled (ladder logic)
+- [docs/quantity_scaling.md](docs/quantity_scaling.md) — scaling, the BQ/AQ optimizer, tolerance and yield views
 - [docs/additional_quantity_specifications.md](docs/additional_quantity_specifications.md) — how quantities are displayed (base + additional units)
+- [recipe_scaling_algorithm.md](recipe_scaling_algorithm.md) — the scoring model behind the optimizer
 - [docs/ui_patterns.md](docs/ui_patterns.md) — reusable UI patterns (the snackbar)

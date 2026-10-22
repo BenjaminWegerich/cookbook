@@ -17,10 +17,11 @@ Zweier-Einrückung, Felder in dieser Reihenfolge:
 ---
 title: Hähnchen-Curry
 type: finished_dish
-description: …            (optional, ein Absatz)
+description: …            (optional, ein Absatz oder eine Titel-Fortsetzung)
 servings: 4               (nur finished_dish)
 reference:                (optional, beide Typen)
   - Reis
+tolerance: 0.5            (optional, beide Typen — s. Toleranz)
 prep_time: 30 min
 total_time: 45 min        (optional, nur wenn größer als prep_time)
 theme:                    (optional, beide Typen — s. u.)
@@ -33,9 +34,12 @@ theme:                    (optional, beide Typen — s. u.)
   keines dieser Zeichen `/ \ : * ? " < > |`, keine Steuerzeichen, keine reservierten
   Windows-Namen (`con`, `prn`, `aux`, `nul`, `com1`–`com9`, `lpt1`–`lpt9`).
 - `type` (Pflicht): `finished_dish` oder `ingredient_recipe`.
-  - `finished_dish`: komplettes Gericht mit `servings` (ganze Leiterzahl, s. Mengen).
+  - `finished_dish`: komplettes Gericht mit `servings` (erlaubte Portionszahl, s. Mengen).
   - `ingredient_recipe`: wiederverwendbare Basis (Soße, Teig, Fond, Gewürzmischung …) mit
-    `yield` (Leiterzahl) und `yield_unit` (`g`/`ml`) statt `servings`; niemals `servings`.
+    `yield` (positive Zahl) und `yield_unit` (`g`/`ml`) statt `servings`; niemals `servings`.
+- `description` (optional): ein Absatz, der das Gericht beschreibt und ggf. passende Beilagen
+  oder andere Verwendungen nennt; er darf den Titel fortsetzen statt ein eigenständiger Satz
+  zu sein (z. B. „Bauernfrühstück / mit Kartoffeln, Karotten und Tofu").
 - `reference` (optional): Namen, die die Portion (Gericht) bzw. die Ergiebigkeit (Basis)
   verankern; jeder Name muss in den zusammengeführten Zutaten vorkommen.
 - `theme` (optional, beide Typen): die visuelle Gestaltung des HTML-Exports — Schriftart und
@@ -77,19 +81,35 @@ Schritte — sonst nichts:
 - Natürliche, konkrete deutsche Anweisungen.
 
 ## Mengen
-- Jede gespeicherte Menge (`servings`, `yield`, jede Zeilenmenge) ist eine **Leiterzahl**:
-  Basis `0,1 … 1000`, erweitert um ganze Zehnerpotenzen. Gültig z. B. `0,5`, `1`, `4`, `15`,
-  `250`, `400`, `1500`, `2500`; ungültig `0,45`, `11`, `1150`, `160`, `75` — ein Wert
-  außerhalb der Leiter ist ein Fehler.
-- `servings` zusätzlich ganze Zahl (`4`, nicht `4,5`).
+- Jede gespeicherte Menge ist ein **unrunder Zielwert**: jede positive endliche Zahl ist
+  erlaubt (`250`, `400`, `433.33`, `0.5`). Es gibt keine Leiter und keine Liste erlaubter
+  Zahlen mehr; die App wählt für die Anzeige später nur eine praktische Darstellung.
+- `servings` ist die Ausnahme: eine der erlaubten Portionszahlen
+  `1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 22, 25, 28, 30` (keine anderen Zahlen).
+- `yield` ist eine positive Zahl ohne weitere Beschränkung.
 - Nur `g`/`ml`, Dezimalpunkt: `500 g`, `15 ml`, `1.5 g`. Kein `kg`/`l`, kein Komma —
   deine Ausgabe ist bereits kanonisch.
-- Jede Zeile und jede `{{…}}`-Angabe braucht eine positive Leiterzahl: mit Einheit die
-  BQ-Leiter (1 … 10000 g/ml), ohne Einheit (Stückzahl) die AQ-Leiter (Brüche `1/10 … 1000`,
-  kanonisch `{{1/2}}`, `{{1+1/4}}`, `{{3}}`). Mengen im üblichen Rahmen.
+- Jede Zeile und jede `{{…}}`-Angabe braucht eine positive Zahl; mit Einheit in g/ml, ohne
+  Einheit eine Stückzahl (`{{1/2}}`, `{{1+1/4}}` oder `{{0.5}}`). Mengen im üblichen Rahmen.
+
+## Toleranz
+- `tolerance` (optional, 0 … 1) ist eine **Darstellungspräferenz**, kein Skalierungsfaktor:
+  Sie entscheidet nur, ob die App eher exakte Metermengen (0) oder praktische Haushaltsmaße
+  (1) zeigt. `tolerance: 1` bedeutet **nicht**, dass Mengen halbiert oder verdoppelt werden
+  dürfen; der Zielwert bleibt unverändert.
+- Lass `tolerance` im Zweifel **weg** (dann gilt der Standard 0.5). Setze sie auf Rezeptebene
+  nur, wenn das ganze Rezept erkennbar eine Richtung hat (z. B. ein sehr präzises Backrezept
+  → 0.25; ein lockeres Alltagsgericht → 0.75).
+- Setze sie **nicht** für jede Zutat und nicht für jede Zeile. Eine Zeilen-Toleranz ist die
+  Ausnahme für eine einzelne Menge, die bewusst anders behandelt werden soll:
+  `- 250 g Mehl {tolerance: 0.8}`. Rezept- und besonders Zeilen-Toleranzen sparsam einsetzen;
+  die Zutaten-Stammdaten können bereits passende Toleranzen enthalten, die du nicht wiederholst.
+- Die App berechnet BQ/AQ (Anzeigewerte) selbst. Schreibe **nie** eine zusätzliche Einheit
+  oder einen Anzeigewert in die Zeile; schreibe nur den Zielwert.
 
 ## Zutatenzeilen
 - Grammatik (Menge zuerst): `- 250 g Reis` = `MENGE EINHEIT NAME`. Name ohne `|`, einzeilig.
+  Optional darf am Zeilenende eine Toleranz stehen: `- 250 g Reis {tolerance: 0.8}`.
 - Inline-`{{…}}` in der Schritt-Prosa für skalierte Anzeigewerte, die nicht in die
   Zutatenliste zählen: `{{1500 ml Wasser}}`, `{{100 g}}`, `{{1/2}}` (Stückzahl). Sparsam für
   Wasser/Salz/Stückzahlen; ein Name braucht immer eine Einheit.
@@ -101,6 +121,8 @@ Schritte — sonst nichts:
   exakt und case-sensitiv übernehmen, nicht umbenennen oder abkürzen.
 - `reference` nennt die verankernden Zutaten (Portion bzw. Ergiebigkeit); jede muss in den
   Zeilen vorkommen.
+- Prioritäten oder zusätzliche Einheiten an der Zeile gibt es nicht; die App wählt die
+  Anzeige-Einheit selbst aus den Stammdaten.
 
 ## Sammlung
 - `title` muss in der Sammlung eindeutig sein.

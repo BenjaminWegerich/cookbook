@@ -4,14 +4,15 @@
  * The user's authoritative ingredient master data lives in two CSV files
  * inside the `Stammdaten` subfolder of the Cookbook folder:
  * - `zutaten.csv` — the ingredient list: one row per ingredient
- *   (`Ingredient;Singular;Plural;Base Unit;Reorder Point`), where the two cells
- *   after the name are the optional display forms for a count („1 Karotte“ /
- *   „2 Karotten“; empty for an invariant name); ingredient-level fields can be
- *   added as further columns later without touching the mapping file;
+ *   (`Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point`), where the
+ *   two cells after the name are the optional display forms for a count
+ *   („1 Karotte“ / „2 Karotten“; empty for an invariant name) and the
+ *   `Tolerance` cell is the optional ingredient-level fallback;
  * - `zutaten-umrechnungen.csv` — the AU mappings: one row per
  *   ingredient–additional-unit mapping (`Ingredient;Additional Unit;
- *   Conversion Factor;Priority`); an ingredient without additional units
- *   simply has no rows here.
+ *   Conversion Factor`); an ingredient without additional units simply has no
+ *   rows here. Per-ingredient priorities are gone; at most one mapping may
+ *   reference a unit flagged as a shopping unit.
  *
  * The formats mirror the repo seeds (docs/ingredients.csv +
  * docs/ingredient_unit_mappings.csv, see ingredientCsv.ts). At startup the app
@@ -206,10 +207,10 @@ async function writeMasterDataFiles(
  *   a shopping trip: 0 (only ever bought for a recipe), a positive value (an
  *   exact unit's amount when one applies — the create sheet resolves it, see
  *   core resolveReorderPoint), or Infinity (always in stock)
- * @param entries the additional units with their g/ml factors and unique
- *   positive-integer priorities (may be empty — an ingredient without
- *   additional units is valid master data); the entries are stored sorted by
- *   ascending priority (registry invariant, see additionalUnitsData.ts)
+ * @param entries the additional units with their g/ml factors (may be empty —
+ *   an ingredient without additional units is valid master data)
+ * @param tolerance the optional ingredient-level tolerance in [0, 1], or
+ *   undefined to inherit the recipe / global default
  * @param folder the folder snapshot of the caller's save, or omitted to resolve
  *   the folder here (the new-ingredient flow passes the snapshot it shares with
  *   the shopping assignment, so the folder is listed once per save)
@@ -219,7 +220,8 @@ export async function appendIngredientMasterData(
   name: string,
   bu: string,
   reorderPoint: number,
-  entries: ReadonlyArray<{ au: string; factor: number; priority: number }>,
+  entries: ReadonlyArray<{ au: string; factor: number }>,
+  tolerance: number | undefined,
   folder?: CookbookFolder,
 ): Promise<void> {
   const resolved = folder ?? (await listCookbookFolder(token));
@@ -235,9 +237,11 @@ export async function appendIngredientMasterData(
     throw new Error(`Die Zutat „${name}“ existiert bereits in der Stammdatenliste.`);
   }
 
-  // Sorted ascending by priority so the registry shape keeps its invariant
-  // (the entries are tried in this order, §7 of the AQS spec).
-  const sorted = [...entries].sort((a, b) => a.priority - b.priority);
+  if (tolerance !== undefined) {
+    if (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 1) {
+      throw new Error('Zutaten-Stammdaten: Die Toleranz muss eine Zahl zwischen 0 und 1 sein.');
+    }
+  }
   const extended: IngredientMappings = {
     ...current,
     [name]: {
@@ -245,11 +249,8 @@ export async function appendIngredientMasterData(
       // Resolved by the create sheet: 0, a positive base quantity (snapped to
       // an exact unit's amount when one applies), or Infinity.
       reorderPoint,
-      entries: sorted.map((entry) => ({
-        au: entry.au,
-        factor: entry.factor,
-        priority: entry.priority,
-      })),
+      ...(tolerance !== undefined ? { tolerance } : {}),
+      entries: entries.map((entry) => ({ au: entry.au, factor: entry.factor })),
     },
   };
   // The pair lives in `Stammdaten`; the folder is created when the pair is
@@ -274,8 +275,10 @@ export interface IngredientMasterEntryInput {
   plural: string | null;
   /** Base-unit quantity on stock after a shopping trip: 0, a positive value, or Infinity. */
   reorderPoint: number;
-  /** The AU mappings; the write stores them sorted by ascending priority. */
-  entries: ReadonlyArray<{ au: string; factor: number; priority: number }>;
+  /** The AU mappings (no per-ingredient priority anymore). */
+  entries: ReadonlyArray<{ au: string; factor: number }>;
+  /** Ingredient-level tolerance in [0, 1], or undefined to inherit. */
+  tolerance?: number | undefined;
 }
 
 /** The state an edit replaced, so the caller can offer an undo. */
@@ -333,23 +336,18 @@ export async function updateIngredientMasterData(
   if (Number.isNaN(update.reorderPoint) || update.reorderPoint < 0) {
     throw new Error('Zutaten-Stammdaten: Der Vorrat muss eine Zahl ≥ 0 oder unendlich sein.');
   }
-  // The registry and the CSV parser both require unique positive-integer
-  // priorities. Checking here turns a programming mistake into a clear message
-  // instead of a parse failure after the files were serialized.
-  const priorities = new Set<number>();
+  // Factors must be positive; the one-shopping-unit rule is checked by the
+  // CSV parser when the pair is serialized (before anything reaches Drive).
   for (const entry of update.entries) {
     if (!Number.isFinite(entry.factor) || entry.factor <= 0) {
       throw new Error(`Zutaten-Stammdaten: ungültiger Faktor für „${name}“ → „${entry.au}“.`);
     }
-    if (!Number.isInteger(entry.priority) || entry.priority <= 0) {
-      throw new Error(`Zutaten-Stammdaten: ungültige Priorität für „${name}“ → „${entry.au}“.`);
-    }
-    if (priorities.has(entry.priority)) {
-      throw new Error(
-        `Zutaten-Stammdaten: doppelte Priorität ${entry.priority} für „${name}“ — jede Umrechnung braucht eine eindeutige Priorität.`,
-      );
-    }
-    priorities.add(entry.priority);
+  }
+  if (
+    update.tolerance !== undefined &&
+    (!Number.isFinite(update.tolerance) || update.tolerance < 0 || update.tolerance > 1)
+  ) {
+    throw new Error('Zutaten-Stammdaten: Die Toleranz muss eine Zahl zwischen 0 und 1 sein.');
   }
 
   const folder = await listCookbookFolder(token);
@@ -360,17 +358,15 @@ export async function updateIngredientMasterData(
     throw new Error(`Die Zutat „${name}“ steht nicht in den Stammdaten.`);
   }
 
-  // The registry invariant is ascending priority; the form already validates
-  // uniqueness, so this only restores the order after the grid was edited.
-  const sorted = [...update.entries].sort((a, b) => a.priority - b.priority);
   const nextEntry: IngredientEntry = {
     bu: previous.bu,
     reorderPoint: update.reorderPoint,
+    ...(update.tolerance !== undefined ? { tolerance: update.tolerance } : {}),
     // Both forms or neither: an invariant name must not carry empty strings.
     ...(update.singular !== null && update.plural !== null
       ? { singular: update.singular, plural: update.plural }
       : {}),
-    entries: sorted,
+    entries: update.entries,
   };
   const next: IngredientMappings = { ...current, [name]: nextEntry };
   const dataFolderId = await ensureCookbookArea(token, 'data', folder);

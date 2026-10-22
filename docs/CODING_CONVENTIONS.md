@@ -225,7 +225,7 @@
     press feedback (the shared `:active` rule is scoped with `:not(:disabled)`). The rule lives
     once in `index.css`; component stylesheets never define their own `:disabled` styling.
   - **Disabling is only allowed when the cause is visible next to the button:** a control at its
-    boundary (the first step cannot move up, the quantity sits at the end of its ladder) or an
+    boundary (the first step cannot move up, the quantity is at its mode's minimum) or an
     input in the same card that is still empty (the API-key field). The label stays unchanged —
     the muted look alone carries the message.
   - **A cause that is not local never disables.** When the reason lies elsewhere on the screen

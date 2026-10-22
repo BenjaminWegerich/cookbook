@@ -3,13 +3,12 @@
  *
  * Hosts all deterministic cookbook logic, independent of React and the DOM
  * (see docs/ARCHITECTURE.md):
- * - quantity scaling on the ladder of standard numbers — implemented
- *   (docs/quantity_scaling.md, src/ladder.ts)
- * - additional-unit selection and display — implemented
- *   (docs/additional_quantity_specifications.md, src/additionalUnits.ts;
- *   master data in docs/*.csv, compiled by scripts/generate-additional-data.mjs)
- * - the AQ ladder — the standard numbers for additional quantities and for
- *   unitless inline counts — implemented (src/aqLadder.ts)
+ * - the quantity optimizer and its BQ/AQ master tables — implemented
+ *   (docs/recipe_scaling_algorithm.md, src/quantityOptimizer.ts,
+ *   src/quantityValues.ts, src/quantityData.ts)
+ * - additional-unit display — implemented (docs/additional_quantity_specifications.md,
+ *   src/additionalUnits.ts; master data in docs/*.csv, compiled by
+ *   scripts/generate-additional-data.mjs)
  * - ingredient and shopping master data parsing — implemented
  *   (docs/storage_format.md §9/§10, src/ingredientCsv.ts +
  *   src/shoppingRouteCsv.ts: route, item table and synonym table)
@@ -29,6 +28,10 @@
 export * from './additionalUnits.js';
 export * from './additionalUnitsData.js';
 export * from './aqLadder.js';
+export * from './quantityValues.js';
+export * from './quantityOptimizer.js';
+export * from './servingSizes.js';
+export * from './tolerance.js';
 export * from './ingredientCsv.js';
 export * from './ingredientRegistry.js';
 export * from './ladder.js';

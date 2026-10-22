@@ -24,11 +24,10 @@
  *   same name autofill (tagged "Zutaten-Rezept"), the quantity family comes
  *   from the sub-recipe's yield unit, and picking a title makes the row/
  *   artifact a sub-recipe use implicitly (there is no link field);
- * - the quantity is picked with the QuantityPicker: the BQ stepper (full pool
- *   1 … 10000) for a g/ml value, the AQ stepper (fractions, 0.1 … 1000) for a
- *   unitless count; quantity-only inline mentions may be Gewicht / Volumen /
- *   ohne Einheit, and the sheet normalizes the value to the chosen mode's
- *   ladder (see pickerQuantity);
+ * - the quantity is entered freely (recipes store the unrounded target): the
+ *   field accepts any positive number, with suggestion chips and an adaptive
+ *   +/− step; quantity-only inline mentions may be Gewicht / Volumen / ohne
+ *   Einheit;
  * - the live preview shows the full display form ("1 Becher Joghurt (400 g)",
  *   "1,5 l Wasser", "½") via core renderAQS/formatBQ/formatAQValue;
  * - the reference role is set on the *master list* only — this sheet never
@@ -42,19 +41,19 @@ import { useMemo, useState } from 'react';
 import {
   formatAQValue,
   formatBQ,
+  formatDecimal,
   masterIngredientNames,
   mappingsFor,
-  nearestAQValue,
+  optimizeUnitless,
   renderAQS,
-  roundToRung,
   type Ingredient,
   type TextArtifact,
+  type ToleranceContext,
   type Unit,
 } from '@cookbook/core';
 
-import QuantityPicker from './QuantityPicker';
+import QuantityInput, { type QuantityFamily } from './QuantityInput';
 import { LinkIcon, PlusIcon, TrashIcon } from './icons';
-import type { QuantityFamily } from './quantityChips';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /** One ingredient recipe of the collection, as the sheet needs it for the
@@ -95,6 +94,8 @@ interface IngredientSheetProps {
   prefill?: { name: string; quantity: number };
   /** The collection's ingredient recipes, offered in the name autofill. */
   ingredientRecipes: IngredientRecipeOption[];
+  /** The recipe-level tolerance, for the live preview. */
+  tolerance?: ToleranceContext;
   /**
    * Called with the resulting value; `action 'remove'` only in row-edit mode.
    * In inline modes the name and/or the unit may be absent; inline-edit
@@ -116,6 +117,7 @@ function IngredientSheet({
   initial,
   prefill,
   ingredientRecipes,
+  tolerance,
   onConfirm,
   onClose,
   onCreateNewIngredient,
@@ -184,15 +186,14 @@ function IngredientSheet({
   const unit: Unit | undefined = family ?? (trimmedName === '' ? undefined : initial?.unit);
 
   /**
-   * The quantity handed to the picker, the preview and the save: always a
-   * standard number of the current mode. A unitless inline count uses the AQ
-   * ladder (fractions, 0.1 … 1000), a g/ml value uses the BQ ladder. Switching
-   * the mode (or typing a name, which transiently changes the family) can
-   * leave the stored state on the other ladder, so the value is normalized on
-   * the fly instead of being mutated — the stored state survives a transient
-   * name edit untouched.
+   * The unitless preview uses the same “BQ only” optimizer branch as the
+   * export, with the recipe / artifact tolerance. A value without a fitting AQ
+   * candidate stays a plain decimal.
    */
-  const pickerQuantity = family === null ? nearestAQValue(quantity) : roundToRung(quantity);
+  const unitlessPreview = (): string => {
+    const result = optimizeUnitless(quantity, { recipe: tolerance?.recipe });
+    return result.notation === undefined ? formatDecimal(result.value) : formatAQValue(result.value);
+  };
 
   /**
    * Suggestions: master-data ingredient names plus ingredient-recipe titles
@@ -254,10 +255,10 @@ function IngredientSheet({
     }
     const value: SheetResult =
       trimmedName !== ''
-        ? { name: trimmedName, quantity: pickerQuantity, unit: unit ?? 'g' }
+        ? { name: trimmedName, quantity: quantity, unit: unit ?? 'g' }
         : unit !== undefined
-          ? { quantity: pickerQuantity, unit }
-          : { quantity: pickerQuantity };
+          ? { quantity: quantity, unit }
+          : { quantity: quantity };
     onConfirm(value, mode === 'row-edit' || mode === 'inline-edit' ? 'update' : 'add');
   };
 
@@ -357,7 +358,7 @@ function IngredientSheet({
             <button
               type="button"
               className="add-button"
-              onClick={() => onCreateNewIngredient(trimmedName, pickerQuantity)}
+              onClick={() => onCreateNewIngredient(trimmedName, quantity)}
             >
               <PlusIcon className="button-icon" optical={20} />
               <span>Neue Zutat anlegen</span>
@@ -407,7 +408,7 @@ function IngredientSheet({
 
         <div className="field">
           <span className="field-label">Menge</span>
-          <QuantityPicker value={pickerQuantity} onChange={setQuantity} family={family} />
+          <QuantityInput value={quantity} onChange={setQuantity} family={family} />
         </div>
 
         <div className="field">
@@ -415,10 +416,10 @@ function IngredientSheet({
           {/* Live preview of the display form (§2). */}
           <p className="aqs-preview" aria-live="polite">
             {trimmedName !== '' && validName
-              ? renderAQS(trimmedName, pickerQuantity, unit ?? 'g')
+              ? renderAQS(trimmedName, quantity, unit ?? 'g', tolerance)
               : unit !== undefined
-                ? formatBQ(pickerQuantity, unit)
-                : formatAQValue(pickerQuantity)}
+                ? formatBQ(quantity, unit)
+                : unitlessPreview()}
           </p>
         </div>
 
