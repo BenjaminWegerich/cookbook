@@ -54,10 +54,12 @@
   point, display forms) and `docs/ingredient_unit_mappings.csv` (factor only; no
   priority) are compiled into `packages/core/src/additionalUnitsData.ts` via
   `npm run generate:additional` (`scripts/generate-additional-data.mjs`).
-- The legacy AQ bridge (`packages/core/src/aqLadder.ts`) is still used by the
-  shopping/pantry code; the recipe display uses the optimizer directly. The old
-  ladder modules (`ladder.ts`, `ladderData.ts`, `standard_numbers.csv`) remain
-  only for the shopping migration.
+- The legacy AQ bridge (`packages/core/src/aqLadder.ts`) still backs the
+  nearest-AQ display helpers in `additionalUnits.ts`; the recipe and shopping
+  code use the optimizer and BQ/AQ tables directly. The old ladder modules
+  (`ladder.ts`, `ladderData.ts`, `standard_numbers.csv`) are no longer imported
+  by the app; they remain exported and tested until the cleanup task in
+  [ROADMAP.md](ROADMAP.md) removes them.
 - Shopping master data (see [storage_format.md](storage_format.md) §10 and
   [shopping_item_identity.md](shopping_item_identity.md)): the three CSV codecs and their
   serializers (`packages/core/src/shoppingRouteCsv.ts`), the runtime registry holding the
@@ -70,9 +72,10 @@
 - The multi-level sub-recipe plan (`packages/core/src/subRecipePlan.ts`): which Zutaten-Rezepte
   a bundle of dishes reaches (only `ingredient_recipe` titles are links, at any depth), their
   topological order, and per sub-recipe the requirement (the exact sum over all parents), the
-  stock prefill `min(requirement, reorder point)`, the cooking amount
-  `roundToRung(requirement − stock)`, and the bottom-level uses of the dishes *and* the cooked
-  sub-recipes. `resolveSubRecipePlan` adds the invalidation rule: a row whose requirement moved
+  stock prefill `min(requirement, reorder point)`, the exact cooking amount
+  `requirement − stock`, and the bottom-level uses of the dishes *and* the cooked
+  sub-recipes. Its ingredients scale by `cook / yield`; no ladder rung is involved.
+  `resolveSubRecipePlan` adds the invalidation rule: a row whose requirement moved
   away from the acknowledged one loses its stock and marks the rows below it in turn.
 - Recipe format parsing and validation
   (see [storage_format.md](storage_format.md)).

@@ -21,13 +21,11 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
       5-chip tolerance control. Scheme columns moved into `AQs.csv`; per-ingredient
       priorities were removed and the master data enforces one shopping unit per
       ingredient.
-- [ ] Migrate the shopping list, sub-recipe cooking and pantry/stock to the new
-      quantity model (exact targets, exact sums, no ladder rung rounding; new
-      non-ladder stock suggestions; the shopping unit rule). This is the next
-      phase and is deliberately not started yet.
-- [ ] After that migration, remove the legacy ladder modules
+- [ ] Remove the now-unused legacy ladder modules
       (`packages/core/src/ladder.ts`, `ladderData.ts`), `docs/standard_numbers.csv`
       and `scripts/generate-ladder.mjs`, and delete the remaining ladder tests.
+      The shopping flow no longer imports them; they remain only as exported
+      modules and their tests.
 
 ## Known external blockers
 
@@ -148,12 +146,10 @@ not where it is used.
 - [x] Add the scaled ingredient list of the meal plan's recipes to the shopping list
       ("Einkaufsliste"): the dishes are picked per checkbox („Einkaufsliste schreiben“), the
       linked Zutaten-Rezepte are cooked first („Vorräte auswählen — Teil 1: Zutaten-Rezepte“:
-      each sub-recipe's stock prefills with `min(required, reorder point)`, the rest is cooked —
-      the current implementation still snaps it to the nearest ladder rung; the quantity-system
-      migration task above replaces that), then the stock step („Teil 2: Zutaten“) prefills each
-      bottom-level ingredient's stock with `min(need, reorder point)`, and the difference is
-      rounded up to whole shopping units and written with `POST /keep/shopping`
-      (undo via „Rückgängig“).
+      each sub-recipe's stock prefills with `min(required, reorder point)`, the exact rest is
+      cooked), then the stock step („Teil 2: Zutaten“) prefills each bottom-level ingredient's
+      stock with `min(need, reorder point)`, and the difference is rounded up to whole shopping
+      units and written with `POST /keep/shopping` (undo via „Rückgängig“).
 - [x] Sort the shopping list by category/aisle (built on the shopping-route master data,
       storage_format.md §10): „Einkaufsliste sortieren“ lists the unchecked entries without an
       Einkaufsort, each of which is assigned a store + section (like „Neue Zutat anlegen“) or

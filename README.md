@@ -6,9 +6,8 @@ and smart displays, and integration with Google Keep and Gemini for Home.
 
 > **Status:** v1 foundation in place. The web app (Vite + React + TypeScript) runs on
 > GitHub Pages and is connected to Google Drive via OAuth. The quantity optimizer, tolerance
-> model, additional-unit display, recipe storage and HTML export are implemented. The
-> shopping list and pantry still use the legacy ladder internally; their migration is the
-> next roadmap task.
+> model, additional-unit display, recipe storage and HTML export are implemented, and the
+> shopping list, sub-recipe cooking and pantry/stock use the same exact quantity model.
 
 ## Features
 
@@ -53,8 +52,9 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
 ### 6. Smart shopping list in Google Keep
 
 - Automatic transfer of a recipe's ingredients to the shopping list.
-- Scaling happens first (quantity for x people). The shopping/pantry code still uses the
-  old ladder internally and is scheduled for its own migration to the new quantity model.
+- Scaling happens first (quantity for x people) with exact factors. The needs are
+  summed exactly and only the buy amount is rounded up to whole shopping units
+  (or whole grams/millilitres without one).
 - Bundled writing from the home screen's "Einkaufsliste" caption row: the button
   "Einkaufsliste schreiben" beside that caption turns the meal plan into a selection
   view. All dishes selected there are added to the shopping list in one write, so an

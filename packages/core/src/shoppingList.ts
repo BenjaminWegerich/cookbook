@@ -19,21 +19,34 @@
  *    only `need − Vorrat` is bought; a reorder point that already covers the
  *    need buys nothing.
  *
- * The amount that goes on the list is **rounded up**, not to the nearest ladder
- * rung: a shopping amount is not a stored recipe quantity, so it may sit between
- * rungs ("850 g Mehl") — but never below what the dishes need. With a shopping
- * unit (§3.1) the amount is rounded up to a whole number of that unit and
- * rendered in the unit's familiar arrangement ("3 Becher Mehl (450 g)"); without
- * one it is rounded up to a whole family unit ("850 g Mehl").
+ * **Scaling is exact.** A planned size names the factor between the requested
+ * and the written recipe size (servings or yield), and every target moves by
+ * that factor — `V0' = V0 × factor`. There is no ladder rung to round to
+ * (docs/quantity_scaling.md §7), so a sum may be any positive number. The
+ * millionth rounding below only removes binary floating-point noise; it never
+ * moves a need to a table value.
  *
- * The need is named on the sheet as well (`needText`), as its plain base form
- * — "600 g Joghurt", "1,15 kg Mehl" — without the additional unit: the
- * additional quantity names the *shopping* unit, which belongs on the buy side.
+ * The amount that goes on the list is **rounded up**, not to the nearest table
+ * value: a shopping amount is not a stored recipe quantity, so it may sit
+ * between table values ("850 g Mehl") — but never below what the dishes need.
+ * With a shopping unit (§3.1) the amount is rounded up to a whole number of
+ * that unit and rendered in the unit's familiar arrangement ("3 Becher Mehl
+ * (450 g)"); without one it is rounded up to a whole family unit ("850 g
+ * Mehl").
+ *
+ * The need is named on the sheet as well (`needText`), in the ingredient's
+ * familiar reading but never as a *different* amount: an exact unit is shown
+ * only when its whole count really brings that amount home, while an
+ * approximate unit names the need as a count ("8 Karotten (500 g)"). The
+ * additional quantity names the *shopping* unit on the buy side; the need is
+ * the authoritative amount.
  *
  * Rounding up is also what makes the stock picker cheap: because a whole number
  * of shopping units is bought, whole ranges of stock produce the *same* list, so
  * the sheet offers only the stock values where the result changes (`stockPool`)
- * instead of one ladder rung per tap.
+ * instead of one table value per tap. Without an exact shopping unit it offers
+ * clean values from the **BQ table** (`suggestedStocks`), not the removed
+ * ladder.
  *
  * Everything here is pure and framework-free; the web app supplies the scaled
  * ingredient lists of the selected dishes (keep/shoppingBundle.ts), because
@@ -46,30 +59,31 @@ import {
   formatBQ,
   formatDecimal,
   NNBSP,
+  renderQuantityText,
   renderUnitCount,
   shoppingUnitFor,
 } from './additionalUnits.js';
-import { aqToNumber, isAQValue } from './aqLadder.js';
-import {
-  NUMBER_SCHEMES,
-  type AdditionalUnit,
-  type IngredientEntry,
-} from './additionalUnitsData.js';
+import type { AdditionalUnit, IngredientEntry } from './additionalUnitsData.js';
 import { mappingsFor } from './ingredientRegistry.js';
-import {
-  difference,
-  pos,
-  roundedBQ,
-  rungAbove,
-  rungAtOrAbove,
-  rungBelow,
-  scale,
-} from './ladder.js';
 import { convertYieldUnit, writtenPlannedAmount, type PlannedAmount } from './planLink.js';
+import { allowedBQValuesInRange, isAQValue, schemeValues } from './quantityValues.js';
 import type { Ingredient, Recipe } from './recipe/types.js';
 
 /** The two family base units a shopping need lives in (`kg`/`l` are display). */
 export type FamilyUnit = 'g' | 'ml';
+
+/** One millionth: the precision that only removes float noise from a sum. */
+const SUM_PRECISION = 1_000_000;
+
+/**
+ * Rounds a quantity to millionths. Scaling and summing exact targets is correct
+ * in the reals, but binary floating point can leave a value like
+ * `0.30000000000000004`; this keeps the sums and the comparisons clean without
+ * moving the amount to a table value.
+ */
+function roundMillionths(value: number): number {
+  return Math.round(value * SUM_PRECISION) / SUM_PRECISION;
+}
 
 /**
  * One ingredient use in the family base unit: `kg` / `l` rows (hand-written
@@ -102,46 +116,47 @@ export function familyUnitOf(ingredient: Ingredient): FamilyUnit {
 }
 
 /**
- * The ladder-step difference between the size a recipe is written in and the
- * size it is cooked at, or 0 when the two are not comparable.
+ * The exact scaling factor between the size a recipe is written in and the size
+ * it is cooked at, or 1 when the two are not comparable.
  *
  * A planned size that does not name the recipe's own kind or family unit cannot
  * happen for an entry the app recognized (`plannedAmountFitsRecipe`), and a
- * size-less entry falls back to the written size — 0 steps either way. A
- * hand-edited size that is not a ladder value (docs/quantity_scaling.md §3)
- * also answers 0 instead of throwing: one malformed entry must not take the
- * whole shopping sheet down with it.
+ * size-less entry falls back to the written size — factor 1 either way. A
+ * hand-edited size that is not positive also answers 1 instead of throwing: one
+ * malformed entry must not take the whole shopping sheet down with it.
  */
-function planScaleSteps(written: PlannedAmount, planned: PlannedAmount | null): number {
+function planScaleFactor(written: PlannedAmount, planned: PlannedAmount | null): number {
   if (planned === null || written.kind !== planned.kind) {
-    return 0;
+    return 1;
   }
   if (
     written.kind === 'yield' &&
     planned.kind === 'yield' &&
     written.baseUnit !== planned.baseUnit
   ) {
-    return 0;
+    return 1;
   }
   const from = written.kind === 'servings' ? written.servings : written.quantity;
   const to = planned.kind === 'servings' ? planned.servings : planned.quantity;
-  try {
-    return difference(from, to);
-  } catch {
-    return 0;
+  if (!(from > 0) || !(to > 0) || !Number.isFinite(from) || !Number.isFinite(to)) {
+    return 1;
   }
+  return to / from;
 }
 
 /**
- * The recipe's ingredient list scaled to the size the plan cooks it at
- * (docs/recipe_structure.md: scaling moves every quantity by the same number of
- * ladder steps). `planned` is the size the meal-plan entry states, or null for
- * an entry that states none — such an entry means the dish at its written size,
- * which is what its link opens, so nothing is scaled.
+ * The recipe's ingredient list scaled to the size the plan cooks it at.
+ *
+ * The factor is exact (docs/quantity_scaling.md §7): a dish written for 4 and
+ * planned for 6 scales every target by 1.5, and an ingredient recipe written at
+ * 500 ml and cooked at 750 ml does the same. Nothing is rounded to a table
+ * value. `planned` is the size the meal-plan entry states, or null for an entry
+ * that states none — such an entry means the dish at its written size, which is
+ * what its link opens, so nothing is scaled.
  *
  * The `reference` role is dropped (it only matters in the recipe view), and a
- * quantity the ladder cannot scale (a hand-written file) stays unscaled instead
- * of failing the whole bundle.
+ * quantity the data cannot scale (a hand-written file in an unknown unit) stays
+ * unscaled instead of failing the whole bundle.
  *
  * Sub-recipe links are deliberately *not* resolved here: an ingredient named
  * after an `ingredient_recipe` stays one row (decided with the user for this
@@ -151,17 +166,13 @@ export function scaledIngredientsForPlan(
   recipe: Recipe,
   planned: PlannedAmount | null,
 ): Ingredient[] {
-  const deltaX = planScaleSteps(writtenPlannedAmount(recipe), planned);
+  const factor = planScaleFactor(writtenPlannedAmount(recipe), planned);
   return recipe.ingredients.map((entry) => {
     const ingredient = toFamilyUnit(entry);
-    if (deltaX === 0) {
+    if (factor === 1) {
       return ingredient;
     }
-    try {
-      return { ...ingredient, quantity: scale(ingredient.quantity, deltaX) };
-    } catch {
-      return ingredient;
-    }
+    return { ...ingredient, quantity: roundMillionths(ingredient.quantity * factor) };
   });
 }
 
@@ -170,10 +181,11 @@ export function scaledIngredientsForPlan(
  * the same name **within** a recipe are already merged by the recipe's master
  * list; across dishes they are summed here, in order of first appearance.
  *
- * The sum is deliberately *not* rounded to a ladder rung — it is a shopping
- * need, not a stored recipe quantity, and rounding it (to the nearer rung) could
+ * The sum is deliberately *not* rounded to a table value — it is a shopping
+ * need, not a stored recipe quantity, and rounding it to the nearer value could
  * round a need *down* and under-buy. The bought amount is rounded up later
- * (`shoppingRow`), which is the only rounding a shopping list needs.
+ * (`shoppingRow`), which is the only rounding a shopping list needs. Only the
+ * millionth rounding removes floating-point noise.
  *
  * As in the recipe's own merge, entries of the same name are only summed when
  * they share a unit; a mismatched unit (g against ml for one name) stays a
@@ -190,7 +202,10 @@ export function sumIngredientUses(lists: readonly (readonly Ingredient[])[]): In
         key,
         existing === undefined
           ? { ...ingredient }
-          : { ...existing, quantity: existing.quantity + ingredient.quantity },
+          : {
+              ...existing,
+              quantity: roundMillionths(existing.quantity + ingredient.quantity),
+            },
       );
     }
   }
@@ -314,7 +329,7 @@ export interface ShoppingRow {
   readonly covered: boolean;
   /**
    * The line for the Keep write — the shopping unit's arrangement
-   * ("3 Becher Mehl (450 g)") or the base form ("850 g Butter"). Null when
+   * ("3 Becher Joghurt (1,5 kg)") or the base form ("850 g Cashews"). Null when
    * nothing is to buy; the sheet shows a zero amount then.
    */
   readonly text: string | null;
@@ -327,9 +342,9 @@ export interface ShoppingRow {
 }
 
 /**
- * Rounds a quantity to thousandths. Ladder values carry at most two decimals,
- * so a sum of them is exact to the thousandth; the rounding only removes the
- * floating-point noise of that sum (1150 + 1e-13 must not round up to 1151 g).
+ * Rounds a quantity to thousandths. The pantry's fields and chips work at this
+ * precision, so a sum is normalized before it is displayed or compared. The
+ * stored recipe targets are untouched; this is a sheet-local precision.
  */
 function roundThousandths(value: number): number {
   return Math.round(value * 1000) / 1000;
@@ -343,8 +358,8 @@ function roundThousandths(value: number): number {
  *   would stand);
  * - otherwise the missing amount (`need − stock`) is rounded **up**: to a whole
  *   number of the ingredient's shopping unit when it has one (§3.1, "2 Becher
- *   Joghurt (800 g)"), else to a whole family unit ("850 g Butter", which need
- *   not be a ladder rung). Buying less than the dishes need is never an option,
+ *   Joghurt (800 g)"), else to a whole family unit ("850 g Cashews", which need
+ *   not be a table value). Buying less than the dishes need is never an option,
  *   so this is the only direction that may round.
  *
  * The count of a shopping unit is not gated by the unit's number scheme: the
@@ -423,63 +438,49 @@ export function buyAmount(need: ShoppingNeed, stock: number): number {
 
 /**
  * The largest number of whole shopping units a need may round up to and still
- * get one slider stop per possible result (decided with the user). Beyond it the
- * row would carry more stops than a phone slider can separate cleanly, so the
- * picker falls back to whole packs — or, without an exact unit, to the ladder.
+ * get one chip per possible result (decided with the user). Beyond it the row
+ * would carry more chips than a phone row can offer cleanly, so the picker
+ * falls back to whole packs.
  */
 const MAX_RESULT_UNITS = 6;
 
 /**
- * The ladder rungs within `[from, to]`, ascending (empty when the range holds
- * none). Used for the fine-grained stock pool: `[need/10, need]` spans one
- * decade, so the pool always holds about seventeen values.
- */
-function rungRange(from: number, to: number): number[] {
-  const values: number[] = [];
-  let rung = rungAtOrAbove(from);
-  while (rung <= to) {
-    values.push(rung);
-    rung = rungAbove(rung);
-  }
-  return values;
-}
-
-/**
- * The stock values a row's slider snaps to (decided with the user), ascending
- * from 0 to the need. The sheet's job is to keep the *result* right without
- * making the user hunt for an amount the app can work out itself, so the pool
- * holds exactly the stock values at which the bought amount changes — every one
- * of them becomes a stop of the discrete slider (components/StockSlider):
+ * The stock values a row can jump to (decided with the user), ascending from 0
+ * to the need. The sheet's job is to keep the *result* right without making the
+ * user hunt for an amount the app can work out itself, so the pool holds
+ * exactly the stock values at which the bought amount changes — every one of
+ * them becomes a chip (components/StockChips):
  *
  * - an ingredient bought in an **exact** shopping unit (§3.1) whose need rounds
- *   up to at most `MAX_RESULT_UNITS` units gets **one stop per possible result**.
+ *   up to at most `MAX_RESULT_UNITS` units gets **one value per possible result**.
  *   With 1200 g of flour needed and a 1000 g pack, only two stock values change
  *   anything: below 200 g two packs are bought, from 200 g up exactly one, and
  *   from the need itself nothing. 300 g, 500 g or 1000 g on the shelf are all
- *   the same case, so the stops are `0, need − (n−1)·factor, …, need − factor,
+ *   the same case, so the values are `0, need − (n−1)·factor, …, need − factor,
  *   need` — one per result, however unevenly the amounts are spaced;
  * - a larger need in exact packs gets the **whole packs** up to the need
  *   (`0, factor, 2·factor, …, need`);
- * - everything else — no shopping unit, or an **approximate** one ("Stück") —
- *   gets the **ladder rungs** within one tenth of the need, plus 0 and the need
- *   itself.
+ * - everything else — no exact shopping unit, or an approximate one ("Stück") —
+ *   gets the clean values of the **BQ table** within one tenth of the need, plus
+ *   0 and the need itself.
  *
  * The last value always covers the need completely, so no stock can make the
  * bought amount negative. Within one bucket the stored stock value is
  * irrelevant — nothing is written back to the master data, only the shopping
- * list is written — so a stop may stand for a whole range.
+ * list is written — so a value may stand for a whole range.
  *
  * Reads the runtime registry, so the user's own master data decides which of
  * the three shapes a row gets.
  */
 export function stockPool(need: ShoppingNeed): readonly number[] {
   const needed = roundThousandths(need.needed);
-  if (!(needed > 0)) {
-    // A row without a need cannot buy anything; a one-value pool keeps its
-    // slider inert instead of inventing a ladder below zero.
+  if (!(needed > 0) || !Number.isFinite(needed)) {
+    // A row without a finite need cannot buy anything; a one-value pool keeps
+    // its chips inert instead of inventing values below zero (and an infinite
+    // range would never terminate).
     return [0];
   }
-  const target = shoppingUnitFor(mappingsFor(need.ingredient), need.baseUnit);
+  const target = shoppingUnitOf(need);
   if (target !== null && target.au.exact) {
     const count = Math.ceil(roundThousandths(needed / target.factor));
     if (count <= MAX_RESULT_UNITS) {
@@ -498,32 +499,47 @@ export function stockPool(need: ShoppingNeed): readonly number[] {
     values.push(needed);
     return values;
   }
-  // Fine-grained: 0, the ladder rungs within one tenth of the need, and the need
-  // itself (which need not be a rung — a need is a sum over dishes).
-  const values = [0, ...rungRange(needed / 10, needed)];
-  if (values[values.length - 1] !== needed) {
-    values.push(needed);
+  // Fine-grained: 0, the allowed BQ values within one tenth of the need, and
+  // the need itself (which need not be a table value — a need is a sum over
+  // dishes).
+  const values = [0];
+  for (const entry of allowedBQValuesInRange(needed / 10, needed)) {
+    const value = roundThousandths(entry.value);
+    if (value > 0 && value < needed) {
+      values.push(value);
+    }
   }
+  values.push(needed);
   return values;
 }
 
 /**
- * The ladder mantissas in decreasing keep-priority, decided with the user. Each
- * stands for a whole "family" of ladder values that are ten times apart: "1" is
- * 0.1 / 1 / 10 / 100 …, "3" is 3 / 30 / 300 …, and so on. A value and every
- * value a decade above or below it share one priority, because they are the same
- * rung of the ladder's repeating 16-rung decade pattern. Used only for
- * ingredients **without** a shopping unit (with one, the chips are the stock
- * thresholds where the bought amount changes — see `suggestedStocks`).
+ * The clean BQ values a row suggests when it has no exact package threshold to
+ * offer: 0 and the need first, then the allowed BQ values within one tenth of
+ * the need, best first. "Best" is the BQ table's own clumsiness penalty, then
+ * the value closest to the need — so 800 g, 700 g, 600 g … lead for a need of
+ * 850 g, and an awkward value only appears when no cleaner one is available.
+ *
+ * The list is a suggestion pool, not a rounding rule: a stock may be any amount
+ * the user types. The UI keeps the leading values when the chip row runs out of
+ * space and displays the survivors in increasing order.
  */
-const SUGGESTED_MANTISSA_PRIORITY: readonly number[] = [
-  1, 3, 2, 6, 4, 8, 1.5, 2.5, 5, 7, 9, 3.5, 1.2, 1.8, 2.2, 2.8,
-];
-
-/** The same priorities as ladder step offsets within a decade (0 … 15). */
-const SUGGESTED_MANTISSA_X: readonly number[] = SUGGESTED_MANTISSA_PRIORITY.map((mantissa) =>
-  pos(mantissa),
-);
+function bqStockSuggestions(needed: number): number[] {
+  if (!(needed > 0) || !Number.isFinite(needed)) {
+    return [0];
+  }
+  const values = [0, needed];
+  const candidates = allowedBQValuesInRange(needed / 10, needed)
+    .filter((entry) => roundThousandths(entry.value) < needed)
+    .sort((a, b) => a.penalty - b.penalty || b.value - a.value);
+  for (const entry of candidates) {
+    const value = roundThousandths(entry.value);
+    if (!values.includes(value)) {
+      values.push(value);
+    }
+  }
+  return values;
+}
 
 /**
  * The stock values a row's chips suggest, in the order the row keeps them when
@@ -532,73 +548,52 @@ const SUGGESTED_MANTISSA_X: readonly number[] = SUGGESTED_MANTISSA_PRIORITY.map(
  * row itself displays the kept values in **increasing** order — the priority
  * here only decides *which* survive a narrow screen, never the display order.
  *
- * - **With a shopping unit**, the relevant values are the stock thresholds where
- *   the bought amount changes (core's `stockPool`, "like the slider before"): a
- *   1200 g need in 1000 g packs offers only 0, 200 and 1200. The middle
- *   thresholds follow in ascending order behind 0 and the need.
- * - **Without a shopping unit** (grams / millilitres, no packages), one value
- *   per ladder mantissa, each the largest rung with that mantissa below the
- *   need, in `SUGGESTED_MANTISSA_PRIORITY` order.
+ * - **With an exact shopping unit**, the relevant values are the stock
+ *   thresholds where the bought amount changes (core's `stockPool`): a 1200 g
+ *   need in 1000 g packs offers only 0, 200 and 1200. The middle thresholds
+ *   follow in ascending order behind 0 and the need.
+ * - **Without an exact shopping unit** (an approximate piece unit, grams,
+ *   millilitres), one value per clean BQ below the need, in penalty order — the
+ *   new quantity model has no ladder to walk.
  *
  * Every value is rounded to the thousandth and each appears once, strictly
  * inside [0, needed] with 0 and the need included exactly once.
  */
 export function suggestedStocks(need: ShoppingNeed): readonly number[] {
   const needed = roundThousandths(need.needed);
-  if (!(needed > 0)) {
+  if (!(needed > 0) || !Number.isFinite(needed)) {
     return [0];
   }
-  // A shopping unit makes the bought amount jump only at whole packages: those
-  // thresholds are the only stock values that change the result.
-  if (shoppingUnitOf(need) !== null) {
+  const target = shoppingUnitOf(need);
+  if (target !== null && target.au.exact) {
     const pool = stockPool(need);
     return [0, needed, ...pool.filter((value) => value !== 0 && value !== needed)];
   }
-  return suggestedLadderStocks(need);
+  return bqStockSuggestions(needed);
 }
 
 /**
- * The stock values a row's chips suggest **on the ladder alone**: 0 and the need
- * first, then one candidate per mantissa — each the largest rung with that
- * mantissa below the need — in `SUGGESTED_MANTISSA_PRIORITY` order. This is the
- * branch `suggestedStocks` takes for an ingredient without a shopping unit.
- *
- * The cooking step ("Vorräte auswählen, Teil 1: Zutaten-Rezepte") uses it
- * directly and on purpose: a sub-recipe's stock is *cooked* food, not a package
- * on a shelf, so even a sub-recipe whose name is registered with a shopping unit
- * offers ladder amounts and never package thresholds (./subRecipePlan).
+ * The stock values a cooked sub-recipe row suggests: always the BQ-based list,
+ * never package thresholds. A sub-recipe's stock is *cooked food*, not a package
+ * on a shelf, so even a sub-recipe whose name is registered with an exact
+ * shopping unit offers amounts a pot can hold (./subRecipePlan,
+ * components/SubRecipeSelect).
  */
-export function suggestedLadderStocks(need: ShoppingNeed): readonly number[] {
-  const needed = roundThousandths(need.needed);
-  if (!(needed > 0)) {
-    // A row without a need cannot cover anything; a one-value pool keeps its
-    // chips inert instead of inventing a ladder below zero.
-    return [0];
-  }
-  const below = rungBelow(needed);
-  const xBelow = pos(below);
-  const values: number[] = [0, needed];
-  for (const offset of SUGGESTED_MANTISSA_X) {
-    // The largest rung with this mantissa at or below `below`: step xBelow back
-    // by its remainder mod 16, so the result shares the offset's decade slot.
-    const remainder = (((xBelow - offset) % 16) + 16) % 16;
-    values.push(roundThousandths(roundedBQ(xBelow - remainder)));
-  }
-  return values;
+export function suggestedSubRecipeStocks(need: ShoppingNeed): readonly number[] {
+  return bqStockSuggestions(roundThousandths(need.needed));
 }
 
 /**
  * The nearest count of an additional unit for a raw count (see
  * `stockCountText`): 0 or a value of the unit's number scheme (§6.1), the
- * nearest by absolute distance, ties toward the larger count like `roundToAQ`.
- * Above the scheme's range the raw count itself is rounded to a whole number —
- * the field answers "roughly how many is that", while the scheme bounds what a
- * *recipe* line may say.
+ * nearest by absolute distance, ties toward the larger count like the display
+ * formatters. Above the scheme's range the raw count itself is rounded to a
+ * whole number — the field answers "roughly how many is that", while the scheme
+ * bounds what a *recipe* line may say.
  */
 function nearestCount(au: AdditionalUnit, raw: number): number {
-  const allowed = NUMBER_SCHEMES[au.numberScheme] ?? [];
   // 0 is not an AQ value but a legitimate count: an empty shelf is zero pieces.
-  const candidates = [0, ...allowed.map((value) => aqToNumber(value))];
+  const candidates = [0, ...schemeValues(au.numberScheme)];
   const largest = candidates[candidates.length - 1] ?? 0;
   if (raw >= largest) {
     return Math.round(raw);
@@ -617,20 +612,22 @@ function nearestCount(au: AdditionalUnit, raw: number): number {
 
 /**
  * The need of one row as a line of its own: what the selected dishes need
- * together, as the plain base form — the exact amount and the ingredient name,
- * without the additional unit ("600 g Joghurt", "1,15 kg Mehl", "60 g
- * Trockenhefe"). Decided with the user: the additional quantity names the
- * *shopping* unit, which belongs on the buy side, not on the requirement.
+ * together, in the ingredient's familiar reading but always naming that exact
+ * amount — an exact unit only when its whole count really brings it home, an
+ * approximate unit as its count plus the authoritative base amount ("8 Karotten
+ * (500 g)"), or the plain base form ("600 g Joghurt"). The shopping unit on the
+ * buy side may name a *different* amount (it is rounded up to whole packages),
+ * so the need keeps its own reading.
  */
 export function needText(need: ShoppingNeed): string {
-  return `${formatBQ(need.needed, need.baseUnit)} ${need.ingredient}`;
+  return renderQuantityText(need.ingredient, need.needed, need.baseUnit);
 }
 
 /**
  * The shopping unit of one row's ingredient, with its factor (family base unit
  * per one unit), or null when the master data gives the ingredient none
  * (§3.1). The pantry sheet shows the stock's whole count in this unit beside the
- * slider, and reads a count typed into that field in it.
+ * stock picker, and reads a count typed into that field in it.
  */
 export function shoppingUnitOf(need: ShoppingNeed): { au: AdditionalUnit; factor: number } | null {
   return shoppingUnitFor(mappingsFor(need.ingredient), need.baseUnit);
@@ -638,8 +635,8 @@ export function shoppingUnitOf(need: ShoppingNeed): { au: AdditionalUnit; factor
 
 /**
  * The stock translated into the ingredient's shopping unit ("2 Stück", "1
- * Packung") — the pantry sheet's field beside the slider, which can also be
- * tapped to type a count. Null when there is nothing to count: either the
+ * Packung") — the pantry sheet's field beside the stock picker, which can also
+ * be tapped to type a count. Null when there is nothing to count: either the
  * ingredient has no shopping unit, or its unit is **exact** (§3.1) and the
  * stock is not a whole number of it. The sheet prints a dash then, because
  * "0,2 Packung" would name a shelf that cannot exist.
@@ -647,8 +644,8 @@ export function shoppingUnitOf(need: ShoppingNeed): { au: AdditionalUnit; factor
  * An **approximate** unit's factor is an average (§6.3): grams on the shelf and
  * pieces in a recipe are two readings of one stock, so its count is the nearest
  * value of the unit's number scheme (§6.1), rendered in the §8 glyph typography
- * ("1 ½ Stück"). The stock is not required to be a ladder value: it comes from
- * the reorder point (which need not be a rung) or from a typed number.
+ * ("1 ½ Stück"). The stock is not required to be a table value: it comes from
+ * the reorder point or from a typed number.
  */
 export function stockCountText(need: ShoppingNeed, stock: number): string | null {
   const target = shoppingUnitOf(need);

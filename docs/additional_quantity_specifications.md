@@ -204,8 +204,10 @@ remains in the master-data form; it is not part of recipe scaling.
   most one mapping to a `Shopping Unit = yes` unit. This is the only remaining
   “preference” between units.
 - The shopping list uses the purchase unit and rounds *up* to whole packages; it
-  does not use the optimizer's display AQ. That code is scheduled for its own
-  migration (see [quantity_scaling.md](quantity_scaling.md) §9).
+  does not use the optimizer's display AQ. The shopping code is migrated to the
+  new quantity model (see [quantity_scaling.md](quantity_scaling.md) §9): exact
+  targets and sums, no ladder rung rounding, and BQ-based stock suggestions
+  without an exact unit.
 
 ## 8. Consequences and rules
 

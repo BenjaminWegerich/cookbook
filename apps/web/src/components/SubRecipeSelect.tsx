@@ -5,31 +5,29 @@
  * The step exists only when the selection reaches at least one sub-recipe. It
  * asks one question per sub-recipe — *how much of it is already made?* — and
  * derives the amount to cook from the answer. The rows are core's
- * `planSubRecipes` (through ../keep/shoppingBundle), the arithmetic is the same
- * ladder the whole app uses:
+ * `planSubRecipes` (through ../keep/shoppingBundle), the arithmetic is exact:
  *
  * ```
  *   required = Σ over every parent of its scaled use      (core: `required`)
  *   stock    = min(required, reorder point)               (core: `defaultStock`)
- *   cook     = roundToRung(required − stock)              (core: `cook`)
+ *   cook     = required − stock                           (core: `cook`)
  * ```
  *
  * **The stock is the input, the cooking amount is the result.** The row reads
  * exactly like step 2's: left the requirement, right the amount to cook behind a
  * **skillet** instead of the shopping cart — this step never buys, it cooks. The
- * stock chips below the line are the ladder amounts a shelf can hold
- * (`suggestedLadderStocks`, deliberately *not* the package thresholds of a
+ * stock chips below the line are BQ-based amounts a shelf can hold
+ * (`suggestedSubRecipeStocks`, deliberately *not* the package thresholds of a
  * shopping unit: a sub-recipe is cooked food, and even a sub-recipe whose name
  * happens to be registered with a shopping unit is not bought in packs). The
  * last chip covers the whole requirement and reads olive, "andere" opens the
  * keyboard on the stock, and both readings are tappable as plain text
  * (components/TappableQuantity).
  *
- * A typed **cooking** amount is snapped to the nearest ladder rung before the
- * stock is back-computed from it: a cooking amount is a stored, scaled recipe
- * size, and only a rung can be scaled down into the sub-recipe's own ingredients
- * (docs/quantity_scaling.md §3/§6) — the same restriction the HTML export needs
- * to open the recipe at that amount.
+ * A typed **cooking** amount is kept exactly (to the sheet's thousandth
+ * precision): a cooking amount is a scaled recipe size, and any positive amount
+ * can be scaled down into the sub-recipe's own ingredients by `cook / yield`
+ * (docs/quantity_scaling.md §7). There is no ladder rung to snap to any more.
  *
  * **A row whose requirement moves is invalidated** (decided with the user): the
  * rows below it need something else now, so the amount the user chose no longer
@@ -59,8 +57,7 @@ import type { ReactNode } from 'react';
 
 import {
   formatBQ,
-  roundToRung,
-  suggestedLadderStocks,
+  suggestedSubRecipeStocks,
   type FamilyUnit,
   type ShoppingNeed,
   type SubRecipeNode,
@@ -102,7 +99,7 @@ interface SubRecipeSelectProps {
 
 /**
  * The requirement of a sub-recipe in the shape core's stock helpers take
- * (`ShoppingNeed`): the ladder-based stock suggestions and the prefill only read
+ * (`ShoppingNeed`): the BQ-based stock suggestions and the prefill only read
  * these four fields, so the cooking rows can share every helper step 2 uses.
  */
 function needOf(node: SubRecipeNode): ShoppingNeed {
@@ -138,7 +135,7 @@ function customStockOf(node: SubRecipeNode, typed: number | undefined): number |
   if (stock <= 0 || stock >= node.required) {
     return null;
   }
-  return suggestedLadderStocks(needOf(node)).includes(stock) ? null : stock;
+  return suggestedSubRecipeStocks(needOf(node)).includes(stock) ? null : stock;
 }
 
 /** One rendered row: the sub-recipe, its invalidation and its shape. */
@@ -308,12 +305,12 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
   }
 
   /**
-   * Types the amount to cook: it snaps to the nearest ladder rung (see the file
-   * header) and the stock is back-computed from it, so the two readings can
-   * never disagree.
+   * Types the amount to cook: it is kept exactly (to the sheet's thousandth
+   * precision) and the stock is back-computed from it, so the two readings can
+   * never disagree. No ladder rung is involved (see the file header).
    */
   function setCook(name: string, required: number, typed: number): void {
-    const cooked = typed > 0 ? roundToRung(typed) : 0;
+    const cooked = typed > 0 ? roundThousandths(typed) : 0;
     setStock(name, required, Math.max(0, roundThousandths(required - cooked)));
   }
 
@@ -329,7 +326,7 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
     const customValue = customStockOf(node, stale ? undefined : typedStocks.get(key));
     // The suggested stock values as chips, each labelled in the base form. The
     // custom value is left out so it never duplicates the edit chip below.
-    const chips: StockChip[] = suggestedLadderStocks(needOf(node))
+    const chips: StockChip[] = suggestedSubRecipeStocks(needOf(node))
       .filter((value) => value !== customValue)
       .map((value) => ({
         value,
@@ -444,7 +441,7 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
               value={node.stock}
               baseUnit={node.baseUnit}
               customChip={customChip}
-              // The suggestions are ladder stops, never package thresholds: the
+              // The suggestions are BQ-based amounts, never package thresholds: the
               // typed-value entry ("andere") must always stay reachable.
               alwaysShowAndere
               onChange={(next) => setStock(key, node.required, next)}

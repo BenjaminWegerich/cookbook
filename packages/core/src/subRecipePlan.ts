@@ -19,19 +19,18 @@
  * The arithmetic, per sub-recipe X:
  *
  * ```
- *   required(X) = Σ over every parent P of  scale(amount of X in P, Δx_P)
+ *   required(X) = Σ over every parent P of  scale(amount of X in P, factor_P)
  *   stock(X)    = min(required(X), reorder point(X))   // prefill, user-editable
- *   cook(X)     = rung(required(X) − stock(X))         // 0 when covered
- *   Δx_X        = pos(cook(X)) − pos(yield(X))
+ *   cook(X)     = required(X) − stock(X)               // 0 when covered
+ *   factor_X    = cook(X) / yield(X)
  * ```
  *
- * `required` is an exact sum over parents and therefore not necessarily a rung
- * (exactly like a dish's need in ./shoppingList); `cook` is a stored, scaled
- * recipe size and therefore must be a rung (docs/quantity_scaling.md §3) — the
- * same restriction the HTML export needs to open the sub-recipe at the amount
- * that was cooked (§6). The nearest rung wins, ties toward the larger value
- * (`roundToRung`), so a need of 320 g cooks 300 g: that difference is inherent
- * to the ladder and is neither bought nor cooked.
+ * **Everything is exact.** `required` is the unrounded sum over parents,
+ * `cook` is the exact amount missing from the shelf — not a ladder rung — and
+ * the sub-recipe's own ingredients are scaled by `cook / yield` (for example
+ * 750 ml of a sauce written at 500 ml scales its milk by 1.5). The written
+ * recipe is never rewritten; any positive target is a valid scaled size under
+ * the new quantity model (docs/quantity_scaling.md §7).
  *
  * **`cook` is derived, `stock` is chosen.** The user's input is the shelf, not
  * the pot: a tap on a stock chip stores a stock, and a typed cooking amount is
@@ -54,9 +53,16 @@
  */
 
 import { mappingsFor } from './ingredientRegistry.js';
-import { difference, roundToRung, scale } from './ladder.js';
 import { familyUnitOf, toFamilyUnit, type FamilyUnit } from './shoppingList.js';
 import type { Ingredient, Recipe } from './recipe/types.js';
+
+/** One millionth: the precision that only removes float noise from a sum. */
+const SUM_PRECISION = 1_000_000;
+
+/** Rounds a quantity to millionths, removing only the float noise of a sum. */
+function roundMillionths(value: number): number {
+  return Math.round(value * SUM_PRECISION) / SUM_PRECISION;
+}
 
 /**
  * One sub-recipe of the plan: what its parents require, what is on the shelf
@@ -70,11 +76,11 @@ export interface SubRecipeNode {
   readonly name: string;
   /** Family base unit of `yieldAmount`, `required`, `stock` and `cook`. */
   readonly baseUnit: FamilyUnit;
-  /** The recipe's written yield, converted into `baseUnit` (a ladder value). */
+  /** The recipe's written yield, converted into `baseUnit` (exact). */
   readonly yieldAmount: number;
   /**
    * The amount every parent requires together, as the exact sum of their
-   * scaled uses — not rounded to a rung (see the file header).
+   * scaled uses — not rounded to a table value (see the file header).
    */
   readonly required: number;
   /**
@@ -88,8 +94,9 @@ export interface SubRecipeNode {
   /** The chosen stock (≥ 0); `defaultStock` when the user decided nothing. */
   readonly stock: number;
   /**
-   * The amount to cook: `roundToRung(required − stock)`, or 0 when the stock
-   * covers the requirement. Always a ladder rung — see the file header.
+   * The amount to cook: `required − stock`, or 0 when the stock covers the
+   * requirement. Any positive amount — the exact missing quantity, not a table
+   * value.
    */
   readonly cook: number;
 }
@@ -111,20 +118,15 @@ export interface SubRecipePlan {
   readonly bottomUses: readonly Ingredient[];
 }
 
-/** Rounds a quantity to thousandths, removing the float noise of a summed need. */
-function roundThousandths(value: number): number {
-  return Math.round(value * 1000) / 1000;
-}
-
 /** The family base unit and amount of an ingredient recipe's yield. */
 function yieldOf(recipe: Recipe): { baseUnit: FamilyUnit; amount: number } {
   const amount = recipe.yield;
   const unit = recipe.yield_unit;
-  if (amount === undefined || unit === undefined) {
-    // Unreachable for a validated collection: an ingredient recipe must state
-    // its yield (docs/recipe_structure.md, "Servings"). A hand-edited file that
-    // does not cannot be scaled, and guessing a yield would silently produce a
-    // wrong shopping list.
+  if (amount === undefined || unit === undefined || !(amount > 0) || !Number.isFinite(amount)) {
+    // Unreachable for a validated collection: an ingredient recipe must state a
+    // positive yield (docs/recipe_structure.md, "Servings"). A hand-edited file
+    // that does not cannot be scaled, and guessing a yield would silently
+    // produce a wrong shopping list.
     throw new Error(`planSubRecipes: "${recipe.title}" states no yield`);
   }
   // The same conversion the ingredient uses take (./shoppingList), so a yield
@@ -134,23 +136,14 @@ function yieldOf(recipe: Recipe): { baseUnit: FamilyUnit; amount: number } {
 }
 
 /**
- * Scales one ingredient list by `deltaX` rungs. Quantities are converted into
- * their family base unit first, exactly like `scaledIngredientsForPlan`; a
- * quantity the ladder cannot scale (a hand-written, off-ladder file) stays
- * unscaled instead of failing the whole bundle — the same tolerance the dish
- * level shows.
+ * Scales one ingredient list by the exact factor `cook / yield`. Quantities are
+ * converted into their family base unit first, exactly like
+ * `scaledIngredientsForPlan`; nothing is rounded to a table value.
  */
-function scaleList(ingredients: readonly Ingredient[], deltaX: number): Ingredient[] {
+function scaleList(ingredients: readonly Ingredient[], factor: number): Ingredient[] {
   return ingredients.map((raw) => {
     const use = toFamilyUnit(raw);
-    if (deltaX === 0) {
-      return use;
-    }
-    try {
-      return { ...use, quantity: scale(use.quantity, deltaX) };
-    } catch {
-      return use;
-    }
+    return { ...use, quantity: roundMillionths(use.quantity * factor) };
   });
 }
 
@@ -165,8 +158,8 @@ function scaleList(ingredients: readonly Ingredient[], deltaX: number): Ingredie
  * @param decisions the chosen stock per sub-recipe title, in the family base
  *   unit. A title the user decided nothing for keeps its `defaultStock`; the
  *   values are never written back to the master data.
- * @throws {Error} when a sub-recipe states no yield, when a parent uses one in
- *   another family unit (g against ml), or when the links form a cycle
+ * @throws {Error} when a sub-recipe states no valid yield, when a parent uses
+ *   one in another family unit (g against ml), or when the links form a cycle
  */
 export function planSubRecipes(
   dishes: readonly (readonly Ingredient[])[],
@@ -285,7 +278,7 @@ export function planSubRecipes(
       );
     }
     usedIn.set(use.name, unit);
-    required.set(use.name, (required.get(use.name) ?? 0) + use.quantity);
+    required.set(use.name, roundMillionths((required.get(use.name) ?? 0) + use.quantity));
   };
 
   // The dishes first: their uses are the roots of the graph and are already
@@ -307,15 +300,15 @@ export function planSubRecipes(
       );
     }
 
-    const need = roundThousandths(required.get(name) ?? 0);
+    const need = roundMillionths(required.get(name) ?? 0);
     const entry = mappingsFor(name);
     const known = entry !== undefined && entry.bu === baseUnit;
     const reorderPoint = known ? entry.reorderPoint : 0;
     const defaultStock = Math.min(need, reorderPoint);
     const chosen = decisions.get(name);
-    const stock = Math.max(0, roundThousandths(chosen === undefined ? defaultStock : chosen));
-    const missing = roundThousandths(need - stock);
-    const cook = missing > 0 ? roundToRung(missing) : 0;
+    const stock = Math.max(0, roundMillionths(chosen === undefined ? defaultStock : chosen));
+    const missing = roundMillionths(Math.max(0, need - stock));
+    const cook = missing > 0 ? missing : 0;
     nodes.push({
       name,
       baseUnit,
@@ -328,19 +321,10 @@ export function planSubRecipes(
     });
 
     if (cook > 0) {
-      // The sub-recipe is cooked at a ladder rung, so the step count to its
-      // written yield is an integer and every one of its ingredients moves by
-      // it — the same rule the export applies when it opens the sub-recipe
-      // (docs/quantity_scaling.md §6). A yield the ladder cannot read (an
-      // off-ladder hand-edited file) leaves the list unscaled instead of
-      // failing the bundle, like ./shoppingList's plan scaling.
-      let deltaX = 0;
-      try {
-        deltaX = difference(yieldAmount, cook);
-      } catch {
-        deltaX = 0;
-      }
-      for (const scaled of scaleList(recipe.ingredients, deltaX)) {
+      // Exact scaling: the recipe's own ingredients move by cook / yield, the
+      // same factor the cooking view applies (docs/quantity_scaling.md §7).
+      const factor = cook / yieldAmount;
+      for (const scaled of scaleList(recipe.ingredients, factor)) {
         addUse(scaled);
       }
     }

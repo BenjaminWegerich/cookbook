@@ -6,7 +6,7 @@
  * - the requirement of a sub-recipe is the sum over its parents, and a parent
  *   contributes only what it actually cooks;
  * - the stock prefills on `min(required, reorder point)` and the cooking amount
- *   is the rest, snapped to the nearest rung;
+ *   is the rest, exact (no ladder rounding);
  * - a covered sub-recipe (cook 0) demands nothing from its own sub-recipes;
  * - the rows come in topological order even when a recipe names a sub-recipe
  *   before the sub-recipe it depends on;
@@ -115,7 +115,7 @@ describe('planSubRecipes', () => {
     expect(nodes['D']!.yieldAmount).toBe(100);
 
     // Only D's own ingredient reaches the bottom level, scaled from D's yield
-    // to the 300 g cooked (Δx = +8 rungs): 10 g Salz → 30 g.
+    // to the 300 g cooked (factor 3): 10 g Salz → 30 g.
     expect(plan.bottomUses).toEqual([use('Salz', 30)]);
   });
 
@@ -154,19 +154,28 @@ describe('planSubRecipes', () => {
     expect(byName(plan.nodes)['C']!.required).toBe(200);
   });
 
-  it('rounds the cooking amount to the nearest rung', () => {
-    // 200 g on the shelf of a 321 g requirement would leave 121 g to cook — not
-    // a rung, so the nearest one (120 g) is cooked: a cooking amount is a
-    // stored recipe size and must stay a standard number.
+  it('keeps the cooking amount exact (no ladder rounding)', () => {
+    // 200 g on the shelf of a 321 g requirement leaves exactly 121 g to cook.
+    // The new quantity model scales by the exact factor cook / yield (1.21), so
+    // 10 g Salz becomes 12.1 g — the former ladder rounded 121 g to 120 g.
     const recipes = new Map<string, Recipe>([['B', subRecipe('B', [use('Salz', 10)])]]);
     const plan = planSubRecipes([[use('B', 321)]], recipes, new Map([['B', 200]]));
 
     const node = byName(plan.nodes)['B']!;
     expect(node.required).toBe(321);
     expect(node.stock).toBe(200);
-    expect(node.cook).toBe(120);
-    // 120 g from a 100 g yield is +1 rung: 10 g Salz → 12 g.
-    expect(plan.bottomUses).toEqual([use('Salz', 12)]);
+    expect(node.cook).toBe(121);
+    expect(plan.bottomUses).toEqual([use('Salz', 12.1)]);
+  });
+
+  it('scales a sub-recipe by a fractional cooking factor', () => {
+    // 150 g required of a 100 g yield is a factor of 1.5 — not a ladder step,
+    // but a perfectly valid scaled recipe size under the exact model.
+    const recipes = new Map<string, Recipe>([['B', subRecipe('B', [use('Salz', 10)])]]);
+    const plan = planSubRecipes([[use('B', 150)]], recipes);
+
+    expect(byName(plan.nodes)['B']).toMatchObject({ required: 150, cook: 150 });
+    expect(plan.bottomUses).toEqual([use('Salz', 15)]);
   });
 
   it('cooks nothing when the chosen stock exceeds the requirement', () => {
@@ -249,7 +258,7 @@ describe('planSubRecipes', () => {
 
     expect(plan.nodes.map((node) => node.name)).toEqual(['B', 'C', 'D']);
     expect(byName(plan.nodes)['D']).toMatchObject({ required: 300, defaultStock: 0, cook: 300 });
-    // 300 g from a 100 g yield is +8 rungs: 10 g Salz → 30 g.
+    // 300 g from a 100 g yield is a factor of 3: 10 g Salz → 30 g.
     expect(plan.bottomUses).toEqual([use('Salz', 30)]);
   });
 });

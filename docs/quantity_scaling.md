@@ -30,10 +30,12 @@
   millionth precision only to remove floating-point noise, then optimized for
   display like any other target.
 
-This replaces the old quantity ladder. The old `docs/standard_numbers.csv`, the
-`packages/core/src/ladder.ts` / `ladderData.ts` modules and the legacy
-`aqLadder.ts` bridge remain only for the shopping/pantry code until its
-migration; the recipe, editor, export and meal plan use the optimizer.
+This replaces the old quantity ladder. `docs/standard_numbers.csv` and the
+`packages/core/src/ladder.ts` / `ladderData.ts` modules are no longer imported by
+the app; they remain exported and tested until the cleanup task in
+[ROADMAP.md](ROADMAP.md) removes them. The legacy `aqLadder.ts` bridge still
+backs the nearest-AQ display helpers in `additionalUnits.ts`; the recipe and
+shopping code use the BQ/AQ tables directly.
 
 ## 2. Master data
 
@@ -218,13 +220,27 @@ If no AQ value fits `ε_max`, the artifact keeps its unrounded count. AQ values
 keep their canonical notation (`{{1/2}}`, `{{1+1/4}}`); other positive counts are
 stored as decimals.
 
-## 9. Legacy shopping code (migration status)
+## 9. Shopping list, cooking and stock (migrated)
 
-The shopping list, sub-recipe cooking and pantry/stock code still use the old
-ladder (`ladder.ts`, `ladderData.ts`, `standard_numbers.csv`). They are being
-migrated separately; until then, their internal amounts may still be snapped to
-ladder rungs. The recipe/editor/export/meal-plan path does not use those
-modules.
+The shopping list, sub-recipe cooking and pantry/stock use the same exact model
+as the recipe paths (see `packages/core/src/shoppingList.ts` and
+`packages/core/src/subRecipePlan.ts`):
+
+- a planned recipe scales by the exact factor between the requested and written
+  size; a sub-recipe's ingredients scale by `cook / yield`;
+- a dish's need is the exact sum over its recipes, and a sub-recipe's
+  requirement is the exact sum over its parents — no ladder rung rounding;
+- only the amount to **buy** is rounded up: to whole shopping units when the
+  ingredient has one, otherwise to whole grams/millilitres;
+- an exact shopping unit offers the package thresholds as stock suggestions; an
+  approximate unit or no unit offers clean **BQ table** values instead of old
+  ladder rungs;
+- the need is shown as its exact amount in the ingredient's familiar reading,
+  while the shopping unit names the purchase side.
+
+The legacy ladder modules (`ladder.ts`, `ladderData.ts`,
+`standard_numbers.csv`) are no longer imported by this code. Removing them is
+the cleanup task in [ROADMAP.md](ROADMAP.md).
 
 ## 10. Implementation map
 
@@ -236,6 +252,8 @@ modules.
 | Tolerance | `packages/core/src/tolerance.ts` |
 | Serving counts | `packages/core/src/servingSizes.ts` |
 | Display arrangements | `packages/core/src/additionalUnits.ts` |
+| Shopping list arithmetic | `packages/core/src/shoppingList.ts` |
+| Sub-recipe cooking plan | `packages/core/src/subRecipePlan.ts` |
 | Export views | `packages/core/src/recipe/exportHtml.ts`, `yieldViews.ts` |
 | Data generators | `packages/core/scripts/generate-quantity-data.mjs`, `generate-additional-data.mjs` |
 
