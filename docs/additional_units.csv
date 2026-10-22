@@ -1,4 +1,5 @@
 Additional Unit;Singular;Plural;Arrangement;Number Scheme;Unit Exact;Shopping Unit
+Dose;Dose;Dosen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes;yes
 Dose (Abtropfgewicht);Dose;Dosen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Abtropfgewicht);halves_and_integers_up_to_30;yes;yes
 Dose (Gesamtgewicht);Dose;Dosen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU> Gesamtgewicht);halves_and_integers_up_to_30;yes;yes
 Esslöffel;EL;EL;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_10;no;no

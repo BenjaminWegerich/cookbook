@@ -50,6 +50,15 @@ export interface IngredientEntry {
 /** All additional units, in table order. */
 export const ADDITIONAL_UNITS: readonly AdditionalUnit[] = [
   {
+    name: 'Dose',
+    singular: 'Dose',
+    plural: 'Dosen',
+    arrangement: '<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>)',
+    numberScheme: 'halves_and_integers_up_to_30',
+    exact: true,
+    shoppingUnit: true,
+  },
+  {
     name: 'Dose (Abtropfgewicht)',
     singular: 'Dose',
     plural: 'Dosen',
