@@ -28,6 +28,14 @@
  *   field accepts any positive number, with suggestion chips and an adaptive
  *   +/− step; quantity-only inline mentions may be Gewicht / Volumen / ohne
  *   Einheit;
+ * - the optional quantity-level precision is chosen with the same five chips
+ *   as the ingredient master data and is always offered, before a name is
+ *   chosen too. Its baseline is the ingredient's master-data level, or the
+ *   neutral medium level when the quantity has no ingredient entry (a
+ *   sub-recipe, a unitless mention, or no name yet). The chip matching that
+ *   baseline means "no override", so a quantity is only stored with a
+ *   `{precision: …}` tag when it deviates; the baseline is named beside the
+ *   caption (there is no separate reset control);
  * - the live preview shows the full display form ("1 Becher Joghurt (400 g)",
  *   "1,5 l Wasser", "½") via core renderAQS/formatBQ/formatAQValue;
  * - the reference role is set on the *master list* only — this sheet never
@@ -39,6 +47,7 @@
 import { useMemo, useState } from 'react';
 
 import {
+  INTERNAL_PRECISION,
   formatAQValue,
   formatBQ,
   formatDecimal,
@@ -47,13 +56,16 @@ import {
   optimizeUnitless,
   renderAQSDisplay,
   type Ingredient,
+  type PrecisionLevel,
   type TextArtifact,
   type Unit,
 } from '@cookbook/core';
 
 import ArrangementLine from './ArrangementLine';
+import PrecisionChips from './PrecisionChips';
 import QuantityInput, { type QuantityFamily } from './QuantityInput';
 import { LinkIcon, PlusIcon, TrashIcon } from './icons';
+import { precisionLabel } from './precisionLabels';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /** One ingredient recipe of the collection, as the sheet needs it for the
@@ -82,8 +94,10 @@ export type IngredientSheetMode = 'row-add' | 'row-edit' | 'inline-add' | 'inlin
 export type FreeUnit = QuantityFamily | 'none';
 
 /** A confirmed row/artifact value. Rows always carry a name and a unit;
- *  quantity-only inline artifacts may omit the name and/or the unit. */
-export type SheetResult = Ingredient | { quantity: number; unit?: Unit };
+ *  quantity-only inline artifacts may omit the name and/or the unit. The
+ *  precision is present only when it overrides the ingredient default. */
+export type SheetResult =
+  Ingredient | { quantity: number; unit?: Unit; precision?: PrecisionLevel };
 
 interface IngredientSheetProps {
   mode: IngredientSheetMode;
@@ -132,6 +146,13 @@ function IngredientSheet({
     return initial?.unit === 'ml' ? 'ml' : initial?.unit === 'g' ? 'g' : 'none';
   });
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The quantity-level precision override. `undefined` means the ingredient
+   * default applies; the chips show the effective value in both cases.
+   */
+  const [precisionOverride, setPrecisionOverride] = useState<PrecisionLevel | undefined>(
+    initial?.precision,
+  );
 
   /**
    * Whether the name input takes the focus when the sheet opens. On smartphones
@@ -183,26 +204,32 @@ function IngredientSheet({
   const unit: Unit | undefined = family ?? (trimmedName === '' ? undefined : initial?.unit);
 
   /**
+   * The precision this quantity shows without an override: the chosen
+   * ingredient's master-data level. A sub-recipe title, a unitless inline
+   * mention and the still-empty form have no master-data entry, so they use the
+   * internal neutral level — the same fallback the core renderers apply.
+   */
+  const ingredientDefault = mappingsFor(trimmedName)?.precision;
+  const baselinePrecision = ingredientDefault ?? INTERNAL_PRECISION;
+
+  /**
+   * The precision that is displayed and previewed: the explicit choice when the
+   * user made one, otherwise the baseline. It is always defined, which lets the
+   * field appear from the empty form on, before a name is chosen.
+   */
+  const effectivePrecision = precisionOverride ?? baselinePrecision;
+
+  /**
    * The unitless preview uses the same “BQ only” optimizer branch as the
    * export, with the optional artifact-level precision. A value without a
    * fitting AQ candidate stays a plain decimal.
    */
   const unitlessPreview = (): string => {
-    const result = optimizeUnitless(quantity, {
-      ...(initial?.precision !== undefined ? { quantity: initial.precision } : {}),
-    });
+    const result = optimizeUnitless(quantity, { quantity: effectivePrecision });
     return result.notation === undefined
       ? formatDecimal(result.value)
       : formatAQValue(result.value);
   };
-
-  /**
-   * True when the „Vorschau“ below is produced by the quantity optimizer.
-   * A valid name renders through `renderAQSDisplay` and a unitless mention
-   * through `optimizeUnitless`; only the fallback for a half-typed name with a
-   * known unit (`formatBQ`) skips optimization and therefore gets no hint.
-   */
-  const previewOptimized = unit === undefined || (trimmedName !== '' && validName);
 
   /**
    * Suggestions: master-data ingredient names plus ingredient-recipe titles
@@ -262,12 +289,34 @@ function IngredientSheet({
       setError('Bitte eine Zutat aus der Liste wählen.');
       return;
     }
+    /**
+     * Only a deviating value is stored: a quantity whose precision equals its
+     * baseline (the ingredient default, or the neutral level for a sub-recipe /
+     * unitless mention) writes no `{precision: …}` tag. This also drops an old
+     * redundant tag that matched the baseline.
+     */
+    const savedPrecision =
+      precisionOverride !== undefined && precisionOverride !== baselinePrecision
+        ? precisionOverride
+        : undefined;
     const value: SheetResult =
       trimmedName !== ''
-        ? { name: trimmedName, quantity: quantity, unit: unit ?? 'g' }
+        ? {
+            name: trimmedName,
+            quantity: quantity,
+            unit: unit ?? 'g',
+            ...(savedPrecision !== undefined ? { precision: savedPrecision } : {}),
+          }
         : unit !== undefined
-          ? { quantity: quantity, unit }
-          : { quantity: quantity };
+          ? {
+              quantity: quantity,
+              unit,
+              ...(savedPrecision !== undefined ? { precision: savedPrecision } : {}),
+            }
+          : {
+              quantity: quantity,
+              ...(savedPrecision !== undefined ? { precision: savedPrecision } : {}),
+            };
     onConfirm(value, mode === 'row-edit' || mode === 'inline-edit' ? 'update' : 'add');
   };
 
@@ -420,6 +469,38 @@ function IngredientSheet({
           <QuantityInput value={quantity} onChange={setQuantity} family={family} />
         </div>
 
+        {/* Quantity-level precision: the optional override of the quantity's
+            baseline. The chips always show the effective value; the chip that
+            matches the baseline means "no override" (the passive caption names
+            that baseline, so no reset button is needed). The field is offered
+            for every quantity — a master ingredient, a sub-recipe, a unitless
+            mention, and the still-empty form (neutral medium). */}
+        <div className="field">
+          <div className="field-head">
+            <span className="field-label">
+              Genauigkeit<span className="optional-mark">(optional)</span>
+            </span>
+            <span className="field-default">
+              {ingredientDefault !== undefined
+                ? `Zutat-Standard: ${precisionLabel(ingredientDefault)}`
+                : `Standard: ${precisionLabel(INTERNAL_PRECISION)}`}
+            </span>
+          </div>
+          <PrecisionChips
+            value={effectivePrecision}
+            onChange={(next) =>
+              // Tapping the chip that equals the current baseline means "follow
+              // the baseline": clear the override instead of storing it.
+              setPrecisionOverride(next === baselinePrecision ? undefined : next)
+            }
+            ariaLabel="Genauigkeit der Menge"
+          />
+          <p className="field-hint">
+            Je niedriger die gewählte Genauigkeit, desto stärker wird die Menge auf glatte Zahlen
+            gerundet.
+          </p>
+        </div>
+
         <div className="field">
           <span className="field-label">Vorschau</span>
           {/* Live preview of the display form (§2). */}
@@ -427,7 +508,7 @@ function IngredientSheet({
             {trimmedName !== '' && validName ? (
               <ArrangementLine
                 display={renderAQSDisplay(trimmedName, quantity, unit ?? 'g', {
-                  ...(initial?.precision !== undefined ? { quantity: initial.precision } : {}),
+                  quantity: effectivePrecision,
                 })}
               />
             ) : unit !== undefined ? (
@@ -436,16 +517,6 @@ function IngredientSheet({
               unitlessPreview()
             )}
           </p>
-          {/* The optimizer rounds the target to a BQ/AQ pair; the precision
-              setting (ingredient master data, or the artifact override) decides
-              how strongly. The hint appears only when the branch above really
-              optimized — the plain-BQ fallback is unaffected. */}
-          {previewOptimized && (
-            <p className="field-hint">
-              Je niedriger die gewählte Genauigkeit, desto stärker wird die Menge auf glatte Zahlen
-              gerundet.
-            </p>
-          )}
         </div>
 
         <div className="sheet-actions">

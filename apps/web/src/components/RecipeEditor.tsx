@@ -160,11 +160,23 @@ function baselineDraftFor(target: StoredRecipe | null, initialDraft?: Recipe): E
   }
 }
 
-/** Maps a confirmed sheet value to the display-only artifact stored in text. */
+/** Maps a confirmed sheet value to the display-only artifact stored in text.
+ *  The optional quantity-level precision travels with it, so the artifact keeps
+ *  an override the sheet chose (the sheet drops one that equals the ingredient
+ *  default). */
 function toTextArtifact(value: SheetResult): TextArtifact {
   return 'name' in value
-    ? { name: value.name, quantity: value.quantity, unit: value.unit ?? 'g' }
-    : { quantity: value.quantity, ...(value.unit !== undefined ? { unit: value.unit } : {}) };
+    ? {
+        name: value.name,
+        quantity: value.quantity,
+        unit: value.unit ?? 'g',
+        ...(value.precision !== undefined ? { precision: value.precision } : {}),
+      }
+    : {
+        quantity: value.quantity,
+        ...(value.unit !== undefined ? { unit: value.unit } : {}),
+        ...(value.precision !== undefined ? { precision: value.precision } : {}),
+      };
 }
 
 /**

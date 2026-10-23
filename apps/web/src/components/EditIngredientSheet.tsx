@@ -274,7 +274,10 @@ function EditIngredientSheet({
         {/* Ingredient-level precision: a display preference, not a scale. */}
         <div className="field">
           <span className="field-label">Genauigkeit</span>
-          <p className="field-hint">Standard erbt die Rezept- bzw. globale Einstellung.</p>
+          <p className="field-hint">
+            Gilt für alle Mengen dieser Zutat. Eine einzelne Menge kann eine andere Genauigkeit
+            wählen.
+          </p>
           <PrecisionChips
             value={precision}
             onChange={(next) => {

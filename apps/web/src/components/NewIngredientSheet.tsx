@@ -424,7 +424,7 @@ function NewIngredientSheet({
           <span className="field-label">Genauigkeit</span>
           <p className="field-hint">
             Bestimmt, wie genau die Mengen dieser Zutat dargestellt werden: „Sehr hoch“ bevorzugt
-            exakte metrische Mengen, „Sehr niedrig“ runde Haushalts- und Packungsmaße.
+            exakte metrische Mengen, „Sehr niedrig“ bevorzugt runde Haushalts- und Packungsmaße.
           </p>
           <PrecisionChips
             value={precision}

@@ -6,15 +6,17 @@
  * Higher precision prefers exact metric amounts, lower precision practical
  * household/package measures.
  *
- * The ingredient-level value is mandatory, so the control always has a value
- * and offers no „Standard“ reset. It is shared by the create and edit sheets of
- * the ingredient master data, so labels and values cannot drift.
+ * The control always carries a value in both places it is used: the ingredient
+ * master data (mandatory) and the quantity sheet (the effective value). It never
+ * offers a separate „Standard“ chip or reset — the default is one of the five
+ * levels, so in the quantity sheet selecting that level *is* the reset. The
+ * create and edit sheets of the ingredient master data share it, so labels and
+ * values cannot drift.
  */
 
 import { PRECISION_LEVELS, type PrecisionLevel } from '@cookbook/core';
 
-/** German labels of the five choices, in PRECISION_LEVELS order. */
-const LABELS: readonly string[] = ['Sehr niedrig', 'Niedrig', 'Mittel', 'Hoch', 'Sehr hoch'];
+import { precisionLabel } from './precisionLabels';
 
 interface PrecisionChipsProps {
   /** The current precision level. */
@@ -30,7 +32,7 @@ function PrecisionChips({ value, onChange, ariaLabel }: PrecisionChipsProps) {
   return (
     <div className="precision-control">
       <div className="quantity-chips" role="group" aria-label={ariaLabel}>
-        {PRECISION_LEVELS.map((choice, index) => (
+        {PRECISION_LEVELS.map((choice) => (
           <button
             key={choice}
             type="button"
@@ -38,7 +40,7 @@ function PrecisionChips({ value, onChange, ariaLabel }: PrecisionChipsProps) {
             aria-pressed={value === choice}
             onClick={() => onChange(choice)}
           >
-            {LABELS[index]}
+            {precisionLabel(choice)}
           </button>
         ))}
       </div>
