@@ -24,12 +24,11 @@
  *    "Umplanen" action already state that the dish is on the plan, and the home
  *    screen shows a planned recipe only in its "Essensplan" section.
  * 3. **Unrecognized meal-plan entry** — no recipe behind it, so it carries **no
- *    hero image at all** (decided with the user; the list card's symbol is
- *    enough, and this sheet is about the entry's text and its actions). Its
+ *    hero image at all** (decided with the user; the list card's danger symbol
+ *    is enough, and this sheet is about the entry's text and its actions). Its
  *    body shows the title without the export link, the stated size and a
- *    trailing free-text note, then the parts the parser recognized: the
- *    "Unbekannt" badge (GlobeIcon on clay for an entry with a link,
- *    RoomServiceIcon on danger otherwise) as the first item of the
+ *    trailing free-text note, then the parts the parser recognized: the danger
+ *    "Unbekannt" badge (RoomServiceIcon before the label) as the first item of the
  *    caption/value row, the free-text note as a line of its own under the title
  *    (in its written parentheses), the stated size as the "Geplant"
  *    caption/value item exactly like a known planned
@@ -148,7 +147,6 @@ import {
   CalendarEditIcon,
   CheckBoxIcon,
   ContentCopyIcon,
-  GlobeIcon,
   MenuBookIcon,
   MoreVertIcon,
   PencilIcon,
@@ -860,7 +858,7 @@ function RecipeOverview({
       >
         {/* Hero: only a recognized recipe with a photo has one. An unrecognized
             entry deliberately shows none (decided with the user) — the list
-            card's "unbekannt" symbol already marks it, and its own badge
+            card's danger "unbekannt" symbol already marks it, and its own badge
             sits in the caption/value row below instead of on an image; its body
             then starts at the sheet's top padding. A recognized recipe without
             a photo also shows none (decided with the user): its body starts at
@@ -898,9 +896,7 @@ function RecipeOverview({
               fact should be read before the recipe's own timing. Arbeitszeit and
               Gesamtzeit follow as the recipe's lookup values after the
               description introduced the dish. An unrecognized entry leads the
-              same row with its "Unbekannt" badge (the globe on clay when the
-              line has a link, the cloche on danger otherwise) and then names its
-              two facts
+              same row with its "Unbekannt" badge and then names the two facts
               its line carries: the size it states ("Geplant", exactly like a
               known planned recipe) and, right after it, the domain of its link
               behind the caption "Link". The shared row gives all of them the
@@ -918,18 +914,8 @@ function RecipeOverview({
                   keeps it on that same line. */}
               {target.kind === 'unknown' && (
                 <div className="overview-meta-badge">
-                  <span
-                    className={
-                      linkHref === null
-                        ? 'recipe-badge recipe-badge-unknown'
-                        : 'recipe-badge recipe-badge-unknown is-linked'
-                    }
-                  >
-                    {linkHref === null ? (
-                      <RoomServiceIcon className="recipe-badge-icon" optical={20} />
-                    ) : (
-                      <GlobeIcon className="recipe-badge-icon" optical={20} />
-                    )}
+                  <span className="recipe-badge recipe-badge-unknown">
+                    <RoomServiceIcon className="recipe-badge-icon" optical={20} />
                     <span>Unbekannt</span>
                   </span>
                 </div>

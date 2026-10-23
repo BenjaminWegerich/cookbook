@@ -33,6 +33,12 @@
 
 /* ---- Details block ------------------------------------------------------- */
 
+/* The detail blocks. Vertical rhythm follows the type-size rule
+   (docs/DESIGN.md §4.3): the bigger a block's text, the larger the step below it.
+   The 18 px description and meta row share the small step (--space-3); the 32 px
+   title adds --space-2 on top of that gap (--space-5 in total, see
+   .overview-title below); the action row under the body keeps --space-6 (see
+   .overview-actions). */
 .overview-body {
   display: grid;
   gap: var(--space-3);
@@ -41,9 +47,14 @@
 }
 
 .overview-title {
-  /* margin: 0 — the heading's UA margin would stack on the grid gap and push
-     the following element far below the title. */
-  margin: 0;
+  /* The heading's UA margin would stack on the grid gap and push the following
+     element far below the title, so the top and inline margins are zero. The
+     bottom margin is the title's own extra step: added to the body's --space-3
+     gap it gives the 32 px title --space-5 below it. A lone title (no
+     description, meta, loading or error line follows) is the body's last child
+     and keeps no extra margin, so the action row sees the same --space-6 as
+     below any other body block. */
+  margin: 0 0 var(--space-2);
   font-size: var(--text-xl);
   font-weight: 600;
   line-height: var(--leading-xl);
@@ -51,6 +62,10 @@
      the sheet. The title is not clamped here: the overview is the readable
      detail view, so it shows the full name. */
   overflow-wrap: anywhere;
+}
+
+.overview-title:last-child {
+  margin-block-end: 0;
 }
 
 /* Arbeitszeit / Gesamtzeit / Geplant as one compact caption/value row. */
@@ -153,6 +168,10 @@
      overflow sideways on a narrower viewport. */
   flex-wrap: wrap;
   gap: var(--space-2);
+  /* The action row closes the reading block, so it keeps the next larger step
+     below the text: the sheet's --space-5 gap plus --space-1 here is --space-6
+     (18 px), one step above the --space-5 gap below the 32 px title. */
+  margin-block-start: var(--space-1);
 }
 
 .overview-action {
@@ -258,9 +277,16 @@
 .overview-menu button {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  /* Same symbol-to-label gap as an action button (--space-2), so the entry's
+     icon and text keep the buttons' horizontal rhythm. */
+  gap: var(--space-2);
   width: 100%;
-  padding: var(--space-3) var(--space-4);
+  /* The entry's own --space-1 inline padding plus the menu's --space-2 padding
+     above is --space-4 (10 px) — exactly the inline padding of every action
+     button. A menu entry's symbol therefore starts on the same inset as a
+     button's, instead of being pushed in by the menu's surface padding. The
+     block padding stays the entry's own --space-3. */
+  padding: var(--space-3) var(--space-1);
   background: none;
   border: none;
   border-radius: var(--radius-sm);

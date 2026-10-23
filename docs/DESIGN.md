@@ -213,6 +213,13 @@ interface.
 - A second-priority step gets a `--space-*` token only when a repeated need appears, not in
   advance.
 
+**Vertical space follows the type size.** A block of text keeps a larger step below it the
+larger its type: a 32px title keeps `--space-5` (14px) to the block below it, while 18px body
+text, a description and a caption/value row share `--space-3` (8px). The action row that
+closes a reading block keeps `--space-6` (18px) — one step above the title's gap — so the
+controls stand apart from the text. *decided with the user; the recipe overview is the first
+screen built on it.*
+
 *Applies to: cooking view.*
 
 The same pixel ladder and `--space-*` tokens as the web app. Screen gutters are `--app-padding`
@@ -833,7 +840,7 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 | „Neu" | new releases | danger | the ingredient is not in the master data yet |
 | „Rezept" | link | accent | the ingredient has a recipe of its own; the badge itself opens it |
 | „Referenz" | outline star | olive | mirrors the star toggle; its × clears the role |
-| „Unbekannt" | globe with a link, room service otherwise | accent with a link, danger otherwise | a meal-plan line the app cannot recognise |
+| „Unbekannt" | room service | danger | a meal-plan line the app cannot recognise |
 
 **Rules**
 
@@ -878,9 +885,8 @@ without a photo starts its body at the sheet's top padding, like an unrecognized
 that opened the sheet already carried the room-service placeholder, so the sheet does not repeat
 it. The card grid keeps the placeholder for recipes without a photo.
 
-**An unrecognised meal-plan line gets its own media area** instead of a placeholder: a line
-with a link shows the globe on the clay accent, a line without one the room-service cloche on the
-danger colour — that card then needs no badge of its own (§5.7).
+**An unrecognised meal-plan line gets the danger media area** with the room-service symbol
+instead of a placeholder — that card then needs no badge of its own (§5.7).
 
 **Sizes.** Card media: the full card width, 4:3. Overview hero: the full sheet content width,
 4:3. Editor preview: 120 × 90px (4:3).

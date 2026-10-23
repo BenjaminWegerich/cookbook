@@ -9,11 +9,10 @@
  *   recipe (see `parseMealPlanText` / `plannedAmountFitsRecipe` in
  *   @cookbook/core). The card shows the known recipe format (photo, title).
  * - **Unrecognized** — everything else, including a known title whose suffix
- *   does not fit. The card shows the "unbekannt" symbol in place of a photo
- *   (no recipe stands behind the entry): the globe on the clay accent when the
- *   entry carries a link, the cloche on the danger colour otherwise. Its title
- *   is shown without its stated size and without a trailing free-text note. The
- *   parts the parser recognized are not lost: the stated size, the note and the link
+ *   does not fit. The card shows the danger "unbekannt" symbol in place of a
+ *   photo (no recipe stands behind the entry) and the entry's title without
+ *   its stated size and without a trailing free-text note. The parts the
+ *   parser recognized are not lost: the stated size, the note and the link
  *   travel on the card and are shown by the recipe overview (the size as its
  *   "Geplant" value like a known planned recipe, the note as a line under the
  *   title, the link as the domain after "Geplant" — all decided with the user).

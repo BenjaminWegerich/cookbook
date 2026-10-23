@@ -9,7 +9,6 @@ import type { KeepStatus } from '../keep/useKeep';
 import {
   CheckCircleIcon,
   CloseIcon,
-  GlobeIcon,
   ListPlusIcon,
   RoomServiceIcon,
   SearchIcon,
@@ -155,8 +154,7 @@ interface RecipeListProps {
  *   one card per entry, in Keep's order. An entry recognized as a recipe (its
  *   text is a recipe title, plus an optional fitting size suffix) renders in
  *   the known card format; every other entry renders as a card whose media area
- *   is the "unbekannt" symbol instead of a photo (the globe on clay for an
- *   entry with a link, the cloche on danger for one without), with the entry's title
+ *   is the danger "unbekannt" symbol instead of a photo, with the entry's title
  *   as its title (the export link, a stated size and a free-text note are left
  *   out — the overview behind the card shows them). Tapping either card opens
  *   the overview: the recognized one with its stated size and "Umplanen", the
@@ -310,7 +308,7 @@ function RecipeList({
   /**
    * The counter of the "Essensplan" caption: `x Einträge, davon y unbekannt` —
    * y is how many of Keep's entries are not recognized as a recipe (the cards
-   * with the "unbekannt" symbol; every entry counts, even a repeated
+   * with the danger "unbekannt" symbol; every entry counts, even a repeated
    * one). Null while the
    * plan is not resolved (Keep off, connecting, still loading or failed): the
    * app must not claim a zero it cannot know.
@@ -441,32 +439,20 @@ function RecipeList({
             );
           }
           // Unrecognized: no recipe stands behind the entry, so the card's media
-          // area is not a photo but the "unbekannt" symbol, and the card carries
-          // no badge any more. The symbol follows the line: an entry that carries
-          // a link points at the web, so it shows the globe (GlobeIcon) on the
-          // clay accent; an entry without a link keeps the serving cloche of
-          // RoomServiceIcon on the danger colour, which reads as "a dish, not
-          // known yet" rather than as an error (decided with the user). The
-          // title is the entry without its export URL, its stated size and its
-          // free-text note — exactly the shape a known recipe's card has — and
-          // the overview behind the card shows those recognized parts (size,
-          // note, link) plus the "Unbekannt" badge.
+          // area is not a photo but the danger "unbekannt" symbol — the serving
+          // cloche of RoomServiceIcon, decided with the user, who wanted it to
+          // read as "a dish, not known yet" instead of as an error — which is why
+          // the card carries no badge any more. The title is the entry
+          // without its export URL, its stated size and its free-text note —
+          // exactly the shape a known recipe's card has — and the overview
+          // behind the card shows those recognized parts (size, note, link)
+          // plus the "Unbekannt" badge.
           return (
             <li key={card.key}>
               <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
                 <span className="recipe-media">
-                  <span
-                    className={
-                      card.link === null
-                        ? 'recipe-thumb recipe-thumb-unknown'
-                        : 'recipe-thumb recipe-thumb-unknown is-linked'
-                    }
-                  >
-                    {card.link === null ? (
-                      <RoomServiceIcon className="recipe-thumb-icon" />
-                    ) : (
-                      <GlobeIcon className="recipe-thumb-icon" optical={40} />
-                    )}
+                  <span className="recipe-thumb recipe-thumb-unknown">
+                    <RoomServiceIcon className="recipe-thumb-icon" />
                   </span>
                 </span>
                 <span className="recipe-card-title">
