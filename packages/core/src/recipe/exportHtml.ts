@@ -59,11 +59,11 @@
 
 import {
   EN_SPACE,
-  formatAQValueSlash,
+  formatAQValue,
   formatBQ,
   formatDecimal,
-  renderAQSDisplaySlash,
-  renderMasterAQSDisplaySlash,
+  renderAQSDisplay,
+  renderMasterAQSDisplay,
   type ArrangementDisplay,
 } from '../additionalUnits.js';
 import { optimizeUnitless } from '../quantityOptimizer.js';
@@ -83,7 +83,7 @@ import type { ResolvedTheme } from './theme.js';
 import { displayTimeText } from './timeValues.js';
 import { defaultYieldView, yieldViewQuantities } from './yieldViews.js';
 import type { Ingredient, MasterIngredient, Recipe, Step, Unit } from './types.js';
-import { EMBEDDED_FONT_COMPANION, EMBEDDED_FONTS } from './embeddedFonts.js';
+import { EMBEDDED_FONT_COMPANIONS, EMBEDDED_FONTS } from './embeddedFonts.js';
 
 /**
  * The recipe photo, encoded for embedding in the export (DESIGN §5.8). The
@@ -157,6 +157,7 @@ function themeCss(theme: ResolvedTheme): string {
       ? theme.ink
       : theme.paper;
   const fonts = resolveThemeFonts(theme.font);
+  const headingFallback = fonts.heading === fonts.body ? '' : `'${fonts.body}', `;
   return (
     `:root {\n` +
     `  --theme-font: '${theme.font}';\n` +
@@ -169,9 +170,12 @@ function themeCss(theme: ResolvedTheme): string {
     // book serif for the body (see resolveThemeFonts). Both faces are embedded
     // as self-hosted WOFF2 `@font-face` rules (see fontFaceCss below); the
     // system-ui stack remains the fallback for a face without an embedded font
-    // (§4.8).
+    // (§4.8). A heading face that differs from the body face falls back to the
+    // body face first, so a character the heading face lacks (a fraction or
+    // U+202F in a page title) keeps the theme's design and uses the body face's
+    // companion instead of the operating system's font.
     `  --font: '${fonts.body}', system-ui, sans-serif;\n` +
-    `  --font-heading: '${fonts.heading}', system-ui, sans-serif;\n` +
+    `  --font-heading: '${fonts.heading}', ${headingFallback}system-ui, sans-serif;\n` +
     `  --paper: var(--theme-paper);\n` +
     `  --ink: var(--theme-ink);\n` +
     `  --accent: var(--theme-accent);\n` +
@@ -200,11 +204,14 @@ const THEME_FACE_UNICODE_RANGE =
  * face is a variable font, declared once over the two weights the cooking view
  * uses (`400 600`, §4.2).
  *
- * A companion face follows the family under the same name. It supplies the
- * narrow no-break space (U+202F) every quantity uses and the Number Forms
- * fraction glyphs; the family's `unicode-range` excludes them, so the browser
- * takes them from the companion. Without it the number and its unit lose their
- * gap ("300g") in browsers that fall back without a space glyph.
+ * A matching companion face follows every export body family under the same
+ * name. It supplies the narrow no-break space (U+202F) every quantity uses and
+ * the Number Forms fraction glyphs of §7; the family's `unicode-range` excludes
+ * both, so the browser takes them from the companion. Without it the number and
+ * its unit lose their gap ("300g") in browsers that fall back without a space
+ * glyph, and the fractions would come from a foreign fallback font. Noto Serif
+ * Display has no companion: it renders page headings only and carries no
+ * quantities.
  */
 function familyFaceCss(family: string): string {
   const faces = EMBEDDED_FONTS[family];
@@ -222,16 +229,18 @@ function familyFaceCss(family: string): string {
         `}`,
     )
     .join('\n');
-  const companion =
+  const companion = EMBEDDED_FONT_COMPANIONS[family];
+  if (companion === undefined) return themeFaces;
+  const companionCss =
     `@font-face {\n` +
     `  font-family: '${family}';\n` +
     `  font-style: normal;\n` +
     `  font-display: swap;\n` +
-    `  font-weight: ${EMBEDDED_FONT_COMPANION.weight};\n` +
-    `  unicode-range: ${EMBEDDED_FONT_COMPANION.unicodeRange};\n` +
-    `  src: url(data:font/woff2;base64,${EMBEDDED_FONT_COMPANION.base64}) format('woff2');\n` +
+    `  font-weight: ${companion.weight};\n` +
+    `  unicode-range: ${companion.unicodeRange};\n` +
+    `  src: url(data:font/woff2;base64,${companion.base64}) format('woff2');\n` +
     `}\n`;
-  return `${themeFaces}\n${companion}`;
+  return `${themeFaces}\n${companionCss}`;
 }
 
 /**
@@ -304,9 +313,7 @@ function artifactContext(artifact: TextArtifact): PrecisionContext {
  */
 function unitlessText(value: number, context: PrecisionContext): string {
   const result = optimizeUnitless(value, context);
-  return result.notation === undefined
-    ? formatDecimal(result.value)
-    : formatAQValueSlash(result.value);
+  return result.notation === undefined ? formatDecimal(result.value) : formatAQValue(result.value);
 }
 
 /**
@@ -352,7 +359,7 @@ function displayHtml(
   if (name === undefined) {
     return escapeHtml(bu === undefined ? unitlessText(value, context) : formatBQ(value, bu));
   }
-  return arrangementHtml(renderAQSDisplaySlash(name, value, bu ?? 'g', context), 'bare');
+  return arrangementHtml(renderAQSDisplay(name, value, bu ?? 'g', context), 'bare');
 }
 
 /**
@@ -368,7 +375,7 @@ function artifactDisplayHtml(
   if (name === undefined) {
     return displayHtml(name, value, bu, context);
   }
-  return arrangementHtml(renderAQSDisplaySlash(name, value, bu ?? 'g', context), 'parenthesised');
+  return arrangementHtml(renderAQSDisplay(name, value, bu ?? 'g', context), 'parenthesised');
 }
 
 /**
@@ -412,7 +419,7 @@ function masterDisplay(
     const text = `${formatBQ(ingredient.quantity * factor, ingredient.unit)} ${ingredient.name}`;
     return { text, parts: [{ kind: 'text', value: text }] };
   }
-  return renderMasterAQSDisplaySlash(ingredient.name, uses, ingredient.unit);
+  return renderMasterAQSDisplay(ingredient.name, uses, ingredient.unit);
 }
 
 /**

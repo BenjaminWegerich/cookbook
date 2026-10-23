@@ -559,10 +559,11 @@ A typeface joins the shortlist only when it meets every requirement:
   declared over `400 600`. *decided with the user*
 - **Character coverage.** Native glyphs for Basic Latin and Latin-1 (the German letters
   `ä ö ü ß Ä Ö Ü` included), the typographic punctuation the content uses (`„ " ' – — …`).
-  Fractions render in the slash form (§7), so the theme face needs no fraction glyphs. The
-  narrow no-break space between number and unit is not left to the system font: the export
-  embeds the Noto Sans companion face for U+202F (the same one the web app uses, §4.2), so a
-  quantity keeps its gap even though the theme font's latin subset omits the character.
+  Quantities render the Number Forms fraction glyphs of §7, so every body face embeds a
+  matching fraction companion (U+2150–215E, U+2189) built from its own full variable source.
+  The companion also carries the narrow no-break space (U+202F) between number and unit.
+  Noto Serif Display is a heading face only and embeds no companion; its body face, Noto
+  Serif, embeds one.
 - **Legible at arm's length** at the four sizes of §4.2 within their fixed line-heights, with
   clear figures. A typeface may be expressive in any genre, but body text (18–24 px) that
   fails at arm's length is out. The display serif meets this as a heading face only; its body
@@ -1407,9 +1408,10 @@ verbless „Zurück" and „Weiter". Its other strings: the step title „Schrit
 (sub-recipe badge), the size-picker captions „Portionen" / „Menge", the time captions
 „Arbeitszeit" / „Gesamtzeit", and the footer „Erstellt mit Cookbook" beside the brand mark.
 Numbers and units are joined by the narrow no-break space. Quantities show proper fractions
-in the slash form — `1/2`, `2/5`, `1 1/4` — never the web app's vulgar-fraction glyphs: the
-slash form keeps full-size digits for arm's-length reading and asks no fraction glyphs of the
-theme font. A mixed number joins its integer and fraction with the narrow no-break space. A badge
+in the web app's vulgar-fraction glyphs — `½`, `⅗`, `1 ¼` — not the slash form: each theme's
+body face embeds its own matching fraction glyphs (§4.8), so the fractions keep the theme's
+design instead of falling back to another font. A mixed number joins its integer and fraction
+with the narrow no-break space. A badge
 or a symbol that sits inside a sentence keeps one space on each side of it, so a screen reader
 never reads it and the neighbouring word as one word.
 

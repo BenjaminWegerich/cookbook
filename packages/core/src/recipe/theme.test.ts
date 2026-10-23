@@ -13,7 +13,7 @@ import {
   resolveTheme,
   resolveThemeFonts,
 } from './theme.js';
-import { EMBEDDED_FONT_COMPANION, EMBEDDED_FONTS } from './embeddedFonts.js';
+import { EMBEDDED_FONT_COMPANIONS, EMBEDDED_FONTS } from './embeddedFonts.js';
 
 describe('THEME_FONT_SHORTLIST', () => {
   it('holds the five Noto faces of DESIGN §4.8, no duplicates', () => {
@@ -70,10 +70,19 @@ describe('EMBEDDED_FONTS', () => {
     }
   });
 
-  it('embeds the fraction/space companion for the theme faces', () => {
-    expect(EMBEDDED_FONT_COMPANION.base64.length).toBeGreaterThan(0);
-    expect(EMBEDDED_FONT_COMPANION.weight).toBe('400 600');
-    expect(EMBEDDED_FONT_COMPANION.unicodeRange).toContain('U+202F');
+  it('embeds a fraction/space companion for every export body face', () => {
+    // Every shortlist face renders body text except the display serif, which is
+    // a heading face only (resolveThemeFonts pairs it with Noto Serif).
+    const bodyFaces = THEME_FONT_SHORTLIST.filter((name) => name !== 'Noto Serif Display');
+    expect(Object.keys(EMBEDDED_FONT_COMPANIONS).sort()).toEqual([...bodyFaces].sort());
+    for (const family of bodyFaces) {
+      const companion = EMBEDDED_FONT_COMPANIONS[family];
+      expect(companion?.base64.length, family).toBeGreaterThan(0);
+      expect(companion?.weight, family).toBe('400 600');
+      expect(companion?.unicodeRange, family).toContain('U+202F');
+      expect(companion?.unicodeRange, family).toContain('U+2150-215E');
+    }
+    expect(EMBEDDED_FONT_COMPANIONS['Noto Serif Display']).toBeUndefined();
   });
 });
 

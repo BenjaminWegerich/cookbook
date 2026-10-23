@@ -1,5 +1,8 @@
 /**
- * The six self-hosted Noto faces (scripts/generate-noto-faces.mjs).
+ * The six self-hosted Noto faces the web app declares
+ * (scripts/generate-noto-faces.mjs). The same script also builds the export-only
+ * fraction companions for the other theme body faces; they live beside these
+ * files but are declared only in the standalone export, never in the app.
  *
  * The four stock faces are the latin subsets of the `@fontsource` packages, so
  * the bundle ships exactly the files the app can use — no Cyrillic, Devanagari

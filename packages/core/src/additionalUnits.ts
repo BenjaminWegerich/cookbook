@@ -276,8 +276,8 @@ const AQ_GLYPHS: Readonly<Record<string, string>> = {
  * Formats a canonical AQ fraction ("1/2", "1+1/4") in the display typography
  * of §8: glyphs for the proper fractions and a narrow no-break space between
  * the integer and the glyph of a mixed number ("1 ¼"). Whole AQ values pass
- * through unchanged. A fraction without a glyph (none exists today) keeps its
- * canonical form so a new AQ row never renders as garbage.
+ * through unchanged. A fraction without a glyph (e.g. a master sum of 7/24)
+ * keeps its canonical form so it never renders as garbage.
  */
 export function formatAQ(aq: string): string {
   const glyph = AQ_GLYPHS[aq];
@@ -290,38 +290,13 @@ export function formatAQ(aq: string): string {
 }
 
 /**
- * Formats a canonical AQ fraction ("1/2", "1+1/4") in the slash form of
- * DESIGN §7 (cooking view): a proper fraction keeps its full-size digits
- * ("1/2", "2/5"), and a mixed number joins its integer and fraction with the
- * narrow no-break space ("1 1/4"). Unlike `formatAQ`, which substitutes the
- * web app's single Unicode fraction glyphs, this form asks no fraction glyph
- * of the export's theme font and reads at arm's length (§4.8 character
- * coverage). Whole AQ values pass through unchanged.
- */
-export function formatAQSlash(aq: string): string {
-  const plus = aq.indexOf('+');
-  if (plus === -1) return aq;
-  return `${aq.slice(0, plus)}${NNBSP}${aq.slice(plus + 1)}`;
-}
-
-/**
  * Formats a numeric AQ value in the §8 typography (0.25 → "¼", 1.25 → "1 ¼").
- * Used for unitless inline quantities that are AQ values. Throws when `value`
- * is not an AQ value; callers with an arbitrary target use `optimizeUnitless`
- * first.
+ * Used for unitless inline quantities that are AQ values, in both the web app
+ * and the HTML export. Throws when `value` is not an AQ value; callers with an
+ * arbitrary target use `optimizeUnitless` first.
  */
 export function formatAQValue(value: number): string {
   return formatAQ(aqNotation(value));
-}
-
-/**
- * Formats a numeric AQ value in the slash form of DESIGN §7 (0.25 → "1/4",
- * 1.25 → "1 1/4") — the cooking view's counterpart of `formatAQValue`, used
- * for unitless inline quantities. Throws when `value` is not an AQ value,
- * exactly like `formatAQValue`.
- */
-export function formatAQValueSlash(value: number): string {
-  return formatAQSlash(aqNotation(value));
 }
 
 /**
@@ -606,7 +581,7 @@ function renderSelectedAQ(
 
 /**
  * Renders an optimizer result with the selected unit's arrangement. Shared by
- * `renderAQS`, `renderAQSSlash` and the reorder-point preview. The shown BQ is
+ * `renderAQS` and the reorder-point preview. The shown BQ is
  * the optimizer's BQ: for an exact unit that is `q·c`, for a non-exact or
  * metric-only candidate a value from the BQ table, and for a fallback `V0`.
  */
@@ -661,10 +636,10 @@ export function renderAQS(
 }
 
 /**
- * The web app's display runs for `renderAQS` (§4): the same line, with every
- * parenthesized arrangement note split out so it can be rendered muted and
- * italic after an en space. The written shopping list keeps `renderAQS`'s
- * bracketed `text`.
+ * The display runs for `renderAQS` (§4), used by the web app and the HTML
+ * export: the same line, with every parenthesized arrangement note split out so
+ * it can be rendered muted and italic after an en space. The written shopping
+ * list keeps `renderAQS`'s bracketed `text`.
  */
 export function renderAQSDisplay(
   ingredient: string,
@@ -673,33 +648,6 @@ export function renderAQSDisplay(
   context: PrecisionContext = {},
 ): ArrangementDisplay {
   return renderAQSWith(ingredient, bq, bu, formatAQ, context);
-}
-
-/**
- * The cooking view's counterpart of `renderAQS` (DESIGN §7): the same line,
- * but the additional quantity renders in the slash form (`formatAQSlash`)
- * instead of the web app's fraction glyphs.
- */
-export function renderAQSSlash(
-  ingredient: string,
-  bq: number,
-  bu: string,
-  context: PrecisionContext = {},
-): string {
-  return renderAQSDisplaySlash(ingredient, bq, bu, context).text;
-}
-
-/**
- * The cooking view's display runs for `renderAQSSlash` (§4): the slash-form AQ
- * with the arrangement notes split out for styled rendering.
- */
-export function renderAQSDisplaySlash(
-  ingredient: string,
-  bq: number,
-  bu: string,
-  context: PrecisionContext = {},
-): ArrangementDisplay {
-  return renderAQSWith(ingredient, bq, bu, formatAQSlash, context);
 }
 
 /**
@@ -721,20 +669,8 @@ export function renderMasterAQSDisplay(
 }
 
 /**
- * The cooking view's counterpart of `renderMasterAQSDisplay` (DESIGN §7): the
- * same constrained master line, with the slash-form AQ.
- */
-export function renderMasterAQSDisplaySlash(
-  ingredient: string,
-  uses: readonly MasterQuantityUse[],
-  bu: string,
-): ArrangementDisplay {
-  return renderMasterAQSWith(ingredient, uses, bu, formatAQSlash);
-}
-
-/**
- * The shared core of the two master renderers: optimizes the master quantity
- * from its step uses and renders the selected unit's arrangement.
+ * The shared core of the master renderer: optimizes the master quantity from
+ * its step uses and renders the selected unit's arrangement.
  */
 function renderMasterAQSWith(
   ingredient: string,
@@ -750,8 +686,8 @@ function renderMasterAQSWith(
 }
 
 /**
- * The shared core of the four public AQS renderers: selects the additional
- * quantity, then renders the arrangement with the caller's fraction formatter.
+ * The shared core of the AQS display renderer: selects the additional quantity,
+ * then renders the arrangement with the §8 fraction formatter.
  */
 function renderAQSWith(
   ingredient: string,

@@ -233,7 +233,8 @@ the user), so an exact unit never changes what is stored.
   Number and unit are joined by U+202F.
 - AQ notation: proper fractions use the Unicode glyphs (`⅒ ⅑ ⅛ ⅙ ¼ ⅓ ⅜ ⅖ ½ ⅗ ⅔ ¾ ⅝ ⅚ ⅞`);
   a mixed number is integer + U+202F + glyph (`1 ¼`); whole counts stay as they
-  are. The cooking view uses the slash form (`1/2`, `1 1/4`). A master AQ sum
+  are. The web app and the cooking view share this glyph form; the export embeds
+  a matching fraction face for every theme body face. A master AQ sum
   that is not an AQ table value uses the reduced slash fraction with the same
   mixed form (`7/24`, `1 7/24`), because no glyph exists for it.
 - Precision can be set per quantity (optional) and per ingredient (mandatory);

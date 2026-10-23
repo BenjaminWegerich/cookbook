@@ -17,9 +17,7 @@ import {
   NNBSP,
   renderAQS,
   renderAQSDisplay,
-  renderAQSSlash,
   renderMasterAQSDisplay,
-  renderMasterAQSDisplaySlash,
   renderPantryChipDisplay,
   selectAQ,
   splitArrangementNotes,
@@ -94,10 +92,6 @@ describe('renderAQS (optimizer-backed)', () => {
 
   it('falls back to the plain base form when no candidate fits', () => {
     expect(renderAQS('Mehl', 0.5, 'g')).toBe(`0,5${NB}g Mehl`);
-  });
-
-  it('renders the slash form for the cooking view', () => {
-    expect(renderAQSSlash('Joghurt', 250, 'g')).toBe(`1/2${NB}Becher Joghurt (250${NB}g)`);
   });
 
   it('selectAQ returns null when only a metric BQ fits', () => {
@@ -193,14 +187,14 @@ describe('renderMasterAQSDisplay (constrained master row)', () => {
     );
   });
 
-  it('writes a master fraction above one as a mixed fraction with NNBSP', () => {
-    // The cooking view writes "1 1/2", never the improper "3/2".
-    const line = renderMasterAQSDisplaySlash(
+  it('writes a master fraction above one as a mixed glyph with NNBSP', () => {
+    // The export and the web app write "1 ½", never the improper "3/2".
+    const line = renderMasterAQSDisplay(
       'Joghurt',
       [{ quantity: 450 }, { quantity: 250 }],
       'g',
     ).text;
-    expect(line).toBe(`1${NB}1/2${NB}Becher Joghurt (750${NB}g)`);
+    expect(line).toBe(`1${NB}½${NB}Becher Joghurt (750${NB}g)`);
     expect(line).not.toContain('3/2');
   });
 });

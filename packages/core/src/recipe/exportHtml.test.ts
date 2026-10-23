@@ -12,13 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  EN_SPACE,
-  NNBSP,
-  formatBQ,
-  renderAQSSlash,
-  renderAQSDisplaySlash,
-} from '../additionalUnits.js';
+import { EN_SPACE, NNBSP, formatBQ, renderAQSDisplay } from '../additionalUnits.js';
 import { escapeHtml } from './artifacts.js';
 import { parseRecipe } from './parse.js';
 import { generateRecipeHtml } from './exportHtml.js';
@@ -37,7 +31,7 @@ function amountHtml(
   bu: string,
   noteForm: 'bare' | 'parenthesised' | 'reference' = 'bare',
 ): string {
-  return renderAQSDisplaySlash(name, value, bu)
+  return renderAQSDisplay(name, value, bu)
     .parts.map((part) => {
       if (part.kind === 'text') {
         return escapeHtml(part.value);
@@ -123,9 +117,9 @@ prep_time: 5 min
    Joghurt unterheben.
 `),
     );
-    // Step rows show 1 Becher (500 g) and 1/2 Becher (250 g); the master sums
-    // both the BQs (750 g) and the AQs (1 1/2 Becher).
-    expect(repeated).toContain(`1${NNBSP}1/2${NNBSP}Becher Joghurt`);
+    // Step rows show 1 Becher (500 g) and ½ Becher (250 g); the master sums
+    // both the BQs (750 g) and the AQs (1 ½ Becher).
+    expect(repeated).toContain(`1${NNBSP}½${NNBSP}Becher Joghurt`);
     expect(repeated).toContain(`<span class="arrangement-note">750${NNBSP}g</span>`);
   });
 
@@ -165,7 +159,7 @@ reference:
     expect(html).toContain(amountHtml('Béchamelsauce', 500, 'ml'));
   });
 
-  it('renders inline artifacts scaled inside the prose, in slash form', () => {
+  it('renders inline artifacts scaled inside the prose', () => {
     // Option 6 is the written size, so the {{1500 ml Wasser}} artifact is unscaled.
     expect(html).toContain(amountHtml('Wasser', 1500, 'ml'));
     // No raw artifact markers survive.
@@ -286,12 +280,12 @@ prep_time: 5 min
 
   const html = generateRecipeHtml(counts);
 
-  it('scales a unitless count by the exact factor and shows slash-form fractions', () => {
+  it('scales a unitless count by the exact factor and shows fraction glyphs', () => {
     // Option 6 (factor 1.5): 1/2 → 3/4, 100 → 150 (outside the AQ table, so a
     // plain number), 1/3 → 1/2.
-    expect(html).toContain('Mit 3/4 und 150 und 1/2 arbeiten.');
+    expect(html).toContain('Mit ¾ und 150 und ½ arbeiten.');
     // The written option 4 shows the unscaled counts.
-    expect(html).toContain('Mit 1/2 und 100 und 1/3 arbeiten.');
+    expect(html).toContain('Mit ½ und 100 und ⅓ arbeiten.');
     expect(html).not.toContain('{{');
   });
 });
@@ -440,7 +434,10 @@ prep_time: 15 min
     const html = generateRecipeHtml(displayThemed);
     expect(html).toContain("--theme-font: 'Noto Serif Display';");
     expect(html).toContain("--font: 'Noto Serif', system-ui, sans-serif;");
-    expect(html).toContain("--font-heading: 'Noto Serif Display', system-ui, sans-serif;");
+    // The heading face falls back to the body serif for glyphs it lacks.
+    expect(html).toContain(
+      "--font-heading: 'Noto Serif Display', 'Noto Serif', system-ui, sans-serif;",
+    );
   });
 
   it('computes the derived colours (muted and on-accent) as solid hex', () => {
@@ -521,23 +518,24 @@ prep_time: 15 min
     const html = generateRecipeHtml(condensed);
     expect(html).toContain("font-family: 'Noto Sans Condensed';");
     expect(html).toContain('font-weight: 400 600;');
-    // The theme face plus the shared companion, both under the theme family.
+    // The theme face plus its matching companion, both under the theme family.
     expect(html.match(/@font-face/g)).toHaveLength(2);
   });
 
-  it('embeds the fraction/space companion beside the theme face', () => {
+  it('embeds the matching fraction/space companion beside the theme face', () => {
     const html = generateRecipeHtml(serif);
-    // The theme face excludes U+202F; the companion owns it and the Number Forms.
+    // The theme face excludes U+202F and the Number Forms; its companion owns
+    // both, so the fractions keep the serif design.
     expect(html).toContain('unicode-range: U+202F, U+2150-215E, U+2189;');
     expect(html.match(/@font-face/g)).toHaveLength(2);
   });
 
-  it('embeds both faces of a display-serif theme, each with its companion', () => {
+  it('embeds both faces of a display-serif theme, with a companion for the body only', () => {
     const html = generateRecipeHtml(display);
     expect(html).toContain("font-family: 'Noto Serif Display';");
     expect(html).toContain("font-family: 'Noto Serif';");
-    // Latin face + companion for the heading and for the body family.
-    expect(html.match(/@font-face/g)).toHaveLength(4);
+    // Heading face (no fractions) + body latin face + body companion.
+    expect(html.match(/@font-face/g)).toHaveLength(3);
   });
 
   it('sets only the page headings in the heading face', () => {
