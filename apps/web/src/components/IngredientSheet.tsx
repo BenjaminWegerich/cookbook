@@ -197,6 +197,14 @@ function IngredientSheet({
   };
 
   /**
+   * True when the „Vorschau“ below is produced by the quantity optimizer.
+   * A valid name renders through `renderAQSDisplay` and a unitless mention
+   * through `optimizeUnitless`; only the fallback for a half-typed name with a
+   * known unit (`formatBQ`) skips optimization and therefore gets no hint.
+   */
+  const previewOptimized = unit === undefined || (trimmedName !== '' && validName);
+
+  /**
    * Suggestions: master-data ingredient names plus ingredient-recipe titles
    * matching the typed name (prefix + substring). A title that is also a
    * master name appears once — the sub-recipe interpretation wins. Computed
@@ -428,6 +436,16 @@ function IngredientSheet({
               unitlessPreview()
             )}
           </p>
+          {/* The optimizer rounds the target to a BQ/AQ pair; the precision
+              setting (ingredient master data, or the artifact override) decides
+              how strongly. The hint appears only when the branch above really
+              optimized — the plain-BQ fallback is unaffected. */}
+          {previewOptimized && (
+            <p className="field-hint">
+              Je niedriger die gewählte Genauigkeit, desto stärker wird die Menge auf glatte Zahlen
+              gerundet.
+            </p>
+          )}
         </div>
 
         <div className="sheet-actions">
