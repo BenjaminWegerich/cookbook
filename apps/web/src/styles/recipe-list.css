@@ -16,7 +16,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
-  margin-block-end: var(--space-7);
+  margin-block-end: var(--space-6);
 }
 
 /* The heading opens the screen, so the browser's default vertical margin
@@ -33,7 +33,7 @@
    Zurück button sits on its own line at the top left — the editor's back
    placement — and the screen title below it. Two whitespace sources are removed
    so the screen keeps its own vertical rhythm:
-   - the base header's bottom margin (--space-7) would add air on top of the
+   - the base header's bottom margin (--space-6) would add air on top of the
      screen's grid gap;
    - the h1's browser-default margin (~21 px on each side at the 32 px screen
      title size) would add the same amount again above the title and below it.
@@ -60,10 +60,10 @@
   align-items: flex-start;
   justify-content: flex-start;
   gap: var(--space-6);
-  margin-block-end: calc(-1 * var(--space-5));
+  margin-block-end: calc(-1 * var(--space-6));
   margin-inline: calc(-1 * var(--app-padding));
   padding-inline: var(--app-padding);
-  padding-block-end: var(--space-5);
+  padding-block-end: var(--space-6);
   background: var(--color-bg);
 }
 
@@ -136,14 +136,12 @@
   margin-inline: calc(-1 * var(--app-padding));
   /* The bottom padding is the bar's opaque step below the field: cards scrolling
      up disappear --space-6 (18 px) under the field instead of touching its bottom
-     edge. The bottom margin keeps the resting distance at 32 px (18 + 14), two
-     pixels more than the former 30 px (6 + 24), because no ladder token lands on
-     the exact 12 px that would preserve it. Only the scrolling state gains the
-     large step; the resting layout stays effectively unchanged. Same
+     edge. That same step is the resting distance to the first section: the bar
+     adds no bottom margin, so the screen's content step is not doubled. Same
      construction as the stacked header's step below its title
      (.app-header-stacked). */
   padding: var(--space-2) var(--app-padding) var(--space-6);
-  margin-block-end: var(--space-5);
+  margin-block-end: 0;
   background: var(--color-bg);
 }
 
@@ -620,7 +618,7 @@
 
 .login-panel {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-3);
   padding: var(--space-4); /* the 18px/10px pair (§4.4) */
   background: var(--color-surface);
   border: 1px solid var(--color-line);
@@ -633,6 +631,23 @@
      needs, so it is capped here rather than via the `.app-narrow` class. */
   max-width: 42rem;
   margin-inline: auto;
+}
+
+/* The panel's title is the screen title while nobody is signed in: the standard
+   32px/36px pair, with the browser's default h1 margin reset. Its 6px bottom
+   allowance plus the panel's 8px gap gives the title block the 14px step to the
+   body. */
+.login-panel h1 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+  line-height: var(--leading-xl);
+  font-weight: 600;
+}
+
+/* The connect action closes the panel's reading block: the 8px gap plus this
+   6px difference reaches the 14px card step. */
+.login-panel > .primary-button {
+  margin-block-start: var(--space-2);
 }
 
 .login-note {
@@ -661,7 +676,7 @@
 
 .empty-state {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   padding: var(--space-8);
   background: var(--color-surface);
   border: 1px dashed var(--color-line);
@@ -680,12 +695,18 @@
 .plan-connect {
   display: grid;
   justify-items: start;
-  gap: var(--space-4);
+  gap: var(--space-3);
   padding: var(--space-4); /* the 18px/10px pair (§4.4) */
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+
+/* The one action closes the state message: the 8px gap plus this 6px
+   difference reaches the 14px card step. */
+.plan-connect > .primary-button {
+  margin-block-start: var(--space-2);
 }
 
 .plan-connect p {
@@ -709,7 +730,7 @@
 /* Non-fatal warning under the header when the Drive master data is corrupt
    or unreadable — the built-in seed keeps the app functional. */
 .master-data-warning {
-  margin-block-end: var(--space-5);
+  margin-block-end: var(--space-6);
   padding: var(--space-4);
   background: var(--color-surface);
   border: 1px solid var(--color-danger);

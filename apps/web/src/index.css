@@ -60,6 +60,18 @@ h3 {
   font-weight: 600;
 }
 
+/* Browser margins are never part of the rhythm (docs/DESIGN.md §4.3): a heading
+   or paragraph carries only the difference its step needs, set by its component.
+   Without this reset the UA's 1em paragraph margin would stack on every grid or
+   flex gap. */
+h1,
+h2,
+h3,
+h4,
+p {
+  margin-block: 0;
+}
+
 /* Base control reset. A button carries no look of its own: it takes exactly one
    of the five variants in styles/editor.css (docs/DESIGN.md §5.1) — .primary-button,
    .danger-button, .outlined-button, .text-button, .add-button — or the shared .chip.

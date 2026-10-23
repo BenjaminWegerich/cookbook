@@ -206,24 +206,102 @@ interface.
 - Any gap, padding or margin is a `--space-*` token, never a literal.
 - Use the smallest step that separates two things clearly; related items sit closer than
   unrelated ones.
-- A heading takes more space above than below.
+- A heading earns the step below it and adds no space above itself; the block above pays the
+  separation.
 - Screen gutters are `--app-padding` (18px), the same on every screen.
 - Inline icons are `--icon-size` (24px), the floating action button `--fab-size` (56px).
 - An action button is at least `--control-height` (42px) tall, so a change of leading can never shrink a target below thumb reach.
 - A second-priority step gets a `--space-*` token only when a repeated need appears, not in
   advance.
 
-**Vertical space follows the type size.** A block of text keeps a larger step below it the
-larger its type: a 32px title keeps `--space-5` (14px) to the block below it, while 18px body
-text, a description and a caption/value row share `--space-3` (8px). The action row that
-closes a reading block keeps `--space-6` (18px) — one step above the title's gap — so the
-controls stand apart from the text. *decided with the user; the recipe overview is the first
-screen built on it.*
+**Vertical rhythm is owned by the block above.** Every block of a reading flow earns the
+space below it by its type size and its role; nothing chooses its own distance from what
+precedes it. A sheet and a card therefore read top to bottom as one rhythm; a screen applies
+the same steps to its content, and its page padding belongs to §4.7.
+
+**The rhythm has five steps:**
+
+| Step | Token | Between |
+| --- | --- | --- |
+| 6px | `--space-2` | a title and its subtitle |
+| 8px | `--space-3` | the body blocks of one reading block: description, caption/value row, status line |
+| 14px | `--space-5` | a title and its first body block inside a reading block; two content blocks of a card or sheet; a section caption and its content |
+| 18px | `--space-6` | a sheet's or card's content and the action row that closes it; a screen's content blocks, including the header and its content |
+| 24px | `--space-7` | two captioned sections |
+
+**These five steps govern the reading rhythm.** A control's padding, a form's field group, a
+row's height and a placeholder's padding are component geometry; their sections name them,
+and they never introduce a second rhythm. *decided with the user.*
+
+**The mat is not a rhythm step.** `--space-4` (10px) is the surface mat: a card's padding and
+the distance from a card's media to the text below it. A media area directly on a sheet keeps
+the sheet's 14px block step to the body, not the card mat. A media tile sits inside the mat
+and never adds a rhythm step of its own.
+
+**One reading block is one thought.** Its body blocks sit 8px apart. Inside a reading block,
+a title keeps 14px to the block below it — the overview's 32px title and a 24px card title
+alike; the step marks the heading, not the point size. A subtitle is part of the title block
+(6px), not a body block; the whole title block keeps 14px to the body. A caption/value row is
+one block; its pairs never add a step each.
+
+**An action row closes a sheet's or card's content.** It keeps 18px from the content above
+and, in a sheet, 18px below: the sheet's bottom padding is that same step. A row that wraps
+keeps the 18px above the whole row, never above each line.
+
+**A sheet, a screen and a card own their edges.** A sheet and a screen pad with
+`--app-padding` (18px); a card with `--space-4` (10px). Their first and last child add no
+outer margin: a title that opens a container sits on the top padding, and the last block sits
+on the bottom padding. A lone block therefore sits at the same distance from the edge as a
+populated one, and the bottom safe-area inset extends the padding rather than adding a
+margin. A screen may extend its bottom padding for a focus ring; its top padding stays 18px.
+
+**Browser margins are reset.** A heading or paragraph never contributes its default margin
+to the rhythm; it carries only the difference its step needs, like the overview's 6px title
+allowance.
+
+**Space is a gap, not a margin between siblings.** A container that stacks blocks uses a grid
+or flex `gap`; its gaps never collapse with a child's margin. A block that must exceed the
+container's gap carries only the difference as a margin: the overview's title adds 6px to the
+body's 8px gap to reach 14px, and its action row adds 4px to the sheet's 14px gap to reach
+18px. No child opens a container with a top margin, no empty element produces space, and a
+blank line is never a gap.
+
+**A status line is a body block.** Loading, empty and error lines sit in the reading block at
+the 8px step; they never reserve the space of content that has not arrived, so nothing jumps
+when they are replaced. A block that is not rendered leaves no gap behind.
+
+**Rows are separated by a divider, not by space.** Rows inside one card touch; a hairline is
+the whole vertical separation, and the row's own block padding sets its height. A list is one
+block in the rhythm, not one block per row.
+
+**A section keeps 24px from the next.** Its caption keeps 14px to its own content; a section
+that is only its caption takes no bottom margin, so two section steps never stack.
+
+**A screen header is one block above the content.** Inside it the back button and the title
+keep 18px, and a title and its subtitle 6px. The screen stacks its content blocks at 18px; a
+captioned section inside it keeps 24px (§5.4). The header's masking padding is not a gap: the
+screen keeps 18px from the header to its first content block, so the header never adds a
+second space. *decided with the user.*
+
+**The rhythm never changes with the viewport.** A wider screen adds columns, never vertical
+air; the same five steps hold on a phone and on a desktop.
+
+**The recipe overview is the reference.** Hero, title, description, caption/value row and
+action row follow the rhythm in order, and the sheet's 18px padding closes both ends. Any
+screen that reads as one text-and-action flow uses the same sequence.
 
 *Applies to: cooking view.*
 
 The same pixel ladder and `--space-*` tokens as the web app. Screen gutters are `--app-padding`
 (18px). Every tappable control is at least 42px tall. No other pixel value exists.
+
+**The five-step rhythm applies here too.** The intro's photo and title keep 14px; the title
+keeps 14px to the description and the description 8px to the meta line; without a description
+the meta line takes the title's 14px. The meta line keeps 18px to the size picker, the
+reference readout 8px below the picker and the brand footer 18px above itself. The Zutaten and
+Zubereitung screens open with the recipe-title caption 6px above the heading; the heading
+keeps 6px to the theme divider and the divider 14px to the list or step. Step rows keep 14px
+to the step prose. A screen without a photo starts its title on the 18px padding.
 
 ### 4.4 Shape, elevation and surfaces
 
@@ -713,10 +791,11 @@ such action. *decided with the user*
   line or set in a smaller size to fit.
 - A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
   muted) beneath it.
-- An ingredient arrangement's parenthesized note loses its brackets: it follows one en space,
-  muted and italic (`1 Becher Joghurt␣500 g`). Step prose keeps a regular space and the brackets,
-  styled with their content (§5.11); the written shopping list keeps its bracketed wording. The
-  reference readout is the third form: it keeps the brackets after one en space (§5.11).
+- An ingredient arrangement's parenthesized note is muted and italic. The editor's ingredient
+  lists and the reference readout keep the brackets after one en space (`1 Becher
+  Joghurt␣(500 g)`); the pantry surfaces drop them (`1 Becher Joghurt␣500 g`). Step prose keeps
+  a regular space and the brackets, styled with their content (§5.11); the written shopping
+  list keeps its bracketed wording.
 - A row whose value changed under the user marks itself and keeps the mark until it is
   confirmed: a tinted surface, a `--space-1` accent line along its leading edge and one muted
   line naming the consequence (`.pantry-row--attention`, `.pantry-attention-note`). The mark is
@@ -890,7 +969,7 @@ it. The card grid keeps the placeholder for recipes without a photo.
 instead of a placeholder — that card then needs no badge of its own (§5.7).
 
 **Sizes.** Card media: the full card width, 4:3. Overview hero: the full sheet content width,
-4:3. Editor preview: 120 × 90px (4:3).
+4:3. Editor preview: 160 × 120px (4:3).
 
 **Rules**
 
@@ -1432,6 +1511,7 @@ that file.
 | Section | Implements in |
 | --- | --- |
 | §4.1–4.4 tokens | `apps/web/src/styles/tokens.css` (colour, type, spacing, radius, elevation, layout constants) |
+| §4.3 vertical rhythm | `apps/web/src/styles/recipe-overview.css` (the reference), `apps/web/src/styles/editor.css`, `apps/web/src/styles/recipe-list.css`, `apps/web/src/index.css` (browser margin reset), and the screen stylesheets (`ai-create.css`, `pantry-select.css`, `shopping-list-select.css`, `shopping-sort-select.css`, `ingredient-master.css`, `shopping-places.css`) |
 | §4.5 Iconography | `apps/web/src/components/icons.tsx` |
 | §4.6 Motion | `apps/web/src/index.css` (global press/focus rules), the component stylesheets |
 | §4.7 Layout | `apps/web/src/index.css`, `apps/web/src/styles/recipe-list.css` |

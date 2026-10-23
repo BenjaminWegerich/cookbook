@@ -78,7 +78,9 @@
   /* ---- Intro ---- */
   /* The photo (§5.8): a 4:3 landscape media area at the top of the intro,
      cropped to cover and rounded at the theme's medium radius. The title's own
-     top margin (--space-6) is the gap between the photo and the title. */
+     top margin (--space-5, 14px) is the gap between the photo and the title;
+     without a photo the intro carries .no-photo and the title sits on the
+     screen's 18px padding. */
   .media { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
            border-radius: var(--radius-md); }
   /* The theme's display face, when it has one, is reserved for the main heading
@@ -86,12 +88,13 @@
      other text — the captions included — stays in the theme's body face
      (§4.8). */
   h1, .screen-title, .step-title { font-family: var(--font-heading); }
-  h1 { font-size: var(--text-xl); line-height: var(--leading-xl); font-weight: 600; margin: var(--space-6) 0 var(--space-2);
+  h1 { font-size: var(--text-xl); line-height: var(--leading-xl); font-weight: 600; margin: var(--space-5) 0 var(--space-2);
        overflow-wrap: anywhere; }
-  .description { margin: 0 0 var(--space-6); overflow-wrap: anywhere; }
+  .screen.intro.no-photo h1 { margin-top: 0; }
+  .description { margin: var(--space-3) 0 0; overflow-wrap: anywhere; }
   /* Times and the Cookbook brand share the recipe overview's caption/value look:
      an all-caps muted caption before a bold value (§5.11). */
-  .meta-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-7); margin: 0 0 var(--space-6); }
+  .meta-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-7); margin: var(--space-3) 0 var(--space-6); }
   .meta-item { display: inline-flex; align-items: baseline; gap: var(--space-2); }
   .caption { color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; text-transform: uppercase; }
   .meta-value { font-weight: 600; font-size: var(--text-md); line-height: var(--leading-md); }
@@ -107,7 +110,7 @@
   /* The chip row's gap is the app's --space-4 (10px): a chip's 32px pill reaches
      the 42px hit area through a 5px ring, so the gap must be at least twice the
      ring or two neighbouring hit areas would overlap (§5.2). */
-  .chips { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-4); }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: 0; }
   .chip { position: relative; font: inherit; font-size: var(--text-sm); line-height: var(--leading-sm); padding: var(--space-2) var(--space-5);
           border-radius: 100px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
   /* The visible pill stays compact (32px); the ring beyond it brings the hit area
@@ -121,11 +124,11 @@
   .arrangement-note { color: var(--muted); font-style: italic; }
   /* Reference-ingredient readout under the size picker (amounts only, muted):
      one amount per line, no bullet and no comma between them (§5.11). */
-  .reference { margin: 0; padding: 0; list-style: none; color: var(--muted);
+  .reference { margin: var(--space-3) 0 0; padding: 0; list-style: none; color: var(--muted);
                font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
   /* Ingredient-recipe stepper (§5.2 "exactly as today"). */
-  .yield-row { display: flex; align-items: center; gap: var(--space-3); }
+  .yield-row { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-3) 0 0; }
   .yield-step-button { font: inherit; font-size: var(--text-md); line-height: var(--leading-md); min-width: var(--space-9);
                        min-height: 42px; padding: var(--space-3); border-radius: var(--radius-md);
                        border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
@@ -135,11 +138,11 @@
 
   /* ---- Zutaten ---- */
   .screen-caption { font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600;
-                    text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 var(--space-6);
+                    text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 var(--space-2);
                     overflow-wrap: anywhere; }
-  .screen-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-3); }
+  .screen-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-2); }
   /* The theme's decorative divider below „Zutaten" and the step title (§5.5). */
-  .divider { margin: 0 0 var(--space-4); height: 0; border-bottom: 2px solid var(--accent); width: 42px; }
+  .divider { margin: 0 0 var(--space-5); height: 0; border-bottom: 2px solid var(--accent); width: 42px; }
   .check-list { list-style: none; margin: 0; padding: 0; }
   .check-row { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) 0;
                border-top: 1px solid var(--line);
@@ -151,7 +154,7 @@
   .check-row input:checked + .qty { color: var(--muted); }
 
   /* ---- Zubereitung (steps) ---- */
-  .step-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-3); }
+  .step-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-2); }
   /* The wrap fills the space below the header and centres the step's rows and
      prose together (§5.11). overflow:hidden clips only the slide's horizontal
      travel; the wrap grows with its content, so a tall step still scrolls. */
@@ -165,7 +168,7 @@
   @keyframes stepBack { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
   /* The ingredient rows and the prose read at arm's length, so both use
      --text-lg. Rows are bulleted; a plain margin separates them from the prose. */
-  .step-rows { list-style: none; margin: 0 0 var(--space-6); padding: 0; }
+  .step-rows { list-style: none; margin: 0 0 var(--space-5); padding: 0; }
   .step-rows li { display: flex; align-items: center; padding: var(--space-2) 0;
                   font-size: var(--text-lg); line-height: var(--leading-lg); }
   /* The bullet is the font's own U+2022 glyph with one space on each side; the
@@ -219,7 +222,7 @@
   </style>
 </head>
 <body>
-<section class="screen intro active" data-screen="intro">
+<section class="screen intro active no-photo" data-screen="intro">
   <h1>Shredded Tofu Wraps</h1>
   <p class="description">Knusprige Wraps mit mariniertem Tofu und frischem Gemüse.</p>
   <div class="meta-line">

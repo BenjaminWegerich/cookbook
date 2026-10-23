@@ -14,7 +14,7 @@
    follows it at the header's masking padding. */
 .shopping-places {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-6);
   padding-block-end: var(--space-10);
 }
 

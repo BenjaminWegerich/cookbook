@@ -13,7 +13,7 @@
    search follows it at the header's masking padding. */
 .ingredient-master {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-6);
   padding-block-end: var(--space-10);
 }
 

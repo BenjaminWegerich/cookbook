@@ -51,8 +51,9 @@
      item between the two buttons and push „Speichern" into the middle. */
   display: grid;
   gap: var(--space-3);
+  margin-block-end: calc(-1 * var(--space-6));
   margin-inline: calc(-1 * var(--app-padding));
-  padding: var(--space-4) var(--app-padding);
+  padding: var(--space-4) var(--app-padding) var(--space-6);
   background: var(--color-bg);
 }
 
@@ -970,6 +971,10 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
+  /* An action row stands one step apart from the content above it: the sheet's
+     14 px gap plus this 4 px difference is the 18 px control step. In a 10 px
+     composer the same difference gives the 14 px block step. */
+  margin-block-start: var(--space-1);
 }
 
 /* A quiet line that explains why a row's primary action is unavailable, so the

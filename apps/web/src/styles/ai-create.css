@@ -7,7 +7,7 @@
 
 .ai-screen {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-6);
   align-content: start;
   min-height: 100dvh;
 }
@@ -72,7 +72,7 @@
    small paragraph break. */
 .ai-hint {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
   color: var(--color-ink-muted);
   font-size: var(--text-md);
   line-height: var(--leading-md);
