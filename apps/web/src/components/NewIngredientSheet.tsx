@@ -22,12 +22,10 @@
  * the ingredient is created without a shopping stop (decided with the user).
  *
  * The reorder point is picked with the free QuantityInput (suggested chips +
- * adaptive stepper) and previewed as the ingredient line it will
- * produce. The preview resolves against the *unsaved* mapping rows of this form,
- * so adding a Becher mapping updates the line immediately; an exact unit snaps
- * the stored value to its amount (core resolveReorderPoint,
- * docs/storage_format.md §9). Its default is 0 ("only ever bought for a
- * recipe"); "∞" selects infinite stock.
+ * adaptive stepper) and stored exactly as entered: no quantity optimization
+ * applies to this field (decided with the user), so an additional unit never
+ * snaps or rewrites it and there is no preview line. Its default is 0 ("only
+ * ever bought for a recipe"); "∞" selects infinite stock.
  *
  * Every mapping is a conversion factor only: the optimizer scores every
  * compatible unit, and the app allows at most one shopping unit per ingredient.
@@ -48,14 +46,12 @@ import {
   formatDecimal,
   masterIngredientNames,
   mappingsFor,
-  resolveReorderPoint,
   shoppingSections,
   shoppingStores,
   type PrecisionLevel,
   type ShoppingStop,
 } from '@cookbook/core';
 
-import ArrangementLine from './ArrangementLine';
 import IngredientMappingsField from './IngredientMappingsField';
 import QuantityInput from './QuantityInput';
 import PrecisionChips from './PrecisionChips';
@@ -80,9 +76,9 @@ interface NewIngredientSheetProps {
   saving: boolean;
   /** Drive error of the last save attempt (German, from the storage layer). */
   error: string | null;
-  /** Called with the master data to create; `reorderPoint` is the resolved
-   *  value (already snapped to an exact unit's amount) and `stop` is the chosen
-   *  shopping stop, or null while the route holds no stops at all. */
+  /** Called with the master data to create; `reorderPoint` is the value as
+   *  entered (stored without optimization) and `stop` is the chosen shopping
+   *  stop, or null while the route holds no stops at all. */
   onSave: (
     name: string,
     bu: string,
@@ -217,33 +213,6 @@ function NewIngredientSheet({
   const entries: NewIngredientEntry[] = mappingEntriesFromRows(mappingRows);
 
   /**
-   * The rows that would actually be saved (a finite positive factor). The
-   * reorder-point preview resolves against exactly these, so a half-typed row
-   * neither shows up in the preview nor changes the stored value.
-   */
-  const validEntries = entries.filter((entry) => Number.isFinite(entry.factor) && entry.factor > 0);
-
-  /**
-   * The draft master-data entry the preview resolves against: the base unit and
-   * the not-yet-saved mapping rows of this form (resolveReorderPoint reads the
-   * mappings from its argument, so the ingredient need not exist in the
-   * registry yet).
-   */
-  const draftEntry = {
-    bu,
-    precision,
-    entries: validEntries,
-  };
-
-  /**
-   * The reorder point as it will read and be stored. An exact unit snaps the
-   * stored value to its amount (a 160 g Becher turns a selected 150 g into
-   * 160 g); the preview uses the draft mappings, so an AU row added below
-   * updates the line immediately.
-   */
-  const reorder = resolveReorderPoint(trimmedName, draftEntry, reorderPoint, bu);
-
-  /**
    * The shopping route as the app currently holds it (core registry, read every
    * render like the ingredient list above): the store chips and — once a store
    * is picked — the section options of exactly that store.
@@ -358,7 +327,7 @@ function NewIngredientSheet({
       return;
     }
     setLocalError(null);
-    onSave(trimmedName, bu, reorder.storedValue, entries, precision, chosenStop);
+    onSave(trimmedName, bu, reorderPoint, entries, precision, chosenStop);
   };
 
   // Ctrl+S is the keyboard equivalent of the „Speichern" button. The sheet is
@@ -468,8 +437,8 @@ function NewIngredientSheet({
         </div>
 
         {/* The reorder point: what is on the shelf after a shopping trip. Same
-            picker as a recipe quantity (chips + stepper), plus 0 and ∞; the
-            preview below resolves against the mapping rows above — unsaved. */}
+            picker as a recipe quantity, plus 0 and ∞; the value is stored as
+            entered, without quantity optimization. */}
         <div className="field">
           <span className="field-label">Vorrat</span>
           <QuantityInput
@@ -482,17 +451,6 @@ function NewIngredientSheet({
             allowZero
             allowInfinite
           />
-        </div>
-
-        {/* The line the reorder number will produce: it sits directly under
-            „Vorrat“, whose value it shows as the ingredient line, in the same
-            small caption style as the „Bereich“ line inside „Einkauf“ below
-            (decided with the user). */}
-        <div className="field">
-          <p className="field-hint">Vorschau</p>
-          <p className="aqs-preview" aria-live="polite">
-            <ArrangementLine display={reorder.previewDisplay} />
-          </p>
         </div>
 
         {/* Where the ingredient is bought (docs/storage_format.md §10): level 1

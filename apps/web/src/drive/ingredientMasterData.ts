@@ -206,9 +206,9 @@ async function writeMasterDataFiles(
  * @param name the new ingredient name
  * @param bu the base unit family ("g" or "ml")
  * @param reorderPoint the base-unit quantity that is definitely on stock after
- *   a shopping trip: 0 (only ever bought for a recipe), a positive value (an
- *   exact unit's amount when one applies — the create sheet resolves it, see
- *   core resolveReorderPoint), or Infinity (always in stock)
+ *   a shopping trip, stored exactly as entered by the master-data sheets (no
+ *   unit snapping): 0 (only ever bought for a recipe), a positive value, or
+ *   Infinity (always in stock)
  * @param entries the additional units with their g/ml factors (may be empty —
  *   an ingredient without additional units is valid master data)
  * @param precision the mandatory ingredient-level precision

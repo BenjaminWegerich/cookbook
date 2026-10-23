@@ -4,8 +4,9 @@
  * Opened by tapping a row of the „Zutaten“ screen. It changes the fields that
  * are safe to change on an existing entry:
  * - the optional Singular/Plural display forms (the pair is atomic);
- * - the reorder point („Vorrat“), with the same picker and the same live
- *   preview as the create sheet;
+ * - the reorder point („Vorrat“), with the same picker as the create sheet;
+ *   the value is stored exactly as entered, without quantity optimization or a
+ *   preview line;
  * - the additional-unit mappings (a factor per unit; no per-ingredient priority);
  * - the mandatory ingredient-level precision (five chips).
  *
@@ -29,9 +30,8 @@
 
 import { useRef, useState } from 'react';
 
-import { resolveReorderPoint, type IngredientEntry, type PrecisionLevel } from '@cookbook/core';
+import { type IngredientEntry, type PrecisionLevel } from '@cookbook/core';
 
-import ArrangementLine from './ArrangementLine';
 import IngredientMappingsField from './IngredientMappingsField';
 import QuantityInput from './QuantityInput';
 import PrecisionChips from './PrecisionChips';
@@ -117,30 +117,12 @@ function EditIngredientSheet({
   const showSummary = showDisplayError && showMappingError;
 
   /**
-   * The rows that would actually be saved (a finite positive factor). The
-   * preview resolves against exactly these, so a half-typed row neither shows
-   * up in the preview nor changes the value.
+   * The rows that would actually be saved (a finite positive factor): a
+   * half-typed row is dropped rather than persisted.
    */
   const entries = mappingEntriesFromRows(rows).filter(
     (entry_) => Number.isFinite(entry_.factor) && entry_.factor > 0,
   );
-
-  /**
-   * The draft entry the preview resolves against: the unsaved display forms and
-   * the valid mapping rows of this form, so a corrected pair or a new factor is
-   * visible immediately (resolveReorderPoint reads the mappings from its
-   * argument rather than from the registry).
-   */
-  const draftEntry = {
-    bu,
-    singular: singular.trim() === '' ? undefined : singular.trim(),
-    plural: plural.trim() === '' ? undefined : plural.trim(),
-    entries,
-    precision,
-  };
-
-  /** The reorder point as it will read and be stored (exact units snap it). */
-  const reorder = resolveReorderPoint(name, draftEntry, reorderPoint, bu);
 
   /** Reports a form edit to the parent, which drops a stale Drive error. */
   const markEdited = (): void => onEdited();
@@ -174,7 +156,7 @@ function EditIngredientSheet({
     onSave({
       singular: forms.singular,
       plural: forms.plural,
-      reorderPoint: reorder.storedValue,
+      reorderPoint,
       entries,
       precision,
     });
@@ -304,8 +286,8 @@ function EditIngredientSheet({
         </div>
 
         {/* The reorder point: what is on the shelf after a shopping trip. Same
-            picker as the create sheet, with 0 and ∞; the preview below resolves
-            against this form's unsaved display forms and mappings. */}
+            picker as the create sheet, with 0 and ∞; the value is stored as
+            entered, without quantity optimization. */}
         <div className="field">
           <span className="field-label">Vorrat</span>
           <QuantityInput
@@ -318,13 +300,6 @@ function EditIngredientSheet({
             allowZero
             allowInfinite
           />
-        </div>
-
-        <div className="field">
-          <p className="field-hint">Vorschau</p>
-          <p className="aqs-preview" aria-live="polite">
-            <ArrangementLine display={reorder.previewDisplay} />
-          </p>
         </div>
 
         <div className="sheet-actions">

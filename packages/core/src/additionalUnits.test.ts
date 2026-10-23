@@ -21,16 +21,11 @@ import {
   renderMasterAQSDisplay,
   renderMasterAQSDisplaySlash,
   renderPantryChipDisplay,
-  resolveReorderPoint,
   selectAQ,
   splitArrangementNotes,
 } from './additionalUnits.js';
 import { ADDITIONAL_UNITS, NUMBER_SCHEMES } from './additionalUnitsData.js';
-import {
-  resetIngredientMappings,
-  setIngredientMappings,
-  allIngredientMappings,
-} from './ingredientRegistry.js';
+import { resetIngredientMappings, allIngredientMappings } from './ingredientRegistry.js';
 
 /** The typographic space of every displayed quantity. */
 const NB = NNBSP;
@@ -171,38 +166,6 @@ describe('formatting', () => {
 
   it('formats a mixed AQ value with the narrow no-break space', () => {
     expect(formatAQValue(1.25)).toBe(`1${NB}¼`);
-  });
-});
-
-describe('resolveReorderPoint', () => {
-  it('snaps an exact unit to its amount and previews the optimizer line', () => {
-    const result = resolveReorderPoint('Joghurt', allIngredientMappings().Joghurt, 250, 'g');
-    expect(result.storedValue).toBe(250);
-    expect(result.preview).toBe(`½${NB}Becher Joghurt (250${NB}g)`);
-    expect(result.previewDisplay.parts).toEqual([
-      { kind: 'text', value: `½${NB}Becher Joghurt` },
-      { kind: 'note', value: `250${NB}g` },
-    ]);
-  });
-
-  it('keeps the entered amount for a bare ingredient', () => {
-    setIngredientMappings({
-      Testzutat: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
-    });
-    const result = resolveReorderPoint('Testzutat', allIngredientMappings().Testzutat, 123, 'g');
-    expect(result.storedValue).toBe(123);
-    expect(result.preview).toBe(`123${NB}g Testzutat`);
-  });
-
-  it('keeps the unbegrenzt form for infinite stock', () => {
-    expect(resolveReorderPoint('Wasser', allIngredientMappings().Wasser, Infinity, 'ml')).toEqual({
-      preview: 'unbegrenzt Wasser',
-      previewDisplay: {
-        text: 'unbegrenzt Wasser',
-        parts: [{ kind: 'text', value: 'unbegrenzt Wasser' }],
-      },
-      storedValue: Infinity,
-    });
   });
 });
 

@@ -372,10 +372,10 @@ Zutaten-Rezepte", which cooks `required − stock` of the sub-recipe (see
 here simply starts from the neutral reorder point 0 and is cooked in full.
 
 New ingredients are created in the web app („Neue Zutat anlegen“) with a stock picker
-(suggested chips, stepper, live preview). When an **exact** additional unit applies, the
-stored value snaps to that unit's base amount rather than the picked quantity: a 160 g
-Becher turns a picked 150 g into the stored 160 g, because stock comes in whole packages
-(the one place where an exact unit changes what is stored, not only the display — see
+(suggested chips, stepper); the picked value is stored exactly as entered, without quantity
+optimization or a preview line. The same applies when editing an ingredient („Zutat
+bearbeiten“): the Vorrat field never snaps to an additional unit, so a 150 g entry stays
+150 g even for a 160 g Becher (decided with the user; see
 additional_quantity_specifications.md §6.3). „∞“ in the picker stores `inf`.
 
 The mappings file is a pure overlay; an ingredient without additional units (e.g.

@@ -108,8 +108,8 @@ export interface AdditionalQuantity {
  * The parts of an ingredient entry that drive the arrangement: its fixed base
  * unit, its AU mappings and its Singular/Plural display forms. The reorder point
  * takes no part in it, so a **draft** entry — the create form's not-yet-saved
- * mapping rows — can be rendered from directly (see selectAQForEntry,
- * renderSelectedAQ and resolveReorderPoint).
+ * mapping rows — can be rendered from directly (see selectAQForEntry and
+ * renderSelectedAQ).
  */
 export type AuSelectableEntry = Pick<
   IngredientEntry,
@@ -566,13 +566,13 @@ function collapseDisplaySpaces(display: ArrangementDisplay): ArrangementDisplay 
 
 /**
  * Renders the selected unit's arrangement with the placeholders substituted
- * (§4). Shared by renderAQS (a registered ingredient) and resolveReorderPoint
- * (the create form's draft entry). `ingredient` may be empty in the draft case,
- * which drops the arrangement's space before the name.
+ * (§4). Shared by renderAQS (a registered ingredient) and the draft-entry
+ * renderers. `ingredient` may be empty in the draft case, which drops the
+ * arrangement's space before the name.
  *
  * `entry` is the ingredient entry the `<INF>` display forms are read from;
- * callers that already hold one (the create form's draft, renderQuantityText)
- * pass it, and the registry is consulted otherwise. A caller that hides the
+ * callers that already hold one (a draft entry, renderQuantityText) pass it,
+ * and the registry is consulted otherwise. A caller that hides the
  * name (an empty `ingredient`) can still pass the entry so `<INF>` keeps its
  * singular/plural form — the name-less shopping and pantry lines rely on it.
  */
@@ -1072,78 +1072,4 @@ export function renderPantryChipDisplay(
  */
 export function renderPantryLine(ingredient: string, bq: number, bu: string): string {
   return renderPantryText(ingredient, pantryReading(ingredient, bq, bu), bu);
-}
-
-/** The resolved create-form reorder point: its preview line and the value to store. */
-export interface ReorderPointResolution {
-  /** The written line for the chosen stock level ("1 Becher Creme Fraiche (160 g)"). */
-  readonly preview: string;
-  /**
-   * The same line as display runs (§4): the arrangement's note split out for
-   * the muted, italic rendering the sheets use.
-   */
-  readonly previewDisplay: ArrangementDisplay;
-  /** The base quantity to store in the master data (0, a positive amount, or Infinity). */
-  readonly storedValue: number;
-}
-
-/**
- * Resolves a reorder point against an ingredient's (possibly not-yet-saved) AU
- * mappings — the create form's stock-level field.
- *
- * The reorder point is a base quantity, but it names a *stock state*: what is on
- * the shelf after a shopping trip, not what a recipe calls for. That difference
- * is why an **exact** unit does not merely change the preview here, as it does
- * for a recipe row (§6.3): the **stored** value snaps to the exact amount,
- * because stock comes in whole packages. 150 g entered for a 160 g Becher is
- * previewed and stored as 160 g — there is no such thing as 150 g of a 160 g
- * tub. Approximate units and the base form keep the entered value.
- *
- * The three stock levels of the master data (docs/storage_format.md §9):
- * - `0` — only ever bought for a recipe; the base form is shown ("0 g …");
- * - `Infinity` — infinite stock (water); the preview reads "unbegrenzt …";
- * - a positive base quantity — the entered target, snapped as described above
- *   when an exact unit is selected.
- *
- * The mappings come from the caller rather than the registry so the create form
- * can preview its unsaved rows.
- *
- * @param ingredient the ingredient name for the preview ("" = not yet named)
- * @param entry the draft or registered entry (undefined = no mappings yet)
- * @param bq the entered reorder point: 0, a positive base quantity, or Infinity
- * @param bu the base unit family (g / ml)
- */
-export function resolveReorderPoint(
-  ingredient: string,
-  entry: AuSelectableEntry | undefined,
-  bq: number,
-  bu: string,
-): ReorderPointResolution {
-  if (bq === Infinity) {
-    const text = ingredient === '' ? 'unbegrenzt' : `unbegrenzt ${ingredient}`;
-    return {
-      preview: text,
-      previewDisplay: { text, parts: [{ kind: 'text', value: text }] },
-      storedValue: Infinity,
-    };
-  }
-  // 0 is a valid reorder point but not a positive target: no AU applies.
-  const result = bq === 0 ? null : optimizeQuantity(bq, entry, bu);
-  if (result === null || result.aq === undefined) {
-    const base = formatBQ(bq, bu);
-    const text = ingredient === '' ? base : `${base} ${ingredient}`;
-    return {
-      preview: text,
-      previewDisplay: { text, parts: [{ kind: 'text', value: text }] },
-      storedValue: bq,
-    };
-  }
-  // An exact unit defines the stock amount (whole packages); a non-integer
-  // count already produced a whole-gram/millilitre BQ in the optimizer. An
-  // approximate unit only changes the count reading, so the entered amount
-  // stays.
-  const storedValue = result.aq.au.exact ? result.bq : bq;
-  const previewResult: OptimizedQuantity = { ...result, bq: storedValue };
-  const previewDisplay = renderOptimizedAQ(ingredient, previewResult, bu, formatAQ, entry);
-  return { preview: previewDisplay.text, previewDisplay, storedValue };
 }

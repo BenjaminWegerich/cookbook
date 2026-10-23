@@ -199,9 +199,10 @@ shown BQ is the optimizer's selected BQ. The stored `V0` stays 25 g / 8 g.
 ### 6.3 Exactness and the shopping list
 
 The exact flag affects display only. The stored `V0` is never rewritten by
-display selection. The one historical exception — snapping the **reorder point**
-to a whole package in the ingredient master data — is a stock-state rule and
-remains in the master-data form; it is not part of recipe scaling.
+display selection. The ingredient master-data forms („Neue Zutat anlegen“,
+„Zutat bearbeiten“) store the **reorder point** exactly as entered; the former
+stock-state exception — snapping it to a whole package — is gone (decided with
+the user), so an exact unit never changes what is stored.
 
 ## 7. No priority; one shopping unit
 
