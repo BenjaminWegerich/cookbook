@@ -141,3 +141,28 @@ When two candidates produce equivalent scores ($|S_A - S_B| \le 10^{-5}$), break
 1. Higher numerical BQ value.
 2. Higher numerical AQ value (treating `None` as $-1$).
 3. Alphabetical unit name (treating `None` as `""`).
+
+### 6.4 Master-list Quantities
+
+The master row of an ingredient is a display of its merged step uses, not an
+independent target. Its BQ is the **exact sum of the step rows' displayed BQs**;
+that sum need not be an allowed BQ, and its clumsiness is not scored. Its AQ is
+chosen under these constraints:
+
+1. **One use:** the step result is reused unchanged, so step and master
+   arrangement are identical.
+2. **All uses share one AU:** the master AQ is the exact sum of the step AQs.
+   The sum may lie outside the AQ table; a sum above one is written as a mixed
+   fraction (`1+1/2`, displayed as `1 1/2`), and its clumsiness is not scored.
+3. **Any AU shared with a step:** the master AQ must be strictly larger than
+   that step's AQ. Otherwise a master could repeat `1 Packung` above a step that
+   already reads `1 Packung`.
+4. **Exact units:** outside the shared-AU sum, an exact unit is only a candidate
+   when its count reaches the BQ sum exactly; otherwise the line would
+   contradict itself (`2 Becher (900 g)`).
+5. **Precision:** the master row uses the highest effective precision among its
+   step rows.
+
+The master AQ candidates are scored with Branch 2 (non-exact), because the BQ is
+fixed by the sum rather than derived from the count. The candidate window and
+the tie-break hierarchy of §6 continue to apply.

@@ -31,6 +31,7 @@ import {
 import { AQ_SCHEMES, AQ_VALUES, type AQValue } from './quantityData.js';
 import { allowedBQValuesInRange, aqValueFor } from './quantityValues.js';
 import {
+  PRECISION_LEVELS,
   resolvePrecision,
   weightsFor,
   type PrecisionContext,
@@ -300,6 +301,272 @@ export function optimizeQuantity(
     score: winner.score,
     branch: winner.branch,
     fallback: false,
+  };
+}
+
+/** One ingredient use that contributes to a master-list quantity. */
+export interface MasterQuantityUse {
+  /** The use's unrounded target `V0` in the ingredient's base unit. */
+  readonly quantity: number;
+  /** Optional per-row precision override (the ingredient level applies otherwise). */
+  readonly precision?: PrecisionLevel;
+}
+
+/** The master-row answer: the optimizer result plus the effective precision. */
+export interface OptimizedMasterQuantity extends OptimizedQuantity {
+  /**
+   * The precision the master row was optimized with: the highest effective
+   * precision among its step rows (docs/recipe_scaling_algorithm.md §6.4).
+   */
+  readonly precision: PrecisionLevel;
+}
+
+/** Rounds a derived sum to millionths, removing binary floating-point noise. */
+function roundSum(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+/** Greatest common divisor, for reducing an AQ sum to a canonical fraction. */
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+/**
+ * The canonical notation of an exact sum of AQ values. Every AQ table value is
+ * a multiple of 1/24 (1/8, 1/6, 1/4, 1/3, …), so a sum of them is one too. The
+ * sum is reduced to a mixed fraction, which keeps the familiar "1+1/2" form for
+ * table values and still renders a value the AQ table does not contain (e.g.
+ * "7/24"). The decimal fallback is unreachable for real AQ values and only
+ * guards a hand-edited table.
+ */
+function aqSumNotation(value: number): string {
+  const units = Math.round(value * 24);
+  if (units > 0 && Math.abs(value - units / 24) <= 1e-9) {
+    const whole = Math.floor(units / 24);
+    let numerator = units - whole * 24;
+    let denominator = 24;
+    const divisor = gcd(numerator, denominator);
+    numerator /= divisor;
+    denominator /= divisor;
+    if (numerator === 0) return String(whole);
+    const fraction = `${numerator}/${denominator}`;
+    return whole === 0 ? fraction : `${whole}+${fraction}`;
+  }
+  return String(roundSum(value));
+}
+
+/** The effective precision of one use, resolved through the normal cascade. */
+function usePrecision(use: MasterQuantityUse, entry: OptimizableEntry | undefined): PrecisionLevel {
+  return resolvePrecision({ quantity: use.precision, ingredient: entry?.precision });
+}
+
+/** The highest effective precision among the uses (the master row's level). */
+function highestUsePrecision(
+  uses: readonly MasterQuantityUse[],
+  entry: OptimizableEntry | undefined,
+): PrecisionLevel {
+  let highest: PrecisionLevel = PRECISION_LEVELS[0]!;
+  for (const use of uses) {
+    const level = usePrecision(use, entry);
+    if (PRECISION_LEVELS.indexOf(level) > PRECISION_LEVELS.indexOf(highest)) {
+      highest = level;
+    }
+  }
+  return highest;
+}
+
+/**
+ * Scores one master-row AQ candidate.
+ *
+ * The master row's BQ is the **exact sum of the step BQs**, so its accuracy
+ * error and its clumsiness are both zero. Only the AQ side is scored: its
+ * distance from the shown BQ (accuracy, weighted by the share of cooks reading
+ * the AQ) and the text contradiction between count and amount (conflict). An
+ * AQ candidate that was built by summing the step AQs carries penalty 0, so
+ * summing arrangements is never punished for clumsiness.
+ */
+function scoreMasterCandidate(
+  candidate: Candidate,
+  masterBq: number,
+  weights: QuantityWeights,
+): number {
+  if (candidate.branch === 'metric') return weights.missing;
+  const aqError = Math.abs(candidate.aqBase! - masterBq) / masterBq;
+  const roundness = (1 - USER_PROPORTION_P) * candidate.aq!.penalty;
+  return (
+    weights.accuracy * (1 - USER_PROPORTION_P) * aqError +
+    weights.conflict * aqError +
+    weights.roundness * roundness
+  );
+}
+
+/**
+ * Optimizes the **master-list quantity** of one ingredient from its step uses
+ * (decided with the user). The constraints tie the master row to the rows the
+ * cook reads above it:
+ *
+ * - **One use:** the result is that step's result unchanged, so step and master
+ *   arrangement are identical.
+ * - **Several uses:** the master BQ is the exact sum of the step BQs. It need
+ *   not be a BQ table value and is never charged BQ clumsiness.
+ * - **Same AU everywhere:** if every step uses the same additional unit and the
+ *   master uses it too, the master AQ is the exact sum of the step AQs and is
+ *   never charged AQ clumsiness.
+ * - **Shared AU:** any master AQ that uses an AU some step also uses must be
+ *   strictly larger than that step's AQ (no master "1 Packung" above a step
+ *   that already reads "1 Packung").
+ * - **Exact units:** outside the shared-AU sum, an exact unit is only a
+ *   candidate when its count brings exactly the master BQ home, so a count can
+ *   never contradict the amount it is shown with ("2 Becher (900 g)" is
+ *   rejected).
+ * - **Precision:** the master row inherits the highest effective precision of
+ *   its step rows.
+ *
+ * The master row treats an AQ count as independent from its BQ: the BQ is fixed
+ * by the sum, not derived from the count. That is why its candidates score
+ * through the non-exact formula (with the conflict penalty) rather than the
+ * exact branch of `optimizeQuantity`.
+ *
+ * @param uses the ingredient's step uses, in recipe order
+ * @param entry the ingredient master data, or undefined for an unregistered name
+ * @param bu the base unit family the uses are expressed in (g / ml)
+ */
+export function optimizeMasterQuantity(
+  uses: readonly MasterQuantityUse[],
+  entry: OptimizableEntry | undefined,
+  bu: string,
+): OptimizedMasterQuantity {
+  if (uses.length === 0) {
+    throw new Error('optimizeMasterQuantity: at least one use is required');
+  }
+  for (const use of uses) {
+    if (!(use.quantity > 0) || !Number.isFinite(use.quantity)) {
+      throw new Error(
+        `optimizeMasterQuantity: every use needs a positive finite quantity, got ${use.quantity}`,
+      );
+    }
+  }
+
+  const precision = highestUsePrecision(uses, entry);
+  const stepResults = uses.map((use) =>
+    optimizeQuantity(
+      use.quantity,
+      entry,
+      bu,
+      use.precision !== undefined ? { quantity: use.precision } : {},
+    ),
+  );
+
+  // One use: the master row *is* the step row, arrangement and all.
+  if (stepResults.length === 1) {
+    return { ...stepResults[0]!, precision };
+  }
+
+  const weights = weightsFor(precision);
+  // The BQ the master row shows: the exact sum of the step rows' displayed BQs.
+  const masterBq = roundSum(stepResults.reduce((sum, result) => sum + result.bq, 0));
+
+  // What the step rows contribute to the AQ constraints: the largest AQ per AU
+  // and, for the "all steps share one AU" case, the exact AQ sum per AU.
+  const aqMax = new Map<string, number>();
+  const aqSum = new Map<string, number>();
+  let firstAu: string | undefined;
+  let sharedByAll = true;
+  for (const result of stepResults) {
+    if (result.aq === undefined) {
+      sharedByAll = false;
+      continue;
+    }
+    const name = result.aq.au.name;
+    aqMax.set(name, Math.max(aqMax.get(name) ?? 0, result.aq.value));
+    // Keep the raw sum: the notation helper reduces it to its canonical
+    // fraction (rounding it to millionths first would destroy the 1/24 grid).
+    aqSum.set(name, (aqSum.get(name) ?? 0) + result.aq.value);
+    if (firstAu === undefined) firstAu = name;
+    else if (firstAu !== name) sharedByAll = false;
+  }
+  const sharedAu = sharedByAll ? firstAu : undefined;
+
+  const candidates: Candidate[] = [];
+  const addCandidate = (candidate: Candidate): void => {
+    candidates.push({ ...candidate, score: scoreMasterCandidate(candidate, masterBq, weights) });
+  };
+
+  // The metric-only candidate always exists: the BQ sum is the fallback.
+  addCandidate({ branch: 'metric', bq: masterBq, bqPenalty: 0, score: 0 });
+
+  const mappings: readonly IngredientMapping[] = entryMatches(entry, bu) ? entry.entries : [];
+  for (const mapping of mappings) {
+    const au = AU_BY_NAME.get(mapping.au);
+    // Unreachable with generator-validated data; skip instead of failing.
+    if (au === undefined) continue;
+
+    if (sharedAu === au.name) {
+      // Every step uses this unit: the master AQ is their exact sum, outside the
+      // AQ table if need be, and carries no clumsiness penalty.
+      const sum = aqSum.get(au.name)!;
+      const aqBase = sum * mapping.factor;
+      if (Math.abs(aqBase - masterBq) / masterBq > EPSILON_MAX) continue;
+      addCandidate({
+        branch: 'non-exact',
+        bq: masterBq,
+        bqPenalty: 0,
+        aq: { value: sum, notation: aqSumNotation(sum), penalty: 0 },
+        aqBase,
+        au,
+        factor: mapping.factor,
+        score: 0,
+      });
+      continue;
+    }
+
+    // Any other AU: a table count that is strictly larger than every step AQ of
+    // the same unit (a master must not repeat a step's count) and fits the
+    // usual search window around the BQ sum.
+    const stepMax = aqMax.get(au.name);
+    for (const aq of schemeAqValues(au)) {
+      if (stepMax !== undefined && aq.value <= stepMax + 1e-9) continue;
+      const aqBase = aq.value * mapping.factor;
+      if (Math.abs(aqBase - masterBq) / masterBq > EPSILON_MAX) continue;
+      // An exact unit promises that its count restates the amount. A count that
+      // does not bring exactly the BQ sum home would contradict the master line
+      // ("2 Becher (900 g)"), so it is no candidate. The shared-AU sum above is
+      // exempt: there the rounding of the step BQs is already in the rows.
+      if (au.exact && Math.abs(aqBase - masterBq) > 1e-6) continue;
+      addCandidate({
+        branch: 'non-exact',
+        bq: masterBq,
+        bqPenalty: 0,
+        aq,
+        aqBase,
+        au,
+        factor: mapping.factor,
+        score: 0,
+      });
+    }
+  }
+
+  const bestScore = Math.min(...candidates.map((candidate) => candidate.score));
+  const tied = candidates.filter((candidate) => candidate.score <= bestScore + TIE_EPSILON);
+  tied.sort(compareCandidates);
+  const winner = tied[0]!;
+
+  return {
+    bq: winner.bq,
+    ...(winner.aq !== undefined
+      ? {
+          aq: {
+            value: winner.aq.value,
+            notation: winner.aq.notation,
+            au: winner.au!,
+            factor: winner.factor!,
+          },
+        }
+      : {}),
+    score: winner.score,
+    branch: winner.branch,
+    fallback: false,
+    precision,
   };
 }
 

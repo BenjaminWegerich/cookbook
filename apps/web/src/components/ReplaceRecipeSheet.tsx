@@ -51,6 +51,7 @@ import {
   SERVING_COUNTS,
   defaultYieldView,
   formatBQ,
+  masterUsesFor,
   writtenPlannedAmount,
   yieldViewQuantities,
   type PlannedAmount,
@@ -60,7 +61,7 @@ import {
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
 import ReferenceReadout from './ReferenceReadout';
 import ValueStepper from './ValueStepper';
-import { safeRenderAQSDisplay } from './ingredientDisplay';
+import { safeRenderMasterAQSDisplay } from './ingredientDisplay';
 import { CloseIcon, SearchIcon } from './icons';
 
 /**
@@ -283,9 +284,11 @@ function ReplaceRecipeSheet({
       : details.ingredients
           .filter((ingredient) => ingredient.reference)
           .map((ingredient) =>
-            safeRenderAQSDisplay(ingredient.name, ingredient.quantity * factor, ingredient.unit, {
-              ...(ingredient.precision !== undefined ? { quantity: ingredient.precision } : {}),
-            }),
+            safeRenderMasterAQSDisplay(
+              ingredient.name,
+              masterUsesFor(details.steps, ingredient, factor),
+              ingredient.unit,
+            ),
           );
 
   /**

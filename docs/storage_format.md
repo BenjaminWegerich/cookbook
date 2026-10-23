@@ -136,6 +136,11 @@ layout). The rows are written in a natural, amount-first phrase:
     displayed BQs** (not the sum of their exact targets; the practical amounts
     the cook reads are what add up). The sum is kept at millionth precision to
     remove floating-point noise;
+  - the master row's **display** follows the master-quantity rules
+    ([quantity_scaling.md](quantity_scaling.md) §6): a once-used ingredient
+    repeats the step arrangement, several uses keep the exact BQ sum, a shared
+    AU keeps the exact AQ sum, and the row inherits the highest precision of its
+    uses. The derived BQ total above is unchanged;
   - rows with the same name but different base units stay separate.
 - **Inline artifacts** are display-only quantity mentions *inside the step text*
   (never counted toward any list, but scaled with the serving count at display

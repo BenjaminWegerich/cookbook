@@ -10,7 +10,9 @@
 import {
   NNBSP,
   renderAQSDisplay,
+  renderMasterAQSDisplay,
   type ArrangementDisplay,
+  type MasterQuantityUse,
   type PrecisionContext,
   type Unit,
 } from '@cookbook/core';
@@ -36,6 +38,26 @@ export function safeRenderAQSDisplay(
   try {
     return renderAQSDisplay(name, quantity, unit, context);
   } catch {
+    const text = `${quantity}${NNBSP}${unit} ${name}`;
+    return { text, parts: [{ kind: 'text', value: text }] };
+  }
+}
+
+/**
+ * The master-list counterpart of `safeRenderAQSDisplay`: renders one derived
+ * master row from the step uses it was merged from (`masterUsesFor`) through
+ * the constrained master optimizer. The fallback is the summed step BQ in its
+ * plain base form, so a broken master-data state can never break the list.
+ */
+export function safeRenderMasterAQSDisplay(
+  name: string,
+  uses: readonly MasterQuantityUse[],
+  unit: Unit,
+): ArrangementDisplay {
+  try {
+    return renderMasterAQSDisplay(name, uses, unit);
+  } catch {
+    const quantity = uses.reduce((sum, use) => sum + use.quantity, 0);
     const text = `${quantity}${NNBSP}${unit} ${name}`;
     return { text, parts: [{ kind: 'text', value: text }] };
   }

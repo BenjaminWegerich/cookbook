@@ -44,7 +44,9 @@
   `packages/core/src/quantityData.ts` via `npm run generate:quantity`
   (`scripts/generate-quantity-data.mjs`). `quantityValues.ts` implements the
   decade rule, membership and formatting; `quantityOptimizer.ts` implements the
-  three scoring branches, the scheme gate, the tie-break and the fallback.
+  three scoring branches, the scheme gate, the tie-break, the fallback and the
+  constrained master-list quantity (`optimizeMasterQuantity`).
+  `recipe/masterQuantity.ts` recovers the step uses behind a master row.
   `precision.ts` resolves the quantity/ingredient levels and interpolates the
   weights; `servingSizes.ts` holds the allowed serving counts.
 - Additional-unit display logic (see

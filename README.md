@@ -40,6 +40,10 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
   row may override it. There is no recipe-level or global default.
 - Example: a recipe written for 4 people with 500 g yogurt, scaled to 6 people, has a
   750 g target and may display as `1 ½ Becher (750 g)`; the metric target stays 750 g.
+- The derived master list stays tied to the step rows: a once-used ingredient repeats the
+  step's arrangement; repeated uses add up their displayed BQs exactly and, when all use
+  the same additional unit, their AQs exactly; the master row takes the highest precision
+  of its uses. See [quantity_scaling.md](docs/quantity_scaling.md) §6.
 
 ### 4. Layout & design
 

@@ -12,7 +12,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { EN_SPACE, formatBQ, renderAQSSlash, renderAQSDisplaySlash } from '../additionalUnits.js';
+import {
+  EN_SPACE,
+  NNBSP,
+  formatBQ,
+  renderAQSSlash,
+  renderAQSDisplaySlash,
+} from '../additionalUnits.js';
 import { escapeHtml } from './artifacts.js';
 import { parseRecipe } from './parse.js';
 import { generateRecipeHtml } from './exportHtml.js';
@@ -100,6 +106,27 @@ describe('generateRecipeHtml — finished dish', () => {
       `<ul class="reference size-scoped" data-servings="6">\n` +
         `    <li>${amountHtml('Tortillas', 250, 'g', 'reference')}</li>`,
     );
+  });
+
+  it('renders a repeated ingredient through the constrained master row', () => {
+    const repeated = generateRecipeHtml(
+      parseRecipe(`---
+title: Doppelter Joghurt
+type: finished_dish
+servings: 4
+prep_time: 5 min
+---
+## Zubereitung
+1. - 450 g Joghurt
+   Joghurt anrühren.
+2. - 250 g Joghurt
+   Joghurt unterheben.
+`),
+    );
+    // Step rows show 1 Becher (500 g) and 1/2 Becher (250 g); the master sums
+    // both the BQs (750 g) and the AQs (1 1/2 Becher).
+    expect(repeated).toContain(`1${NNBSP}1/2${NNBSP}Becher Joghurt`);
+    expect(repeated).toContain(`<span class="arrangement-note">750${NNBSP}g</span>`);
   });
 
   it('stacks the reference readout without commas between the amounts', () => {

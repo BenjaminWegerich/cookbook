@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { deriveIngredients, mergeIngredientUses } from './ingredientList.js';
+import { masterUsesFor } from './masterQuantity.js';
 import type { Step } from './types.js';
 
 describe('mergeIngredientUses', () => {
@@ -33,6 +34,20 @@ describe('mergeIngredientUses', () => {
     ]);
     expect(result).toEqual([
       { name: 'Mehl', quantity: 200, unit: 'g' },
+      { name: 'Mehl', quantity: 300, unit: 'ml' },
+    ]);
+  });
+
+  it('merges same-unit uses even when the name also appears in another unit', () => {
+    // The g rows are comparable and merge; the ml row stays separate. This
+    // keeps one master row backed by exactly one unit's uses.
+    const result = mergeIngredientUses([
+      { name: 'Mehl', quantity: 200, unit: 'g' },
+      { name: 'Mehl', quantity: 300, unit: 'ml' },
+      { name: 'Mehl', quantity: 100, unit: 'g' },
+    ]);
+    expect(result).toEqual([
+      { name: 'Mehl', quantity: 300, unit: 'g' },
       { name: 'Mehl', quantity: 300, unit: 'ml' },
     ]);
   });
@@ -85,7 +100,9 @@ describe('deriveIngredients', () => {
       { ingredients: [{ name: 'Joghurt', quantity: 450, unit: 'g' }], text: 'A.' },
       { ingredients: [{ name: 'Joghurt', quantity: 450, unit: 'g' }], text: 'B.' },
     ];
-    expect(deriveIngredients(roundedRows)).toEqual([{ name: 'Joghurt', quantity: 1000, unit: 'g' }]);
+    expect(deriveIngredients(roundedRows)).toEqual([
+      { name: 'Joghurt', quantity: 1000, unit: 'g' },
+    ]);
   });
 
   it('uses the rounded exact-unit BQ when summing', () => {
@@ -117,5 +134,48 @@ describe('deriveIngredients', () => {
     expect(deriveIngredients(withArtifacts)).toEqual([
       { name: 'Nudeln', quantity: 500, unit: 'g' },
     ]);
+  });
+});
+
+describe('masterUsesFor', () => {
+  it('recovers every use behind a master row, in recipe order', () => {
+    const rows: Step[] = [
+      { ingredients: [{ name: 'Joghurt', quantity: 450, unit: 'g' }], text: 'A.' },
+      { ingredients: [{ name: 'Joghurt', quantity: 20, unit: 'g' }], text: 'B.' },
+      { ingredients: [{ name: 'Joghurt', quantity: 450, unit: 'g' }], text: 'C.' },
+    ];
+    const master = deriveIngredients(rows);
+    expect(masterUsesFor(rows, master[0]!)).toEqual([
+      { quantity: 450 },
+      { quantity: 20 },
+      { quantity: 450 },
+    ]);
+  });
+
+  it('scales every use and keeps the row precision', () => {
+    const rows: Step[] = [
+      {
+        ingredients: [{ name: 'Joghurt', quantity: 250, unit: 'g', precision: 'high' }],
+        text: 'A.',
+      },
+      { ingredients: [{ name: 'Joghurt', quantity: 250, unit: 'g' }], text: 'B.' },
+    ];
+    const master = deriveIngredients(rows);
+    expect(masterUsesFor(rows, master[0]!, 2)).toEqual([
+      { quantity: 500, precision: 'high' },
+      { quantity: 500 },
+    ]);
+  });
+
+  it('matches the trimmed name and the base unit, not a same-name other unit', () => {
+    const rows: Step[] = [
+      { ingredients: [{ name: ' Mehl ', quantity: 200, unit: 'g' }], text: 'A.' },
+      { ingredients: [{ name: 'Mehl', quantity: 300, unit: 'ml' }], text: 'B.' },
+      { ingredients: [{ name: 'Mehl', quantity: 100, unit: 'g' }], text: 'C.' },
+    ];
+    const master = deriveIngredients(rows);
+    // Same-unit uses merged into one master row (300 g), the ml use is its own.
+    expect(masterUsesFor(rows, master[0]!)).toEqual([{ quantity: 200 }, { quantity: 100 }]);
+    expect(masterUsesFor(rows, master[1]!)).toEqual([{ quantity: 300 }]);
   });
 });

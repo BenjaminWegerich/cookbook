@@ -63,6 +63,7 @@ import {
   formatBQ,
   formatDecimal,
   renderAQSDisplaySlash,
+  renderMasterAQSDisplaySlash,
   type ArrangementDisplay,
 } from '../additionalUnits.js';
 import { optimizeUnitless } from '../quantityOptimizer.js';
@@ -70,6 +71,7 @@ import { SERVING_COUNTS } from '../servingSizes.js';
 import type { PrecisionContext } from '../precision.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
 import type { TextArtifact } from './artifacts.js';
+import { masterUsesFor } from './masterQuantity.js';
 import {
   PLAN_FRAGMENT_SERVINGS,
   PLAN_FRAGMENT_YIELD,
@@ -80,7 +82,7 @@ import { resolveTheme, resolveThemeFonts } from './theme.js';
 import type { ResolvedTheme } from './theme.js';
 import { displayTimeText } from './timeValues.js';
 import { defaultYieldView, yieldViewQuantities } from './yieldViews.js';
-import type { Ingredient, Recipe, Step, Unit } from './types.js';
+import type { Ingredient, MasterIngredient, Recipe, Step, Unit } from './types.js';
 import { EMBEDDED_FONT_COMPANION, EMBEDDED_FONTS } from './embeddedFonts.js';
 
 /**
@@ -394,6 +396,26 @@ function renderPhoto(photo: RecipePhoto | undefined): string {
 }
 
 /**
+ * Renders one master row from the step uses it was merged from, through the
+ * constrained master optimizer. The uses are scaled to the view, so the
+ * master's BQ is the sum of the *scaled* step BQs at every baked size. A
+ * hand-built recipe whose master entry has no backing row (normally impossible)
+ * falls back to the plain base form instead of breaking the export.
+ */
+function masterDisplay(
+  recipe: Recipe,
+  ingredient: MasterIngredient,
+  factor: number,
+): ArrangementDisplay {
+  const uses = masterUsesFor(recipe.steps, ingredient, factor);
+  if (uses.length === 0) {
+    const text = `${formatBQ(ingredient.quantity * factor, ingredient.unit)} ${ingredient.name}`;
+    return { text, parts: [{ kind: 'text', value: text }] };
+  }
+  return renderMasterAQSDisplaySlash(ingredient.name, uses, ingredient.unit);
+}
+
+/**
  * The reference ingredients of one view, scaled by the view's factor, as HTML
  * lines. Unlike the ingredient rows, the readout keeps an arrangement note's
  * brackets and shows them with their content in the muted, italic run
@@ -402,23 +424,7 @@ function renderPhoto(photo: RecipePhoto | undefined): string {
 function referenceLines(recipe: Recipe, factor: number): string[] {
   return recipe.ingredients
     .filter((ingredient) => ingredient.reference)
-    .map((ingredient) => {
-      const value = ingredient.quantity * factor;
-      const context = ingredientContext(ingredient);
-      // A quantity-only artifact may be unitless (`{{1/2}}`); it then renders
-      // through the unitless branch (DESIGN §7).
-      if (ingredient.name === undefined) {
-        return escapeHtml(
-          ingredient.unit === undefined
-            ? unitlessText(value, context)
-            : formatBQ(value, ingredient.unit),
-        );
-      }
-      return arrangementHtml(
-        renderAQSDisplaySlash(ingredient.name, value, ingredient.unit ?? 'g', context),
-        'reference',
-      );
-    });
+    .map((ingredient) => arrangementHtml(masterDisplay(recipe, ingredient, factor), 'reference'));
 }
 
 /**
@@ -440,13 +446,13 @@ function renderReferenceReadout(
 
 /** One checkable master-ingredient row (checkbox, quantity, optional badge). */
 function renderCheckRow(
-  ingredient: Ingredient,
-  value: number,
+  recipe: Recipe,
+  ingredient: MasterIngredient,
+  factor: number,
   links: Readonly<Record<string, string>>,
   id: string,
-  context: PrecisionContext,
 ): string {
-  const text = displayHtml(ingredient.name, value, ingredient.unit, context);
+  const text = arrangementHtml(masterDisplay(recipe, ingredient, factor), 'bare');
   const badge = subRecipeBadge(links[ingredient.name]);
   return (
     `  <li class="check-row">` +
@@ -471,13 +477,7 @@ function renderCheckList(
 ): string {
   const rows = recipe.ingredients
     .map((ingredient, i) =>
-      renderCheckRow(
-        ingredient,
-        ingredient.quantity * factor,
-        links,
-        `c-${sizeToken}-${i}`,
-        ingredientContext(ingredient),
-      ),
+      renderCheckRow(recipe, ingredient, factor, links, `c-${sizeToken}-${i}`),
     )
     .join('\n');
   const written = isWritten ? ' is-written' : '';

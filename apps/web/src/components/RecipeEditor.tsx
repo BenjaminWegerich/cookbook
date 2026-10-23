@@ -59,6 +59,7 @@ import {
   displayTimeText,
   isHexColor,
   masterIngredientNames,
+  masterUsesFor,
   parseRecipe,
   parseTimeValue,
   resolveTheme,
@@ -106,7 +107,7 @@ import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientShee
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityInput from './QuantityInput';
 import ArrangementLine from './ArrangementLine';
-import { safeRenderAQSDisplay } from './ingredientDisplay';
+import { safeRenderAQSDisplay, safeRenderMasterAQSDisplay } from './ingredientDisplay';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -1319,6 +1320,27 @@ function RecipeEditor({
    */
   const computedIngredients = useMemo(() => saved?.ingredients ?? [], [saved]);
 
+  /**
+   * The display line of each master row. It is derived from the step uses
+   * behind the row (`masterUsesFor`), not from the summed quantity alone, so the
+   * constrained master optimizer can keep the row consistent with the step rows
+   * (one-use identity, exact BQ sum, shared-unit AQ sum, inherited precision).
+   * The index matches `computedIngredients`; both come from the same `saved`.
+   */
+  const masterDisplays = useMemo(
+    () =>
+      saved === null
+        ? []
+        : computedIngredients.map((ingredient) =>
+            safeRenderMasterAQSDisplay(
+              ingredient.name,
+              masterUsesFor(saved.steps, ingredient),
+              ingredient.unit,
+            ),
+          ),
+    [computedIngredients, saved],
+  );
+
   /** Ingredient recipes of the collection, offered in the sheet's name
    *  autofill (title + yield, so a sub-recipe is picked like an ingredient). */
   const ingredientRecipes = useMemo<IngredientRecipeOption[]>(
@@ -2493,6 +2515,9 @@ function RecipeEditor({
                                   ingredient.name,
                                   ingredient.quantity,
                                   ingredient.unit,
+                                  ingredient.precision !== undefined
+                                    ? { quantity: ingredient.precision }
+                                    : {},
                                 )}
                               />
                               {isNewName && (
@@ -2689,7 +2714,7 @@ function RecipeEditor({
                 Referenz-Menge markieren.
               </p>
               <ul className="ingredient-list">
-                {computedIngredients.map((ingredient) => {
+                {computedIngredients.map((ingredient, index) => {
                   const jumpTarget = subRecipeTarget(ingredient.name);
                   const isReference = ingredient.reference === true;
                   const isNewName = unknownUsedNames.has(ingredient.name.trim());
@@ -2697,11 +2722,14 @@ function RecipeEditor({
                     <li key={ingredient.name} className="ingredient-row">
                       <span className="ingredient-line">
                         <ArrangementLine
-                          display={safeRenderAQSDisplay(
-                            ingredient.name,
-                            ingredient.quantity,
-                            ingredient.unit,
-                          )}
+                          display={
+                            masterDisplays[index] ??
+                            safeRenderAQSDisplay(
+                              ingredient.name,
+                              ingredient.quantity,
+                              ingredient.unit,
+                            )
+                          }
                         />
                         {isNewName && (
                           <span className="ingredient-tag tag-new">

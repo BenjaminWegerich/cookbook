@@ -18,6 +18,8 @@ import {
   renderAQS,
   renderAQSDisplay,
   renderAQSSlash,
+  renderMasterAQSDisplay,
+  renderMasterAQSDisplaySlash,
   renderPantryChipDisplay,
   resolveReorderPoint,
   selectAQ,
@@ -201,5 +203,41 @@ describe('resolveReorderPoint', () => {
       },
       storedValue: Infinity,
     });
+  });
+});
+
+describe('renderMasterAQSDisplay (constrained master row)', () => {
+  it('renders a single use exactly like the step row', () => {
+    // 1/3 of a 200 g pack displays as 67 g on the step row; re-optimizing the
+    // 67 g alone would lose the pack, so the master must copy the step result.
+    expect(renderMasterAQSDisplay('Naturtofu', [{ quantity: 66.67 }], 'g')).toEqual(
+      renderAQSDisplay('Naturtofu', 66.67, 'g'),
+    );
+  });
+
+  it('sums the AQs when all steps use the same unit', () => {
+    // 1 Becher (500 g) + 1/2 Becher (250 g) → 1 1/2 Becher (750 g).
+    expect(
+      renderMasterAQSDisplay('Joghurt', [{ quantity: 450 }, { quantity: 250 }], 'g').text,
+    ).toBe(`1${NB}½${NB}Becher Joghurt (750${NB}g)`);
+  });
+
+  it('does not repeat a step pack in the master row', () => {
+    // The user's example: step 1 "1 Packung Mehl (1 kg)", step 2 "20 g"; the
+    // master must be the exact BQ sum "1,02 kg", not "1 Packung (1,02 kg)".
+    expect(renderMasterAQSDisplay('Mehl', [{ quantity: 1000 }, { quantity: 20 }], 'g').text).toBe(
+      `1,02${NB}kg Mehl`,
+    );
+  });
+
+  it('writes a master fraction above one as a mixed fraction with NNBSP', () => {
+    // The cooking view writes "1 1/2", never the improper "3/2".
+    const line = renderMasterAQSDisplaySlash(
+      'Joghurt',
+      [{ quantity: 450 }, { quantity: 250 }],
+      'g',
+    ).text;
+    expect(line).toBe(`1${NB}1/2${NB}Becher Joghurt (750${NB}g)`);
+    expect(line).not.toContain('3/2');
   });
 });

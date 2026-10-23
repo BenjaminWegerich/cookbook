@@ -30,39 +30,33 @@ function roundSum(value: number): number {
  * summing the targets would disagree with those readings. The sum is kept at
  * millionth precision only to remove floating-point noise.
  *
- * Entries are grouped by exact name (trimmed). The first entry's unit is kept.
- * Entries whose quantity cannot be summed meaningfully (different base units
- * for the same name, e.g. g vs ml) are kept as separate entries instead of
- * being merged.
+ * Entries are grouped by exact name (trimmed) **and base unit**. Same-unit uses
+ * of one name are always merged, even when another use of that name is in a
+ * different unit; the different-unit uses stay separate entries because their
+ * amounts are not comparable (g vs ml). Grouping by both fields is what lets
+ * `masterUsesFor` reconstruct exactly the uses behind one master row.
  */
 export function mergeIngredientUses(ingredients: readonly Ingredient[]): Ingredient[] {
-  const byName = new Map<string, Ingredient[]>();
+  const byNameAndUnit = new Map<string, Ingredient[]>();
   for (const ingredient of ingredients) {
-    const name = ingredient.name.trim();
-    const list = byName.get(name);
+    const key = `${ingredient.name.trim()}\u0000${ingredient.unit}`;
+    const list = byNameAndUnit.get(key);
     if (list === undefined) {
-      byName.set(name, [ingredient]);
+      byNameAndUnit.set(key, [ingredient]);
     } else {
       list.push(ingredient);
     }
   }
 
   const merged: Ingredient[] = [];
-  for (const [name, entries] of byName) {
+  for (const entries of byNameAndUnit.values()) {
     // A group always has at least one entry (it was created by a push above).
     const first = entries[0]!;
-    // Only sum when every entry shares the first entry's unit — otherwise the
-    // amounts are not comparable and stay separate.
-    if (entries.every((entry) => entry.unit === first.unit)) {
-      merged.push({
-        name,
-        quantity: roundSum(entries.reduce((sum, entry) => sum + entry.quantity, 0)),
-        unit: first.unit,
-      });
-    } else {
-      // Mixed units: keep each entry as-is (still trimmed).
-      merged.push(...entries.map((entry) => ({ ...entry, name: entry.name.trim() })));
-    }
+    merged.push({
+      name: first.name.trim(),
+      quantity: roundSum(entries.reduce((sum, entry) => sum + entry.quantity, 0)),
+      unit: first.unit,
+    });
   }
   return merged;
 }

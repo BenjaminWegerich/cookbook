@@ -27,8 +27,11 @@
 - The master ingredient list stores the **sum of the step rows' displayed BQs**,
   not the sum of their exact targets. Those are the amounts the cook reads on
   the rows; summing the targets would disagree with them. The sum is kept at
-  millionth precision only to remove floating-point noise, then optimized for
-  display like any other target.
+  millionth precision only to remove floating-point noise. The master row's own
+  display is optimized under constraints that tie it to the step rows (see
+  §6, “Master-list quantities”): a once-used ingredient keeps the step's
+  arrangement, several uses keep the exact BQ sum and the master row inherits
+  the highest precision of its uses.
 
 This replaces the old quantity ladder. `docs/standard_numbers.csv` and the
 `packages/core/src/ladder.ts` / `ladderData.ts` modules are no longer imported by
@@ -179,6 +182,36 @@ Examples:
 - `250 g` Joghurt with a `500 g` Becher may be `1/2 Becher (250 g)`.
 - `0.5 g` has no BQ candidate; it is shown as `0,5 g`.
 
+### Master-list quantities
+
+A master row is not an independent target: `optimizeMasterQuantity`
+([quantityOptimizer.ts](../packages/core/src/quantityOptimizer.ts)) derives it
+from the step uses that `masterUsesFor`
+([masterQuantity.ts](../packages/core/src/recipe/masterQuantity.ts)) recovers.
+The rules:
+
+- **One use:** the step result is reused unchanged, so step and master
+  arrangement are identical.
+- **Several uses:** the master BQ is the exact sum of the step BQs. It need not
+  be a BQ table value and is never charged BQ clumsiness.
+- **Same AU everywhere:** if every step uses the same AU and the master uses it
+  too, the master AQ is the exact sum of the step AQs. A sum outside the AQ
+  table is written as a reduced mixed fraction (`1+1/2`, displayed as
+  `1 1/2`), and its clumsiness is not scored.
+- **Shared AU:** any master AQ that uses an AU some step also uses must be
+  strictly larger than that step's AQ. Without this rule a master could repeat
+  `1 Packung` above a step that already reads `1 Packung` and show a
+  contradictory `1 Packung (1,02 kg)`.
+- **Exact units:** outside the shared-AU sum, an exact unit is only a candidate
+  when its count reaches the master BQ exactly; otherwise the line would
+  contradict itself (`2 Becher (900 g)`).
+- **Precision:** the master row takes the highest effective precision among its
+  step rows.
+
+The constraints hold at every baked export size: the export scales the step
+uses before it optimizes the master row, so the master BQ is always the sum of
+the *displayed* step BQs of that size.
+
 ## 7. Scaling a recipe
 
 A recipe's written size is either its serving count (`finished_dish`) or its
@@ -252,6 +285,7 @@ the cleanup task in [ROADMAP.md](ROADMAP.md).
 | BQ/AQ tables and schemes | `packages/core/src/quantityData.ts` (generated from `docs/BQs.csv` + `docs/AQs.csv`) |
 | Membership, decade rule, formatting | `packages/core/src/quantityValues.ts` |
 | Optimizer | `packages/core/src/quantityOptimizer.ts` |
+| Master-row uses and display | `packages/core/src/recipe/masterQuantity.ts` |
 | Precision | `packages/core/src/precision.ts` |
 | Serving counts | `packages/core/src/servingSizes.ts` |
 | Display arrangements | `packages/core/src/additionalUnits.ts` |

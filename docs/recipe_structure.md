@@ -67,6 +67,10 @@
     its first use and with the **total of the displayed BQs** of those uses —
     not the sum of their exact targets. The amounts the cook reads on the rows
     are what add up;
+  - the master row's display follows the master-quantity rules (see
+    [quantity_scaling.md](quantity_scaling.md) §6): one use repeats the step
+    arrangement, several uses keep the exact BQ sum, a shared AU keeps the
+    exact AQ sum, and the row takes the highest precision of its uses;
   - it is read-only in the editor, except for the reference role (see below).
 - Each ingredient is stored with exactly two parts:
   - name (required),

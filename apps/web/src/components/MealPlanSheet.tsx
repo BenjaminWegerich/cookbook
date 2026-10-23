@@ -74,6 +74,7 @@ import {
   SERVING_COUNTS,
   defaultYieldView,
   formatBQ,
+  masterUsesFor,
   writtenPlannedAmount,
   yieldViewQuantities,
   type PlannedAmount,
@@ -83,7 +84,7 @@ import {
 import { CheckBoxIcon } from './icons';
 import ReferenceReadout from './ReferenceReadout';
 import ValueStepper from './ValueStepper';
-import { safeRenderAQSDisplay } from './ingredientDisplay';
+import { safeRenderMasterAQSDisplay } from './ingredientDisplay';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /**
@@ -230,9 +231,11 @@ function MealPlanSheet({
   const references = recipe.ingredients
     .filter((ingredient) => ingredient.reference)
     .map((ingredient) =>
-      safeRenderAQSDisplay(ingredient.name, ingredient.quantity * factor, ingredient.unit, {
-        ...(ingredient.precision !== undefined ? { quantity: ingredient.precision } : {}),
-      }),
+      safeRenderMasterAQSDisplay(
+        ingredient.name,
+        masterUsesFor(recipe.steps, ingredient, factor),
+        ingredient.unit,
+      ),
     );
 
   /**

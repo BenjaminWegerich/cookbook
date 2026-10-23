@@ -35,7 +35,12 @@ import {
   type IngredientEntry,
 } from './additionalUnitsData.js';
 import { allIngredientMappings, mappingsFor } from './ingredientRegistry.js';
-import { optimizeQuantity, type OptimizedQuantity } from './quantityOptimizer.js';
+import {
+  optimizeMasterQuantity,
+  optimizeQuantity,
+  type MasterQuantityUse,
+  type OptimizedQuantity,
+} from './quantityOptimizer.js';
 import type { PrecisionContext } from './precision.js';
 
 /**
@@ -695,6 +700,53 @@ export function renderAQSDisplaySlash(
   context: PrecisionContext = {},
 ): ArrangementDisplay {
   return renderAQSWith(ingredient, bq, bu, formatAQSlash, context);
+}
+
+/**
+ * The master-list counterpart of `renderAQSDisplay`: renders one derived master
+ * row from the step uses it was merged from, with the constrained master
+ * optimizer (quantityOptimizer.optimizeMasterQuantity). A single use renders
+ * exactly like the step row; several uses keep the master BQ equal to the sum
+ * of the step BQs and the AQ consistent with the step counts.
+ *
+ * The uses must already be scaled to the displayed size. `masterUsesFor`
+ * (recipe/masterQuantity.ts) gathers them from the recipe's steps.
+ */
+export function renderMasterAQSDisplay(
+  ingredient: string,
+  uses: readonly MasterQuantityUse[],
+  bu: string,
+): ArrangementDisplay {
+  return renderMasterAQSWith(ingredient, uses, bu, formatAQ);
+}
+
+/**
+ * The cooking view's counterpart of `renderMasterAQSDisplay` (DESIGN §7): the
+ * same constrained master line, with the slash-form AQ.
+ */
+export function renderMasterAQSDisplaySlash(
+  ingredient: string,
+  uses: readonly MasterQuantityUse[],
+  bu: string,
+): ArrangementDisplay {
+  return renderMasterAQSWith(ingredient, uses, bu, formatAQSlash);
+}
+
+/**
+ * The shared core of the two master renderers: optimizes the master quantity
+ * from its step uses and renders the selected unit's arrangement.
+ */
+function renderMasterAQSWith(
+  ingredient: string,
+  uses: readonly MasterQuantityUse[],
+  bu: string,
+  formatAq: (aq: string) => string,
+): ArrangementDisplay {
+  const result = optimizeMasterQuantity(uses, mappingsFor(ingredient), bu);
+  if (result.aq === undefined) {
+    return baseFormDisplay(ingredient, result.bq, bu);
+  }
+  return renderOptimizedAQ(ingredient, result, bu, formatAq);
 }
 
 /**

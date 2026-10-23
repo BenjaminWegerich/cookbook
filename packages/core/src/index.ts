@@ -40,6 +40,7 @@ export * from './planLink.js';
 export * from './recipe/artifacts.js';
 export * from './recipe/exportHtml.js';
 export * from './recipe/ingredientList.js';
+export * from './recipe/masterQuantity.js';
 export * from './recipe/parse.js';
 export * from './recipe/rename.js';
 export * from './recipe/serialize.js';

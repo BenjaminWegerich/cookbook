@@ -221,15 +221,20 @@ remains in the master-data form; it is not part of recipe scaling.
 - The AQS is recomputed after every scaling step; it never influences scaling.
   Scaling changes `V0`; the optimizer is a display layer on top.
 - The rules apply uniformly to step rows, the master list, reference ingredients
-  and inline artifacts. A unitless artifact uses only the BQ-only branch (no
-  ingredient, no AU); see [quantity_scaling.md](quantity_scaling.md) §8.
+  and inline artifacts. The master list adds the ordering constraints of
+  [quantity_scaling.md](quantity_scaling.md) §6: its BQ and AQ are sums of the
+  step rows' displayed values, not an independent optimization. A unitless
+  artifact uses only the BQ-only branch (no ingredient, no AU); see
+  [quantity_scaling.md](quantity_scaling.md) §8.
 - A mapping's factor is expressed in the ingredient's fixed base unit (`g` or
   `ml`); an ingredient's base unit never changes.
 - Base quantities display in the family unit, switching to `kg` / `l` at 1000.
   Number and unit are joined by U+202F.
 - AQ notation: proper fractions use the Unicode glyphs (`⅒ ⅑ ⅛ ⅙ ¼ ⅓ ⅜ ⅖ ½ ⅗ ⅔ ¾ ⅝ ⅚ ⅞`);
   a mixed number is integer + U+202F + glyph (`1 ¼`); whole counts stay as they
-  are. The cooking view uses the slash form (`1/2`, `1 1/4`).
+  are. The cooking view uses the slash form (`1/2`, `1 1/4`). A master AQ sum
+  that is not an AQ table value uses the reduced slash fraction with the same
+  mixed form (`7/24`, `1 7/24`), because no glyph exists for it.
 - Precision can be set per quantity (optional) and per ingredient (mandatory);
   there is no recipe-level or global default. See
   [quantity_scaling.md](quantity_scaling.md) §5 for the cascade and the storage
