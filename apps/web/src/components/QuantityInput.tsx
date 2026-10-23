@@ -1,26 +1,44 @@
 /**
- * Free quantity input (decided with the user: recipes store the unrounded
- * target, so the old ladder-only stepper is gone).
+ * Quantity input used for every authorable amount (ingredient rows, inline
+ * mentions, recipe yield, reorder point).
  *
- * The field accepts any positive number; the suggestion chips are shortcuts,
- * not limits. The +/− buttons step by a magnitude-aware increment (1 below
- * 100, 10 below 1000, 50 above) so a value can still be reached quickly
- * without forcing it onto a table. The value is always stored in the family
- * unit (g/ml); the label switches to kg/l at 1000 (core formatBQ), while the
- * input itself stays in the family unit.
+ * Decided with the user:
+ * - +/- steps only through the allowed BQ values from the BQ table
+ *   (`nextAllowedBQ` / `previousAllowedBQ`); the buttons never step by an
+ *   arbitrary increment. Holding a button repeats that walk, exactly like
+ *   tapping it quickly (see StepperButton);
+ * - a non-BQ target is only reachable through the keyboard. The field accepts
+ *   any positive number; the suggestion chips are BQ shortcuts, not limits;
+ * - the value shows its unit in the family unit or in kg / l from 1000
+ *   (`formatBQ`): "400 g", "1,5 kg". While the field has keyboard focus it
+ *   shows the plain family-unit number, so typing enters a value the same way
+ *   the stored target is kept; blur restores the unit form;
+ * - the value slot is right-aligned and just wide enough for every quantity up
+ *   to 10 kg / 10 l (see QuantityValue); a live preview below the field stays
+ *   left-aligned;
+ * - zero and infinity are special reorder-point states, not BQ table values:
+ *   `allowZero` adds the 0 chip and lets "−" leave the smallest BQ for 0,
+ *   `allowInfinite` adds the ∞ chip. Neither applies to a unitless count.
  *
- * Two optional modes serve the ingredient master data's reorder point:
- * `allowZero` adds a "0" chip, `allowInfinite` adds "∞". Neither applies to a
- * unitless count.
+ * A unitless inline count (`{{…}}`) has no BQ table and keeps a plain ±1 step;
+ * its display falls back to the AQ fraction typography.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
 import { useEffect, useRef, useState } from 'react';
 
-import { formatAQValue, formatBQ, formatDecimal, isAQValue } from '@cookbook/core';
+import {
+  formatAQValue,
+  formatBQ,
+  formatDecimal,
+  isAQValue,
+  nextAllowedBQ,
+  previousAllowedBQ,
+} from '@cookbook/core';
 
-import { PlusIcon, RemoveIcon } from './icons';
+import QuantityValue from './QuantityValue';
+import StepperButton from './StepperButton';
 
 /** The two authorable base-unit families. */
 export type QuantityFamily = 'g' | 'ml';
@@ -39,13 +57,24 @@ interface QuantityInputProps {
   ariaLabel?: string;
 }
 
-/** Suggested family-unit values (shortcuts only, not a pool limit). */
+/** Suggested family-unit values (all BQs; shortcuts only, not a pool limit). */
 const FAMILY_SUGGESTIONS = [1, 10, 100, 1000, 10000];
 /** Suggested unitless counts. */
 const UNITLESS_SUGGESTIONS = [0.5, 1, 2, 3, 5, 10];
+/** Floor of a unitless stepped value; the field itself accepts any positive number. */
+const UNITLESS_STEP_FLOOR = 0.000001;
 
-/** Display form of a value in the input: family unit, or a plain count. */
-function inputText(value: number, family: QuantityFamily | null): string {
+/** Display form in the field at rest: the full quantity with its unit. */
+function displayText(value: number | undefined, family: QuantityFamily | null): string {
+  if (value === undefined) return '';
+  if (value === Infinity) return '∞';
+  if (family === null) return isAQValue(value) ? formatAQValue(value) : formatDecimal(value);
+  return formatBQ(value, family);
+}
+
+/** Display form while the field has focus: the plain stored family-unit number. */
+function editText(value: number | undefined, family: QuantityFamily | null): string {
+  if (value === undefined) return '';
   if (value === Infinity) return '∞';
   if (family === null) return isAQValue(value) ? formatAQValue(value) : formatDecimal(value);
   return formatDecimal(value);
@@ -57,15 +86,7 @@ function chipText(value: number, family: QuantityFamily | null): string {
   return formatBQ(value, family);
 }
 
-/** Magnitude-aware step for the +/− buttons. */
-function stepFor(value: number, family: QuantityFamily | null): number {
-  if (family === null || !Number.isFinite(value)) return 1;
-  if (value < 100) return 1;
-  if (value < 1000) return 10;
-  return 50;
-}
-
-/** A free quantity input with suggestion chips and adaptive +/− buttons. */
+/** A quantity field with suggestion chips and a BQ-only −/+ stepper. */
 function QuantityInput({
   value,
   onChange,
@@ -74,19 +95,39 @@ function QuantityInput({
   allowInfinite,
   ariaLabel = 'Menge',
 }: QuantityInputProps) {
-  const [text, setText] = useState(value === undefined ? '' : inputText(value, family));
+  /** True while the text field owns keyboard focus (then it shows the raw number). */
+  const [editing, setEditing] = useState(false);
+  /**
+   * The user's own text while editing; null = not editing, so the display is
+   * derived from `value` and `family` on every render. Deriving it (instead of
+   * mirroring it into state) keeps external changes — a chip, a step, a
+   * prefill — in sync without an effect fighting the user's typing.
+   */
+  const [draft, setDraft] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  /**
+   * Mirror of the latest committed value. It lets a hold's repeat ticks step
+   * from the value the previous tick produced, even before the parent has
+   * re-rendered and passed the new prop back.
+   */
+  const valueRef = useRef<number | undefined>(value);
 
-  // Keep the field in sync when the parent changes the value (a chip, a step,
-  // a prefill), but do not fight the user's own typing.
+  // The mirror follows every commit. A hold writes it optimistically as well.
   useEffect(() => {
-    if (document.activeElement !== inputRef.current) {
-      setText(value === undefined ? '' : inputText(value, family));
-    }
-  }, [value, family]);
+    valueRef.current = value;
+  });
 
-  const suggestions =
-    family === null ? UNITLESS_SUGGESTIONS : FAMILY_SUGGESTIONS;
+  // Select the whole value when keyboard editing starts, so the first
+  // keystroke replaces the old amount instead of appending to it.
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const text = editing && draft !== null ? draft : displayText(value, family);
+
+  const suggestions = family === null ? UNITLESS_SUGGESTIONS : FAMILY_SUGGESTIONS;
   const zeroChip = allowZero === true && family !== null ? 0 : null;
   const infinite = allowInfinite === true && family !== null;
 
@@ -101,13 +142,36 @@ function QuantityInput({
     onChange(parsed);
   };
 
-  /** One adaptive step; 0/∞ are left through a chip or by typing. */
-  const step = (direction: 1 | -1): void => {
-    if (value === undefined || value === Infinity) return;
-    const increment = stepFor(value, family);
-    const next = Math.max(allowZero === true ? 0 : 0.000001, value + direction * increment);
-    if (next === 0 && allowZero !== true) return;
-    onChange(Math.round(next * 1000) / 1000);
+  /**
+   * One step. A family quantity walks the BQ table (0 and ∞ are special
+   * reorder-point states); a unitless count keeps its plain ±1. Returns false
+   * when the list end blocks the step, which also stops a press-and-hold.
+   */
+  const step = (direction: 1 | -1): boolean => {
+    const current = valueRef.current;
+    if (current === undefined || !Number.isFinite(current)) return false;
+
+    let next: number | undefined;
+    if (family === null) {
+      if (direction < 0 && current <= UNITLESS_STEP_FLOOR) return false;
+      next = Math.max(UNITLESS_STEP_FLOOR, current + direction);
+      next = Math.round(next * 1000) / 1000;
+    } else if (direction < 0) {
+      next = previousAllowedBQ(current);
+      // 0 is the reorder point's "only ever bought for a recipe" state, not a
+      // BQ table value; it is still reachable with one step down from the
+      // smallest BQ (and from a typed value below it).
+      if (next === undefined && allowZero === true && current > 0) {
+        next = 0;
+      }
+    } else {
+      next = nextAllowedBQ(current);
+    }
+
+    if (next === undefined || next === current) return false;
+    valueRef.current = next; // optimistic: repeats are render-independent
+    onChange(next);
+    return true;
   };
 
   return (
@@ -145,37 +209,46 @@ function QuantityInput({
       </div>
 
       <div className="quantity-row">
-        <button
-          type="button"
-          className="step-button"
-          onClick={() => step(-1)}
-          disabled={value === undefined || value === Infinity || (allowZero !== true && (value ?? 0) <= 0.000001)}
-          aria-label="Menge verringern"
-        >
-          <RemoveIcon className="step-icon" />
-        </button>
-        <input
-          ref={inputRef}
-          className="quantity-value quantity-input"
-          type="text"
-          inputMode="decimal"
-          aria-label={ariaLabel}
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-            commit(event.target.value);
-          }}
-          onBlur={() => setText(value === undefined ? '' : inputText(value, family))}
+        <StepperButton
+          direction={-1}
+          disabled={
+            value === undefined ||
+            !Number.isFinite(value) ||
+            (family === null
+              ? value <= UNITLESS_STEP_FLOOR
+              : previousAllowedBQ(value) === undefined && !(allowZero === true && value > 0))
+          }
+          ariaLabel="Menge verringern"
+          onStep={step}
         />
-        <button
-          type="button"
-          className="step-button"
-          onClick={() => step(1)}
-          disabled={value === undefined || value === Infinity}
-          aria-label="Menge erhöhen"
-        >
-          <PlusIcon className="step-icon" />
-        </button>
+        <QuantityValue>
+          <input
+            ref={inputRef}
+            className="quantity-value quantity-input"
+            type="text"
+            inputMode="decimal"
+            aria-label={ariaLabel}
+            value={text}
+            onFocus={() => {
+              setEditing(true);
+              setDraft(editText(value, family));
+            }}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              commit(event.target.value);
+            }}
+            onBlur={() => {
+              setEditing(false);
+              setDraft(null);
+            }}
+          />
+        </QuantityValue>
+        <StepperButton
+          direction={1}
+          disabled={value === undefined || !Number.isFinite(value)}
+          ariaLabel="Menge erhöhen"
+          onStep={step}
+        />
       </div>
     </div>
   );

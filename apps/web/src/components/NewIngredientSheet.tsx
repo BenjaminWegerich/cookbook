@@ -21,8 +21,8 @@
  * holds no stops at all: then there is nothing to choose, the sheet says so and
  * the ingredient is created without a shopping stop (decided with the user).
  *
- * The reorder point is picked with the free QuantityInput (suggested chips +
- * adaptive stepper) and stored exactly as entered: no quantity optimization
+ * The reorder point is picked with the QuantityInput (suggested chips + BQ
+ * stepper) and stored exactly as entered: no quantity optimization
  * applies to this field (decided with the user), so an additional unit never
  * snaps or rewrites it and there is no preview line. Its default is 0 ("only
  * ever bought for a recipe"); "∞" selects infinite stock.

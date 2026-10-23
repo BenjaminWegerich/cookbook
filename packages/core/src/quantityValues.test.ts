@@ -18,6 +18,8 @@ import {
   isAQValue,
   isAllowedBQ,
   nearestAllowedBQ,
+  nextAllowedBQ,
+  previousAllowedBQ,
 } from './quantityValues.js';
 
 describe('BQ table and decade rule', () => {
@@ -65,6 +67,40 @@ describe('BQ table and decade rule', () => {
     expect(nearestAllowedBQ(1.5)).toBe(2);
     expect(nearestAllowedBQ(0.01)).toBe(1);
     expect(nearestAllowedBQ(437)).toBe(450);
+  });
+
+  it('steps to the adjacent BQ, skipping values between table rows', () => {
+    expect(nextAllowedBQ(1)).toBe(2);
+    expect(nextAllowedBQ(90)).toBe(95);
+    expect(nextAllowedBQ(95)).toBe(100);
+    expect(nextAllowedBQ(99)).toBe(100);
+    expect(nextAllowedBQ(100)).toBe(110);
+    expect(nextAllowedBQ(950)).toBe(1000);
+    expect(nextAllowedBQ(999)).toBe(1000);
+    expect(nextAllowedBQ(1500)).toBe(1600);
+    expect(nextAllowedBQ(9500)).toBe(10000);
+    expect(nextAllowedBQ(10000)).toBe(11000);
+
+    expect(previousAllowedBQ(11000)).toBe(10000);
+    expect(previousAllowedBQ(10000)).toBe(9500);
+    expect(previousAllowedBQ(1500)).toBe(1400);
+    expect(previousAllowedBQ(1000)).toBe(950);
+    expect(previousAllowedBQ(100)).toBe(95);
+    expect(previousAllowedBQ(99)).toBe(95);
+    expect(previousAllowedBQ(90)).toBe(85);
+    expect(previousAllowedBQ(2)).toBe(1);
+    expect(previousAllowedBQ(1)).toBeUndefined();
+  });
+
+  it('steps a value below the table up to its smallest BQ', () => {
+    expect(nextAllowedBQ(0)).toBe(1);
+    expect(nextAllowedBQ(0.5)).toBe(1);
+    expect(previousAllowedBQ(0.5)).toBeUndefined();
+  });
+
+  it('rejects non-finite stepper values', () => {
+    expect(() => nextAllowedBQ(Infinity)).toThrow();
+    expect(() => previousAllowedBQ(Number.NaN)).toThrow();
   });
 });
 

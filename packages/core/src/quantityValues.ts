@@ -210,6 +210,51 @@ export function allowedBQValuesInRange(min: number, max: number): BQValue[] {
 }
 
 /**
+ * The next allowed BQ value strictly above `value`; the smallest table value
+ * (1) when `value` lies below the table. This drives the quantity stepper's
+ * "+": the stepper walks the BQ table, never an arbitrary increment, so a
+ * value entered through the keyboard is skipped to the next real BQ. The
+ * function returns undefined only for values so large that no representable
+ * BQ follows (`value * 10` stops being finite).
+ *
+ * The search range `value … value * 10` is enough by construction: the decade
+ * rule fills every following decade with the 10 … 95 block, so at least one
+ * generated value lies beyond `value` before its tenfold bound.
+ */
+export function nextAllowedBQ(value: number): number | undefined {
+  if (!Number.isFinite(value)) {
+    throw new Error(`nextAllowedBQ: ${value} is not a finite number`);
+  }
+  if (value < BQ_MIN) {
+    return BQ_MIN;
+  }
+  const candidates = allowedBQValuesInRange(value, value * 10);
+  return candidates.find((candidate) => candidate.value > value)?.value;
+}
+
+/**
+ * The previous allowed BQ value strictly below `value`; undefined when nothing
+ * lies below it (the table starts at 1). This drives the quantity stepper's
+ * "−"; like `nextAllowedBQ`, it walks the table, not an arbitrary increment.
+ */
+export function previousAllowedBQ(value: number): number | undefined {
+  if (!Number.isFinite(value)) {
+    throw new Error(`previousAllowedBQ: ${value} is not a finite number`);
+  }
+  if (value <= BQ_MIN) {
+    return undefined;
+  }
+  const candidates = allowedBQValuesInRange(value / 10, value);
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    const candidate = candidates[index]!;
+    if (candidate.value < value) {
+      return candidate.value;
+    }
+  }
+  return undefined;
+}
+
+/**
  * The allowed BQ value nearest to `value` by absolute difference; ties go to
  * the larger value. Used only as a last-resort default for an ingredient-recipe
  * yield that is so small that its ±1-decade band contains no BQ value. The

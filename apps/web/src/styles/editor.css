@@ -145,7 +145,12 @@
   color: var(--color-ink-muted);
 }
 
-.field input[type='text'],
+/* Generic text-field look. The quantity input is excluded: it is an
+   absolutely positioned child of its own fixed-width slot and sets its own
+   value typography, padding and line height (18 px value in a 42 px slot).
+   Without the exclusion this higher-specificity rule would win the cascade
+   and make the slot's hidden width probe disagree with the rendered value. */
+.field input[type='text']:not(.quantity-input),
 .field textarea {
   width: 100%;
   padding: var(--space-3) var(--space-4);
@@ -297,7 +302,7 @@
   gap: var(--space-4); /* the chip row gap — see .quantity-chips above */
 }
 
-/* − / + stepper row (one ladder rung per tap). */
+/* − / + stepper row (one BQ rung per tap; a hold repeats it). */
 .quantity-row {
   display: flex;
   align-items: center;
@@ -335,29 +340,68 @@
   color: currentColor;
 }
 
+/* The value readout of a quantity stepper: 18 px body size, right-aligned, so
+   the digits line up while the stepper walks through different magnitudes. A
+   live preview below the field stays left-aligned. */
 .quantity-value {
-  min-width: 74px;
-  text-align: center;
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
+  text-align: right;
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
   font-weight: 600;
 }
 
-/* Free quantity input (QuantityInput): the value is typed, not stepped, so the
-   field keeps the stepper's centred value typography and gets the shared field
-   fill. The +/− buttons stay for quick magnitude changes. */
+/* The fixed-width value slot of a quantity stepper (QuantityValue). The hidden
+   probe sizes it to the widest display up to the 10 kg / 10 l bar in the
+   element's own font, so the buttons never move while the value changes. */
+.quantity-field {
+  position: relative;
+  display: inline-block;
+  flex: none;
+}
+
+/* The invisible width probe (see QuantityValue): it takes the same padding,
+   border and type as the visible value, so the slot is exactly its text box. */
+.quantity-measure {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid transparent;
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: 600;
+  white-space: nowrap;
+  visibility: hidden;
+}
+
+/* Free quantity input (QuantityInput): the value is typed, not stepped. It
+   fills the fixed-width slot and keeps the stepper's value typography, right
+   alignment and field fill. */
 .quantity-input {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  max-width: 180px;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-bg);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   color: var(--color-ink);
   font: inherit;
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
   font-weight: 600;
+  text-align: right;
+}
+
+/* Read-only value of the ValueStepper: fills the same slot, right-aligned, with
+   the input's border box so both stepper kinds line up. */
+.quantity-display {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid transparent;
+  text-align: right;
 }
 
 /* The mandatory precision chips. */
@@ -868,6 +912,9 @@
   font-size: var(--text-md);
   line-height: var(--leading-md);
   font-weight: 600;
+  /* The quantity value above is right-aligned; the live preview stays a normal
+     left-aligned line. */
+  text-align: start;
 }
 
 .checkbox-field {
