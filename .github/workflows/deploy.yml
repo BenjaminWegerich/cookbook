@@ -61,6 +61,12 @@ jobs:
       - name: Test core module
         run: npm run test --workspace @cookbook/core
 
+      # The TikTok extractor is plain JavaScript with no typecheck of its own,
+      # so its unit tests are the only gate on it — and they were only ever run
+      # locally before this step.
+      - name: Test TikTok extractor
+        run: npm run test --workspace @cookbook/tiktok-extractor
+
       - name: Build web app
         run: npm run build --workspace @cookbook/web
 
