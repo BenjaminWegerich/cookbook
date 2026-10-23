@@ -238,8 +238,8 @@
   flex-shrink: 0;
 }
 
-/* Editor parity (editor.css #editor-field-yield): keep the Gewicht/Volumen
-   toggle at the same distance from the QuantityPicker as the manual editor. */
+/* Editor parity (editor.css #editor-field-yield): keep the g/ml toggle at the
+   same distance from the QuantityPicker as the manual editor. */
 .ai-options .ai-yield .segmented {
   margin-block-end: calc(var(--space-3) + var(--space-1) - var(--space-2));
 }

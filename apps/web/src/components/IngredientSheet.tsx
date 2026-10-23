@@ -26,8 +26,8 @@
  *   artifact a sub-recipe use implicitly (there is no link field);
  * - the quantity is entered freely (recipes store the unrounded target): the
  *   field accepts any positive number, with suggestion chips and an adaptive
- *   +/− step; quantity-only inline mentions may be Gewicht / Volumen / ohne
- *   Einheit;
+ *   +/− step; quantity-only inline mentions choose the g / ml family or no
+ *   unit (—);
  * - the optional quantity-level precision is chosen with the same five chips
  *   as the ingredient master data and is always offered, before a name is
  *   chosen too. Its baseline is the ingredient's master-data level, or the
@@ -138,9 +138,19 @@ function IngredientSheet({
   const initialName = prefill?.name ?? initial?.name ?? '';
   const [name, setName] = useState(initialName);
   const [quantity, setQuantity] = useState(prefill?.quantity ?? initial?.quantity ?? 100);
-  /** Inline mode without a name: the author picks Gewicht / Volumen / no unit.
+  /**
+   * Whether the amount is already the author's own: an edited row/artifact
+   * (initial) or the quantity typed before the create-master-data flow
+   * (prefill) is a value to keep, not a placeholder. Only a fresh entry starts
+   * at the default 100, which a name suggestion may replace with the
+   * ingredient's master base amount (see adoptSuggestion).
+   */
+  const [quantityTouched, setQuantityTouched] = useState(
+    initial !== undefined || prefill !== undefined,
+  );
+  /** Inline mode without a name: the author picks g / ml / no unit (—).
    *  Editing an inline artifact restores its stored unit; fresh inserts start
-   *  at Gewicht. */
+   *  at g. */
   const [freeUnit, setFreeUnit] = useState<FreeUnit>(() => {
     if (mode !== 'inline-edit') return 'g';
     return initial?.unit === 'ml' ? 'ml' : initial?.unit === 'g' ? 'g' : 'none';
@@ -257,16 +267,24 @@ function IngredientSheet({
   }
 
   /**
-   * Adopts a suggestion: exact name, plus the quantity base (the master data's
-   * base unit factor, or the sub-recipe's yield) so the preview starts at a
+   * Adopts a suggestion: exact name, plus — only while the amount is still the
+   * untouched default of a fresh entry — the quantity base (the master data's
+   * base unit factor, or the sub-recipe's yield), so the preview starts at a
    * meaningful value (e.g. Joghurt → 400 g → "1 Becher"; Béchamelsauce →
    * 500 ml).
+   *
+   * A quantity that is already there is never replaced by the picked name: an
+   * edited row keeps its amount (e.g. the row "Chilis" with a "Neu" badge is
+   * matched to a known ingredient without the amount jumping to that
+   * ingredient's master base amount), and so does a typed amount or the one
+   * restored after the create-master-data flow.
    */
   const adoptSuggestion = (candidate: string): void => {
     setName(candidate);
     // The typed name caused the last validation error (unknown/empty name);
     // adopting a known suggestion resolves it, so the message must clear.
     setError(null);
+    if (quantityTouched) return;
     const recipe = ingredientRecipes.find((entry) => entry.title === candidate);
     if (recipe !== undefined) {
       setQuantity(recipe.yield);
@@ -338,8 +356,8 @@ function IngredientSheet({
         aria-label={
           inlineMode
             ? mode === 'inline-add'
-              ? 'Zutat oder Menge zum Text hinzufügen'
-              : 'Zutat oder Menge im Text bearbeiten'
+              ? 'Menge zum Text hinzufügen'
+              : 'Menge im Text bearbeiten'
             : mode === 'row-add'
               ? 'Zutat zur Liste hinzufügen'
               : 'Zutat in der Liste bearbeiten'
@@ -352,8 +370,8 @@ function IngredientSheet({
           <h3 className="sheet-title">
             {inlineMode
               ? mode === 'inline-add'
-                ? 'Zutat oder Menge zum Text hinzufügen'
-                : 'Zutat oder Menge im Text bearbeiten'
+                ? 'Menge zum Text hinzufügen'
+                : 'Menge im Text bearbeiten'
               : mode === 'row-add'
                 ? 'Zutat zur Liste hinzufügen'
                 : 'Zutat in der Liste bearbeiten'}
@@ -444,21 +462,22 @@ function IngredientSheet({
                 className={freeUnit === 'g' ? 'segmented-active' : ''}
                 onClick={() => setFreeUnit('g')}
               >
-                Gewicht
+                g
               </button>
               <button
                 type="button"
                 className={freeUnit === 'ml' ? 'segmented-active' : ''}
                 onClick={() => setFreeUnit('ml')}
               >
-                Volumen
+                ml
               </button>
               <button
                 type="button"
                 className={freeUnit === 'none' ? 'segmented-active' : ''}
+                aria-label="Ohne Einheit"
                 onClick={() => setFreeUnit('none')}
               >
-                Ohne Einheit
+                —
               </button>
             </div>
           </div>
@@ -466,7 +485,16 @@ function IngredientSheet({
 
         <div className="field">
           <span className="field-label">Menge</span>
-          <QuantityInput value={quantity} onChange={setQuantity} family={family} />
+          <QuantityInput
+            value={quantity}
+            onChange={(next) => {
+              // Any author-set amount (typed, chipped or stepped) is kept when
+              // a suggestion is adopted afterwards.
+              setQuantity(next);
+              setQuantityTouched(true);
+            }}
+            family={family}
+          />
         </div>
 
         {/* Quantity-level precision: the optional override of the quantity's
@@ -507,6 +535,7 @@ function IngredientSheet({
           <p className="aqs-preview" aria-live="polite">
             {trimmedName !== '' && validName ? (
               <ArrangementLine
+                noteForm="bracketed"
                 display={renderAQSDisplay(trimmedName, quantity, unit ?? 'g', {
                   quantity: effectivePrecision,
                 })}

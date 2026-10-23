@@ -233,11 +233,11 @@
   color: var(--color-on-accent);
 }
 
-/* Ergiebigkeit field: keep the Gewicht/Volumen toggle at the same distance
-   from the quantity chips as the QuantityPicker keeps between its chips and
-   the stepper. The .field grid gap (--space-2) alone would leave the toggle
-   6 px too close — the picker's chip→stepper band is its --space-3 row gap
-   plus the chips row's --space-1 bottom padding (12 px). */
+/* Ergiebigkeit field: keep the g/ml toggle at the same distance from the
+   quantity chips as the QuantityPicker keeps between its chips and the
+   stepper. The .field grid gap (--space-2) alone would leave the toggle 6 px
+   too close — the picker's chip→stepper band is its --space-3 row gap plus the
+   chips row's --space-1 bottom padding (12 px). */
 #editor-field-yield .segmented {
   margin-block-end: calc(var(--space-3) + var(--space-1) - var(--space-2));
 }
@@ -579,18 +579,19 @@
 
 .photo-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-6);
 }
 
-/* The editor's photo preview: 120 × 90 px, the 4:3 pairing of the common
-   photographic set (DESIGN.md §5.8). An image's own pixel size sits outside the
-   geometric ladder (§4.3), so this pair is not a --space-* or ladder step. The
-   box matches the stored 4:3 photo, so the preview shows it uncropped. As media
-   it takes the rung of the card it sits on — 10px on a card. */
+/* The editor's photo preview: 160 × 120 px, one step above the 120 × 90 pairing
+   of the common photographic set (DESIGN.md §5.8). An image's own pixel size
+   sits outside the geometric ladder (§4.3), so this pair is not a --space-* or
+   ladder step. The box matches the stored 4:3 photo, so the preview shows it
+   uncropped. As media it takes the rung of the card it sits on — 10px on a card. */
 .photo-preview {
-  width: 120px;
-  height: 90px;
+  width: 160px;
+  height: 120px;
   object-fit: cover;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-line);
@@ -599,8 +600,8 @@
 /* The placeholder reserves the same box as the preview, so the row does not
    jump when a photo arrives. */
 .photo-placeholder {
-  width: 120px;
-  height: 90px;
+  width: 160px;
+  height: 120px;
   display: grid;
   place-items: center;
   background: var(--color-bg);
@@ -699,7 +700,9 @@
    a step card (.step-card .ingredient-list below). `overflow: hidden` is what
    lets the first and last rows meet the rounded corners instead of poking past
    them. The list carries no padding of its own: its rows hold it (and they are
-   not rounded), so the rung's inner radius is 0 by the same rule. */
+   not rounded), so the rung's inner radius is 0 by the same rule. The list is
+   flat: no elevation of its own (decided with the user), unlike the raised
+   master-data lists (ingredient-master.css). */
 .ingredient-list {
   list-style: none;
   margin: 0;
@@ -708,6 +711,7 @@
   background: var(--color-bg);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
+  box-shadow: none;
 }
 
 /* Every row but the first carries the divider. The rule keys on the list items

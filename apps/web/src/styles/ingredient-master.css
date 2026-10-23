@@ -29,10 +29,14 @@
   content: none;
 }
 
-/* One paper surface for the whole reference list, with hairlines between the
-   rows (the same shape as the sort page's list). No padding of its own: the
-   rows hold it and stay unrounded (§5.4). */
-.ingredient-list {
+/* One raised paper surface for the whole reference list, with hairlines
+   between the rows (the same shape as the sort page's list). No padding of its
+   own: the rows hold it and stay unrounded (§5.4). The selector is scoped to
+   the two master-data screens that own this list, because the recipe editor
+   also uses `.ingredient-list` for its flat, card-nested lists (editor.css);
+   an unscoped rule here would leak this elevation into the editor. */
+.ingredient-master .ingredient-list,
+.shopping-places .ingredient-list {
   list-style: none;
   margin: 0;
   padding: 0;

@@ -454,7 +454,7 @@ function ReplaceRecipeSheet({
           ) : (
             // The unit is fixed to the recipe's own family unit (the meal plan
             // only accepts a size that fits the recipe), so only the quantity is
-            // chosen here — no Gewicht/Volumen switch.
+            // chosen here — no g/ml switch.
             <div className="field">
               <span className="field-label">Menge</span>
               <ValueStepper

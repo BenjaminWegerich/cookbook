@@ -2,12 +2,13 @@
  * ArrangementLine — renders a core `ArrangementDisplay` with its notes styled.
  *
  * An ingredient arrangement may end in a parenthesized note ("1 Becher Joghurt
- * (500 g)"). The display drops the brackets and shows the note muted and italic
- * after one en space, so the amount line reads as one phrase with a quiet aside
- * (docs/DESIGN.md §5.4). Two exceptions keep the brackets: step prose keeps a
- * regular space and styles brackets and content alike, because the sentence's
- * punctuation must stay visible (§5.11), and the reference readout keeps the
- * brackets after one en space (§5.11).
+ * (500 g)"). The note is always the muted, italic `.arrangement-note` run; how
+ * it is attached depends on the surface. `bracketed` keeps the brackets after
+ * one en space (the editor's ingredient lists and the reference readout),
+ * `parenthesised` keeps a regular space and styles brackets and content alike
+ * for step prose, because the sentence's punctuation must stay visible
+ * (docs/DESIGN.md §5.11). `bare` drops the brackets after one en space for the
+ * pantry surfaces, where the amount still reads as one phrase (§5.4).
  *
  * The written shopping list never uses this component — it keeps the bracketed
  * text from core's `renderAQS`/`renderPantryLine`.
@@ -22,10 +23,11 @@ interface ArrangementLineProps {
   display: ArrangementDisplay;
   /**
    * How a note is attached: `bare` (the default) uses one en space before the
-   * note, `parenthesised` keeps a regular space and the brackets for step prose,
-   * `reference` keeps the brackets after one en space for the reference readout.
+   * bracket-less note, `parenthesised` keeps a regular space and the brackets
+   * for step prose, `bracketed` keeps the brackets after one en space (the
+   * editor's ingredient lists and the reference readout).
    */
-  noteForm?: 'bare' | 'parenthesised' | 'reference';
+  noteForm?: 'bare' | 'parenthesised' | 'bracketed';
 }
 
 /**

@@ -27,7 +27,7 @@
  *   reads it.
  * - The first prompt carries recipe specifications below the prompt and source
  *   fields: the manual editor's Typ and Portionen/Ergiebigkeit controls
- *   (defaults: 6 Portionen for a Gericht, Gewicht / 1 kg for a Zutaten-Rezept),
+ *   (defaults: 6 Portionen for a Gericht, g / 1 kg for a Zutaten-Rezept),
  *   the Merkmale flags "Vorgaben" (vegan — always on for now, schnell und
  *   einfach, günstig) and "KI-Verhalten" (Bei Bedarf nachfragen vs. Direkt
  *   entwerfen).
@@ -1061,14 +1061,14 @@ export default function AiCreateSheet({
                               className={yieldUnit !== 'ml' ? 'segmented-active' : ''}
                               onClick={() => setYieldUnit('g')}
                             >
-                              Gewicht
+                              g
                             </button>
                             <button
                               type="button"
                               className={yieldUnit === 'ml' ? 'segmented-active' : ''}
                               onClick={() => setYieldUnit('ml')}
                             >
-                              Volumen
+                              ml
                             </button>
                           </div>
                           <QuantityInput

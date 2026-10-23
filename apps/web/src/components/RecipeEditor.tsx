@@ -3,12 +3,12 @@
  *
  * Decided with the user:
  * - every step carries its own counted ingredient list (rows) that appears
- *   above the step text; rows are added, edited and reordered per step ("+
- *   Zutat zur Liste hinzufügen", ↑/↓ on the row) and feed
+ *   above the step text; rows are added, edited and reordered per step
+ *   ("Zutat zur Liste hinzufügen", ↑/↓ on the row) and feed
  *   the derived master list (order of first use, duplicates merged with the
  *   total, storage_format.md §4);
- * - the step text is free prose; display-only inline artifacts ("+ Menge im
- *   Text") scale with the serving count but are never counted;
+ * - the step text is free prose; display-only inline artifacts ("Menge zum Text
+ *   hinzufügen") scale with the serving count but are never counted;
  * - the master list (Zutaten section) is read-only except for the reference
  *   role, which can only be set there (both recipe types, no limit); a step row
  *   shows an existing reference but cannot set one (its "REFERENZ" tag's × can
@@ -114,6 +114,7 @@ import {
   CloseIcon,
   LinkIcon,
   NewReleasesIcon,
+  PlusIcon,
   StarIcon,
   TrashIcon,
   UploadIcon,
@@ -566,6 +567,16 @@ function themeFontStack(name: string): string {
   return THEME_FONT_STACKS[name] ?? 'system-ui, sans-serif';
 }
 
+/**
+ * The short label a theme-font chip shows. Every face in the shortlist belongs
+ * to the Noto superfamily, so the shared prefix is redundant in the picker
+ * ("Noto Sans" -> "Sans"); stored values and rendered font names keep the full
+ * family.
+ */
+function themeFontLabel(name: string): string {
+  return name.replace(/^Noto /, '');
+}
+
 /** Relative luminance (WCAG) of a #rrggbb colour, 0 (black) … 1 (white). */
 function relativeLuminance(hex: string): number {
   const channel = (offset: number): number => {
@@ -987,7 +998,7 @@ function ThemeEditor({
             onClick={() => patch({ font: undefined })}
             title="Standard-Schriftart"
           >
-            {DEFAULT_THEME.font}
+            {themeFontLabel(DEFAULT_THEME.font)}
           </button>
           {THEME_FONT_SHORTLIST.filter((font) => font !== DEFAULT_THEME.font).map((font) => (
             <button
@@ -997,7 +1008,7 @@ function ThemeEditor({
               style={{ fontFamily: themeFontStack(font) }}
               onClick={() => patch({ font })}
             >
-              {font}
+              {themeFontLabel(font)}
             </button>
           ))}
         </div>
@@ -2289,7 +2300,7 @@ function RecipeEditor({
                   patchDraft({
                     type: 'ingredient_recipe',
                     // References are available on both types (§4): keep them.
-                    // Defaults for a fresh ingredient recipe: Gewicht, 1000 (1 kg).
+                    // Defaults for a fresh ingredient recipe: g, 1000 (1 kg).
                     yield: draft.yield ?? 1000,
                     yield_unit: draft.yield_unit ?? 'g',
                   })
@@ -2346,14 +2357,14 @@ function RecipeEditor({
                     className={draft.yield_unit !== 'ml' ? 'segmented-active' : ''}
                     onClick={() => patchDraft({ yield_unit: 'g' })}
                   >
-                    Gewicht
+                    g
                   </button>
                   <button
                     type="button"
                     className={draft.yield_unit === 'ml' ? 'segmented-active' : ''}
                     onClick={() => patchDraft({ yield_unit: 'ml' })}
                   >
-                    Volumen
+                    ml
                   </button>
                 </div>
                 <QuantityInput
@@ -2523,6 +2534,7 @@ function RecipeEditor({
                           >
                             <span className="ingredient-line">
                               <ArrangementLine
+                                noteForm="bracketed"
                                 display={safeRenderAQSDisplay(
                                   ingredient.name,
                                   ingredient.quantity,
@@ -2627,7 +2639,8 @@ function RecipeEditor({
                   className="add-button"
                   onClick={() => openSheet({ kind: 'row-add', stepIndex })}
                 >
-                  + Zutat zur Liste hinzufügen
+                  <PlusIcon className="button-icon" optical={20} />
+                  <span>Zutat zur Liste hinzufügen</span>
                 </button>
               </div>
 
@@ -2682,14 +2695,15 @@ function RecipeEditor({
                   })
                 }
               >
-                + Zutat oder Menge zum Text hinzufügen
+                <PlusIcon className="button-icon" optical={20} />
+                <span>Menge zum Text hinzufügen</span>
               </button>
             </section>
           );
         })}
 
-        {/* + Schritt hinzufügen — adds a new empty step after the last one. It is
-            also the scroll target of the "no step" issue (focusFirstIssue). */}
+        {/* „Schritt hinzufügen" — adds a new empty step after the last one. It
+            is also the scroll target of the "no step" issue (focusFirstIssue). */}
         <button
           type="button"
           className="add-button"
@@ -2701,7 +2715,8 @@ function RecipeEditor({
             }))
           }
         >
-          + Schritt hinzufügen
+          <PlusIcon className="button-icon" optical={20} />
+          <span>Schritt hinzufügen</span>
         </button>
 
         {/* Zutaten — the read-only master list (reference role only, §4) */}
@@ -2715,15 +2730,15 @@ function RecipeEditor({
           {computedIngredients.length === 0 ? (
             <p className="empty-hint">
               Die Zutatenliste wird aus den Listen der Zubereitungsschritte zusammengestellt — füge
-              Zutaten über „+ Zutat zur Liste hinzufügen“ in den Schritten hinzu.
+              Zutaten über „Zutat zur Liste hinzufügen“ in den Schritten hinzu.
             </p>
           ) : (
             <>
               {/* The &shy; (U+00AD soft hyphen) lets "zusammengesetzt" break as
                   "zusammen-gesetzt" on narrow widths; invisible when the line fits. */}
               <p className="empty-hint">
-                Liste aus den Zubereitungsschritten zusammen&shy;gesetzt. Zutaten über den Stern als
-                Referenz-Menge markieren.
+                Liste aus den Zubereitungsschritten zusammen&shy;gesetzt. Mit Stern markierte
+                Referenz-Zutaten werden beim Skalieren mit angezeigt.
               </p>
               <ul className="ingredient-list">
                 {computedIngredients.map((ingredient, index) => {
@@ -2734,6 +2749,7 @@ function RecipeEditor({
                     <li key={ingredient.name} className="ingredient-row">
                       <span className="ingredient-line">
                         <ArrangementLine
+                          noteForm="bracketed"
                           display={
                             masterDisplays[index] ??
                             safeRenderAQSDisplay(
