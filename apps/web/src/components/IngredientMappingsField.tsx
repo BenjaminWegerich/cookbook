@@ -8,6 +8,14 @@
  * same labels. Per-ingredient priorities are gone: the optimizer scores every
  * compatible unit, and the app allows at most one shopping unit per ingredient.
  *
+ * The rows are displayed in alphabetical order (German collation), not in the
+ * CSV table order of ADDITIONAL_UNITS. Display order and data order are kept
+ * apart on purpose: the form state and the persisted mappings stay in the
+ * declared table order (buildMappingRows), while only this grid sorts, because
+ * the inputs are bound to their unit by name and never by position. Sorting the
+ * persisted rows instead would rewrite every existing ingredient's mapping
+ * order on an unchanged save.
+ *
  * The state lives in the parent as a string record keyed by unit name: an empty
  * factor means the row is skipped. This component only renders the inputs;
  * validation and persistence belong to `ingredientMasterForm.ts` and the parent.
@@ -16,6 +24,17 @@
  */
 
 import { ADDITIONAL_UNITS } from '@cookbook/core';
+
+/**
+ * The known units in alphabetical order. `localeCompare` with the German
+ * locale gives dictionary order as a German reader expects it, including the
+ * umlauts equal to their base letters (Päckchen before Packung) and the
+ * parenthesised variants grouped with their base unit. Computed once at module
+ * load: the unit table is static, so there is no reason to sort per render.
+ */
+const UNITS_ALPHABETICALLY = [...ADDITIONAL_UNITS].sort((left, right) =>
+  left.name.localeCompare(right.name, 'de'),
+);
 
 interface IngredientMappingsFieldProps {
   /** The ingredient's base unit ("g" or "ml"); factors are expressed in it. */
@@ -31,18 +50,21 @@ interface IngredientMappingsFieldProps {
  * input carries a full `aria-label` that names the unit and its meaning, so a
  * screen reader never depends on the visual column header.
  */
-function IngredientMappingsField({
-  bu,
-  factors,
-  onFactorChange,
-}: IngredientMappingsFieldProps) {
+function IngredientMappingsField({ bu, factors, onFactorChange }: IngredientMappingsFieldProps) {
   return (
     <div className="factor-grid">
-      <span className="factor-head-cell" aria-hidden="true" />
+      {/* The two captions name the grid's columns and deliberately use the
+          same quiet .factor-head-cell style: „Zusatz-Einheit“ over the unit
+          names, „Menge [g]“ over the factors. They stay aria-hidden because
+          every input's aria-label already names its unit and the meaning of
+          the number, so a screen reader loses nothing. */}
+      <span className="factor-head-cell" aria-hidden="true">
+        Zusatz-Einheit
+      </span>
       <span className="factor-head-cell" aria-hidden="true">
         Menge [{bu}]
       </span>
-      {ADDITIONAL_UNITS.flatMap((unit) => [
+      {UNITS_ALPHABETICALLY.flatMap((unit) => [
         <span key={`${unit.name}:name`} className="factor-unit">
           {unit.name}
         </span>,

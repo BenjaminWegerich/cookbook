@@ -1091,10 +1091,11 @@
 }
 
 /* Caption row and input rows of the manual AU mappings share one column grid:
-   unit name · Menge. The numeric column is fixed-width instead of stretching —
-   the values are short (a factor like "7,5"), and a full-width field would
-   dominate the row while saying nothing. The first column sizes to the widest
-   unit name (max-content) so words like "Packung" are never clipped. The two
+   Zusatz-Einheit · Menge. The numeric column is fixed-width instead of
+   stretching — the values are short (a factor like "7,5"), and a full-width
+   field would dominate the row while saying nothing. The first column sizes to
+   the wider of the caption and the longest unit name (max-content), so neither
+   "Zusatz-Einheit" nor words like "Packung (halbierbar)" are clipped. The two
    heading cells and each unit's two cells are direct children of the one
    .factor-grid, so a single grid keeps every row aligned. Column gap is
    --space-3, row gap --space-2 to reproduce the .field rhythm the separate

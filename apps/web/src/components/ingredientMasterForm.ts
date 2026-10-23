@@ -57,8 +57,11 @@ export function mappingFormFromEntry(entry: Pick<IngredientEntry, 'entries'>): M
 }
 
 /**
- * The filled rows in the order the units are declared (ADDITIONAL_UNITS), which
- * is also the order the grid renders them. A row with no factor is skipped by
+ * The filled rows in the order the units are declared (ADDITIONAL_UNITS) — the
+ * order in which mappings are validated and persisted. That is deliberately not
+ * the order the grid shows: `IngredientMappingsField` displays the same rows
+ * alphabetically, but binds every input to its unit by name, so display order
+ * and data order cannot conflict. A row with no factor is skipped by
  * `mappingEntriesFromRows`; the blank rows exist so the user can fill them.
  */
 export function buildMappingRows(factors: Record<string, string>): MappingRow[] {
