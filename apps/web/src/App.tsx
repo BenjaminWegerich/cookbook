@@ -76,6 +76,7 @@ import './styles/recipe-list.css';
 import './styles/recipe-overview.css';
 import './styles/meal-plan-sheet.css';
 import './styles/replace-recipe-sheet.css';
+import './styles/reference-readout.css';
 import './styles/shopping-list-select.css';
 import './styles/shopping-sort-select.css';
 import './styles/pantry-select.css';

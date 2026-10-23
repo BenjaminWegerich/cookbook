@@ -33,7 +33,7 @@
 
 import { aqNotation, isAQValue } from '../aqLadder.js';
 import { formatStoredNumber } from '../quantityValues.js';
-import { isTolerance } from '../tolerance.js';
+import { parsePrecisionLevel, type PrecisionLevel } from '../precision.js';
 import type { Ingredient, Unit } from './types.js';
 
 /** One parsed inline artifact (ingredient or quantity-only mention). */
@@ -49,12 +49,12 @@ export interface TextArtifact {
   /** Ingredient name; absent = quantity-only artifact (`{{100 g}}`). */
   name?: string;
   /**
-   * Optional per-artifact tolerance in [0, 1] (the quantity level of the
-   * cascade). Stored as a trailing `|t=0.8` inside the braces, e.g.
-   * `{{1/2|t=0.8}}`. Absent = inherit the recipe / global default; there is no
-   * ingredient level for a unitless count.
+   * Optional per-artifact precision (the quantity-level override). Stored as a
+   * trailing `|precision: high` inside the braces, e.g.
+   * `{{1/2|precision: high}}`. Absent = the ingredient-level value; a unitless
+   * count has none and uses the internal neutral level.
    */
-  tolerance?: number;
+  precision?: PrecisionLevel;
 }
 
 /** A validated artifact with its character span inside the step text. */
@@ -150,20 +150,20 @@ export function parseIngredientPhrase(
 
 /**
  * Parses one `{{ … }}` content into an artifact, including the optional
- * trailing `|t=0.8` tolerance suffix. Returns null when the phrase is invalid
- * or the tolerance is outside [0, 1]; the caller reports it as a malformed
- * artifact.
+ * trailing `|precision: high` precision suffix.
+ * Returns null when the phrase is invalid or the level unknown; the caller
+ * reports it as a malformed artifact.
  */
 export function parseArtifactContent(content: string): TextArtifact | null {
-  const toleranceMatch = /\|t=([0-9]*[.,]?[0-9]+)\s*$/.exec(content);
+  const precisionMatch = /\|precision:\s*([^|}]*)\s*$/i.exec(content);
   const phrase =
-    toleranceMatch === null ? content : content.slice(0, toleranceMatch.index).trimEnd();
+    precisionMatch === null ? content : content.slice(0, precisionMatch.index).trimEnd();
   const parsed = parseIngredientPhrase(phrase);
   if (parsed === null) return null;
-  if (toleranceMatch === null) return parsed;
-  const tolerance = Number(toleranceMatch[1]!.replace(',', '.'));
-  if (!isTolerance(tolerance)) return null;
-  return { ...parsed, tolerance };
+  if (precisionMatch === null) return parsed;
+  const precision = parsePrecisionLevel(precisionMatch[1]!);
+  if (precision === undefined) return null;
+  return { ...parsed, precision };
 }
 
 /**
@@ -184,11 +184,10 @@ export function artifactToText(artifact: TextArtifact): string {
         ? aqNotation(artifact.quantity)
         : formatStoredNumber(artifact.quantity)
       : `${formatStoredNumber(artifact.quantity)} ${artifact.unit}`;
-  const tolerance =
-    artifact.tolerance === undefined ? '' : `|t=${formatStoredNumber(artifact.tolerance)}`;
+  const precision = artifact.precision === undefined ? '' : `|precision: ${artifact.precision}`;
   return artifact.name === undefined
-    ? `{{${base}${tolerance}}}`
-    : `{{${base} ${artifact.name}${tolerance}}}`;
+    ? `{{${base}${precision}}}`
+    : `{{${base} ${artifact.name}${precision}}}`;
 }
 
 /**

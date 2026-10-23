@@ -715,7 +715,8 @@ such action. *decided with the user*
   muted) beneath it.
 - An ingredient arrangement's parenthesized note loses its brackets: it follows one en space,
   muted and italic (`1 Becher Joghurt␣500 g`). Step prose keeps a regular space and the brackets,
-  styled with their content (§5.11); the written shopping list keeps its bracketed wording.
+  styled with their content (§5.11); the written shopping list keeps its bracketed wording. The
+  reference readout is the third form: it keeps the brackets after one en space (§5.11).
 - A row whose value changed under the user marks itself and keeps the mark until it is
   confirmed: a tinted surface, a `--space-1` accent line along its leading edge and one muted
   line naming the consequence (`.pantry-row--attention`, `.pantry-attention-note`). The mark is
@@ -1015,8 +1016,11 @@ and no personalisation.
 — „Arbeitszeit …" and „Gesamtzeit …" as caption/value pairs in the recipe overview's look
 (all-caps muted captions, bold values) — the size picker under an all-caps „Portionen" /
 „Menge" caption (§5.2), and, when the recipe defines reference ingredients, a small muted
-readout of them below the picker (the Einplanen sheet's look). Scaling happens here and only
-here. A meal-plan link opens this screen with the promised size pre-selected.
+readout of them below the picker (the Einplanen sheet's look). The readout stacks its amounts:
+one reference ingredient per line, with no comma between the lines. An arrangement note keeps
+its brackets, styled with their content, and follows one en space in the muted, italic run.
+Scaling happens here and only here. A meal-plan link opens this screen with the promised size
+pre-selected.
 
 **Zutaten.** The check screen: the recipe-title caption, the heading „Zutaten" with the theme's
 divider below it (§5.5), the master ingredient list of the chosen size as checkable rows (§5.4),

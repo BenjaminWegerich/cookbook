@@ -172,8 +172,6 @@ interface StepEditorProps {
   describedBy?: string;
   /** Marks the step invalid while its error text is on screen (§5.3). */
   invalid?: boolean;
-  /** The recipe-level tolerance for artifact previews. */
-  recipeTolerance?: number;
 }
 
 /**
@@ -182,7 +180,7 @@ interface StepEditorProps {
  * externally (artifact insert/remove).
  */
 const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEditor(
-  { value, onChange, onArtifactEdit, onEnterNext, describedBy, invalid, recipeTolerance },
+  { value, onChange, onArtifactEdit, onEnterNext, describedBy, invalid },
   ref,
 ) {
   const divRef = useRef<HTMLDivElement | null>(null);
@@ -208,10 +206,9 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         span.dataset.artifact = segment.stored;
         span.title = 'Antippen zum Bearbeiten';
         const artifactContext = {
-          ...(segment.artifact.tolerance !== undefined
-            ? { quantity: segment.artifact.tolerance }
+          ...(segment.artifact.precision !== undefined
+            ? { quantity: segment.artifact.precision }
             : {}),
-          ...(recipeTolerance !== undefined ? { recipe: recipeTolerance } : {}),
         };
         // The chip is a flex row of content and its remove button; keeping the
         // mention in one child span lets the note sit inline inside the phrase
@@ -274,7 +271,7 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         placeCaretAfter(target);
       }
     }
-  }, [value, recipeTolerance]);
+  }, [value]);
 
   // Initial render; re-render only when the value changed externally (the DOM
   // is authoritative while the user types — re-rendering would lose the caret).

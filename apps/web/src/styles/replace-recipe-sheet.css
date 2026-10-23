@@ -9,7 +9,7 @@
  * sheet's name-picker list (.suggestions in editor.css), for its size input the
  * editor's (.field / .field-label / .quantity-chips / .quantity-picker /
  * .sheet-actions / .text-button / .primary-button) and for the reference readout
- * the meal-plan overlay's own line (.meal-plan-reference). This file adds only
+ * the shared readout component (reference-readout.css). This file adds only
  * what belongs to this overlay: its own stacking layer, the explanatory line and
  * the status/error lines. All pixel values come from the design ladder
  * (docs/CODING_CONVENTIONS.md).

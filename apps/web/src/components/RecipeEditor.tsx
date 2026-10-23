@@ -69,6 +69,7 @@ import {
   SERVING_COUNTS,
   STANDARD_TIME_VALUES,
   type Ingredient,
+  type PrecisionLevel,
   type Recipe,
   type RecipeTheme,
   type Step,
@@ -104,7 +105,6 @@ import LeaveConfirmSheet from './LeaveConfirmSheet';
 import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientSheet';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityInput from './QuantityInput';
-import ToleranceChips from './ToleranceChips';
 import ArrangementLine from './ArrangementLine';
 import { safeRenderAQSDisplay } from './ingredientDisplay';
 import {
@@ -130,7 +130,7 @@ function toDraft(recipe: Recipe): EditorDraft {
 function withIngredients(draft: EditorDraft): Recipe {
   return {
     ...draft,
-    ingredients: deriveIngredients(draft.steps, draft.reference ?? [], draft.tolerance),
+    ingredients: deriveIngredients(draft.steps, draft.reference ?? []),
   };
 }
 
@@ -352,14 +352,7 @@ async function landscapeCropPhoto(file: File, extension: 'jpg' | 'png'): Promise
 type IssueTarget =
   | {
       kind: 'field';
-      field:
-        | 'title'
-        | 'prep_time'
-        | 'total_time'
-        | 'servings'
-        | 'yield'
-        | 'yield_unit'
-        | 'tolerance';
+      field: 'title' | 'prep_time' | 'total_time' | 'servings' | 'yield' | 'yield_unit';
     }
   | { kind: 'step'; index: number }
   | { kind: 'step-row'; index: number; rowIndex: number }
@@ -377,7 +370,6 @@ function mapIssue(issue: ValidationIssue): IssueTarget {
   if (path === 'servings') return { kind: 'field', field: 'servings' };
   if (path === 'yield') return { kind: 'field', field: 'yield' };
   if (path === 'yield_unit') return { kind: 'field', field: 'yield_unit' };
-  if (path === 'tolerance') return { kind: 'field', field: 'tolerance' };
   const rowMatch = /^steps\[(\d+)\]\.ingredients\[(\d+)\]$/.exec(path);
   if (rowMatch !== null) {
     return {
@@ -434,14 +426,14 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
         name: ingredient.name.trim(),
         quantity: ingredient.quantity,
         unit: ingredient.unit,
-        ...(ingredient.tolerance !== undefined ? { tolerance: ingredient.tolerance } : {}),
+        ...(ingredient.precision !== undefined ? { precision: ingredient.precision } : {}),
       })),
       text: step.text.replace(/\s*\n\s*/g, ' ').trim(),
     }))
     .filter((step) => step.text !== '' || step.ingredients.length > 0);
   const reference =
     draft.reference !== undefined && draft.reference.length > 0 ? draft.reference : undefined;
-  const ingredients = deriveIngredients(steps, reference ?? [], draft.tolerance);
+  const ingredients = deriveIngredients(steps, reference ?? []);
   const theme = normalizeTheme(draft.theme);
   const base = {
     title: draft.title.trim(),
@@ -454,7 +446,6 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
         : undefined,
     steps: steps.length > 0 ? steps : [{ ingredients: [], text: '' }],
     ...(theme !== undefined ? { theme } : {}),
-    ...(draft.tolerance !== undefined ? { tolerance: draft.tolerance } : {}),
   };
   if (draft.type === 'finished_dish') {
     return {
@@ -1757,7 +1748,7 @@ function RecipeEditor({
     bu: string,
     reorderPoint: number,
     entries: NewIngredientEntry[],
-    tolerance: number | undefined,
+    precision: PrecisionLevel,
     stop: ShoppingStop | null,
   ): Promise<void> => {
     setCreateSaving(true);
@@ -1767,15 +1758,7 @@ function RecipeEditor({
       if (stop !== null) {
         await appendShoppingItem(token, name, stop, folder);
       }
-      await appendIngredientMasterData(
-        token,
-        name,
-        bu,
-        reorderPoint,
-        entries,
-        tolerance,
-        folder,
-      );
+      await appendIngredientMasterData(token, name, bu, reorderPoint, entries, precision, folder);
       setCreateSheet(null);
       if (sheetContext !== null) {
         setSheet(sheetContext.sheet);
@@ -2347,18 +2330,6 @@ function RecipeEditor({
               </div>
             </>
           )}
-          <div className="field" id="editor-field-tolerance">
-            <span className="field-label">Toleranz</span>
-            <p className="field-hint">
-              Nur für dieses Rezept: je praktischer, desto eher runde Haushaltsmaße; die
-              Zielmenge selbst ändert sich nicht. „Standard“ erbt die globale Einstellung.
-            </p>
-            <ToleranceChips
-              value={draft.tolerance}
-              onChange={(next) => patchDraft({ tolerance: next })}
-              ariaLabel="Toleranz des Rezepts"
-            />
-          </div>
           {fieldIssue('servings').concat(fieldIssue('yield'), fieldIssue('yield_unit')).length >
             0 && (
             <div className="field-errors" id="editor-error-target">
@@ -2522,7 +2493,6 @@ function RecipeEditor({
                                   ingredient.name,
                                   ingredient.quantity,
                                   ingredient.unit,
-                                  draft.tolerance !== undefined ? { recipe: draft.tolerance } : {},
                                 )}
                               />
                               {isNewName && (
@@ -2633,7 +2603,6 @@ function RecipeEditor({
                   stepIssues(stepIndex).length > 0 ? `editor-error-step-${stepIndex}` : undefined
                 }
                 invalid={stepIssues(stepIndex).length > 0}
-                recipeTolerance={draft.tolerance}
                 onChange={(next) =>
                   updateStep(stepIndex, (current) => ({ ...current, text: next }))
                 }
@@ -2732,7 +2701,6 @@ function RecipeEditor({
                             ingredient.name,
                             ingredient.quantity,
                             ingredient.unit,
-                            draft.tolerance !== undefined ? { recipe: draft.tolerance } : {},
                           )}
                         />
                         {isNewName && (
@@ -2844,7 +2812,6 @@ function RecipeEditor({
           }
           prefill={sheetPrefill ?? undefined}
           ingredientRecipes={ingredientRecipes}
-          tolerance={draft.tolerance !== undefined ? { recipe: draft.tolerance } : {}}
           onConfirm={handleSheetConfirm}
           onClose={handleCloseSheet}
           onCreateNewIngredient={(name, quantity) => {
@@ -2864,8 +2831,8 @@ function RecipeEditor({
           initialName={createSheet.name}
           saving={createSaving}
           error={createError}
-          onSave={(name, bu, reorderPoint, entries, tolerance, stop) =>
-            void handleCreateIngredient(name, bu, reorderPoint, entries, tolerance, stop)
+          onSave={(name, bu, reorderPoint, entries, precision, stop) =>
+            void handleCreateIngredient(name, bu, reorderPoint, entries, precision, stop)
           }
           onEdited={() => setCreateError(null)}
           onClose={handleCreateClose}

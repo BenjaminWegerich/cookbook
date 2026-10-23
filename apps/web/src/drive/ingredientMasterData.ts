@@ -4,10 +4,10 @@
  * The user's authoritative ingredient master data lives in two CSV files
  * inside the `Stammdaten` subfolder of the Cookbook folder:
  * - `zutaten.csv` — the ingredient list: one row per ingredient
- *   (`Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point`), where the
+ *   (`Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point`), where the
  *   two cells after the name are the optional display forms for a count
  *   („1 Karotte“ / „2 Karotten“; empty for an invariant name) and the
- *   `Tolerance` cell is the optional ingredient-level fallback;
+ *   `Precision` cell is the mandatory ingredient-level value;
  * - `zutaten-umrechnungen.csv` — the AU mappings: one row per
  *   ingredient–additional-unit mapping (`Ingredient;Additional Unit;
  *   Conversion Factor`); an ingredient without additional units simply has no
@@ -29,6 +29,7 @@
 
 import {
   allIngredientMappings,
+  isPrecisionLevel,
   mergeIngredientMasterData,
   parseIngredientListCsv,
   parseIngredientMappingsCsv,
@@ -38,6 +39,7 @@ import {
   splitIngredientMasterData,
   type IngredientEntry,
   type IngredientMappings,
+  type PrecisionLevel,
 } from '@cookbook/core';
 
 import {
@@ -209,8 +211,7 @@ async function writeMasterDataFiles(
  *   core resolveReorderPoint), or Infinity (always in stock)
  * @param entries the additional units with their g/ml factors (may be empty —
  *   an ingredient without additional units is valid master data)
- * @param tolerance the optional ingredient-level tolerance in [0, 1], or
- *   undefined to inherit the recipe / global default
+ * @param precision the mandatory ingredient-level precision
  * @param folder the folder snapshot of the caller's save, or omitted to resolve
  *   the folder here (the new-ingredient flow passes the snapshot it shares with
  *   the shopping assignment, so the folder is listed once per save)
@@ -221,7 +222,7 @@ export async function appendIngredientMasterData(
   bu: string,
   reorderPoint: number,
   entries: ReadonlyArray<{ au: string; factor: number }>,
-  tolerance: number | undefined,
+  precision: PrecisionLevel,
   folder?: CookbookFolder,
 ): Promise<void> {
   const resolved = folder ?? (await listCookbookFolder(token));
@@ -237,10 +238,8 @@ export async function appendIngredientMasterData(
     throw new Error(`Die Zutat „${name}“ existiert bereits in der Stammdatenliste.`);
   }
 
-  if (tolerance !== undefined) {
-    if (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 1) {
-      throw new Error('Zutaten-Stammdaten: Die Toleranz muss eine Zahl zwischen 0 und 1 sein.');
-    }
+  if (!isPrecisionLevel(precision)) {
+    throw new Error('Zutaten-Stammdaten: Die Genauigkeit muss eine der fünf Stufen sein.');
   }
   const extended: IngredientMappings = {
     ...current,
@@ -249,7 +248,7 @@ export async function appendIngredientMasterData(
       // Resolved by the create sheet: 0, a positive base quantity (snapped to
       // an exact unit's amount when one applies), or Infinity.
       reorderPoint,
-      ...(tolerance !== undefined ? { tolerance } : {}),
+      precision,
       entries: entries.map((entry) => ({ au: entry.au, factor: entry.factor })),
     },
   };
@@ -277,8 +276,8 @@ export interface IngredientMasterEntryInput {
   reorderPoint: number;
   /** The AU mappings (no per-ingredient priority anymore). */
   entries: ReadonlyArray<{ au: string; factor: number }>;
-  /** Ingredient-level tolerance in [0, 1], or undefined to inherit. */
-  tolerance?: number | undefined;
+  /** Mandatory ingredient-level precision. */
+  precision: PrecisionLevel;
 }
 
 /** The state an edit replaced, so the caller can offer an undo. */
@@ -343,11 +342,8 @@ export async function updateIngredientMasterData(
       throw new Error(`Zutaten-Stammdaten: ungültiger Faktor für „${name}“ → „${entry.au}“.`);
     }
   }
-  if (
-    update.tolerance !== undefined &&
-    (!Number.isFinite(update.tolerance) || update.tolerance < 0 || update.tolerance > 1)
-  ) {
-    throw new Error('Zutaten-Stammdaten: Die Toleranz muss eine Zahl zwischen 0 und 1 sein.');
+  if (!isPrecisionLevel(update.precision)) {
+    throw new Error('Zutaten-Stammdaten: Die Genauigkeit muss eine der fünf Stufen sein.');
   }
 
   const folder = await listCookbookFolder(token);
@@ -361,7 +357,7 @@ export async function updateIngredientMasterData(
   const nextEntry: IngredientEntry = {
     bu: previous.bu,
     reorderPoint: update.reorderPoint,
-    ...(update.tolerance !== undefined ? { tolerance: update.tolerance } : {}),
+    precision: update.precision,
     // Both forms or neither: an invariant name must not carry empty strings.
     ...(update.singular !== null && update.plural !== null
       ? { singular: update.singular, plural: update.plural }

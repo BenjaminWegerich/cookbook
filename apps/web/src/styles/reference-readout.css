@@ -1,0 +1,19 @@
+/**
+ * Reference readout — a recipe's reference ingredients below a size input
+ * (components/ReferenceReadout.tsx, docs/DESIGN.md §5.11).
+ *
+ * It is one small muted readout, not a caption and not a form field: the size
+ * input above it already carries the caption, and the recipe is already named
+ * by the sheet. One amount per line, no bullet and no comma; an arrangement
+ * note keeps its brackets and is styled with them by `.arrangement-note`
+ * (editor.css).
+ */
+
+.reference-readout {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}

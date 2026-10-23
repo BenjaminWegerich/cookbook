@@ -3,7 +3,7 @@
  * Generates `src/additionalUnitsData.ts` from the additional-unit master data:
  *   - docs/AQs.csv                       (AQ values, penalties and the scheme columns)
  *   - docs/additional_units.csv          (units: name, arrangement, scheme, exactness, shopping flag)
- *   - docs/ingredients.csv               (ingredient list: name, base unit, tolerance, reorder point, display forms)
+ *   - docs/ingredients.csv               (ingredient list: name, base unit, precision, reorder point, display forms)
  *   - docs/ingredient_unit_mappings.csv  (ingredient → AU: factor; no priority)
  *
  * The `Singular` / `Plural` columns of docs/ingredients.csv (columns B and C,
@@ -26,10 +26,11 @@
  * unit: the unit name then serves for every count. A half-filled pair is an
  * error (see parseDisplayForms).
  *
- * The `Tolerance` column of docs/ingredients.csv is optional and compiled into
- * the `tolerance` field of the ingredient: the ingredient-level fallback of the
- * tolerance cascade (docs/recipe_scaling_algorithm.md §4.1). Empty = inherit
- * the recipe or the global default; a value must be in [0, 1].
+ * The `Precision` column of docs/ingredients.csv is mandatory and compiled into
+ * the `precision` field of the ingredient: the ingredient level of the display
+ * preference (docs/recipe_scaling_algorithm.md §4.1). The value is one of
+ * `very low`, `low`, `medium`, `high`, `very high`; `very high` prefers exact
+ * metric amounts, `very low` practical household measures.
  *
  * The `Reorder Point` column of docs/ingredients.csv is validated here and
  * compiled into the `reorderPoint` field of each ingredient: the quantity of
@@ -77,7 +78,7 @@
  * cell per row (spreadsheet exports). Scheme cells: `1` = allowed, `0` or
  * empty = not allowed. The `Unit Exact` cell is `yes` or `no`, empty = `yes`.
  * The `Shopping Unit` cell is `yes` or `no` and must not be empty. The
- * ingredient `Tolerance` cell is empty or a number in [0, 1].
+ * ingredient `Precision` cell is mandatory and one of the five levels.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -103,7 +104,10 @@ const UNITS_HEADER =
   'Additional Unit;Singular;Plural;Arrangement;Number Scheme;Unit Exact;Shopping Unit';
 
 /** Exact header of the ingredient list (docs/ingredients.csv). */
-const INGREDIENTS_HEADER = 'Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point';
+const INGREDIENTS_HEADER = 'Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point';
+
+/** The five stored precision levels, from practical to exact. */
+const PRECISION_LEVELS = ['very low', 'low', 'medium', 'high', 'very high'];
 
 /** Converts a CSV cell to a number, accepting both '.' and ',' decimals. */
 function toNumber(cell) {
@@ -175,21 +179,19 @@ function parseReorderPoint(cell, ingredient) {
 }
 
 /**
- * Parses the optional `Tolerance` cell of the ingredient list: empty = inherit
- * the recipe / global default; otherwise a number in [0, 1]. The cell is the
- * ingredient-level step of the tolerance cascade
- * (docs/recipe_scaling_algorithm.md §4.1).
+ * Parses the mandatory `Precision` cell of the ingredient list: one of the five
+ * stored levels (`very low` … `very high`). It is the mandatory ingredient level
+ * of the display preference (docs/recipe_scaling_algorithm.md §4.1).
  */
-function parseToleranceCell(cell, ingredient) {
-  const value = (cell ?? '').trim();
-  if (value === '') return undefined;
-  const tolerance = toNumber(value);
-  if (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 1) {
+function parsePrecisionCell(cell, ingredient) {
+  const value = (cell ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!PRECISION_LEVELS.includes(value)) {
     throw new Error(
-      `${INGREDIENTS_CSV}: invalid Tolerance '${cell}' for '${ingredient}' (use a number in [0, 1] or leave the cell empty)`,
+      `${INGREDIENTS_CSV}: invalid Precision '${cell}' for '${ingredient}' ` +
+        `(use one of: ${PRECISION_LEVELS.join(', ')})`,
     );
   }
-  return tolerance;
+  return value;
 }
 
 /**
@@ -401,7 +403,7 @@ function buildIngredientList() {
   }
   const byName = new Map();
   for (const row of rows) {
-    const [ingredient, singularCell, pluralCell, bu, toleranceCell, reorderCell] = row;
+    const [ingredient, singularCell, pluralCell, bu, precisionCell, reorderCell] = row;
     if (ingredient === '' || bu === '') {
       throw new Error(
         `${INGREDIENTS_CSV}: empty ingredient or base unit in line: ${row.join(';')}`,
@@ -415,11 +417,10 @@ function buildIngredientList() {
     if (byName.has(ingredient)) {
       throw new Error(`${INGREDIENTS_CSV}: duplicate ingredient '${ingredient}'`);
     }
-    const tolerance = parseToleranceCell(toleranceCell, ingredient);
     byName.set(ingredient, {
       bu,
+      precision: parsePrecisionCell(precisionCell, ingredient),
       reorderPoint: parseReorderPoint(reorderCell, ingredient),
-      ...(tolerance !== undefined ? { tolerance } : {}),
       ...parseDisplayForms(singularCell, pluralCell, ingredient, INGREDIENTS_CSV),
     });
   }
@@ -508,6 +509,8 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push(' */');
   lines.push('');
+  lines.push("import type { PrecisionLevel } from './precision.js';");
+  lines.push('');
   lines.push('/** One additional unit: display arrangement, number scheme and unit flags. */');
   lines.push('export interface AdditionalUnit {');
   lines.push(
@@ -546,7 +549,9 @@ function render(units, schemes, ingredientList, mappings) {
   lines.push('  readonly factor: number;');
   lines.push('}');
   lines.push('');
-  lines.push('/** One ingredient in the master data: base unit, reorder point and AU mappings. */');
+  lines.push(
+    '/** One ingredient in the master data: base unit, precision, reorder point and AU mappings. */',
+  );
   lines.push('export interface IngredientEntry {');
   lines.push(
     '  /** Fixed base unit family of the ingredient ("g" or "ml"); the conversion factors are expressed in this unit. */',
@@ -557,9 +562,9 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push('  readonly reorderPoint: number;');
   lines.push(
-    '  /** Ingredient-level tolerance in [0, 1], or absent to inherit the recipe / global default (docs/recipe_scaling_algorithm.md §4.1). */',
+    '  /** Mandatory ingredient-level precision: how exact vs practical the quantities of this ingredient are displayed (docs/recipe_scaling_algorithm.md §4.1). */',
   );
-  lines.push('  readonly tolerance?: number;');
+  lines.push('  readonly precision: PrecisionLevel;');
   lines.push(
     '  /** Singular display form of the name (count 1), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */',
   );
@@ -606,9 +611,7 @@ function render(units, schemes, ingredientList, mappings) {
     lines.push(`  ${JSON.stringify(ingredient)}: {`);
     lines.push(`    bu: ${JSON.stringify(entry.bu)},`);
     lines.push(`    reorderPoint: ${formatReorderPoint(entry.reorderPoint)},`);
-    if (entry.tolerance !== undefined) {
-      lines.push(`    tolerance: ${entry.tolerance},`);
-    }
+    lines.push(`    precision: ${JSON.stringify(entry.precision)},`);
     // The display forms are emitted only when the name has them, so an
     // invariant ingredient keeps the lean entry shape (no empty strings).
     if (entry.singular !== undefined) {
@@ -617,9 +620,7 @@ function render(units, schemes, ingredientList, mappings) {
     }
     lines.push('    entries: [');
     for (const mapping of entries) {
-      lines.push(
-        `      { au: ${JSON.stringify(mapping.au)}, factor: ${mapping.factor} },`,
-      );
+      lines.push(`      { au: ${JSON.stringify(mapping.au)}, factor: ${mapping.factor} },`);
     }
     lines.push('    ],');
     lines.push('  },');

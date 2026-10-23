@@ -102,7 +102,7 @@ export function renameRecipeInCollection(
         ...recipe,
         ...(reference !== undefined ? { reference } : {}),
         steps,
-        ingredients: deriveIngredients(steps, reference ?? [], recipe.tolerance),
+        ingredients: deriveIngredients(steps, reference ?? []),
       });
     }
   }

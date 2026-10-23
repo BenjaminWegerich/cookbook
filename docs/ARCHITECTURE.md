@@ -45,12 +45,12 @@
   (`scripts/generate-quantity-data.mjs`). `quantityValues.ts` implements the
   decade rule, membership and formatting; `quantityOptimizer.ts` implements the
   three scoring branches, the scheme gate, the tie-break and the fallback.
-  `tolerance.ts` resolves the λ cascade and interpolates the weights;
-  `servingSizes.ts` holds the allowed serving counts.
+  `precision.ts` resolves the quantity/ingredient levels and interpolates the
+  weights; `servingSizes.ts` holds the allowed serving counts.
 - Additional-unit display logic (see
   [additional_quantity_specifications.md](additional_quantity_specifications.md)):
   `docs/additional_units.csv` (arrangement, scheme, exactness, shopping flag,
-  display forms), `docs/ingredients.csv` (base unit, optional tolerance, reorder
+  display forms), `docs/ingredients.csv` (base unit, mandatory precision, reorder
   point, display forms) and `docs/ingredient_unit_mappings.csv` (factor only; no
   priority) are compiled into `packages/core/src/additionalUnitsData.ts` via
   `npm run generate:additional` (`scripts/generate-additional-data.mjs`).

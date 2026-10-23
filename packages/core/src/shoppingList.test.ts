@@ -309,7 +309,7 @@ describe('shoppingRow', () => {
     // bullwhip effect this flow exists to avoid — two dishes of 300 g tofu in
     // 200 g Becher buy three Becher, not four.
     setIngredientMappings({
-      Tofu: { bu: 'g', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200 }] },
+      Tofu: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200 }] },
     });
     const bundling = sumIngredientUses([[use('Tofu', 300)], [use('Tofu', 300)]]);
     const rows = shoppingNeeds(bundling).map((entry) => shoppingRow(entry, 0));
@@ -336,7 +336,7 @@ describe('the amount of a shopping row (amountText)', () => {
     // the same pieces, so a name that happens to repeat (here "Becher") stays
     // in place.
     setIngredientMappings({
-      Becher: { bu: 'g', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200 }] },
+      Becher: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200 }] },
     });
     const row = shoppingRow(need({ ingredient: 'Becher', needed: 300 }), 0);
     expect(row.text).toBe(`2${NB}Becher Becher (400${NB}g)`);

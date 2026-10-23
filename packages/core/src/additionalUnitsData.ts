@@ -5,6 +5,8 @@
  * Do not edit by hand — re-run 'npm run generate:additional' (packages/core) after a CSV change.
  */
 
+import type { PrecisionLevel } from './precision.js';
+
 /** One additional unit: display arrangement, number scheme and unit flags. */
 export interface AdditionalUnit {
   /** Canonical unit name: the identity the mappings reference and the runtime registry keys units by; without `singular`/`plural` it is also the form the display line shows. */
@@ -31,14 +33,14 @@ export interface IngredientMapping {
   readonly factor: number;
 }
 
-/** One ingredient in the master data: base unit, reorder point and AU mappings. */
+/** One ingredient in the master data: base unit, precision, reorder point and AU mappings. */
 export interface IngredientEntry {
   /** Fixed base unit family of the ingredient ("g" or "ml"); the conversion factors are expressed in this unit. */
   readonly bu: string;
   /** Base-unit quantity definitely on stock directly after a shopping trip, independent of the meal plan (0 = only ever bought for a recipe; Infinity = always in stock, e.g. water). Not necessarily a ladder value. */
   readonly reorderPoint: number;
-  /** Ingredient-level tolerance in [0, 1], or absent to inherit the recipe / global default (docs/recipe_scaling_algorithm.md §4.1). */
-  readonly tolerance?: number;
+  /** Mandatory ingredient-level precision: how exact vs practical the quantities of this ingredient are displayed (docs/recipe_scaling_algorithm.md §4.1). */
+  readonly precision: PrecisionLevel;
   /** Singular display form of the name (count 1), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */
   readonly singular?: string;
   /** Plural display form of the name (count ≠ 1), e.g. "Karotten"; absent = invariant (see `singular`). */
@@ -415,6 +417,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Äpfel: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Apfel',
     plural: 'Äpfel',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 181.6 }],
@@ -422,6 +425,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Aquafaba: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Dose Kichererbsen',
     plural: 'Dosen Kichererbsen',
     entries: [
@@ -433,6 +437,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Auberginen: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Aubergine',
     plural: 'Auberginen',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 339.5 }],
@@ -440,6 +445,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Avocados: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Avocado',
     plural: 'Avocados',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 249.8 }],
@@ -447,6 +453,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Backpulver: {
     bu: 'g',
     reorderPoint: 90,
+    precision: 'medium',
     entries: [
       { au: 'Päckchen', factor: 15 },
       { au: 'Esslöffel', factor: 10 },
@@ -456,6 +463,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Birnen: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Birne',
     plural: 'Birnen',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 206.5 }],
@@ -463,6 +471,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Blumenkohl: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Blumenkohl',
     plural: 'Blumenkohlköpfe',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 1172.7 }],
@@ -470,6 +479,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Brokkoli: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Brokkoli',
     plural: 'Brokkoli',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 347.1 }],
@@ -477,11 +487,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Butter: {
     bu: 'g',
     reorderPoint: 500,
+    precision: 'medium',
     entries: [{ au: 'Packung (teilbar)', factor: 250 }],
   },
   Cashews: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Cashew',
     plural: 'Cashews',
     entries: [],
@@ -489,6 +501,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Chiliflocken: {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 7 },
       { au: 'Teelöffel', factor: 2 },
@@ -497,11 +510,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Chilis: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [],
   },
   Currypulver: {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6 },
       { au: 'Teelöffel', factor: 2 },
@@ -510,11 +525,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Dill: {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [],
   },
   Eisbergsalat: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Kopf Eisbergsalat',
     plural: 'Köpfe Eisbergsalat',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 721.1 }],
@@ -522,6 +539,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Fenchel: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Fenchelknolle',
     plural: 'Fenchelknollen',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 286.3 }],
@@ -529,6 +547,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'frische Chilis': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'frische Chili',
     plural: 'frische Chilis',
     entries: [],
@@ -536,31 +555,37 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'frische Hefe': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [],
   },
   'frische Petersilie': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 1 }],
   },
   'frischer Dill': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 1.8 }],
   },
   'frischer Ingwer': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [],
   },
   'frischer Kerbel': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 1 }],
   },
   'frischer Knoblauch': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Knoblauchzehe',
     plural: 'Knoblauchzehen',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 4 }],
@@ -568,31 +593,37 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'frischer Liebstöckel': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 1 }],
   },
   'frischer Majoran': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 3 }],
   },
   'frischer Oregano': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 3 }],
   },
   'frischer Rosmarin': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 2.5 }],
   },
   'frischer Salbei': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 3 }],
   },
   'frischer Schnittlauch': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 3 },
       { au: 'Teelöffel', factor: 1 },
@@ -601,11 +632,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'frischer Thymian': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 3 }],
   },
   'frisches Basilikum': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Zweig', factor: 4 },
       { au: 'Blatt', factor: 0.1 },
@@ -614,11 +647,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'frisches Koriandergrün': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Zweig', factor: 1 }],
   },
   Frühlingszwiebeln: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Frühlingszwiebel',
     plural: 'Frühlingszwiebeln',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 29.2 }],
@@ -626,6 +661,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'ganze Gewürznelken': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 5.623413252 },
       { au: 'Teelöffel', factor: 1.77827941 },
@@ -634,31 +670,37 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gehackte Tomaten': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Dose (Gesamtgewicht)', factor: 400 }],
   },
   'gekochte Kichererbsen': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Dose (Abtropfgewicht)', factor: 240 }],
   },
   'gekochte Kichererbsen mit Aquafaba': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Dose (Gesamtgewicht)', factor: 400 }],
   },
   'gekochte Kidneybohnen': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Dose (Abtropfgewicht)', factor: 240 }],
   },
   'gekochte weiße Bohnen': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Dose (Abtropfgewicht)', factor: 250 }],
   },
   'gemahlene Gewürznelken': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6.493816316 },
       { au: 'Teelöffel', factor: 2.053525026 },
@@ -667,6 +709,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gemahlene Koriandersamen': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 4.216965034 },
       { au: 'Teelöffel', factor: 1.333521432 },
@@ -675,6 +718,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gemahlene Kurkuma': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6.493816316 },
       { au: 'Teelöffel', factor: 2.053525026 },
@@ -683,6 +727,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gemahlene Muskatnuss': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -691,6 +736,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gemahlener Ingwer': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6.493816316 },
       { au: 'Teelöffel', factor: 2.053525026 },
@@ -699,6 +745,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gemahlener Kardamom': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6.493816316 },
       { au: 'Teelöffel', factor: 2.053525026 },
@@ -707,6 +754,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gemahlener Kreuzkümmel': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 5.121908158 },
       { au: 'Teelöffel', factor: 1.619689575 },
@@ -715,6 +763,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'getrockneter Liebstöckel': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 4.216965034 },
       { au: 'Teelöffel', factor: 1.333521432 },
@@ -723,6 +772,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gemahlener Pfeffer': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 17.7827941 },
       { au: 'Teelöffel', factor: 5.623413252 },
@@ -731,6 +781,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'Gemüsebrühe-Pulver': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -739,6 +790,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'geräuchertes Paprikapulver': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 5.496908158 },
       { au: 'Teelöffel', factor: 1.738274987 },
@@ -747,6 +799,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gerebelter Kerbel': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 1.539926526 },
       { au: 'Teelöffel', factor: 0.486967525 },
@@ -755,6 +808,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gerebelter Majoran': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 1.539926526 },
       { au: 'Teelöffel', factor: 0.486967525 },
@@ -763,6 +817,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gerebelter Oregano': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 2.371373706 },
       { au: 'Teelöffel', factor: 0.749894209 },
@@ -771,6 +826,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gerebelter Salbei': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 2.371373706 },
       { au: 'Teelöffel', factor: 0.749894209 },
@@ -779,6 +835,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gerebelter Thymian': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 3.16227766 },
       { au: 'Teelöffel', factor: 1 },
@@ -787,11 +844,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'geriebener Käse': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Packung (unteilbar)', factor: 150 }],
   },
   'getrocknete Chilis': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'getrocknete Chili',
     plural: 'getrocknete Chilis',
     entries: [],
@@ -799,6 +858,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'getrockneter Dill': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 3.16227766 },
       { au: 'Teelöffel', factor: 1 },
@@ -807,6 +867,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'getrockneter Rosmarin': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 4.869675252 },
       { au: 'Teelöffel', factor: 1.539926526 },
@@ -815,6 +876,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Gluten: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 8.7 },
       { au: 'Teelöffel', factor: 2.751181564 },
@@ -823,6 +885,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'granulierter Knoblauch': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -831,6 +894,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Grapefruits: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Grapefruit',
     plural: 'Grapefruits',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 393.5 }],
@@ -838,6 +902,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Grapefruitsaft: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Grapefruit',
     plural: 'Grapefruits',
     entries: [
@@ -849,6 +914,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Grapefruitschale: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Grapefruit',
     plural: 'Grapefruits',
     entries: [
@@ -860,6 +926,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'grobkörniges Salz': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -868,6 +935,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Hefeflocken: {
     bu: 'g',
     reorderPoint: 300,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 4.216965034 },
       { au: 'Teelöffel', factor: 1.333521432 },
@@ -876,6 +944,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Karotten: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Karotte',
     plural: 'Karotten',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 62.1 }],
@@ -883,6 +952,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Kartoffeln: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Kartoffel',
     plural: 'Kartoffeln',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 89.5 }],
@@ -890,6 +960,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Kirschtomaten: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Kirschtomate',
     plural: 'Kirschtomaten',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 11.3 }],
@@ -897,6 +968,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Knollensellerie: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Sellerieknolle',
     plural: 'Sellerieknollen',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 876.8 }],
@@ -904,6 +976,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Kopfsalat: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Salatkopf',
     plural: 'Salatköpfe',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 348.3 }],
@@ -911,6 +984,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Limetten: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Limette',
     plural: 'Limetten',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 65 }],
@@ -918,6 +992,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Limettensaft: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Limette',
     plural: 'Limetten',
     entries: [
@@ -929,6 +1004,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Limettenschale: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Limette',
     plural: 'Limetten',
     entries: [
@@ -940,16 +1016,19 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Mehl: {
     bu: 'g',
     reorderPoint: 1000,
+    precision: 'medium',
     entries: [{ au: 'Packung (unteilbar)', factor: 1000 }],
   },
   Mais: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Dose (Abtropfgewicht)', factor: 285 }],
   },
   Milch: {
     bu: 'ml',
     reorderPoint: 3000,
+    precision: 'medium',
     entries: [
       { au: 'Packung (unteilbar)', factor: 1000 },
       { au: 'Esslöffel', factor: 10 },
@@ -959,11 +1038,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Naturtofu: {
     bu: 'g',
     reorderPoint: 400,
+    precision: 'medium',
     entries: [{ au: 'Packung (teilbar)', factor: 200 }],
   },
   Öl: {
     bu: 'ml',
     reorderPoint: 500,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -972,6 +1053,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Orangen: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Orange',
     plural: 'Orangen',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 225.5 }],
@@ -979,6 +1061,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Orangensaft: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Orange',
     plural: 'Orangen',
     entries: [
@@ -990,6 +1073,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Orangenschale: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Orange',
     plural: 'Orangen',
     entries: [
@@ -1001,6 +1085,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Paprikas: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Paprika',
     plural: 'Paprikas',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 206.5624698 }],
@@ -1008,6 +1093,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Pfirsiche: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Pfirsich',
     plural: 'Pfirsiche',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 136.1 }],
@@ -1015,11 +1101,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Räuchertofu: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Packung (teilbar)', factor: 200 }],
   },
   'rote Beete': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'rote Beete',
     plural: 'rote Beeten',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 155.5 }],
@@ -1027,6 +1115,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Rotkohl: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Rotkohl',
     plural: 'Rotkohlköpfe',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 1842.5 }],
@@ -1034,11 +1123,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Kochsahne: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Packung (unteilbar)', factor: 200 }],
   },
   Salz: {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 16.07094682 },
       { au: 'Teelöffel', factor: 5.08207961 },
@@ -1047,11 +1138,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Sauerkraut: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [],
   },
   Schalotten: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Schalotte',
     plural: 'Schalotten',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 32 }],
@@ -1059,6 +1152,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'scharfes Paprikapulver': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 5.496908158 },
       { au: 'Teelöffel', factor: 1.738274987 },
@@ -1067,6 +1161,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Schlagsahne: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Becher', factor: 200 },
       { au: 'Esslöffel', factor: 10 },
@@ -1076,6 +1171,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Senf: {
     bu: 'g',
     reorderPoint: 200,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 17.7827941 },
       { au: 'Teelöffel', factor: 5.623413252 },
@@ -1084,6 +1180,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Sojasauce: {
     bu: 'ml',
     reorderPoint: 250,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -1092,6 +1189,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Speisestärke: {
     bu: 'g',
     reorderPoint: 400,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -1100,6 +1198,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Spitzkohl: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Spitzkohl',
     plural: 'Spitzkohlköpfe',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 1000 }],
@@ -1107,6 +1206,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Stangensellerie: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Stange Sellerie',
     plural: 'Stangen Sellerie',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 56 }],
@@ -1114,6 +1214,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Strauchtomaten: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Strauchtomate',
     plural: 'Strauchtomaten',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 110 }],
@@ -1121,6 +1222,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'süßes Paprikapulver': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 5.496908158 },
       { au: 'Teelöffel', factor: 1.738274987 },
@@ -1129,6 +1231,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Tomatenmark: {
     bu: 'g',
     reorderPoint: 200,
+    precision: 'medium',
     entries: [
       { au: 'Tube', factor: 200 },
       { au: 'Esslöffel', factor: 15.39926526 },
@@ -1138,6 +1241,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Trockenbackhefe: {
     bu: 'g',
     reorderPoint: 42,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 7.498942093 },
       { au: 'Teelöffel', factor: 2.371373706 },
@@ -1146,6 +1250,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Vanilleextrakt: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -1154,6 +1259,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Weißkohl: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Weißkohl',
     plural: 'Weißkohlköpfe',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 1906 }],
@@ -1161,6 +1267,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Wodka: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -1169,6 +1276,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'gemahlener Zimt': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6.493816316 },
       { au: 'Teelöffel', factor: 2.053525026 },
@@ -1177,6 +1285,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Zitronen: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Zitrone',
     plural: 'Zitronen',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 115 }],
@@ -1184,6 +1293,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Zitronensaft: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Zitrone',
     plural: 'Zitronen',
     entries: [
@@ -1195,6 +1305,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Zitronenschale: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Zitrone',
     plural: 'Zitronen',
     entries: [
@@ -1206,6 +1317,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Zucchini: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Zucchini',
     plural: 'Zucchini',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 209.6 }],
@@ -1213,6 +1325,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Zucker: {
     bu: 'g',
     reorderPoint: 1000,
+    precision: 'medium',
     entries: [
       { au: 'Packung (unteilbar)', factor: 1000 },
       { au: 'Esslöffel', factor: 13.33521432 },
@@ -1222,6 +1335,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Zwetschgen: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Zwetschge',
     plural: 'Zwetschgen',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 38.8 }],
@@ -1229,6 +1343,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Zwiebeln: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Zwiebel',
     plural: 'Zwiebeln',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 82.8 }],
@@ -1236,6 +1351,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Wasser: {
     bu: 'ml',
     reorderPoint: Infinity,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -1244,6 +1360,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Kakaopulver: {
     bu: 'g',
     reorderPoint: 250,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -1252,6 +1369,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Leinsamen: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6.493816316 },
       { au: 'Teelöffel', factor: 2.053525026 },
@@ -1260,6 +1378,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'weißer Sesam': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6.493816316 },
       { au: 'Teelöffel', factor: 2.053525026 },
@@ -1268,6 +1387,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'schwarzer Sesam': {
     bu: 'g',
     reorderPoint: 100,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6.493816316 },
       { au: 'Teelöffel', factor: 2.053525026 },
@@ -1276,6 +1396,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Kürbiskerne: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 6.493816316 },
       { au: 'Teelöffel', factor: 2.053525026 },
@@ -1284,6 +1405,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'getrocknete Soja-Steaks': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'getrocknetes Soja-Steak',
     plural: 'getrocknete Soja-Steaks',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 60 }],
@@ -1291,21 +1413,25 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'passierte Tomaten': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Flasche', factor: 700 }],
   },
   'Crème fraîche': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Becher', factor: 150 }],
   },
   'Penne rigate': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Packung (teilbar)', factor: 500 }],
   },
   Joghurt: {
     bu: 'g',
     reorderPoint: 800,
+    precision: 'medium',
     entries: [
       { au: 'Becher', factor: 500 },
       { au: 'Esslöffel', factor: 23.71373706 },
@@ -1315,11 +1441,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Skyr: {
     bu: 'g',
     reorderPoint: 800,
+    precision: 'medium',
     entries: [],
   },
   Mayonnaise: {
     bu: 'g',
     reorderPoint: 250,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 23.71373706 },
       { au: 'Teelöffel', factor: 7.498942093 },
@@ -1328,11 +1456,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Kokosmilch: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Dose (Gesamtgewicht)', factor: 400 }],
   },
   'rote Linsen': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'rote Linse',
     plural: 'rote Linsen',
     entries: [{ au: 'Packung (teilbar)', factor: 500 }],
@@ -1340,6 +1470,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Linsen: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     singular: 'Linse',
     plural: 'Linsen',
     entries: [{ au: 'Packung (teilbar)', factor: 500 }],
@@ -1347,6 +1478,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Olivenöl: {
     bu: 'ml',
     reorderPoint: 1000,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3.16227766 },
@@ -1355,6 +1487,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Apfelessig: {
     bu: 'ml',
     reorderPoint: 750,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 10 },
       { au: 'Teelöffel', factor: 3 },
@@ -1363,21 +1496,25 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   'Hokkaido-Kürbis': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 1500 }],
   },
   Feta: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Packung (teilbar)', factor: 150 }],
   },
   Walnusskerne: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Packung (unteilbar)', factor: 200 }],
   },
   Ahornsirup: {
     bu: 'g',
     reorderPoint: 375,
+    precision: 'medium',
     entries: [
       { au: 'Flasche', factor: 375 },
       { au: 'Esslöffel', factor: 10 },
@@ -1387,11 +1524,13 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Hackfleisch: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [],
   },
   'brauner Zucker': {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Esslöffel', factor: 13.33521432 },
       { au: 'Teelöffel', factor: 4.216965034 },
@@ -1400,6 +1539,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Gemüsebrühe: {
     bu: 'ml',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [
       { au: 'Glas', factor: 400 },
       { au: 'Esslöffel', factor: 10 },
@@ -1409,31 +1549,37 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
   Reis: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Packung (halbierbar)', factor: 1000 }],
   },
   Rosinen: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Packung (halbierbar)', factor: 250 }],
   },
   Sojaschnetzel: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [{ au: 'Packung (halbierbar)', factor: 150 }],
   },
   Tahin: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [],
   },
   Süßkartoffeln: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [],
   },
   Tortillas: {
     bu: 'g',
     reorderPoint: 0,
+    precision: 'medium',
     entries: [],
   },
 };

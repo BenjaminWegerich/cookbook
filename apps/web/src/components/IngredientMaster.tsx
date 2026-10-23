@@ -78,7 +78,7 @@ function isUnchanged(entry: IngredientEntry, update: IngredientMasterEntryInput)
   if ((entry.singular ?? null) !== update.singular) return false;
   if ((entry.plural ?? null) !== update.plural) return false;
   if (entry.reorderPoint !== update.reorderPoint) return false;
-  if ((entry.tolerance ?? null) !== (update.tolerance ?? null)) return false;
+  if (entry.precision !== update.precision) return false;
   if (entry.entries.length !== update.entries.length) return false;
   return entry.entries.every((mapping, index) => {
     const next = update.entries[index];
@@ -229,7 +229,7 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
                 plural: previous.plural ?? null,
                 reorderPoint: previous.reorderPoint,
                 entries: previous.entries,
-                tolerance: previous.tolerance,
+                precision: previous.precision,
               });
               setRevision((current) => current + 1);
             } catch (err) {

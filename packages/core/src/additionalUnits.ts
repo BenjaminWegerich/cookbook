@@ -36,7 +36,7 @@ import {
 } from './additionalUnitsData.js';
 import { allIngredientMappings, mappingsFor } from './ingredientRegistry.js';
 import { optimizeQuantity, type OptimizedQuantity } from './quantityOptimizer.js';
-import type { ToleranceContext } from './tolerance.js';
+import type { PrecisionContext } from './precision.js';
 
 /**
  * Narrow no-break space (U+202F), substituted for the <NNBSP> placeholder
@@ -108,7 +108,7 @@ export interface AdditionalQuantity {
  */
 export type AuSelectableEntry = Pick<
   IngredientEntry,
-  'bu' | 'entries' | 'singular' | 'plural' | 'tolerance'
+  'bu' | 'entries' | 'singular' | 'plural' | 'precision'
 >;
 
 /**
@@ -117,21 +117,21 @@ export type AuSelectableEntry = Pick<
  *
  * The optimizer scores every compatible unit and every scheme-allowed AQ
  * value; a null result means no AQ candidate won, so the caller renders the
- * base form. The tolerance context is passed through unchanged (quantity /
- * ingredient / recipe); the entry's own tolerance is the ingredient level.
+ * base form. The precision context is passed through unchanged (quantity /
+ * ingredient); the entry's own precision is the mandatory ingredient level.
  *
- * @param entry the ingredient's base unit, tolerance and AU mappings, or
+ * @param entry the ingredient's base unit, precision and AU mappings, or
  *   undefined when the name is not registered
  * @param bq the unrounded target V0 in `bu`
  * @param bu the base unit family the target is expressed in (g / ml)
- * @param context optional quantity/ingredient/recipe tolerance overrides
+ * @param context optional quantity/ingredient precision overrides
  * @returns the selected AQ + AU, or null when the base form is the winner
  */
 export function selectAQForEntry(
   entry: AuSelectableEntry | undefined,
   bq: number,
   bu: string,
-  context: ToleranceContext = {},
+  context: PrecisionContext = {},
 ): AdditionalQuantity | null {
   const result = optimizeQuantity(bq, entry, bu, context);
   if (result.aq === undefined) return null;
@@ -151,7 +151,7 @@ export function selectAQ(
   ingredient: string,
   bq: number,
   bu: string,
-  context: ToleranceContext = {},
+  context: PrecisionContext = {},
 ): AdditionalQuantity | null {
   return selectAQForEntry(mappingsFor(ingredient), bq, bu, context);
 }
@@ -650,7 +650,7 @@ export function renderAQS(
   ingredient: string,
   bq: number,
   bu: string,
-  context: ToleranceContext = {},
+  context: PrecisionContext = {},
 ): string {
   return renderAQSDisplay(ingredient, bq, bu, context).text;
 }
@@ -665,7 +665,7 @@ export function renderAQSDisplay(
   ingredient: string,
   bq: number,
   bu: string,
-  context: ToleranceContext = {},
+  context: PrecisionContext = {},
 ): ArrangementDisplay {
   return renderAQSWith(ingredient, bq, bu, formatAQ, context);
 }
@@ -679,7 +679,7 @@ export function renderAQSSlash(
   ingredient: string,
   bq: number,
   bu: string,
-  context: ToleranceContext = {},
+  context: PrecisionContext = {},
 ): string {
   return renderAQSDisplaySlash(ingredient, bq, bu, context).text;
 }
@@ -692,7 +692,7 @@ export function renderAQSDisplaySlash(
   ingredient: string,
   bq: number,
   bu: string,
-  context: ToleranceContext = {},
+  context: PrecisionContext = {},
 ): ArrangementDisplay {
   return renderAQSWith(ingredient, bq, bu, formatAQSlash, context);
 }
@@ -706,7 +706,7 @@ function renderAQSWith(
   bq: number,
   bu: string,
   formatAq: (aq: string) => string,
-  context: ToleranceContext,
+  context: PrecisionContext,
 ): ArrangementDisplay {
   const result = optimizeQuantity(bq, mappingsFor(ingredient), bu, context);
   if (result.aq === undefined) {
@@ -717,7 +717,7 @@ function renderAQSWith(
 }
 
 /**
- * The tolerance of the exact-unit check below: 1/3 · 300 g is 99.999… in binary
+ * The epsilon of the exact-unit check below: 1/3 · 300 g is 99.999… in binary
  * floating point, which is the same amount as 100 g.
  */
 const AMOUNT_EPSILON = 1e-6;
@@ -729,7 +729,7 @@ const AMOUNT_EPSILON = 1e-6;
  * ingredient name ("2 Becher Joghurt (600 g)", "1,15 kg Mehl", "60 g
  * Trockenhefe").
  *
- * Two tolerances separate it from renderAQS, and both follow from what the line
+ * Two precision rules separate it from renderAQS, and both follow from what the line
  * is for — *naming an amount that exists*, not displaying a stored recipe value:
  *
  * - the quantity need not be a standard number (a need is a sum over dishes; a
@@ -1076,9 +1076,7 @@ export function resolveReorderPoint(
     };
   }
   // 0 is a valid reorder point but not a positive target: no AU applies.
-  const result = bq === 0 ? null : optimizeQuantity(bq, entry, bu, {
-    ingredient: entry?.tolerance,
-  });
+  const result = bq === 0 ? null : optimizeQuantity(bq, entry, bu);
   if (result === null || result.aq === undefined) {
     const base = formatBQ(bq, bu);
     const text = ingredient === '' ? base : `${base} ${ingredient}`;

@@ -16,7 +16,7 @@
   number is allowed; there is no ladder of standard values anymore.
 - **BQ and AQ are display values.** For every render, the app runs the
   deterministic optimizer over `V0`, the ingredient's additional-unit mappings
-  and the effective tolerance. The result is either:
+  and the effective precision. The result is either:
   - a **BQ** from the allowed base-quantity table, optionally with an **AQ** from
     the allowed additional-quantity table (a household or packaging unit), or
   - the **plain base form** with `V0`, when no candidate fits.
@@ -48,7 +48,7 @@ Four tables drive the optimizer:
 | [additional_units.csv](additional_units.csv) | Unit identity, display forms, arrangement, number scheme, exactness, shopping flag. |
 | [ingredient_unit_mappings.csv](ingredient_unit_mappings.csv) | Ingredient → compatible additional unit and its conversion factor. |
 
-`docs/ingredients.csv` holds the ingredient list (base unit, optional tolerance,
+`docs/ingredients.csv` holds the ingredient list (base unit, mandatory precision,
 reorder point, display forms). `docs/additional_units.csv` and the ingredient
 mappings are compiled into `packages/core/src/additionalUnitsData.ts`;
 `BQs.csv` and `AQs.csv` are compiled into `packages/core/src/quantityData.ts`.
@@ -103,40 +103,43 @@ The current schemes are:
 No scheme allows a count above `30`. The scheme matrix lives in `AQs.csv`, so a
 new AQ value and its memberships are one edit, not two files.
 
-## 5. Tolerance
+## 5. Precision (Genauigkeit)
 
-Tolerance `λ ∈ [0, 1]` is a **display preference**, not a scale factor:
+Precision is a **display preference**, not a scale factor. It has five stored
+levels:
 
-- `λ = 0` (“Sehr genau”): prefer metric accuracy; awkward numbers and metric-only
-  output are acceptable.
-- `λ = 1` (“Sehr praktisch”): prefer clean household/package measures; small
-  culinary deviations are acceptable.
-- `λ = 1` **never** means that a target may be doubled or halved. `V0` is
-  unchanged.
+| Level | Meaning |
+|---|---|
+| `very low` | Prefer clean household/package measures; small culinary deviations are acceptable. |
+| `low` | Lean practical. |
+| `medium` | Balanced. |
+| `high` | Lean exact. |
+| `very high` | Prefer metric accuracy; awkward numbers and metric-only output are acceptable. |
 
-The effective value is resolved through the cascade:
+A higher value therefore means **more precision** — the reverse of the old
+tolerance scale, where `0` was exact. No level ever means that a target may be
+doubled or halved: `V0` is unchanged.
+
+The effective value is resolved through two levels:
 
 ```
-quantity (row / artifact) ?? ingredient ?? recipe ?? global default (0.5)
+quantity (row / artifact) ?? ingredient (mandatory)
 ```
 
 The ingredient level does not apply to unitless artifacts (they have no
-ingredient). The UI offers five chips: `0`, `0.25`, `0.5`, `0.75`, `1`; an
-unset level inherits. The global default is the code constant
-`DEFAULT_TOLERANCE = 0.5` in
-[tolerance.ts](../packages/core/src/tolerance.ts).
+ingredient); an unregistered sub-recipe has no master-data row. Only these
+values use the internal neutral level `medium`; it is never written to a file
+and is not a user setting. There is **no recipe-level and no global default**.
 
 Storage:
 
 | Level | Where | Format |
 |---|---|---|
-| Quantity | ingredient row | trailing `{tolerance: 0.8}`; artifacts use `{{1/2\|t=0.8}}` |
-| Ingredient | `zutaten.csv` / `docs/ingredients.csv` | `Tolerance` column before `Reorder Point` |
-| Recipe | YAML front matter | `tolerance: 0.7` |
-| Global | code | `DEFAULT_TOLERANCE = 0.5` |
+| Quantity | ingredient row | trailing `{precision: high}`; artifacts use `{{1/2\|precision: high}}` |
+| Ingredient | `zutaten.csv` / `docs/ingredients.csv` | mandatory `Precision` column before `Reorder Point` |
 
-Recipe- and especially quantity-level overrides are meant for exceptions; the
-ingredient master data can carry the ingredient's usual setting.
+The quantity level is meant for exceptions; the ingredient master data carries
+the ingredient's usual setting.
 
 ## 6. Scoring and selection
 
@@ -145,8 +148,8 @@ The full formulas are in [recipe_scaling_algorithm.md](../recipe_scaling_algorit
 
 - `p = 0.5` (user proportion, `USER_PROPORTION_P`);
 - `ε_max = 0.5` (candidate search cutoff, `EPSILON_MAX`);
-- exact weights `W_exact = (0.70, 0.20, 0.05, 0.05)`;
-- practical weights `W_practical = (0.20, 0.30, 0.35, 0.15)`.
+- exact boundary (`very high`) weights `W_exact = (0.70, 0.20, 0.05, 0.05)`;
+- practical boundary (`very low`) weights `W_practical = (0.20, 0.30, 0.35, 0.15)`.
 
 The optimizer evaluates three branches:
 
@@ -213,8 +216,8 @@ so its link can always open exactly the size it promised.
 A unitless artifact (`{{1/2}}`) has no base unit and no ingredient. It uses the
 same scoring idea with only the **BQ-only branch**, applied to the AQ table as
 the primary number table: the count is chosen by accuracy and roundness, with no
-additional unit. The tolerance cascade is `artifact ?? recipe ?? global`; there
-is no ingredient level.
+additional unit. A count has no ingredient, so the only applicable level is the
+optional artifact override; without one, the internal neutral `medium` is used.
 
 If no AQ value fits `ε_max`, the artifact keeps its unrounded count. AQ values
 keep their canonical notation (`{{1/2}}`, `{{1+1/4}}`); other positive counts are
@@ -249,7 +252,7 @@ the cleanup task in [ROADMAP.md](ROADMAP.md).
 | BQ/AQ tables and schemes | `packages/core/src/quantityData.ts` (generated from `docs/BQs.csv` + `docs/AQs.csv`) |
 | Membership, decade rule, formatting | `packages/core/src/quantityValues.ts` |
 | Optimizer | `packages/core/src/quantityOptimizer.ts` |
-| Tolerance | `packages/core/src/tolerance.ts` |
+| Precision | `packages/core/src/precision.ts` |
 | Serving counts | `packages/core/src/servingSizes.ts` |
 | Display arrangements | `packages/core/src/additionalUnits.ts` |
 | Shopping list arithmetic | `packages/core/src/shoppingList.ts` |

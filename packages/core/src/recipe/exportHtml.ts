@@ -62,13 +62,12 @@ import {
   formatAQValueSlash,
   formatBQ,
   formatDecimal,
-  renderAQSSlash,
   renderAQSDisplaySlash,
   type ArrangementDisplay,
 } from '../additionalUnits.js';
 import { optimizeUnitless } from '../quantityOptimizer.js';
 import { SERVING_COUNTS } from '../servingSizes.js';
-import type { ToleranceContext } from '../tolerance.js';
+import type { PrecisionContext } from '../precision.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
 import type { TextArtifact } from './artifacts.js';
 import {
@@ -281,19 +280,17 @@ const LINK_ICON_SVG =
   '<svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false">' +
   '<path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>';
 
-/** The tolerance context of an ingredient use in a recipe. */
-function ingredientContext(ingredient: Ingredient, recipe: Recipe): ToleranceContext {
+/** The precision context of an ingredient use in a recipe. */
+function ingredientContext(ingredient: Ingredient): PrecisionContext {
   return {
-    ...(ingredient.tolerance !== undefined ? { quantity: ingredient.tolerance } : {}),
-    ...(recipe.tolerance !== undefined ? { recipe: recipe.tolerance } : {}),
+    ...(ingredient.precision !== undefined ? { quantity: ingredient.precision } : {}),
   };
 }
 
-/** The tolerance context of an inline artifact in a recipe. */
-function artifactContext(artifact: TextArtifact, recipe: Recipe): ToleranceContext {
+/** The precision context of an inline artifact in a recipe. */
+function artifactContext(artifact: TextArtifact): PrecisionContext {
   return {
-    ...(artifact.tolerance !== undefined ? { quantity: artifact.tolerance } : {}),
-    ...(recipe.tolerance !== undefined ? { recipe: recipe.tolerance } : {}),
+    ...(artifact.precision !== undefined ? { quantity: artifact.precision } : {}),
   };
 }
 
@@ -303,7 +300,7 @@ function artifactContext(artifact: TextArtifact, recipe: Recipe): ToleranceConte
  * the accuracy/roundness weights. If no AQ value fits, the unrounded target is
  * shown as a decimal.
  */
-function unitlessText(value: number, context: ToleranceContext): string {
+function unitlessText(value: number, context: PrecisionContext): string {
   const result = optimizeUnitless(value, context);
   return result.notation === undefined
     ? formatDecimal(result.value)
@@ -311,43 +308,29 @@ function unitlessText(value: number, context: ToleranceContext): string {
 }
 
 /**
- * Renders the plain display text of a quantity/ingredient line (HTML-escaped,
- * no link), keeping the arrangement's brackets. The reference readout uses this
- * form; it stays plain muted text (DESIGN §5.11) and never splits a note. A
- * quantity-only artifact may be unitless (`{{1/2}}`) and then renders through
- * the unitless branch (DESIGN §7).
- */
-function plainDisplayText(
-  name: string | undefined,
-  value: number,
-  bu: Unit | undefined,
-  context: ToleranceContext,
-): string {
-  const line =
-    name === undefined
-      ? bu === undefined
-        ? unitlessText(value, context)
-        : formatBQ(value, bu)
-      : renderAQSSlash(name, value, bu ?? 'g', context);
-  return escapeHtml(line);
-}
-
-/**
- * Renders one arrangement display as HTML: its notes leave their brackets and
- * follow an en space in the muted, italic `.arrangement-note` run. Step prose
- * passes `parenthesised` instead, which keeps a regular space and the brackets
+ * Renders one arrangement display as HTML. The default form (`bare`) lifts the
+ * note out of its brackets and follows an en space in the muted, italic
+ * `.arrangement-note` run (DESIGN §5.4). Step prose passes `parenthesised`,
+ * which keeps a regular space and the brackets (DESIGN §5.11). The reference
+ * readout passes `reference`: it keeps the brackets too, but one en space
+ * precedes them and they are styled with their content like the note
  * (DESIGN §5.11). Every value is escaped; the surrounding markup is fixed here.
  */
-function arrangementHtml(display: ArrangementDisplay, noteForm: 'bare' | 'parenthesised'): string {
+function arrangementHtml(
+  display: ArrangementDisplay,
+  noteForm: 'bare' | 'parenthesised' | 'reference',
+): string {
   return display.parts
     .map((part) => {
       if (part.kind === 'text') {
         return escapeHtml(part.value);
       }
       const note = escapeHtml(part.value);
-      return noteForm === 'bare'
-        ? `${EN_SPACE}<span class="arrangement-note">${note}</span>`
-        : ` <span class="arrangement-note">(${note})</span>`;
+      if (noteForm === 'bare') {
+        return `${EN_SPACE}<span class="arrangement-note">${note}</span>`;
+      }
+      const space = noteForm === 'reference' ? EN_SPACE : ' ';
+      return `${space}<span class="arrangement-note">(${note})</span>`;
     })
     .join('');
 }
@@ -362,7 +345,7 @@ function displayHtml(
   name: string | undefined,
   value: number,
   bu: Unit | undefined,
-  context: ToleranceContext,
+  context: PrecisionContext,
 ): string {
   if (name === undefined) {
     return escapeHtml(bu === undefined ? unitlessText(value, context) : formatBQ(value, bu));
@@ -378,7 +361,7 @@ function artifactDisplayHtml(
   name: string | undefined,
   value: number,
   bu: Unit | undefined,
-  context: ToleranceContext,
+  context: PrecisionContext,
 ): string {
   if (name === undefined) {
     return displayHtml(name, value, bu, context);
@@ -410,21 +393,39 @@ function renderPhoto(photo: RecipePhoto | undefined): string {
   return `  <img class="media" src="data:${photo.mimeType};base64,${photo.base64}" alt="">\n`;
 }
 
-/** The reference ingredients of one view, scaled by the view's factor, as text. */
+/**
+ * The reference ingredients of one view, scaled by the view's factor, as HTML
+ * lines. Unlike the ingredient rows, the readout keeps an arrangement note's
+ * brackets and shows them with their content in the muted, italic run
+ * (DESIGN §5.11).
+ */
 function referenceLines(recipe: Recipe, factor: number): string[] {
   return recipe.ingredients
     .filter((ingredient) => ingredient.reference)
-    .map((ingredient) =>
-      plainDisplayText(
-        ingredient.name,
-        ingredient.quantity * factor,
-        ingredient.unit,
-        ingredientContext(ingredient, recipe),
-      ),
-    );
+    .map((ingredient) => {
+      const value = ingredient.quantity * factor;
+      const context = ingredientContext(ingredient);
+      // A quantity-only artifact may be unitless (`{{1/2}}`); it then renders
+      // through the unitless branch (DESIGN §7).
+      if (ingredient.name === undefined) {
+        return escapeHtml(
+          ingredient.unit === undefined
+            ? unitlessText(value, context)
+            : formatBQ(value, ingredient.unit),
+        );
+      }
+      return arrangementHtml(
+        renderAQSDisplaySlash(ingredient.name, value, ingredient.unit ?? 'g', context),
+        'reference',
+      );
+    });
 }
 
-/** The intro's small muted reference readout, or '' when there is none. */
+/**
+ * The intro's small muted reference readout, or '' when there is none. One
+ * quantity per line: the amounts are not a sentence, so they are stacked and
+ * carry no comma between them (DESIGN §5.11).
+ */
 function renderReferenceReadout(
   recipe: Recipe,
   factor: number,
@@ -433,7 +434,8 @@ function renderReferenceReadout(
 ): string {
   const lines = referenceLines(recipe, factor);
   if (lines.length === 0) return '';
-  return `  <p class="reference size-scoped" ${sizeKey}="${sizeValue}">${lines.join(', ')}</p>\n`;
+  const items = lines.map((line) => `    <li>${line}</li>\n`).join('');
+  return `  <ul class="reference size-scoped" ${sizeKey}="${sizeValue}">\n` + `${items}  </ul>\n`;
 }
 
 /** One checkable master-ingredient row (checkbox, quantity, optional badge). */
@@ -442,7 +444,7 @@ function renderCheckRow(
   value: number,
   links: Readonly<Record<string, string>>,
   id: string,
-  context: ToleranceContext,
+  context: PrecisionContext,
 ): string {
   const text = displayHtml(ingredient.name, value, ingredient.unit, context);
   const badge = subRecipeBadge(links[ingredient.name]);
@@ -474,7 +476,7 @@ function renderCheckList(
         ingredient.quantity * factor,
         links,
         `c-${sizeToken}-${i}`,
-        ingredientContext(ingredient, recipe),
+        ingredientContext(ingredient),
       ),
     )
     .join('\n');
@@ -492,7 +494,6 @@ function renderStep(
   factor: number,
   links: Readonly<Record<string, string>>,
   n: number,
-  recipe: Recipe,
 ): string {
   const rows =
     step.ingredients.length === 0
@@ -504,7 +505,7 @@ function renderStep(
               ingredient.name,
               ingredient.quantity * factor,
               ingredient.unit,
-              ingredientContext(ingredient, recipe),
+              ingredientContext(ingredient),
             );
             const badge = subRecipeBadge(links[ingredient.name]);
             return `  <li><span class="step-ingredient">${text}</span>${badge}</li>`;
@@ -520,7 +521,7 @@ function renderStep(
       artifact.name,
       artifact.quantity * factor,
       artifact.unit,
-      artifactContext(artifact, recipe),
+      artifactContext(artifact),
     );
     // A narrow no-break space in front of the badge only: without it a screen
     // reader reads the badge and the ingredient as one word; without a badge the
@@ -543,21 +544,18 @@ function renderStepWrap(
   sizeKey: string,
   sizeValue: string,
 ): string {
-  const steps = recipe.steps
-    .map((step, i) => renderStep(step, factor, links, i + 1, recipe))
-    .join('\n');
+  const steps = recipe.steps.map((step, i) => renderStep(step, factor, links, i + 1)).join('\n');
   return `<div class="step-wrap size-scoped" ${sizeKey}="${sizeValue}">\n${steps}\n</div>`;
 }
 
 /** The serving picker for finished dishes (DESIGN §5.2). */
 function renderServingPicker(recipe: Recipe): string {
   const buttons = SERVING_COUNTS.map((servings) => {
-      const active = servings === recipe.servings;
-      // A chip is one value of an exclusive set, so it is a radio: the checked
-      // chip is the only tab stop and arrow keys move the choice (§5.2, §8).
-      return `<button type="button" role="radio" aria-checked="${active}" tabindex="${active ? '0' : '-1'}" class="chip serving-chip${active ? ' active' : ''}" data-servings="${servings}">${servings}</button>`;
-    })
-    .join('\n    ');
+    const active = servings === recipe.servings;
+    // A chip is one value of an exclusive set, so it is a radio: the checked
+    // chip is the only tab stop and arrow keys move the choice (§5.2, §8).
+    return `<button type="button" role="radio" aria-checked="${active}" tabindex="${active ? '0' : '-1'}" class="chip serving-chip${active ? ' active' : ''}" data-servings="${servings}">${servings}</button>`;
+  }).join('\n    ');
   return (
     `  <p class="picker-caption">Portionen</p>\n` +
     `  <div class="chips" role="radiogroup" aria-label="Portionen wählen">\n    ${buttons}\n  </div>\n`
@@ -1148,11 +1146,13 @@ const STYLES = `
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   /* The quiet aside of an ingredient arrangement (§5.4): the note left its
      brackets and follows one en space, muted and italic. Step prose keeps its
-     brackets and a regular space (the span then wraps both, §5.11). */
+     brackets and a regular space (the span then wraps both, §5.11), and the
+     reference readout keeps the brackets after an en space. */
   .arrangement-note { color: var(--muted); font-style: italic; }
-  /* Reference-ingredient readout under the size picker (amounts only, muted). */
-  .reference { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-sm);
-               overflow-wrap: anywhere; }
+  /* Reference-ingredient readout under the size picker (amounts only, muted):
+     one amount per line, no bullet and no comma between them (§5.11). */
+  .reference { margin: 0; padding: 0; list-style: none; color: var(--muted);
+               font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
   /* Ingredient-recipe stepper (§5.2 "exactly as today"). */
   .yield-row { display: flex; align-items: center; gap: var(--space-3); }

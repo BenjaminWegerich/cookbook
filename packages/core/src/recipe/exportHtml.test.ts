@@ -22,13 +22,14 @@ import type { Recipe } from './types.js';
 /**
  * The export's HTML for one amount line: the note leaves its brackets and
  * follows an en space in `.arrangement-note`, except in step prose, which keeps
- * the brackets and a regular space.
+ * the brackets and a regular space, and in the reference readout, which keeps
+ * the brackets after an en space.
  */
 function amountHtml(
   name: string,
   value: number,
   bu: string,
-  noteForm: 'bare' | 'parenthesised' = 'bare',
+  noteForm: 'bare' | 'parenthesised' | 'reference' = 'bare',
 ): string {
   return renderAQSDisplaySlash(name, value, bu)
     .parts.map((part) => {
@@ -36,9 +37,11 @@ function amountHtml(
         return escapeHtml(part.value);
       }
       const note = escapeHtml(part.value);
-      return noteForm === 'bare'
-        ? `${EN_SPACE}<span class="arrangement-note">${note}</span>`
-        : ` <span class="arrangement-note">(${note})</span>`;
+      if (noteForm === 'bare') {
+        return `${EN_SPACE}<span class="arrangement-note">${note}</span>`;
+      }
+      const space = noteForm === 'reference' ? EN_SPACE : ' ';
+      return `${space}<span class="arrangement-note">(${note})</span>`;
     })
     .join('');
 }
@@ -92,10 +95,39 @@ describe('generateRecipeHtml — finished dish', () => {
     // 6 → 9 servings is an exact factor of 1.5.
     expect(html).toContain(amountHtml('Tortillas', 375, 'g'));
     expect(html).toContain(amountHtml('Joghurt', 600, 'g'));
-    // The written size's reference readout (amounts only, muted).
+    // The written size's reference readout: one muted line per amount.
     expect(html).toContain(
-      `<p class="reference size-scoped" data-servings="6">${renderAQSSlash('Tortillas', 250, 'g')}</p>`,
+      `<ul class="reference size-scoped" data-servings="6">\n` +
+        `    <li>${amountHtml('Tortillas', 250, 'g', 'reference')}</li>`,
     );
+  });
+
+  it('stacks the reference readout without commas between the amounts', () => {
+    const stacked = generateRecipeHtml(
+      parseRecipe(`---
+title: Zwei Referenzen
+type: finished_dish
+servings: 2
+prep_time: 5 min
+reference:
+  - Tortillas
+  - Joghurt
+---
+## Zubereitung
+1. - 250 g Tortillas
+   - 200 g Joghurt
+   Tortillas und Joghurt verrühren.
+`),
+      {},
+    );
+    // The written size's readout: two lines, no comma joining them, and the
+    // Joghurt keeps its bracketed note after an en space.
+    const readout =
+      /<ul class="reference size-scoped" data-servings="2">([\s\S]*?)<\/ul>/.exec(stacked)?.[1] ??
+      '';
+    expect(readout.match(/<li>/g)).toHaveLength(2);
+    expect(readout).not.toContain(', ');
+    expect(readout).toContain(amountHtml('Joghurt', 200, 'g', 'reference'));
   });
 
   it('renders each step with its own rows above the prose', () => {
@@ -108,7 +140,7 @@ describe('generateRecipeHtml — finished dish', () => {
 
   it('renders inline artifacts scaled inside the prose, in slash form', () => {
     // Option 6 is the written size, so the {{1500 ml Wasser}} artifact is unscaled.
-    expect(html).toContain(renderAQSSlash('Wasser', 1500, 'ml'));
+    expect(html).toContain(amountHtml('Wasser', 1500, 'ml'));
     // No raw artifact markers survive.
     expect(html).not.toContain('{{');
   });
@@ -266,13 +298,14 @@ prep_time: 15 min
     // The written view: the reference keeps its stored quantity, e.g.
     // "300 ml Milch" under the size picker.
     expect(html).toContain(
-      `<p class="reference size-scoped" data-yield="500">${renderAQSSlash('Milch', 300, 'ml')}</p>`,
+      `<ul class="reference size-scoped" data-yield="500">\n` +
+        `    <li>${amountHtml('Milch', 300, 'ml', 'reference')}</li>`,
     );
   });
 
   it('renders rows and unscaled artifacts in the steps', () => {
     expect(html).toContain('<ul class="step-rows">');
-    expect(html).toContain(renderAQSSlash('Milch', 300, 'ml'));
+    expect(html).toContain(amountHtml('Milch', 300, 'ml'));
     expect(html).toContain(amountHtml('Milch', 50, 'ml'));
   });
 

@@ -69,16 +69,16 @@ export function mergeIngredientUses(ingredients: readonly Ingredient[]): Ingredi
 
 /**
  * The BQ the row displays for one use: the optimizer's selected BQ with the
- * use's row tolerance and the recipe tolerance. Unknown ingredients (no master
- * data) still get the metric-only BQ; a fallback returns V0. The optimizer
- * never throws for a positive target, but a malformed draft could; the plain
- * target is the safe fallback so deriving the list cannot break the editor.
+ * use's optional per-quantity precision (the ingredient master data supplies the
+ * mandatory ingredient level). Unknown ingredients (no master data) still get
+ * the metric-only BQ; a fallback returns V0. The optimizer never throws for a
+ * positive target, but a malformed draft could; the plain target is the safe
+ * fallback so deriving the list cannot break the editor.
  */
-function displayedBQ(ingredient: Ingredient, recipeTolerance?: number): number {
+function displayedBQ(ingredient: Ingredient): number {
   try {
     return optimizeQuantity(ingredient.quantity, mappingsFor(ingredient.name), ingredient.unit, {
-      ...(ingredient.tolerance !== undefined ? { quantity: ingredient.tolerance } : {}),
-      ...(recipeTolerance !== undefined ? { recipe: recipeTolerance } : {}),
+      ...(ingredient.precision !== undefined ? { quantity: ingredient.precision } : {}),
     }).bq;
   } catch {
     return ingredient.quantity;
@@ -95,20 +95,17 @@ function displayedBQ(ingredient: Ingredient, recipeTolerance?: number): number {
  *
  * @param steps the step rows, already in the recipe's target unit
  * @param reference recipe-level reference names
- * @param recipeTolerance the recipe-level tolerance (front matter), if set;
- *   it participates in each row's display selection
  */
 export function deriveIngredients(
   steps: readonly Step[],
   reference: readonly string[] = [],
-  recipeTolerance?: number,
 ): MasterIngredient[] {
   const entries: Ingredient[] = [];
   for (const step of steps) {
     for (const ingredient of step.ingredients) {
       // Replace the target with the BQ the row will display; merge then sums
       // those practical amounts.
-      entries.push({ ...ingredient, quantity: displayedBQ(ingredient, recipeTolerance) });
+      entries.push({ ...ingredient, quantity: displayedBQ(ingredient) });
     }
   }
   const referenceNames = new Set(reference.map((name) => name.trim()));

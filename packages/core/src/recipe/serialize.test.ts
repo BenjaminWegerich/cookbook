@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseRecipe } from './parse.js';
+import { RecipeParseError } from './types.js';
 import { serializeRecipe } from './serialize.js';
 import type { Recipe } from './types.js';
 
@@ -60,38 +61,50 @@ describe('serializeRecipe', () => {
     expect(reparsed.ingredients).toEqual(makeDish().ingredients);
   });
 
-  it('round-trips the recipe-level and per-quantity tolerance', () => {
+  it('round-trips a per-quantity precision tag', () => {
     const recipe = makeDish({
-      tolerance: 0.75,
       steps: [
         {
-          ingredients: [{ name: 'Tortillas', quantity: 250, unit: 'g', tolerance: 0.8 }],
+          ingredients: [{ name: 'Tortillas', quantity: 250, unit: 'g', precision: 'high' }],
           text: 'Tortillas im Ofen erwärmen.',
         },
       ],
-      ingredients: [{ name: 'Tortillas', quantity: 250, unit: 'g', tolerance: 0.8 }],
+      ingredients: [{ name: 'Tortillas', quantity: 250, unit: 'g', precision: 'high' }],
     });
     const text = serializeRecipe(recipe);
-    expect(text).toContain('tolerance: 0.75');
-    expect(text).toContain('- 250 g Tortillas {tolerance: 0.8}');
+    expect(text).not.toContain('tolerance:');
+    expect(text).toContain('- 250 g Tortillas {precision: high}');
     const reparsed = parseRecipe(text);
-    expect(reparsed.tolerance).toBe(0.75);
-    expect(reparsed.steps[0]!.ingredients[0]!.tolerance).toBe(0.8);
+    expect(reparsed.steps[0]!.ingredients[0]!.precision).toBe('high');
   });
 
-  it('round-trips an artifact-level tolerance suffix', () => {
+  it('rejects a recipe-level tolerance field', () => {
+    const text = serializeRecipe(makeDish()).replace('prep_time:', 'tolerance: 0.5\nprep_time:');
+    try {
+      parseRecipe(text);
+      throw new Error('expected parseRecipe to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RecipeParseError);
+      expect((error as RecipeParseError).issues).toContainEqual({
+        path: 'tolerance',
+        message: 'Unbekanntes Feld "tolerance".',
+      });
+    }
+  });
+
+  it('round-trips an artifact-level precision suffix', () => {
     // Omit the reference rather than setting it to undefined (the model uses
     // exact optional properties, and the default reference would not occur in
     // this step).
     const { reference: _ignored, ...withoutReference } = makeDish();
     const recipe = {
       ...withoutReference,
-      steps: [{ ingredients: [], text: 'Mit {{1/2|t=0.8}} mischen.' }],
+      steps: [{ ingredients: [], text: 'Mit {{1/2|precision: very low}} mischen.' }],
     };
     const text = serializeRecipe(recipe);
-    expect(text).toContain('{{1/2|t=0.8}}');
+    expect(text).toContain('{{1/2|precision: very low}}');
     const reparsed = parseRecipe(text);
-    expect(reparsed.steps[0]!.text).toBe('Mit {{1/2|t=0.8}} mischen.');
+    expect(reparsed.steps[0]!.text).toBe('Mit {{1/2|precision: very low}} mischen.');
   });
 
   it('writes inline artifacts in the canonical form inside the prose', () => {

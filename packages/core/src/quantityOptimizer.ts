@@ -2,9 +2,9 @@
  * The deterministic quantity optimizer (docs/recipe_scaling_algorithm.md §5–§6).
  *
  * Given the unrounded target `V0` (always in the ingredient's metric base unit),
- * the ingredient's master data and the three tolerance levels, this module
- * decides whether an additional quantity (AQ) is shown and which BQ/AQ pair and
- * unit represent the target best.
+ * the ingredient's master data and the effective precision, this module decides
+ * whether an additional quantity (AQ) is shown and which BQ/AQ pair and unit
+ * represent the target best.
  *
  * The three branches of §5:
  * - **EXACT** (physical packaging): the AQ count fixes the BQ, `BQ = q·c`; the
@@ -19,7 +19,7 @@
  * score.
  *
  * Everything is pure: the optimizer never reads the ingredient registry, the
- * file system or React. Callers pass the ingredient entry and the tolerance
+ * file system or React. Callers pass the ingredient entry and the precision
  * context.
  */
 
@@ -31,13 +31,14 @@ import {
 import { AQ_SCHEMES, AQ_VALUES, type AQValue } from './quantityData.js';
 import { allowedBQValuesInRange, aqValueFor } from './quantityValues.js';
 import {
-  resolveTolerance,
+  resolvePrecision,
   weightsFor,
+  type PrecisionContext,
+  type PrecisionLevel,
   type QuantityWeights,
-  type ToleranceContext,
-} from './tolerance.js';
+} from './precision.js';
 
-/** Maximum relative error considered during candidate generation (λ-independent). */
+/** Maximum relative error considered during candidate generation (precision-independent). */
 export const EPSILON_MAX = 0.5;
 
 /**
@@ -47,7 +48,7 @@ export const EPSILON_MAX = 0.5;
  */
 export const USER_PROPORTION_P = 0.5;
 
-/** Score tolerance for the tie-break hierarchy (§6.3). */
+/** Score epsilon for the tie-break hierarchy (§6.3). */
 const TIE_EPSILON = 1e-5;
 
 /** Additional units by canonical name (validated unique by the generator). */
@@ -66,8 +67,8 @@ export type OptimizerBranch = 'metric' | 'exact' | 'non-exact' | 'fallback';
 export interface OptimizableEntry {
   /** Fixed base unit family of the ingredient. */
   readonly bu: string;
-  /** Ingredient-level tolerance, if the master data sets one. */
-  readonly tolerance?: number;
+  /** Mandatory ingredient-level precision from the master data. */
+  readonly precision: PrecisionLevel;
   /** Compatible additional units and their conversion factors. */
   readonly entries: readonly IngredientMapping[];
 }
@@ -134,40 +135,25 @@ interface Candidate {
 }
 
 /** Applies the scoring formula of §5 to a candidate. */
-function scoreCandidate(
-  candidate: Candidate,
-  v0: number,
-  weights: QuantityWeights,
-): number {
+function scoreCandidate(candidate: Candidate, v0: number, weights: QuantityWeights): number {
   const p = USER_PROPORTION_P;
   const bqError = Math.abs(candidate.bq - v0) / v0;
   if (candidate.branch === 'metric') {
     const accuracy = bqError;
     const roundness = candidate.bqPenalty;
-    return (
-      weights.accuracy * accuracy +
-      weights.roundness * roundness +
-      weights.missing * 1
-    );
+    return weights.accuracy * accuracy + weights.roundness * roundness + weights.missing * 1;
   }
   const aqBase = candidate.aqBase!;
   const aqError = Math.abs(aqBase - v0) / v0;
   const aqPenaltyValue = candidate.aq!.penalty;
   if (candidate.branch === 'exact') {
     // The physical package dictates the BQ: P_conflict = 0, R_BQ = 0.
-    return (
-      weights.accuracy * aqError +
-      weights.roundness * (1 - p) * aqPenaltyValue
-    );
+    return weights.accuracy * aqError + weights.roundness * (1 - p) * aqPenaltyValue;
   }
   const accuracy = p * bqError + (1 - p) * aqError;
   const conflict = Math.abs(candidate.bq - aqBase) / v0;
   const roundness = p * candidate.bqPenalty + (1 - p) * aqPenaltyValue;
-  return (
-    weights.accuracy * accuracy +
-    weights.conflict * conflict +
-    weights.roundness * roundness
-  );
+  return weights.accuracy * accuracy + weights.conflict * conflict + weights.roundness * roundness;
 }
 
 /**
@@ -184,10 +170,7 @@ function compareCandidates(a: Candidate, b: Candidate): number {
 }
 
 /** True when the ingredient entry is usable for the given base unit. */
-function entryMatches(
-  entry: OptimizableEntry | undefined,
-  bu: string,
-): entry is OptimizableEntry {
+function entryMatches(entry: OptimizableEntry | undefined, bu: string): entry is OptimizableEntry {
   return entry !== undefined && entry.bu === bu;
 }
 
@@ -214,18 +197,16 @@ export function optimizeQuantity(
   v0: number,
   entry: OptimizableEntry | undefined,
   bu: string,
-  context: ToleranceContext = {},
+  context: PrecisionContext = {},
 ): OptimizedQuantity {
   if (!(v0 > 0) || !Number.isFinite(v0)) {
     throw new Error(`optimizeQuantity: V0 must be a positive finite number, got ${v0}`);
   }
-  const ingredientTolerance = context.ingredient ?? entry?.tolerance;
-  const lambda = resolveTolerance({
+  const precision = resolvePrecision({
     quantity: context.quantity,
-    ingredient: ingredientTolerance,
-    recipe: context.recipe,
+    ingredient: context.ingredient ?? entry?.precision,
   });
-  const weights = weightsFor(lambda);
+  const weights = weightsFor(precision);
 
   const lower = v0 * (1 - EPSILON_MAX);
   const upper = v0 * (1 + EPSILON_MAX);
@@ -300,9 +281,7 @@ export function optimizeQuantity(
   }
 
   const bestScore = Math.min(...candidates.map((candidate) => candidate.score));
-  const tied = candidates.filter(
-    (candidate) => candidate.score <= bestScore + TIE_EPSILON,
-  );
+  const tied = candidates.filter((candidate) => candidate.score <= bestScore + TIE_EPSILON);
   tied.sort(compareCandidates);
   const winner = tied[0]!;
 
@@ -328,24 +307,18 @@ export function optimizeQuantity(
  * Optimizes a unitless inline count. A count has no ingredient and no base
  * unit, so only the “BQ only” branch applies: the count is chosen from the AQ
  * table (the standard numbers for counts) with the accuracy and roundness
- * weights, and no additional unit is ever shown. The tolerance cascade uses the
- * quantity (artifact) level, the recipe level and the global default — there is
- * no ingredient level by definition.
+ * weights, and no additional unit is ever shown. A count has no ingredient-level
+ * precision, so only the optional per-artifact override applies; without one,
+ * the internal neutral level is used.
  *
  * If no count fits `ε_max`, the artifact keeps its unrounded target (fallback).
  */
-export function optimizeUnitless(
-  v0: number,
-  context: ToleranceContext = {},
-): OptimizedUnitless {
+export function optimizeUnitless(v0: number, context: PrecisionContext = {}): OptimizedUnitless {
   if (!(v0 > 0) || !Number.isFinite(v0)) {
     throw new Error(`optimizeUnitless: V0 must be a positive finite number, got ${v0}`);
   }
-  const lambda = resolveTolerance({
-    quantity: context.quantity,
-    recipe: context.recipe,
-  });
-  const weights = weightsFor(lambda);
+  const precision = resolvePrecision({ quantity: context.quantity });
+  const weights = weightsFor(precision);
   const lower = v0 * (1 - EPSILON_MAX);
   const upper = v0 * (1 + EPSILON_MAX);
   const candidates: { entry: AQValue; score: number }[] = [];
@@ -363,9 +336,7 @@ export function optimizeUnitless(
     return { value: v0, score: 0, fallback: true };
   }
   const bestScore = Math.min(...candidates.map((candidate) => candidate.score));
-  const tied = candidates.filter(
-    (candidate) => candidate.score <= bestScore + TIE_EPSILON,
-  );
+  const tied = candidates.filter((candidate) => candidate.score <= bestScore + TIE_EPSILON);
   // Higher count wins on an exact score tie (the same rule as §6.3).
   tied.sort((a, b) => b.entry.value - a.entry.value);
   const winner = tied[0]!;

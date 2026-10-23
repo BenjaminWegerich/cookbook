@@ -108,10 +108,10 @@ describe('renderAQS (optimizer-backed)', () => {
     expect(selectAQ('Joghurt', 500, 'g')?.aq).toBe('1');
   });
 
-  it('passes a recipe tolerance through the context', () => {
-    // The exact Becher is perfect at 500 g, so every tolerance keeps it; the
-    // call must simply accept the context.
-    expect(renderAQS('Joghurt', 500, 'g', { recipe: 1 })).toContain('1');
+  it('passes a per-quantity precision through the context', () => {
+    // The exact Becher is perfect at 500 g, so every level keeps it; the call
+    // must simply accept the context.
+    expect(renderAQS('Joghurt', 500, 'g', { quantity: 'very high' })).toContain('1');
   });
 });
 
@@ -185,7 +185,7 @@ describe('resolveReorderPoint', () => {
 
   it('keeps the entered amount for a bare ingredient', () => {
     setIngredientMappings({
-      Testzutat: { bu: 'g', reorderPoint: 0, entries: [] },
+      Testzutat: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
     });
     const result = resolveReorderPoint('Testzutat', allIngredientMappings().Testzutat, 123, 'g');
     expect(result.storedValue).toBe(123);

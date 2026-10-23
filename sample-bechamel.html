@@ -116,11 +116,13 @@
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   /* The quiet aside of an ingredient arrangement (§5.4): the note left its
      brackets and follows one en space, muted and italic. Step prose keeps its
-     brackets and a regular space (the span then wraps both, §5.11). */
+     brackets and a regular space (the span then wraps both, §5.11), and the
+     reference readout keeps the brackets after an en space. */
   .arrangement-note { color: var(--muted); font-style: italic; }
-  /* Reference-ingredient readout under the size picker (amounts only, muted). */
-  .reference { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-sm);
-               overflow-wrap: anywhere; }
+  /* Reference-ingredient readout under the size picker (amounts only, muted):
+     one amount per line, no bullet and no comma between them (§5.11). */
+  .reference { margin: 0; padding: 0; list-style: none; color: var(--muted);
+               font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
   /* Ingredient-recipe stepper (§5.2 "exactly as today"). */
   .yield-row { display: flex; align-items: center; gap: var(--space-3); }

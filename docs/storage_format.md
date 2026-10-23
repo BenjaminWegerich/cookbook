@@ -63,7 +63,6 @@ The app writes YAML through a serializer; hand-written files are validated on re
 | `description` | string | no | A single paragraph; may suggest side dishes or other uses, and may be phrased as a continuation of the title (e.g. `Bauernfrühstück / mit Kartoffeln, Karotten und Tofu`). |
 | `prep_time` | string | yes | Free-text display value, e.g. `25 min`, `1 h 30 min`. The editor offers the standard values 1/3/5/10/15/20/30/45 min and 1/1.5/2/3/6/12/24/48 h as chips. |
 | `total_time` | string | no | Only if it is larger than `prep_time`. |
-| `tolerance` | number | no | Display preference in [0, 1] (docs/recipe_scaling_algorithm.md §4). Absent = inherit the ingredient / global value. Five UI chips: 0, 0.25, 0.5, 0.75, 1. |
 
 ### Type-specific fields
 
@@ -129,7 +128,7 @@ layout). The rows are written in a natural, amount-first phrase:
 - **Row grammar:** `- MENGE EINHEIT NAME` (e.g. `- 250 g Reis`,
   `- 400 ml Kokosmilch`). The quantity is the unrounded target `V0`: any positive
   finite number in the ingredient's family unit. A row may end with an optional
-  tolerance tag: `- 250 g Reis {tolerance: 0.8}`. The row is the only way an
+  precision tag: `- 250 g Reis {precision: high}`. The row is the only way an
   ingredient enters the recipe's lists.
 - The **master ingredient list is derived** from the rows of all steps (§7.1):
   - order = order of first use across the steps (each step's rows in their order);
@@ -157,9 +156,10 @@ layout). The rows are written in a natural, amount-first phrase:
   - **A unitless count is an unrounded target.** Any positive number is allowed
     (a decimal or a fraction). AQ values keep their canonical fraction notation
     (`{{1/3}}`, `{{1+1/4}}`, `{{3}}`); other counts are stored as decimals. The
-    display uses the AQ table (BQ-only branch) and the tolerance cascade
-    `artifact ?? recipe ?? global` (docs/quantity_scaling.md §8). An artifact
-    may carry a tolerance suffix: `{{1/2|t=0.8}}`.
+    display uses the AQ table (BQ-only branch). A count has no ingredient, so
+    only an optional artifact override applies; without one the internal neutral
+    `medium` is used (docs/quantity_scaling.md §8). An artifact may carry a
+    precision suffix: `{{1/2|precision: high}}`.
   - An artifact that carries a unit is a base quantity: its `MENGE` is the
     unrounded target and its display uses the normal optimizer.
   - **Canonical values are g/ml with `.` decimals.** Hand-written files may use
@@ -244,8 +244,9 @@ the file. Two levels:
 - `title` is non-empty and file-name-safe.
 - `servings` must be one of the allowed serving counts; `yield` and every row /
   artifact `Menge` must be a positive finite number (`V0`). There is no ladder
-  membership check anymore. A `tolerance`, when present at any level, must be in
-  [0, 1].
+  membership check anymore. A precision tag, when present, must be one of
+  `very low`, `low`, `medium`, `high`, `very high`. A front-matter `tolerance`
+  field is an unknown field and is rejected.
 - Row syntax, step structure and the artifacts of each step are validated (issue
   paths `steps[i].ingredients[j]…` and `steps[i].text`). A row without a name or
   quantity, a step whose prose is missing, and prose starting with `- ` are errors.
@@ -319,23 +320,24 @@ collection folder, in the same canonical formats as the repo seeds (`docs/ingred
 `docs/ingredient_unit_mappings.csv`):
 
     zutaten.csv                  (ingredient list)
-    Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point
-    Joghurt;;;g;;0
-    Cashews;Cashew;Cashews;g;;0
+    Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point
+    Joghurt;;;g;medium;0
+    Cashews;Cashew;Cashews;g;medium;0
 
     zutaten-umrechnungen.csv     (AU mappings; an ingredient without additional
     Ingredient;Additional Unit;Conversion Factor   units has no rows here)
     Joghurt;Becher;500
 
 The ingredient list is the authoritative source of ingredient names, their fixed base
-unit, their optional tolerance, their reorder point and their display forms — one row per
+unit, their mandatory precision, their reorder point and their display forms — one row per
 ingredient, so further ingredient-level fields can be added as columns later. Where an
 item is bought is deliberately not such a column: it is the separate shopping-route pair
 of §10, whose name set also covers items that are not ingredients at all.
 
-The `Tolerance` cell is optional: empty = inherit the recipe / global value; otherwise
-a number in [0, 1]. It is the ingredient level of the cascade
-(docs/recipe_scaling_algorithm.md §4.1).
+The `Precision` cell is **mandatory**: one of `very low`, `low`, `medium`, `high`,
+`very high`. It is the ingredient level of the display preference
+(docs/recipe_scaling_algorithm.md §4.1). A file under an older header (without the
+`Precision` column) is rejected instead of silently inventing a value.
 
 The reorder point is the base-unit (g/ml) quantity that is definitely on stock directly
 after a shopping trip, independent of the meal plan. It is a mandatory cell and need not
@@ -343,9 +345,7 @@ be a table value: `0` = the ingredient is only ever bought for a recipe; a posit
 number = that much is on stock even without a planned recipe (1000 g of flour means the
 shopping list is refilled once the last pack is opened, outside the app); `inf` = infinite
 stock (realistically only water). It is the last column, so a spreadsheet round-trip — which
-may drop trailing empty cells — can never cut a meaningful cell. A file written before this
-column existed (header `Ingredient;Base Unit`) still loads: its ingredients get the neutral
-reorder point 0, and the next write adds the column.
+may drop trailing empty cells — can never cut a meaningful cell.
 
 `Singular` and `Plural` are the **display forms** of the name — what the app writes when it
 names the ingredient with a count („1 Karotte“ / „2 Karotten“). They sit in columns B and C,
@@ -357,10 +357,7 @@ Butter): the name then serves for every count. A name whose canonical form is al
 plural states the pair in full („Haferflocken“ → `Haferflocke;Haferflocken`, „Karotten“ →
 `Karotte;Karotten`). The pair is atomic — a row with only one of the two cells is rejected
 with a German error, because the empty side would silently fall back to the canonical name.
-A file written before these columns existed (header `Ingredient;Base Unit;Reorder Point`)
-still loads with every name invariant, and the next write adds both columns. A file
-written before `Tolerance` existed (header `Ingredient;Singular;Plural;Base Unit;Reorder
-Point`) also loads; the tolerance is unset and the next write adds the column.
+Older headers are rejected because the `Precision` column is mandatory.
 
 An **ingredient recipe** (a sub-recipe) has its row here too, like any other ingredient. Its
 reorder point is the amount of the finished product that is on hand — cooked and kept, e.g.
@@ -477,7 +474,7 @@ ids.
 
 - [recipe_structure.md](recipe_structure.md) — logical model this encoding implements.
 - [quantity_scaling.md](quantity_scaling.md) — how the stored target `V0` is scaled and
-  how the optimizer chooses the displayed BQ/AQ; tolerance, yields and export views.
+  how the optimizer chooses the displayed BQ/AQ; precision, yields and export views.
 - [additional_quantity_specifications.md](additional_quantity_specifications.md) —
   what is *not* stored here (additional units are computed at display time).
 - [recipe_structure.md](recipe_structure.md) — the authoritative logical model these files

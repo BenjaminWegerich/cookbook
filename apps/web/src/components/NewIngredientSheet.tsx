@@ -31,8 +31,8 @@
  *
  * Every mapping is a conversion factor only: the optimizer scores every
  * compatible unit, and the app allows at most one shopping unit per ingredient.
- * The ingredient-level tolerance is optional (five chips; "Standard" inherits
- * the recipe / global value). As a convenience the mappings of an existing
+ * The ingredient-level precision is mandatory (five chips, default `medium`):
+ * it is the only precision level in the master data. As a convenience the mappings of an existing
  * ingredient with the same base-unit family can be copied in as a
  * starting point ("Von bekannter Zutat übernehmen", a text-autocomplete like
  * the ingredient sheet's name selector) and then edited / extended — factors
@@ -51,18 +51,18 @@ import {
   resolveReorderPoint,
   shoppingSections,
   shoppingStores,
+  type PrecisionLevel,
   type ShoppingStop,
 } from '@cookbook/core';
 
 import ArrangementLine from './ArrangementLine';
 import IngredientMappingsField from './IngredientMappingsField';
 import QuantityInput from './QuantityInput';
-import ToleranceChips from './ToleranceChips';
+import PrecisionChips from './PrecisionChips';
 import {
   buildMappingRows,
   mappingEntriesFromRows,
   validateMappingRows,
-  validateTolerance,
   type MappingRow,
 } from './ingredientMasterForm';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
@@ -88,7 +88,7 @@ interface NewIngredientSheetProps {
     bu: string,
     reorderPoint: number,
     entries: NewIngredientEntry[],
-    tolerance: number | undefined,
+    precision: PrecisionLevel,
     stop: ShoppingStop | null,
   ) => void;
   /** Called when the user edits any form field — the parent forgets the
@@ -105,11 +105,7 @@ const BASE_UNITS = ['g', 'ml'] as const;
  * empty/duplicate name first, then the first invalid mapping row. It is the
  * single source of truth for both the save attempt and the live error text.
  */
-function currentSaveErrorMessage(
-  name: string,
-  rows: MappingRow[],
-  toleranceRaw: string,
-): string | null {
+function currentSaveErrorMessage(name: string, rows: MappingRow[]): string | null {
   const trimmed = name.trim();
   if (trimmed === '') {
     return 'Bitte einen Namen angeben.';
@@ -117,7 +113,7 @@ function currentSaveErrorMessage(
   if (masterIngredientNames().includes(trimmed)) {
     return `„${trimmed}“ existiert bereits in der Stammdatenliste.`;
   }
-  return validateMappingRows(rows) ?? validateTolerance(toleranceRaw);
+  return validateMappingRows(rows);
 }
 
 /**
@@ -174,10 +170,8 @@ function NewIngredientSheet({
   const [reorderPoint, setReorderPoint] = useState(0);
   /** Factor inputs keyed by additional-unit name; empty string = row skipped. */
   const [factors, setFactors] = useState<Record<string, string>>({});
-  /** Ingredient-level tolerance; undefined = inherit the recipe / global value. */
-  const [tolerance, setTolerance] = useState<number | undefined>(undefined);
-  /** The five-chip control is not a text field; this keeps the shared validator happy. */
-  const toleranceRaw = tolerance === undefined ? '' : String(tolerance);
+  /** Mandatory ingredient-level precision; `medium` is the neutral start. */
+  const [precision, setPrecision] = useState<PrecisionLevel>('medium');
   /** The copy-source autocomplete text ("" = nothing typed); applying resets it. */
   const [copyQuery, setCopyQuery] = useState('');
   /** The chosen store — level 1 of the shopping route; null = nothing picked. */
@@ -227,9 +221,7 @@ function NewIngredientSheet({
    * reorder-point preview resolves against exactly these, so a half-typed row
    * neither shows up in the preview nor changes the stored value.
    */
-  const validEntries = entries.filter(
-    (entry) => Number.isFinite(entry.factor) && entry.factor > 0,
-  );
+  const validEntries = entries.filter((entry) => Number.isFinite(entry.factor) && entry.factor > 0);
 
   /**
    * The draft master-data entry the preview resolves against: the base unit and
@@ -239,8 +231,8 @@ function NewIngredientSheet({
    */
   const draftEntry = {
     bu,
+    precision,
     entries: validEntries,
-    ...(tolerance !== undefined ? { tolerance } : {}),
   };
 
   /**
@@ -291,8 +283,7 @@ function NewIngredientSheet({
    * different problem is only announced by the next save attempt. The order is
    * the form's order: name, mapping rows, then the „Einkauf“ field.
    */
-  const saveErrorNow =
-    currentSaveErrorMessage(trimmedName, mappingRows, toleranceRaw) ?? shoppingError;
+  const saveErrorNow = currentSaveErrorMessage(trimmedName, mappingRows) ?? shoppingError;
   const shownLocalError = localError !== null && localError === saveErrorNow ? localError : null;
 
   /** Reports a form edit to the parent (drops the stale Drive error). */
@@ -367,7 +358,7 @@ function NewIngredientSheet({
       return;
     }
     setLocalError(null);
-    onSave(trimmedName, bu, reorder.storedValue, entries, tolerance, chosenStop);
+    onSave(trimmedName, bu, reorder.storedValue, entries, precision, chosenStop);
   };
 
   // Ctrl+S is the keyboard equivalent of the „Speichern" button. The sheet is
@@ -458,21 +449,21 @@ function NewIngredientSheet({
           />
         </div>
 
-        {/* The ingredient-level tolerance is a preference for the display
-            optimizer; "Standard" inherits the recipe / global value. */}
+        {/* The mandatory ingredient-level precision is a preference for the
+            display optimizer; higher values prefer exact metric amounts. */}
         <div className="field">
-          <span className="field-label">Toleranz</span>
+          <span className="field-label">Genauigkeit</span>
           <p className="field-hint">
-            Standard erbt die Rezept- bzw. globale Einstellung. Nur setzen, wenn diese Zutat
-            bewusst genauer oder praktischer dargestellt werden soll.
+            Bestimmt, wie genau die Mengen dieser Zutat dargestellt werden: „Sehr hoch“ bevorzugt
+            exakte metrische Mengen, „Sehr niedrig“ runde Haushalts- und Packungsmaße.
           </p>
-          <ToleranceChips
-            value={tolerance}
+          <PrecisionChips
+            value={precision}
             onChange={(next) => {
-              setTolerance(next);
+              setPrecision(next);
               markEdited();
             }}
-            ariaLabel="Toleranz der Zutat"
+            ariaLabel="Genauigkeit der Zutat"
           />
         </div>
 

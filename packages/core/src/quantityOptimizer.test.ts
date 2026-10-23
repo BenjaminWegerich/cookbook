@@ -12,29 +12,32 @@ import type { OptimizableEntry, OptimizedQuantity } from './quantityOptimizer.js
 import { optimizeQuantity, optimizeUnitless } from './quantityOptimizer.js';
 
 /** A bare ingredient (no additional units). */
-const bare: OptimizableEntry = { bu: 'g', entries: [] };
+const bare: OptimizableEntry = { bu: 'g', precision: 'medium', entries: [] };
 
 /** Mehl: an unteilbar pack (integer counts only), 1000 g each. */
 const mehl: OptimizableEntry = {
   bu: 'g',
+  precision: 'medium',
   entries: [{ au: 'Packung (unteilbar)', factor: 1000 }],
 };
 
 /** Mehl with a divisible pack, for the exact-branch tests. */
 const teilbar: OptimizableEntry = {
   bu: 'g',
+  precision: 'medium',
   entries: [{ au: 'Packung (teilbar)', factor: 1000 }],
 };
 
 /** Joghurt: a 500 g Becher (exact, halves/integers scheme). */
 const joghurt: OptimizableEntry = {
   bu: 'g',
+  precision: 'medium',
   entries: [{ au: 'Becher', factor: 500 }],
 };
 
 /** A factor list built from one unit name and factor. */
 function entry(unit: string, factor: number): OptimizableEntry {
-  return { bu: 'g', entries: [{ au: unit, factor }] };
+  return { bu: 'g', precision: 'medium', entries: [{ au: unit, factor }] };
 }
 
 describe('optimizeQuantity', () => {
@@ -88,6 +91,7 @@ describe('optimizeQuantity', () => {
     // 7.5 g; 1.5 × 7.5 g = 11.25 g becomes 11 g.
     const exactFractional: OptimizableEntry = {
       bu: 'g',
+      precision: 'medium',
       entries: [{ au: 'Stück (BE zuerst, exakt)', factor: 7.5 }],
     };
     expect(optimizeQuantity(7.5, exactFractional, 'g').bq).toBe(7.5);
@@ -107,10 +111,10 @@ describe('optimizeQuantity', () => {
     expect(result.aq).toBeUndefined();
   });
 
-  it('passes the ingredient tolerance through the cascade', () => {
-    // The exact Becher is perfect at V0 = 500, so no tolerance can beat it;
-    // just check the result stays valid and the entry tolerance is accepted.
-    const result = optimizeQuantity(500, { ...joghurt, tolerance: 1 }, 'g');
+  it('passes the ingredient precision through the cascade', () => {
+    // The exact Becher is perfect at V0 = 500, so no precision can beat it;
+    // just check the result stays valid and the entry precision is accepted.
+    const result = optimizeQuantity(500, { ...joghurt, precision: 'very high' }, 'g');
     expect(result.aq?.notation).toBe('1');
   });
 
@@ -140,11 +144,11 @@ describe('optimizeUnitless', () => {
     expect(result.value).toBe(0.01);
   });
 
-  it('honours the recipe tolerance level without an ingredient level', () => {
-    // At λ = 1 the practical weights prefer the clean integer 2 over the
-    // perfect but clumsier 1+1/2 (penalty 0.33); at the default it is the
-    // other way round.
+  it('honours the per-artifact precision override', () => {
+    // Low precision prefers the clean integer 2 over the perfect but clumsier
+    // 1+1/2 (penalty 0.33); medium keeps the exact half.
     expect(optimizeUnitless(1.5, {}).notation).toBe('1+1/2');
-    expect(optimizeUnitless(1.5, { recipe: 1 }).notation).toBe('2');
+    expect(optimizeUnitless(1.5, { quantity: 'very low' }).notation).toBe('2');
+    expect(optimizeUnitless(1.5, { quantity: 'very high' }).notation).toBe('1+1/2');
   });
 });

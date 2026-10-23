@@ -22,11 +22,12 @@ import { serializeRecipe } from '@cookbook/core';
 import type { IngredientMappings, Recipe, RecipeType } from '@cookbook/core';
 
 /**
- * Serializes the ingredient master data as `- Name (base unit[, tolerance])`
+ * Serializes the ingredient master data as `- Name (base unit, Genauigkeit X)`
  * lines. The AI only needs the names (to reuse them), the base unit family
- * (g/ml, so it writes the right unit) and the ingredient-level tolerance that
- * is already set — the prompt tells it not to repeat that value on every row.
- * The additional-unit conversions are display data the AI never writes.
+ * (g/ml, so it writes the right unit) and the mandatory ingredient-level
+ * precision that is already set — the prompt tells it not to repeat that value
+ * on every row. The additional-unit conversions are display data the AI never
+ * writes.
  */
 function serializeMasterData(mappings: IngredientMappings): string {
   const names = Object.keys(mappings).sort((a, b) => a.localeCompare(b, 'de'));
@@ -34,9 +35,7 @@ function serializeMasterData(mappings: IngredientMappings): string {
   return names
     .map((name) => {
       const entry = mappings[name]!;
-      const tolerance =
-        entry.tolerance === undefined ? '' : `, Toleranz ${entry.tolerance}`;
-      return `- ${name} (${entry.bu}${tolerance})`;
+      return `- ${name} (${entry.bu}, Genauigkeit ${entry.precision})`;
     })
     .join('\n');
 }
@@ -81,8 +80,8 @@ export function buildCollectionText(input: AiCollectionInput): string {
 
   sections.push(
     `## Zutaten-Stammdaten\n${serializeMasterData(input.masterData)}\n` +
-      'Die Toleranzwerte in dieser Liste sind bereits gesetzt; wiederhole sie nicht in den ' +
-      'Rezeptzeilen, außer eine einzelne Menge braucht bewusst eine andere Toleranz.',
+      'Die Genauigkeitswerte in dieser Liste sind bereits gesetzt; wiederhole sie nicht in den ' +
+      'Rezeptzeilen, außer eine einzelne Menge braucht bewusst eine andere Genauigkeit.',
   );
 
   const titles = input.recipes

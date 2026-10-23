@@ -5,9 +5,12 @@
  * folder (zutaten.csv + zutaten-umrechnungen.csv).
  *
  * The master data is split into two files:
- * - the **ingredient list** (`Ingredient;Singular;Plural;Base Unit;Reorder Point`,
+ * - the **ingredient list** (`Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point`,
  *   one row per ingredient): the source of ingredient names, their display
- *   forms, their fixed base unit and their reorder point. The reorder point is
+ *   forms, their fixed base unit, their mandatory precision and their reorder
+ *   point. `Precision` is one of the five stored levels (`very low` … `very
+ *   high`); it is the mandatory ingredient level of the display preference
+ *   (docs/recipe_scaling_algorithm.md §4.1). The reorder point is
  *   the base-unit quantity definitely on stock directly after a shopping trip,
  *   independent of the meal plan (0 = only ever bought for a recipe; `inf` =
  *   always in stock, e.g. water). It is a mandatory cell, need not be a ladder
@@ -19,10 +22,8 @@
  *   and a half-filled pair is rejected. `Ingredient` stays the canonical key:
  *   recipes and the mappings file use it, never a display form. Ingredient-level
  *   fields (e.g. a category) can be added as further columns later without
- *   touching the mapping file. A file under an older header still parses and is
- *   upgraded on its next write: `Ingredient;Base Unit;Reorder Point` (before
- *   the display forms existed — the name is invariant) and `Ingredient;Base
- *   Unit` (before the reorder point existed — neutral 0);
+ *   touching the mapping file. Older headers are rejected: every ingredient
+ *   must state its precision;
  * - the **AU mappings** (`Ingredient;Additional Unit;Conversion Factor;Priority`,
  *   one row per ingredient–additional-unit mapping): a pure overlay on the
  *   list — an ingredient without additional units simply has no rows here.
@@ -56,6 +57,7 @@ import {
 } from './additionalUnitsData.js';
 import { parseCsvRows } from './csv.js';
 import type { IngredientMappings } from './ingredientRegistry.js';
+import { parsePrecisionLevel, PRECISION_LEVELS, type PrecisionLevel } from './precision.js';
 
 /** One ingredient-list row: the fixed base unit plus the ingredient's reorder point. */
 export interface IngredientListEntry {
@@ -78,11 +80,11 @@ export interface IngredientListEntry {
   /** Display form for a count other than one („2 Karotten“); see {@link singular}. */
   readonly plural?: string;
   /**
-   * Ingredient-level tolerance in [0, 1], or undefined to inherit the recipe /
-   * global default (docs/recipe_scaling_algorithm.md §4.1). Optional; the cell
-   * sits before the mandatory reorder point.
+   * Mandatory ingredient-level precision (docs/recipe_scaling_algorithm.md
+   * §4.1): one of the five stored levels. A quantity-level tag in a recipe can
+   * override it; there is no recipe-level or global default.
    */
-  readonly tolerance?: number;
+  readonly precision: PrecisionLevel;
 }
 
 /** The ingredient list: ingredient name → base unit + reorder point. */
@@ -91,30 +93,8 @@ export type IngredientList = Readonly<Record<string, IngredientListEntry>>;
 /** AU mappings keyed by ingredient name (file order; no priority). */
 export type IngredientMappingsByIngredient = Readonly<Record<string, readonly IngredientMapping[]>>;
 
-/** Exact header of the current ingredient list CSV. */
-const LIST_HEADER = 'Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point';
-
-/**
- * Header of the ingredient list before the Tolerance column existed. Such
- * files still parse (every ingredient inherits the recipe/global tolerance)
- * and are upgraded to LIST_HEADER on the next write.
- */
-const NO_TOLERANCE_LIST_HEADER = 'Ingredient;Singular;Plural;Base Unit;Reorder Point';
-
-/**
- * Header of the ingredient list as written before the display-form columns
- * existed. Such files still parse (see parseIngredientListCsv): every
- * ingredient is invariant, so the name serves for every count; the next write
- * upgrades them to LIST_HEADER.
- */
-const LEGACY_LIST_HEADER = 'Ingredient;Base Unit;Reorder Point';
-
-/**
- * Header of the ingredient list as written before the reorder-point column
- * existed. Such files still parse (see parseIngredientListCsv) and load with
- * the neutral reorder point 0; the next write upgrades them to LIST_HEADER.
- */
-const ANCIENT_LIST_HEADER = 'Ingredient;Base Unit';
+/** Exact header of the ingredient list CSV. Older headers are rejected. */
+const LIST_HEADER = 'Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point';
 
 /** Exact header of the AU mappings CSV. */
 const MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor';
@@ -147,8 +127,8 @@ function toNumber(cell: string): number {
 /**
  * Parses a reorder-point cell into a number: a non-negative base quantity or
  * the token `inf` for infinite stock, parsed case-insensitively. The cell is
- * mandatory — an empty cell is an error (an absent column, by contrast, is the
- * legacy case handled in parseIngredientListCsv).
+ * mandatory — an empty cell is an error, and an absent column is rejected by
+ * the header check in parseIngredientListCsv).
  */
 function parseReorderPointCell(cell: string, ingredient: string): number {
   if (cell === '') {
@@ -201,106 +181,39 @@ function parseDisplayForms(
   return { singular, plural };
 }
 
-/** One ingredient-list row's cells, named after their meaning in the matched header. */
-interface IngredientListCells {
-  readonly ingredient: string | undefined;
-  readonly singular: string | undefined;
-  readonly plural: string | undefined;
-  readonly bu: string | undefined;
-  readonly tolerance: string | undefined;
-  readonly reorderPoint: string | undefined;
-}
-
-/**
- * Reads one data row's cells by position. The current format
- * (`Ingredient;Singular;Plural;Base Unit;Reorder Point`) puts the display
- * forms in columns B and C — directly after the name — so the base unit and
- * the reorder point sit two cells further right than in the older layouts. An
- * older row has no display forms at all (its name counts as invariant) and, in
- * the oldest layout, no reorder-point cell either.
- */
-type ListLayout = 'current' | 'noTolerance' | 'legacy' | 'ancient';
-
-function readIngredientListRow(row: readonly string[], layout: ListLayout): IngredientListCells {
-  if (layout === 'current') {
-    const [ingredient, singular, plural, bu, tolerance, reorderPoint] = row;
-    return { ingredient, singular, plural, bu, tolerance, reorderPoint };
-  }
-  if (layout === 'noTolerance') {
-    const [ingredient, singular, plural, bu, reorderPoint] = row;
-    return { ingredient, singular, plural, bu, tolerance: undefined, reorderPoint };
-  }
-  if (layout === 'legacy') {
-    const [ingredient, bu, reorderPoint] = row;
-    return {
-      ingredient,
-      singular: undefined,
-      plural: undefined,
-      bu,
-      tolerance: undefined,
-      reorderPoint,
-    };
-  }
-  const [ingredient, bu] = row;
-  return {
-    ingredient,
-    singular: undefined,
-    plural: undefined,
-    bu,
-    tolerance: undefined,
-    reorderPoint: undefined,
-  };
-}
-
-/** Parses the optional Tolerance cell: empty = undefined, otherwise [0, 1]. */
-function parseToleranceCell(cell: string | undefined, ingredient: string): number | undefined {
-  if (cell === undefined || cell === '') return undefined;
-  const value = toNumber(cell);
-  if (!Number.isFinite(value) || value < 0 || value > 1) {
+/** Parses the mandatory Precision cell: one of the five stored levels. */
+function parsePrecisionCell(cell: string | undefined, ingredient: string): PrecisionLevel {
+  if (cell === undefined || cell.trim() === '') {
     throw new Error(
-      `Zutaten-Liste: ungültige Toleranz "${cell}" für "${ingredient}" (erlaubt: Zahl von 0 bis 1 oder leer).`,
+      `Zutaten-Liste: leerer Precision-Wert für "${ingredient}" ` +
+        `(erlaubt: ${PRECISION_LEVELS.join(', ')}).`,
     );
   }
-  return value;
+  const precision = parsePrecisionLevel(cell);
+  if (precision === undefined) {
+    throw new Error(
+      `Zutaten-Liste: ungültiger Precision-Wert "${cell}" für "${ingredient}" ` +
+        `(erlaubt: ${PRECISION_LEVELS.join(', ')}).`,
+    );
+  }
+  return precision;
 }
 
 /**
  * Parses the ingredient list CSV
- * (`Ingredient;Singular;Plural;Base Unit;Reorder Point`) into name → base
- * unit + reorder point + display forms. Throws on malformed input (empty or
- * duplicate names, unknown base unit, missing or invalid reorder point,
- * half-filled display-form pair); the returned record preserves the file
- * order.
- *
- * A file under an older header still parses and gains the missing columns on
- * its next serialization: `Ingredient;Base Unit;Reorder Point` (display forms
- * before they existed — the names count as invariant) and `Ingredient;Base
- * Unit` (reorder point before it existed — the neutral 0). The older layouts
- * are not a prefix of the current one (the display forms sit in columns B and
- * C), so the matched header decides how the cells are read.
+ * (`Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point`) into name →
+ * base unit + mandatory precision + reorder point + display forms. Throws on
+ * malformed input (empty or duplicate names, unknown base unit, missing or
+ * invalid precision, missing or invalid reorder point, half-filled display-form
+ * pair); the returned record preserves the file order. Older headers are
+ * rejected — precision is mandatory, so a file without the column must be
+ * migrated.
  */
 export function parseIngredientListCsv(text: string): IngredientList {
-  const { header, rows } = parseCsvRows(text, [
-    LIST_HEADER,
-    NO_TOLERANCE_LIST_HEADER,
-    LEGACY_LIST_HEADER,
-    ANCIENT_LIST_HEADER,
-  ]);
-  const headerText = header.join(';');
-  const layout: ListLayout =
-    headerText === LIST_HEADER
-      ? 'current'
-      : headerText === NO_TOLERANCE_LIST_HEADER
-        ? 'noTolerance'
-        : headerText === LEGACY_LIST_HEADER
-          ? 'legacy'
-          : 'ancient';
+  const { rows } = parseCsvRows(text, [LIST_HEADER]);
   const result: Record<string, IngredientListEntry> = {};
   for (const row of rows) {
-    const { ingredient, singular, plural, bu, tolerance, reorderPoint } = readIngredientListRow(
-      row,
-      layout,
-    );
+    const [ingredient, singular, plural, bu, precision, reorderPoint] = row;
     if (ingredient === undefined || ingredient === '' || bu === undefined || bu === '') {
       throw new Error(`Zutaten-Liste: leere Zutat oder Basis-Einheit in Zeile "${row.join(';')}".`);
     }
@@ -310,14 +223,11 @@ export function parseIngredientListCsv(text: string): IngredientList {
     if (result[ingredient] !== undefined) {
       throw new Error(`Zutaten-Liste: doppelte Zutat "${ingredient}".`);
     }
-    // An older row has no reorder-point cell in the oldest layout at all
-    // (neutral 0 until the next write) and no display forms (invariant name).
-    const parsedTolerance = parseToleranceCell(tolerance, ingredient);
     result[ingredient] = {
       bu,
+      precision: parsePrecisionCell(precision, ingredient),
       reorderPoint:
         reorderPoint === undefined ? 0 : parseReorderPointCell(reorderPoint, ingredient),
-      ...(parsedTolerance !== undefined ? { tolerance: parsedTolerance } : {}),
       ...parseDisplayForms(singular, plural, ingredient),
     };
   }
@@ -337,7 +247,7 @@ export function serializeIngredientListCsv(list: IngredientList): string {
   for (const [ingredient, entry] of Object.entries(list)) {
     lines.push(
       `${ingredient};${entry.singular ?? ''};${entry.plural ?? ''};${entry.bu};` +
-        `${entry.tolerance === undefined ? '' : entry.tolerance};` +
+        `${entry.precision};` +
         `${formatReorderPointCell(entry.reorderPoint)}`,
     );
   }
@@ -455,8 +365,8 @@ export function mergeIngredientMasterData(
   for (const [ingredient, entry] of Object.entries(list)) {
     result[ingredient] = {
       bu: entry.bu,
+      precision: entry.precision,
       reorderPoint: entry.reorderPoint,
-      ...(entry.tolerance !== undefined ? { tolerance: entry.tolerance } : {}),
       // The display forms travel into the registry unchanged; an invariant
       // name gets neither key (see displayFormFields).
       ...displayFormFields(entry),
@@ -481,7 +391,7 @@ export function splitIngredientMasterData(mappings: IngredientMappings): {
     list[ingredient] = {
       bu: entry.bu,
       reorderPoint: entry.reorderPoint,
-      ...(entry.tolerance !== undefined ? { tolerance: entry.tolerance } : {}),
+      precision: entry.precision,
       ...displayFormFields(entry),
     };
     // Bare ingredients have no rows in the mappings file — they live in the

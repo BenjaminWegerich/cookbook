@@ -30,9 +30,9 @@
  *   starting on the size the recipe is written in, exactly like "Einplanen", so
  *   an untouched size replaces the entry with the dish as it stands;
  * - below the size input, the recipe's reference ingredients scaled to the
- *   choice — the same readout the meal-plan overlay shows, and the sanity check
- *   described in docs/recipe_structure.md ("the reference ingredient's amount
- *   moves by the same steps");
+ *   choice, one per line — the same readout the meal-plan overlay shows, and
+ *   the sanity check described in docs/recipe_structure.md ("the reference
+ *   ingredient's amount moves by the same steps");
  * - "Abbrechen" closes the overlay without writing; "Eintrag ersetzen" hands the
  *   chosen recipe and size to App, which builds the Keep line and performs the
  *   write — only App knows the entry's exact text, the recipe's export file and
@@ -58,8 +58,9 @@ import {
 } from '@cookbook/core';
 
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
+import ReferenceReadout from './ReferenceReadout';
 import ValueStepper from './ValueStepper';
-import { safeRenderAQS } from './ingredientDisplay';
+import { safeRenderAQSDisplay } from './ingredientDisplay';
 import { CloseIcon, SearchIcon } from './icons';
 
 /**
@@ -275,23 +276,16 @@ function ReplaceRecipeSheet({
    * the same readout the meal-plan overlay shows below its size input.
    */
   const writtenSize = details === null ? undefined : isDish ? details.servings : details.yield;
-  const factor =
-    writtenSize === undefined ? 1 : (isDish ? servings : effectiveYield) / writtenSize;
+  const factor = writtenSize === undefined ? 1 : (isDish ? servings : effectiveYield) / writtenSize;
   const references =
     details === null
       ? []
       : details.ingredients
           .filter((ingredient) => ingredient.reference)
           .map((ingredient) =>
-            safeRenderAQS(
-              ingredient.name,
-              ingredient.quantity * factor,
-              ingredient.unit,
-              {
-                ...(ingredient.tolerance !== undefined ? { quantity: ingredient.tolerance } : {}),
-                ...(details.tolerance !== undefined ? { recipe: details.tolerance } : {}),
-              },
-            ),
+            safeRenderAQSDisplay(ingredient.name, ingredient.quantity * factor, ingredient.unit, {
+              ...(ingredient.precision !== undefined ? { quantity: ingredient.precision } : {}),
+            }),
           );
 
   /**
@@ -473,7 +467,7 @@ function ReplaceRecipeSheet({
         {/* The reference ingredients, scaled to the choice — the same readout
             the meal-plan overlay shows, in the same shared style. Deliberately
             no caption: it is a readout of the amounts, not a form field. */}
-        {references.length > 0 && <p className="meal-plan-reference">{references.join(', ')}</p>}
+        <ReferenceReadout items={references} />
 
         {error !== null && (
           <p className="replace-recipe-error" role="alert">

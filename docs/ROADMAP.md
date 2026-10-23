@@ -16,11 +16,11 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
 - [x] Replace the quantity ladder for recipes: the optimizer in
       `packages/core/src/quantityOptimizer.ts` selects BQ/AQ from
       `docs/BQs.csv` + `docs/AQs.csv`; recipes store the unrounded target;
-      tolerance is stored at recipe/ingredient/quantity level; the editor,
-      recipe view, meal plan and HTML export use exact scaling factors and the
-      5-chip tolerance control. Scheme columns moved into `AQs.csv`; per-ingredient
-      priorities were removed and the master data enforces one shopping unit per
-      ingredient.
+      precision is mandatory at ingredient level with an optional per-quantity
+      override (no recipe/global level); the editor, recipe view, meal plan and
+      HTML export use exact scaling factors and the 5-chip precision control.
+      Scheme columns moved into `AQs.csv`; per-ingredient priorities were removed
+      and the master data enforces one shopping unit per ingredient.
 - [ ] Remove the now-unused legacy ladder modules
       (`packages/core/src/ladder.ts`, `ladderData.ts`), `docs/standard_numbers.csv`
       and `scripts/generate-ladder.mjs`, and delete the remaining ladder tests.

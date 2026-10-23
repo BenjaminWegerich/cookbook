@@ -3,7 +3,7 @@
 > Defines how an ingredient's target amount is displayed: the optimizer chooses a
 > **base quantity** (BQ, metric `g`/`ml`) and optionally an **additional quantity**
 > (AQ, a household or packaging unit). Related documents:
-> [quantity_scaling.md](quantity_scaling.md) (scaling, optimizer, tolerance),
+> [quantity_scaling.md](quantity_scaling.md) (scaling, optimizer, precision),
 > [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md) (the scoring model),
 > [AQs.csv](AQs.csv) / [BQs.csv](BQs.csv) (the allowed values),
 > [recipe_structure.md](recipe_structure.md) (recipe model).
@@ -23,8 +23,8 @@
   may display as `1 Becher (500 g)`). That is deliberate: the display is the
   practical reading, while `V0` stays the exact target. If no candidate fits, the
   plain base form with `V0` is shown.
-- The **tolerance** (`λ`, five chips) shifts the balance between metric accuracy
-  and practical measures; it never changes `V0` (see
+- The **precision** (five levels, `very low` … `very high`) shifts the balance
+  between metric accuracy and practical measures; it never changes `V0` (see
   [quantity_scaling.md](quantity_scaling.md) §5).
 
 ## 2. Terminology
@@ -67,7 +67,7 @@ The display logic is driven by four repository tables, compiled into
 
 The ingredient list ([ingredients.csv](ingredients.csv) /
 `zutaten.csv`) supplies the fixed base unit, the display forms, the optional
-ingredient-level tolerance and the reorder point. An ingredient without mappings
+mandatory ingredient-level precision and the reorder point. An ingredient without mappings
 (e.g. Cashews) has no AQ and always uses the base form.
 
 ### 3.1 Shopping unit
@@ -230,18 +230,19 @@ remains in the master-data form; it is not part of recipe scaling.
 - AQ notation: proper fractions use the Unicode glyphs (`⅒ ⅑ ⅛ ⅙ ¼ ⅓ ⅜ ⅖ ½ ⅗ ⅔ ¾ ⅝ ⅚ ⅞`);
   a mixed number is integer + U+202F + glyph (`1 ¼`); whole counts stay as they
   are. The cooking view uses the slash form (`1/2`, `1 1/4`).
-- A tolerance in [0, 1] can be set per quantity, per ingredient and per recipe;
-  the global default is 0.5. See [quantity_scaling.md](quantity_scaling.md) §5
-  for the cascade and the storage format.
+- Precision can be set per quantity (optional) and per ingredient (mandatory);
+  there is no recipe-level or global default. See
+  [quantity_scaling.md](quantity_scaling.md) §5 for the cascade and the storage
+  format.
 
 ## 9. Relationship to other documents
 
-- [quantity_scaling.md](quantity_scaling.md) — scaling, the optimizer, tolerance,
+- [quantity_scaling.md](quantity_scaling.md) — scaling, the optimizer, precision,
   BQ decade rule, yields and export views.
 - [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md) — the scoring
   formulas and candidate rules.
 - [AQs.csv](AQs.csv) / [BQs.csv](BQs.csv) — the allowed values and schemes.
 - [recipe_structure.md](recipe_structure.md) — the recipe model and the stored
   target `V0`.
-- [storage_format.md](storage_format.md) — the canonical fields and the tolerance
+- [storage_format.md](storage_format.md) — the canonical fields and the precision
   annotations.

@@ -21,7 +21,6 @@ description: …            (optional, ein Absatz oder eine Titel-Fortsetzung)
 servings: 4               (nur finished_dish)
 reference:                (optional, beide Typen)
   - Reis
-tolerance: 0.5            (optional, beide Typen — s. Toleranz)
 prep_time: 30 min
 total_time: 45 min        (optional, nur wenn größer als prep_time)
 theme:                    (optional, beide Typen — s. u.)
@@ -92,26 +91,26 @@ Schritte — sonst nichts:
 - Jede Zeile und jede `{{…}}`-Angabe braucht eine positive Zahl; mit Einheit in g/ml, ohne
   Einheit eine Stückzahl (`{{1/2}}`, `{{1+1/4}}` oder `{{0.5}}`). Mengen im üblichen Rahmen.
 
-## Toleranz
-- `tolerance` (optional, 0 … 1) ist eine **Darstellungspräferenz**, kein Skalierungsfaktor:
-  Sie entscheidet nur, ob die App eher exakte Metermengen (0) oder praktische Haushaltsmaße
-  (1) zeigt. `tolerance: 1` bedeutet **nicht**, dass Mengen halbiert oder verdoppelt werden
-  dürfen; der Zielwert bleibt unverändert.
-- Lass `tolerance` im Zweifel **weg** (dann gilt der Standard 0.5). Setze sie auf Rezeptebene
-  nur, wenn das ganze Rezept erkennbar eine Richtung hat (z. B. ein sehr präzises Backrezept
-  → 0.25; ein lockeres Alltagsgericht → 0.75).
-- Setze sie **nicht** für jede Zutat und nicht für jede Zeile. Eine Zeilen-Toleranz ist die
-  Ausnahme für eine einzelne Menge, die bewusst anders behandelt werden soll:
-  `- 250 g Mehl {tolerance: 0.8}`. Rezept- und besonders Zeilen-Toleranzen sparsam einsetzen;
-  die Zutaten-Stammdaten können bereits passende Toleranzen enthalten, die du nicht wiederholst.
+## Genauigkeit
+- Die **Genauigkeit** ist eine **Darstellungspräferenz**, kein Skalierungsfaktor: Sie
+  entscheidet nur, ob die App eher exakte metrische Mengen (`very high`) oder praktische
+  Haushaltsmaße (`very low`) zeigt. Keine Stufe erlaubt es, Mengen zu halbieren oder zu
+  verdoppeln; der Zielwert bleibt unverändert.
+- Es gibt **keine Rezept- und keine globale Stufe** mehr. Die Genauigkeit steht verpflichtend
+  in den Zutaten-Stammdaten; du schreibst sie **nicht** ins Frontmatter.
+- Eine Zeilen-Genauigkeit ist die Ausnahme für eine einzelne Menge, die bewusst anders
+  behandelt werden soll: `- 250 g Mehl {precision: high}`. Setze sie sparsam ein — die
+  Stammdaten enthalten bereits passende Werte, die du nicht wiederholst.
+- Erlaubte Werte: `very low` (praktisch), `low`, `medium`, `high`, `very high` (exakt).
 - Die App berechnet BQ/AQ (Anzeigewerte) selbst. Schreibe **nie** eine zusätzliche Einheit
   oder einen Anzeigewert in die Zeile; schreibe nur den Zielwert.
 
 ## Zutatenzeilen
 - Grammatik (Menge zuerst): `- 250 g Reis` = `MENGE EINHEIT NAME`. Name ohne `|`, einzeilig.
-  Optional darf am Zeilenende eine Toleranz stehen: `- 250 g Reis {tolerance: 0.8}`.
+  Optional darf am Zeilenende eine Genauigkeit stehen: `- 250 g Reis {precision: high}`.
 - Inline-`{{…}}` in der Schritt-Prosa für skalierte Anzeigewerte, die nicht in die
-  Zutatenliste zählen: `{{1500 ml Wasser}}`, `{{100 g}}`, `{{1/2}}` (Stückzahl). Sparsam für
+  Zutatenliste zählen: `{{1500 ml Wasser}}`, `{{100 g}}`, `{{1/2}}` (Stückzahl). Eine
+  Mengenangabe ohne Zutat (z. B. `{{1/2}}`) darf optional `|precision: high` tragen. Sparsam für
   Wasser/Salz/Stückzahlen; ein Name braucht immer eine Einheit.
 - Die Zutatenliste wird aus allen Zeilen abgeleitet (du schreibst sie nirgends): gleicher
   Name einmal mit Gesamtmenge an der ersten Fundstelle; gleicher Name mit verschiedener

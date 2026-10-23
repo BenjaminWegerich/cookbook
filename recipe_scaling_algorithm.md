@@ -51,33 +51,51 @@ Links ingredients to compatible additional units and defines the physical base u
 
 ---
 
-## 4. The "Tolerance" Setting
+## 4. The "Precision" Setting (Genauigkeit)
 
-Users or recipes can adjust the balance between measurement precision and convenience via a normalized slider (or chips):
-$$\lambda \in [0.0, 1.0]$$
-* **$\lambda = 0.0$ ("Prefer Exact Quantities"):** Prioritizes recipe fidelity; tolerates awkward numbers and metric-only output.
-* **$\lambda = 1.0$ ("Prefer Practical Quantities"):** Prioritizes clean numbers and household measures; tolerates culinary deviation.
+Users adjust the balance between **measurement precision and convenience** via five levels:
+
+| Level | Numeric position `g` | Meaning |
+| :--- | :---: | :--- |
+| `very low` | 0.00 | Prefer practical household/package measures; tolerate culinary deviation. |
+| `low` | 0.25 | Lean practical, but keep amounts close. |
+| `medium` | 0.50 | Balanced. |
+| `high` | 0.75 | Lean exact, but accept a clean household reading when close. |
+| `very high` | 1.00 | Prefer exact metric amounts; tolerate awkward numbers and metric-only output. |
+
+Precision is a **display preference**, never a scale factor: it changes which BQ/AQ candidate wins, not `V0`.
 
 ### 4.1 Resolution Cascade
-The effective slider value $\lambda$ is resolved using a hierarchical fallback:
-$$\lambda = \lambda_{\text{quantity}} \;\mathbf{??}\; \lambda_{\text{ingredient}} \;\mathbf{??}\; \lambda_{\text{recipe}} \;\mathbf{??}\; \lambda_{\text{global\_default}}$$
+The effective precision `g` is resolved through two levels:
+
+$$
+g = g_{\text{quantity}} \;\mathbf{??}\; g_{\text{ingredient}}
+$$
+
+- **`quantity`** (optional): a per-row or per-artifact override, stored in the recipe file.
+- **`ingredient`** (mandatory): the ingredient master-data value. Every ingredient row in `zutaten.csv` states one of the five levels.
+- **No recipe-level and no global default.** Only values that have no applicable level at all — unitless inline artifacts (no ingredient) and unregistered sub-recipes (no master-data row) — use the internal neutral level `medium`. It is never written to a file and is not a user setting.
 
 ### 4.2 Dynamic Weight Interpolation
-The system defines two boundary weight vectors: $\mathbf{W}_{\text{exact}}$ ($\lambda = 0$) and $\mathbf{W}_{\text{practical}}$ ($\lambda = 1$).
+The system defines two boundary weight vectors: $\mathbf{W}_{\text{practical}}$ at `very low` (`g = 0`) and $\mathbf{W}_{\text{exact}}$ at `very high` (`g = 1`).
 
-The runtime weight vector $\mathbf{W}(\lambda)$ is calculated via linear interpolation:
-$$\mathbf{W}(\lambda) = (1 - \lambda) \cdot \mathbf{W}_{\text{exact}} + \lambda \cdot \mathbf{W}_{\text{practical}}$$
+The runtime weight vector $\mathbf{W}(g)$ is calculated via linear interpolation:
+$$
+\mathbf{W}(g) = (1 - g) \cdot \mathbf{W}_{\text{practical}} + g \cdot \mathbf{W}_{\text{exact}}
+$$
 
-Because both boundary vectors sum to $1.0$, $\mathbf{W}(\lambda)$ is guaranteed to sum to $1.0$ for any $\lambda \in [0, 1]$.
+Because both boundary vectors sum to $1.0$, $\mathbf{W}(g)$ is guaranteed to sum to $1.0$ for every level.
 
 #### System Parameter Defaults:
 
-| Weight Component | Exact Boundary ($\lambda = 0.0$) | Practical Boundary ($\lambda = 1.0$) | Purpose |
+| Weight Component | Practical Boundary (`very low`, `g = 0`) | Exact Boundary (`very high`, `g = 1`) | Purpose |
 | :--- | :---: | :---: | :--- |
-| **$W_{\text{acc}}$** | **$0.70$** | **$0.20$** | Importance of matching $V_0$ |
-| **$W_{\text{conflict}}$** | **$0.20$** | **$0.30$** | Penalty for text contradiction |
-| **$W_{\text{round}}$** | **$0.05$** | **$0.35$** | Importance of clean numbers |
-| **$W_{\text{missing}}$** | **$0.05$** | **$0.15$** | Penalty for omitting an AQ |
+| **$W_{\text{acc}}$** | **$0.20$** | **$0.70$** | Importance of matching $V_0$ |
+| **$W_{\text{conflict}}$** | **$0.30$** | **$0.20$** | Penalty for text contradiction |
+| **$W_{\text{round}}$** | **$0.35$** | **$0.05$** | Importance of clean numbers |
+| **$W_{\text{missing}}$** | **$0.15$** | **$0.05$** | Penalty for omitting an AQ |
+
+> This reverses the old tolerance scale: a **higher** value now means **more precision** (more metric accuracy), not more practical output.
 
 ### 4.3 Remaining System Parameters
 Beyond the weights, two system-level constants are required:

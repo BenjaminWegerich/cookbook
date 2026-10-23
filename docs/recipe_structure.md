@@ -30,10 +30,12 @@
 - A finished dish's **servings** is one of the fixed counts `1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 22, 25, 28, 30` (the old integer standard numbers). Example: 6, 10 or 12 people — not 11. The HTML export pre-bakes one view per count.
 - An ingredient recipe's **yield** is any positive number in its base unit (e.g. `500 ml`). The export bakes the allowed BQ values within ±1 decade of it; the app opens on the nearest BQ view when the written yield is not a BQ value. See [quantity scaling](quantity_scaling.md) §7.
 
-### Tolerance (optional)
+### Precision (Genauigkeit)
 
-- A recipe can carry `tolerance` in its front matter: a number from `0` (very exact) to `1` (very practical). It is a **display preference**, not a scale factor; it never changes a target amount.
-- Leave it unset to inherit the ingredient-level setting or the global default `0.5`. Use recipe-level tolerance only when the whole recipe has a clear direction; use per-row overrides (`{tolerance: 0.8}`) only for exceptions. The five UI chips are `0`, `0.25`, `0.5`, `0.75`, `1`.
+- Precision is a **display preference**, not a scale factor; it never changes a target amount. A higher value prefers exact metric amounts, a lower value practical household/package measures.
+- Every ingredient states its precision in the **ingredient master data** — the level is mandatory there. There is **no recipe-level value and no global default**; a recipe's front matter must not contain a precision field.
+- A single ingredient row may override the ingredient's value with a trailing tag: `- 250 g Reis {precision: high}`. Use it only for exceptions.
+- The five levels are `very low`, `low`, `medium`, `high`, `very high`.
 - See [quantity_scaling.md](quantity_scaling.md) §5 for the cascade and the storage format.
 
 ### Total Time (optional)
@@ -71,14 +73,14 @@
   - base quantity specification (required): the amount in the family base unit (g or ml — kg/l exist only in display, see [storage_format.md](storage_format.md) §4).
 - The base quantity is mandatory for every ingredient, without exception. Ingredients without a meaningful quantity (e.g., salt "to taste") are either given a fixed amount or omitted from the recipe.
 - The base quantity is the **unrounded target `V0`**: any positive finite number is allowed (`250`, `400`, `433.33`, `0.5`). There is no ladder of standard numbers anymore.
-- The author never types a second unit. All additional quantity specifications (e.g., Becher, EL, Packung, Stück) are computed automatically at display time from the ingredient–unit mappings, the number schemes and the tolerance (see [additional_quantity_specifications.md](additional_quantity_specifications.md)). The app chooses the best BQ/AQ; per-ingredient priorities do not exist.
+- The author never types a second unit. All additional quantity specifications (e.g., Becher, EL, Packung, Stück) are computed automatically at display time from the ingredient–unit mappings, the number schemes and the precision (see [additional_quantity_specifications.md](additional_quantity_specifications.md)). The app chooses the best BQ/AQ; per-ingredient priorities do not exist.
 - Display examples (new seed):
   - Target: "500 g Joghurt" → displayed as "1 Becher Joghurt (500 g)" (1 Becher = 500 g).
   - Target: "250 g Mehl" → displayed as "250 g Mehl" because the only pack is `Packung (unteilbar)` (integers only) and its ¼ is not allowed; the metric target wins.
   - Target: "1500 ml Wasser" → displayed as "1,5 l Wasser" (no fitting additional unit for water; the base form switches to l at 1000).
   - Target: "15 ml Zitronensaft" → displayed as "5 TL Zitronensaft (15 ml)" with the seed data (the spoons win over the approximate lemon mapping); a different mapping/scheme may show a fraction of a lemon instead.
 - Display conventions:
-  - The additional quantity specification is shown only if a scheme-allowed AQ candidate and a BQ candidate fit the tolerance search window; otherwise the metric base form alone is shown (see [additional_quantity_specifications.md](additional_quantity_specifications.md)).
+  - The additional quantity specification is shown only if a scheme-allowed AQ candidate and a BQ candidate fit the candidate search window; otherwise the metric base form alone is shown (see [additional_quantity_specifications.md](additional_quantity_specifications.md)).
   - The order, as well as punctuation (e.g., parentheses), is defined by each additional unit's display arrangement.
   - The BQ and AQ are display values chosen by the optimizer; the stored target `V0` is not rewritten. If no candidate fits, the display shows `V0` in the plain base form.
 - Ingredients can be recipes in their own right (example: "Béchamelsauce" as an ingredient for "Lasagne").

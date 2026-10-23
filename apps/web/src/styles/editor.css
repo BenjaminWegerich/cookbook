@@ -360,17 +360,11 @@
   font-weight: 600;
 }
 
-/* The tolerance chips plus the optional „Standard“ reset. */
-.tolerance-control {
+/* The mandatory precision chips. */
+.precision-control {
   display: grid;
   gap: var(--space-2);
   justify-items: start;
-}
-
-.tolerance-reset {
-  padding: 0;
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
 }
 
 /* ---- Step editor (contenteditable with artifacts) -------------------------- */

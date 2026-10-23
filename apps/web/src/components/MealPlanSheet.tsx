@@ -30,12 +30,12 @@
  * - the size input is the editor's own control for the recipe type — the
  *   serving chips for a finished dish, the ValueStepper (suggested chips +
  *   baked views) for an ingredient recipe;
- * - below it one small muted line shows the recipe's reference ingredients
- *   scaled to the selected size: the sanity check described in
+ * - below it a small muted readout lists the recipe's reference ingredients,
+ *   one per line, scaled to the selected size: the sanity check described in
  *   docs/recipe_structure.md ("the reference ingredient's amount moves by the
  *   same steps"). It carries the amounts only, without a caption (decided with
  *   the user) — it is a readout, not another form field, and the overview
- *   already names the recipe. The line is omitted when the recipe defines no
+ *   already names the recipe. The readout is omitted when the recipe defines no
  *   reference;
  * - "Abbrechen" closes the overlay without writing. The writing button hands the
  *   caller the chosen size; App builds the Keep line there, because only App
@@ -81,8 +81,9 @@ import {
 } from '@cookbook/core';
 
 import { CheckBoxIcon } from './icons';
+import ReferenceReadout from './ReferenceReadout';
 import ValueStepper from './ValueStepper';
-import { safeRenderAQS } from './ingredientDisplay';
+import { safeRenderAQSDisplay } from './ingredientDisplay';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /**
@@ -183,8 +184,7 @@ function MealPlanSheet({
   const bakedYields =
     isDish || recipe.yield === undefined ? null : yieldViewQuantities(recipe.yield);
   /** The view the recipe opens at: the written yield when it is a BQ value. */
-  const defaultYield =
-    recipe.yield === undefined ? initialYield : defaultYieldView(recipe.yield);
+  const defaultYield = recipe.yield === undefined ? initialYield : defaultYieldView(recipe.yield);
 
   /** Selected serving count (finished dish). */
   const [servings, setServings] = useState(initialServings);
@@ -225,18 +225,14 @@ function MealPlanSheet({
 
   // Reference ingredients scaled by the same factor as everything else
   // (docs/recipe_structure.md): the display is the sanity check of the choice.
+  // The readout keeps an arrangement note's brackets, so it takes the display
+  // runs rather than one pre-joined string.
   const references = recipe.ingredients
     .filter((ingredient) => ingredient.reference)
     .map((ingredient) =>
-      safeRenderAQS(
-        ingredient.name,
-        ingredient.quantity * factor,
-        ingredient.unit,
-        {
-          ...(ingredient.tolerance !== undefined ? { quantity: ingredient.tolerance } : {}),
-          ...(recipe.tolerance !== undefined ? { recipe: recipe.tolerance } : {}),
-        },
-      ),
+      safeRenderAQSDisplay(ingredient.name, ingredient.quantity * factor, ingredient.unit, {
+        ...(ingredient.precision !== undefined ? { quantity: ingredient.precision } : {}),
+      }),
     );
 
   /**
@@ -325,10 +321,11 @@ function MealPlanSheet({
           </div>
         )}
 
-        {/* The reference ingredients, scaled to the choice. Deliberately no
-            caption: the line is a readout of the amounts, not a form field, and
-            a label would repeat what the recipe overview already said. */}
-        {references.length > 0 && <p className="meal-plan-reference">{references.join(', ')}</p>}
+        {/* The reference ingredients, scaled to the choice, one per line.
+            Deliberately no caption: the readout holds amounts, not form
+            fields, and a label would repeat what the recipe overview already
+            said. */}
+        <ReferenceReadout items={references} />
 
         {error !== null && (
           <p className="meal-plan-error" role="alert">

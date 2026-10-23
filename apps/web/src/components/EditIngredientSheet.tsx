@@ -7,7 +7,7 @@
  * - the reorder point („Vorrat“), with the same picker and the same live
  *   preview as the create sheet;
  * - the additional-unit mappings (a factor per unit; no per-ingredient priority);
- * - the optional ingredient-level tolerance (five chips).
+ * - the mandatory ingredient-level precision (five chips).
  *
  * The canonical name and the base unit are deliberately not fields. Recipes,
  * inline mentions and the mappings file key on the name; the base unit decides
@@ -29,12 +29,12 @@
 
 import { useRef, useState } from 'react';
 
-import { resolveReorderPoint, type IngredientEntry } from '@cookbook/core';
+import { resolveReorderPoint, type IngredientEntry, type PrecisionLevel } from '@cookbook/core';
 
 import ArrangementLine from './ArrangementLine';
 import IngredientMappingsField from './IngredientMappingsField';
 import QuantityInput from './QuantityInput';
-import ToleranceChips from './ToleranceChips';
+import PrecisionChips from './PrecisionChips';
 import {
   buildMappingRows,
   displayFormsFromValues,
@@ -89,8 +89,8 @@ function EditIngredientSheet({
   const [factors, setFactors] = useState<Record<string, string>>(
     () => mappingFormFromEntry(entry).factors,
   );
-  /** Ingredient-level tolerance; undefined = inherit the recipe / global value. */
-  const [tolerance, setTolerance] = useState<number | undefined>(entry.tolerance);
+  /** Mandatory ingredient-level precision. */
+  const [precision, setPrecision] = useState<PrecisionLevel>(entry.precision);
   /**
    * True after the first failed save attempt. Before it, the form is pristine
    * (the entry is valid by construction), so no error is shown; after it, the
@@ -136,7 +136,7 @@ function EditIngredientSheet({
     singular: singular.trim() === '' ? undefined : singular.trim(),
     plural: plural.trim() === '' ? undefined : plural.trim(),
     entries,
-    ...(tolerance !== undefined ? { tolerance } : {}),
+    precision,
   };
 
   /** The reorder point as it will read and be stored (exact units snap it). */
@@ -176,7 +176,7 @@ function EditIngredientSheet({
       plural: forms.plural,
       reorderPoint: reorder.storedValue,
       entries,
-      tolerance,
+      precision,
     });
   };
 
@@ -289,19 +289,17 @@ function EditIngredientSheet({
           )}
         </div>
 
-        {/* Ingredient-level tolerance: a display preference, not a scale. */}
+        {/* Ingredient-level precision: a display preference, not a scale. */}
         <div className="field">
-          <span className="field-label">Toleranz</span>
-          <p className="field-hint">
-            Standard erbt die Rezept- bzw. globale Einstellung.
-          </p>
-          <ToleranceChips
-            value={tolerance}
+          <span className="field-label">Genauigkeit</span>
+          <p className="field-hint">Standard erbt die Rezept- bzw. globale Einstellung.</p>
+          <PrecisionChips
+            value={precision}
             onChange={(next) => {
-              setTolerance(next);
+              setPrecision(next);
               markEdited();
             }}
-            ariaLabel="Toleranz der Zutat"
+            ariaLabel="Genauigkeit der Zutat"
           />
         </div>
 

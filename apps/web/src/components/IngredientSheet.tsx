@@ -48,7 +48,6 @@ import {
   renderAQSDisplay,
   type Ingredient,
   type TextArtifact,
-  type ToleranceContext,
   type Unit,
 } from '@cookbook/core';
 
@@ -95,8 +94,6 @@ interface IngredientSheetProps {
   prefill?: { name: string; quantity: number };
   /** The collection's ingredient recipes, offered in the name autofill. */
   ingredientRecipes: IngredientRecipeOption[];
-  /** The recipe-level tolerance, for the live preview. */
-  tolerance?: ToleranceContext;
   /**
    * Called with the resulting value; `action 'remove'` only in row-edit mode.
    * In inline modes the name and/or the unit may be absent; inline-edit
@@ -118,7 +115,6 @@ function IngredientSheet({
   initial,
   prefill,
   ingredientRecipes,
-  tolerance,
   onConfirm,
   onClose,
   onCreateNewIngredient,
@@ -188,12 +184,16 @@ function IngredientSheet({
 
   /**
    * The unitless preview uses the same “BQ only” optimizer branch as the
-   * export, with the recipe / artifact tolerance. A value without a fitting AQ
-   * candidate stays a plain decimal.
+   * export, with the optional artifact-level precision. A value without a
+   * fitting AQ candidate stays a plain decimal.
    */
   const unitlessPreview = (): string => {
-    const result = optimizeUnitless(quantity, { recipe: tolerance?.recipe });
-    return result.notation === undefined ? formatDecimal(result.value) : formatAQValue(result.value);
+    const result = optimizeUnitless(quantity, {
+      ...(initial?.precision !== undefined ? { quantity: initial.precision } : {}),
+    });
+    return result.notation === undefined
+      ? formatDecimal(result.value)
+      : formatAQValue(result.value);
   };
 
   /**
@@ -418,7 +418,9 @@ function IngredientSheet({
           <p className="aqs-preview" aria-live="polite">
             {trimmedName !== '' && validName ? (
               <ArrangementLine
-                display={renderAQSDisplay(trimmedName, quantity, unit ?? 'g', tolerance)}
+                display={renderAQSDisplay(trimmedName, quantity, unit ?? 'g', {
+                  ...(initial?.precision !== undefined ? { quantity: initial.precision } : {}),
+                })}
               />
             ) : unit !== undefined ? (
               formatBQ(quantity, unit)

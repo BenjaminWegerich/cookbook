@@ -37,7 +37,7 @@ import { parseDocument } from 'yaml';
 
 import { parseArtifactContent, parseIngredientPhrase, replaceArtifacts } from './artifacts.js';
 import { isServingCount } from '../servingSizes.js';
-import { isTolerance } from '../tolerance.js';
+import { parsePrecisionLevel, PRECISION_LEVELS, type PrecisionLevel } from '../precision.js';
 import { deriveIngredients } from './ingredientList.js';
 import { isHexColor, THEME_FONT_SHORTLIST } from './theme.js';
 import { RecipeParseError } from './types.js';
@@ -65,8 +65,8 @@ const INVALID_TITLE_CHARS = /[/\\:*?"<>|]/;
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 /** Any `{{ … }}` block in a step — candidates for malformed artifacts. */
 const CURLY_BLOCK_RE = /\{\{([^{}]*)\}\}/g;
-/** Optional trailing per-quantity tolerance tag on an ingredient row. */
-const ROW_TOLERANCE_RE = /\s*\{tolerance:\s*([0-9]*[.,]?[0-9]+)\}\s*$/;
+/** Optional trailing per-quantity precision tag on an ingredient row. */
+const ROW_PRECISION_RE = /\s*\{precision:\s*([^{}]*)\}\s*$/i;
 
 const UNITS: readonly Unit[] = ['g', 'kg', 'ml', 'l'];
 
@@ -77,7 +77,6 @@ const COMMON_FIELDS: ReadonlySet<string> = new Set([
   'description',
   'reference',
   'theme',
-  'tolerance',
   'prep_time',
   'total_time',
 ]);
@@ -203,11 +202,7 @@ function readTheme(
  * Records a value problem for `path`: a quantity is any positive finite number
  * (the unrounded target V0). There is no ladder membership check anymore.
  */
-function checkPositiveQuantity(
-  value: number,
-  path: string,
-  issues: ValidationIssue[],
-): void {
+function checkPositiveQuantity(value: number, path: string, issues: ValidationIssue[]): void {
   if (!Number.isFinite(value) || value <= 0) {
     issues.push({ path, message: 'Der Wert muss eine positive Zahl sein.' });
   }
@@ -234,13 +229,11 @@ function checkServingCount(value: number, path: string, issues: ValidationIssue[
 }
 
 /**
- * Validates an optional tolerance cell / front-matter value: a number in
- * [0, 1]. An absent value is not passed here.
+ * The German error message for an unknown precision token, listing the five
+ * canonical words. Shared by the row tag and (via null) the artifact parser.
  */
-function checkTolerance(value: number, path: string, issues: ValidationIssue[]): void {
-  if (!isTolerance(value)) {
-    issues.push({ path, message: `Die Toleranz muss eine Zahl zwischen 0 und 1 sein (gefunden: ${value}).` });
-  }
+function precisionErrorMessage(raw: string): string {
+  return `Ungültige Genauigkeit "${raw}" ` + `(erlaubt: ${PRECISION_LEVELS.join(', ')}).`;
 }
 
 /** Validates the title as a file name (§2: empty, whitespace, unsafe chars). */
@@ -452,20 +445,6 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   // Theme (§3, DESIGN §4.8): the recipe's optional visual skin for the export.
   const theme = readTheme(data, issues);
 
-  // Recipe-level tolerance (docs/recipe_scaling_algorithm.md §4.1): optional,
-  // number in [0, 1]; absent = the global default. The ingredient and
-  // per-quantity levels override it.
-  let tolerance: number | undefined;
-  const toleranceValue = data['tolerance'];
-  if (toleranceValue !== undefined) {
-    if (typeof toleranceValue !== 'number') {
-      issues.push({ path: 'tolerance', message: '"tolerance" muss eine Zahl sein.' });
-    } else {
-      checkTolerance(toleranceValue, 'tolerance', issues);
-      tolerance = toleranceValue;
-    }
-  }
-
   if (title === undefined || type === undefined || prepTime === undefined) {
     // The problems are already recorded; the recipe cannot be built.
     return undefined;
@@ -481,7 +460,6 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     ...(totalTime !== undefined ? { total_time: totalTime } : {}),
     ...(reference !== undefined ? { reference } : {}),
     ...(theme !== undefined ? { theme } : {}),
-    ...(tolerance !== undefined ? { tolerance } : {}),
     ...(servings !== undefined ? { servings } : {}),
     ...(yieldValue !== undefined ? { yield: yieldValue } : {}),
     ...(yieldUnit !== undefined ? { yield_unit: yieldUnit } : {}),
@@ -491,56 +469,60 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
 }
 
 /**
- * Splits an optional trailing `{tolerance: 0.8}` tag off an ingredient row.
- * The tag is the quantity-level step of the tolerance cascade; `{…}` is not
+ * Splits an optional trailing `{precision: high}` tag off an ingredient row.
+ * The tag is the quantity-level override of the precision cascade; `{…}` is not
  * allowed in an ingredient name, so the suffix is unambiguous.
  */
-function extractRowTolerance(
+function extractRowPrecision(
   content: string,
   path: string,
   issues: ValidationIssue[],
-): { phrase: string; tolerance?: number } {
-  const match = ROW_TOLERANCE_RE.exec(content);
+): { phrase: string; precision?: PrecisionLevel } {
+  const match = ROW_PRECISION_RE.exec(content);
   if (match === null) {
     // A malformed tag would otherwise be swallowed into the name (or rejected
     // by the phrase grammar with a less precise message). Name the problem.
-    if (/\{tolerance\s*:/.test(content)) {
+    if (/\{precision\s*:/.test(content)) {
       issues.push({
         path,
-        message: 'Ungültige Toleranz an der Zutaten-Zeile (erwartet z. B. "{tolerance: 0.8}").',
+        message: 'Ungültige Genauigkeit an der Zutaten-Zeile (erwartet z. B. "{precision: high}").',
+      });
+    } else if (/\{tolerance\s*:/.test(content)) {
+      issues.push({
+        path,
+        message:
+          'Das Feld "tolerance" heißt jetzt "precision" (erwartet z. B. "{precision: high}").',
       });
     }
     return { phrase: content };
   }
-  const tolerance = Number(match[1]!.replace(',', '.'));
-  if (!isTolerance(tolerance)) {
-    issues.push({
-      path,
-      message: `Die Toleranz muss eine Zahl zwischen 0 und 1 sein (gefunden: ${match[1]}).`,
-    });
+  const raw = match[1]!.trim();
+  const precision = parsePrecisionLevel(raw);
+  if (precision === undefined) {
+    issues.push({ path, message: precisionErrorMessage(raw) });
     return { phrase: content.slice(0, match.index).trimEnd() };
   }
-  return { phrase: content.slice(0, match.index).trimEnd(), tolerance };
+  return { phrase: content.slice(0, match.index).trimEnd(), precision };
 }
 
 /**
  * Parses one row line ("- 250 g Reis") into a canonical Ingredient. Records
- * issues on the given path. A trailing `{tolerance: …}` tag becomes the
- * per-quantity tolerance.
+ * issues on the given path. A trailing `{precision: …}` tag becomes the
+ * per-quantity precision.
  */
 function parseRow(line: string, path: string, issues: ValidationIssue[]): Ingredient | null {
   const content = line.trim().replace(/^-\s+/, '');
-  const { phrase, tolerance } = extractRowTolerance(content, path, issues);
+  const { phrase, precision } = extractRowPrecision(content, path, issues);
   const parsed = parsePhrase(phrase, true, path, issues);
   if (parsed === null) return null;
   if (parsed.name === undefined) return null; // unreachable with requireName
-  return tolerance === undefined ? parsed : { ...parsed, tolerance };
+  return precision === undefined ? parsed : { ...parsed, precision };
 }
 
 /**
  * Validates the artifacts of one step text and normalizes them to the
  * canonical family form (kg/l and German comma decimals → g/ml + '.',
- * unitless counts → AQ notation where possible, optional `|t=` tolerance).
+ * unitless counts → AQ notation where possible, optional `|precision: high`.
  *
  * Any positive finite quantity is allowed; the old ladder membership check is
  * gone because recipes store the unrounded target. The display optimizer later
@@ -553,7 +535,7 @@ function validateAndNormalizeText(text: string, path: string, issues: Validation
     if (parsed === null) {
       issues.push({
         path,
-        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}}, {{100}}, {{1/2}} oder {{1/2|t=0.8}}).`,
+        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}}, {{100}}, {{1/2}} oder {{1/2|precision: high}}).`,
       });
       continue;
     }
@@ -762,7 +744,7 @@ export function parseRecipe(text: string): Recipe {
     throw new RecipeParseError(issues);
   }
 
-  const ingredients = deriveIngredients(steps, recipe.reference ?? [], recipe.tolerance);
+  const ingredients = deriveIngredients(steps, recipe.reference ?? []);
   // §4: every reference name must match a merged ingredient of the recipe.
   if (recipe.reference !== undefined) {
     const mergedNames = new Set(ingredients.map((ingredient) => ingredient.name));

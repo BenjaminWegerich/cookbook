@@ -7,8 +7,9 @@
  * .quantity-chips / .quantity-picker / .sheet-actions / .text-button /
  * .outlined-button / .primary-button in editor.css and recipe-list.css). This
  * file adds only what
- * belongs to this overlay: its own stacking layer and the two small text
- * lines. All pixel values come from the design ladder
+ * belongs to this overlay: its own stacking layer and the error line. The
+ * reference readout below the size input lives in reference-readout.css, shared
+ * with the replace sheet. All pixel values come from the design ladder
  * (docs/CODING_CONVENTIONS.md).
  */
 
@@ -23,15 +24,6 @@
 
 .sheet.meal-plan-sheet {
   z-index: 41;
-}
-
-/* The reference sanity check under the size input: small and quiet, because it
-   is a readout of the choice, not an input — hence no caption. */
-.meal-plan-reference {
-  margin: 0;
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
 }
 
 /* The write failed: the reason sits next to the buttons that triggered it, in

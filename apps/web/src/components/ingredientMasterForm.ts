@@ -106,20 +106,6 @@ export function validateMappingRows(rows: readonly MappingRow[]): string | null 
 }
 
 /**
- * Validates the optional ingredient-level tolerance: empty = inherit, otherwise
- * a number in [0, 1] (docs/recipe_scaling_algorithm.md §4.1).
- */
-export function validateTolerance(raw: string): string | null {
-  const text = raw.trim();
-  if (text === '') return null;
-  const value = Number(text.replace(',', '.'));
-  if (!Number.isFinite(value) || value < 0 || value > 1) {
-    return 'Die Toleranz muss eine Zahl zwischen 0 und 1 sein oder leer bleiben.';
-  }
-  return null;
-}
-
-/**
  * Validates the optional Singular/Plural pair. The pair is atomic in the stored
  * format: both cells are filled for a name with a count form, both are empty for
  * an invariant name (Zucker, Milch). A half-filled pair is rejected, because the

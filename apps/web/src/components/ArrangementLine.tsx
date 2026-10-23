@@ -4,9 +4,10 @@
  * An ingredient arrangement may end in a parenthesized note ("1 Becher Joghurt
  * (500 g)"). The display drops the brackets and shows the note muted and italic
  * after one en space, so the amount line reads as one phrase with a quiet aside
- * (docs/DESIGN.md §5.4). Step prose is the one exception: it keeps a regular
- * space and the brackets, but styles brackets and content alike, because the
- * sentence's punctuation must stay visible (docs/DESIGN.md §5.11).
+ * (docs/DESIGN.md §5.4). Two exceptions keep the brackets: step prose keeps a
+ * regular space and styles brackets and content alike, because the sentence's
+ * punctuation must stay visible (§5.11), and the reference readout keeps the
+ * brackets after one en space (§5.11).
  *
  * The written shopping list never uses this component — it keeps the bracketed
  * text from core's `renderAQS`/`renderPantryLine`.
@@ -21,9 +22,10 @@ interface ArrangementLineProps {
   display: ArrangementDisplay;
   /**
    * How a note is attached: `bare` (the default) uses one en space before the
-   * note, `parenthesised` keeps a regular space and the brackets for step prose.
+   * note, `parenthesised` keeps a regular space and the brackets for step prose,
+   * `reference` keeps the brackets after one en space for the reference readout.
    */
-  noteForm?: 'bare' | 'parenthesised';
+  noteForm?: 'bare' | 'parenthesised' | 'reference';
 }
 
 /**
@@ -42,12 +44,11 @@ export default function ArrangementLine({ display, noteForm = 'bare' }: Arrangem
         if (part.kind === 'text') {
           return <Fragment key={index}>{part.value}</Fragment>;
         }
+        const bracketed = noteForm !== 'bare';
         return (
           <Fragment key={index}>
             {noteForm === 'parenthesised' ? ' ' : EN_SPACE}
-            <span className="arrangement-note">
-              {noteForm === 'parenthesised' ? `(${part.value})` : part.value}
-            </span>
+            <span className="arrangement-note">{bracketed ? `(${part.value})` : part.value}</span>
           </Fragment>
         );
       })}

@@ -1,145 +1,145 @@
-Ingredient;Singular;Plural;Base Unit;Tolerance;Reorder Point
-Äpfel;Apfel;Äpfel;g;;0
-Aquafaba;Dose Kichererbsen;Dosen Kichererbsen;ml;;0
-Auberginen;Aubergine;Auberginen;g;;0
-Avocados;Avocado;Avocados;g;;0
-Backpulver;;;g;;90
-Birnen;Birne;Birnen;g;;0
-Blumenkohl;Blumenkohl;Blumenkohlköpfe;g;;0
-Brokkoli;Brokkoli;Brokkoli;g;;0
-Butter;;;g;;500
-Cashews;Cashew;Cashews;g;;0
-Chiliflocken;;;g;;100
-Chilis;;;g;;0
-Currypulver;;;g;;100
-Dill;;;g;;100
-Eisbergsalat;Kopf Eisbergsalat;Köpfe Eisbergsalat;g;;0
-Fenchel;Fenchelknolle;Fenchelknollen;g;;0
-frische Chilis;frische Chili;frische Chilis;g;;0
-frische Hefe;;;g;;0
-frische Petersilie;;;g;;0
-frischer Dill;;;g;;0
-frischer Ingwer;;;g;;0
-frischer Kerbel;;;g;;0
-frischer Knoblauch;Knoblauchzehe;Knoblauchzehen;g;;0
-frischer Liebstöckel;;;g;;0
-frischer Majoran;;;g;;0
-frischer Oregano;;;g;;0
-frischer Rosmarin;;;g;;0
-frischer Salbei;;;g;;0
-frischer Schnittlauch;;;g;;0
-frischer Thymian;;;g;;0
-frisches Basilikum;;;g;;0
-frisches Koriandergrün;;;g;;0
-Frühlingszwiebeln;Frühlingszwiebel;Frühlingszwiebeln;g;;0
-ganze Gewürznelken;;;g;;0
-gehackte Tomaten;;;g;;0
-gekochte Kichererbsen;;;g;;0
-gekochte Kichererbsen mit Aquafaba;;;g;;0
-gekochte Kidneybohnen;;;g;;0
-gekochte weiße Bohnen;;;g;;0
-gemahlene Gewürznelken;;;g;;0
-gemahlene Koriandersamen;;;g;;100
-gemahlene Kurkuma;;;g;;100
-gemahlene Muskatnuss;;;g;;100
-gemahlener Ingwer;;;g;;100
-gemahlener Kardamom;;;g;;0
-gemahlener Kreuzkümmel;;;g;;100
-getrockneter Liebstöckel;;;g;;100
-gemahlener Pfeffer;;;g;;100
-Gemüsebrühe-Pulver;;;g;;100
-geräuchertes Paprikapulver;;;g;;100
-gerebelter Kerbel;;;g;;0
-gerebelter Majoran;;;g;;0
-gerebelter Oregano;;;g;;100
-gerebelter Salbei;;;g;;100
-gerebelter Thymian;;;g;;0
-geriebener Käse;;;g;;0
-getrocknete Chilis;getrocknete Chili;getrocknete Chilis;g;;0
-getrockneter Dill;;;g;;100
-getrockneter Rosmarin;;;g;;100
-Gluten;;;g;;0
-granulierter Knoblauch;;;g;;100
-Grapefruits;Grapefruit;Grapefruits;g;;0
-Grapefruitsaft;Grapefruit;Grapefruits;ml;;0
-Grapefruitschale;Grapefruit;Grapefruits;g;;0
-grobkörniges Salz;;;g;;100
-Hefeflocken;;;g;;300
-Karotten;Karotte;Karotten;g;;0
-Kartoffeln;Kartoffel;Kartoffeln;g;;0
-Kirschtomaten;Kirschtomate;Kirschtomaten;g;;0
-Knollensellerie;Sellerieknolle;Sellerieknollen;g;;0
-Kopfsalat;Salatkopf;Salatköpfe;g;;0
-Limetten;Limette;Limetten;g;;0
-Limettensaft;Limette;Limetten;ml;;0
-Limettenschale;Limette;Limetten;g;;0
-Mehl;;;g;;1000
-Mais;;;g;;0
-Milch;;;ml;;3000
-Naturtofu;;;g;;400
-Öl;;;ml;;500
-Orangen;Orange;Orangen;g;;0
-Orangensaft;Orange;Orangen;ml;;0
-Orangenschale;Orange;Orangen;g;;0
-Paprikas;Paprika;Paprikas;g;;0
-Pfirsiche;Pfirsich;Pfirsiche;g;;0
-Räuchertofu;;;g;;0
-rote Beete;rote Beete;rote Beeten;g;;0
-Rotkohl;Rotkohl;Rotkohlköpfe;g;;0
-Kochsahne;;;ml;;0
-Salz;;;g;;100
-Sauerkraut;;;g;;0
-Schalotten;Schalotte;Schalotten;g;;0
-scharfes Paprikapulver;;;g;;100
-Schlagsahne;;;ml;;0
-Senf;;;g;;200
-Sojasauce;;;ml;;250
-Speisestärke;;;g;;400
-Spitzkohl;Spitzkohl;Spitzkohlköpfe;g;;0
-Stangensellerie;Stange Sellerie;Stangen Sellerie;g;;0
-Strauchtomaten;Strauchtomate;Strauchtomaten;g;;0
-süßes Paprikapulver;;;g;;100
-Tomatenmark;;;g;;200
-Trockenbackhefe;;;g;;42
-Vanilleextrakt;;;ml;;0
-Weißkohl;Weißkohl;Weißkohlköpfe;g;;0
-Wodka;;;ml;;0
-gemahlener Zimt;;;g;;100
-Zitronen;Zitrone;Zitronen;g;;0
-Zitronensaft;Zitrone;Zitronen;ml;;0
-Zitronenschale;Zitrone;Zitronen;g;;0
-Zucchini;Zucchini;Zucchini;g;;0
-Zucker;;;g;;1000
-Zwetschgen;Zwetschge;Zwetschgen;g;;0
-Zwiebeln;Zwiebel;Zwiebeln;g;;0
-Wasser;;;ml;;inf
-Kakaopulver;;;g;;250
-Leinsamen;;;g;;0
-weißer Sesam;;;g;;100
-schwarzer Sesam;;;g;;100
-Kürbiskerne;;;g;;0
-getrocknete Soja-Steaks;getrocknetes Soja-Steak;getrocknete Soja-Steaks;g;;0
-passierte Tomaten;;;g;;0
-Crème fraîche;;;g;;0
-Penne rigate;;;g;;0
-Joghurt;;;g;;800
-Skyr;;;g;;800
-Mayonnaise;;;g;;250
-Kokosmilch;;;ml;;0
-rote Linsen;rote Linse;rote Linsen;g;;0
-Linsen;Linse;Linsen;g;;0
-Olivenöl;;;ml;;1000
-Apfelessig;;;ml;;750
-Hokkaido-Kürbis;;;g;;0
-Feta;;;g;;0
-Walnusskerne;;;g;;0
-Ahornsirup;;;g;;375
-Hackfleisch;;;g;;0
-brauner Zucker;;;g;;0
-Gemüsebrühe;;;ml;;0
-Reis;;;g;;0
-Rosinen;;;g;;0
-Sojaschnetzel;;;g;;0
-Tahin;;;g;;0
-Süßkartoffeln;;;g;;0
-Tortillas;;;g;;0
+Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point
+Äpfel;Apfel;Äpfel;g;medium;0
+Aquafaba;Dose Kichererbsen;Dosen Kichererbsen;ml;medium;0
+Auberginen;Aubergine;Auberginen;g;medium;0
+Avocados;Avocado;Avocados;g;medium;0
+Backpulver;;;g;medium;90
+Birnen;Birne;Birnen;g;medium;0
+Blumenkohl;Blumenkohl;Blumenkohlköpfe;g;medium;0
+Brokkoli;Brokkoli;Brokkoli;g;medium;0
+Butter;;;g;medium;500
+Cashews;Cashew;Cashews;g;medium;0
+Chiliflocken;;;g;medium;100
+Chilis;;;g;medium;0
+Currypulver;;;g;medium;100
+Dill;;;g;medium;100
+Eisbergsalat;Kopf Eisbergsalat;Köpfe Eisbergsalat;g;medium;0
+Fenchel;Fenchelknolle;Fenchelknollen;g;medium;0
+frische Chilis;frische Chili;frische Chilis;g;medium;0
+frische Hefe;;;g;medium;0
+frische Petersilie;;;g;medium;0
+frischer Dill;;;g;medium;0
+frischer Ingwer;;;g;medium;0
+frischer Kerbel;;;g;medium;0
+frischer Knoblauch;Knoblauchzehe;Knoblauchzehen;g;medium;0
+frischer Liebstöckel;;;g;medium;0
+frischer Majoran;;;g;medium;0
+frischer Oregano;;;g;medium;0
+frischer Rosmarin;;;g;medium;0
+frischer Salbei;;;g;medium;0
+frischer Schnittlauch;;;g;medium;0
+frischer Thymian;;;g;medium;0
+frisches Basilikum;;;g;medium;0
+frisches Koriandergrün;;;g;medium;0
+Frühlingszwiebeln;Frühlingszwiebel;Frühlingszwiebeln;g;medium;0
+ganze Gewürznelken;;;g;medium;0
+gehackte Tomaten;;;g;medium;0
+gekochte Kichererbsen;;;g;medium;0
+gekochte Kichererbsen mit Aquafaba;;;g;medium;0
+gekochte Kidneybohnen;;;g;medium;0
+gekochte weiße Bohnen;;;g;medium;0
+gemahlene Gewürznelken;;;g;medium;0
+gemahlene Koriandersamen;;;g;medium;100
+gemahlene Kurkuma;;;g;medium;100
+gemahlene Muskatnuss;;;g;medium;100
+gemahlener Ingwer;;;g;medium;100
+gemahlener Kardamom;;;g;medium;0
+gemahlener Kreuzkümmel;;;g;medium;100
+getrockneter Liebstöckel;;;g;medium;100
+gemahlener Pfeffer;;;g;medium;100
+Gemüsebrühe-Pulver;;;g;medium;100
+geräuchertes Paprikapulver;;;g;medium;100
+gerebelter Kerbel;;;g;medium;0
+gerebelter Majoran;;;g;medium;0
+gerebelter Oregano;;;g;medium;100
+gerebelter Salbei;;;g;medium;100
+gerebelter Thymian;;;g;medium;0
+geriebener Käse;;;g;medium;0
+getrocknete Chilis;getrocknete Chili;getrocknete Chilis;g;medium;0
+getrockneter Dill;;;g;medium;100
+getrockneter Rosmarin;;;g;medium;100
+Gluten;;;g;medium;0
+granulierter Knoblauch;;;g;medium;100
+Grapefruits;Grapefruit;Grapefruits;g;medium;0
+Grapefruitsaft;Grapefruit;Grapefruits;ml;medium;0
+Grapefruitschale;Grapefruit;Grapefruits;g;medium;0
+grobkörniges Salz;;;g;medium;100
+Hefeflocken;;;g;medium;300
+Karotten;Karotte;Karotten;g;medium;0
+Kartoffeln;Kartoffel;Kartoffeln;g;medium;0
+Kirschtomaten;Kirschtomate;Kirschtomaten;g;medium;0
+Knollensellerie;Sellerieknolle;Sellerieknollen;g;medium;0
+Kopfsalat;Salatkopf;Salatköpfe;g;medium;0
+Limetten;Limette;Limetten;g;medium;0
+Limettensaft;Limette;Limetten;ml;medium;0
+Limettenschale;Limette;Limetten;g;medium;0
+Mehl;;;g;medium;1000
+Mais;;;g;medium;0
+Milch;;;ml;medium;3000
+Naturtofu;;;g;medium;400
+Öl;;;ml;medium;500
+Orangen;Orange;Orangen;g;medium;0
+Orangensaft;Orange;Orangen;ml;medium;0
+Orangenschale;Orange;Orangen;g;medium;0
+Paprikas;Paprika;Paprikas;g;medium;0
+Pfirsiche;Pfirsich;Pfirsiche;g;medium;0
+Räuchertofu;;;g;medium;0
+rote Beete;rote Beete;rote Beeten;g;medium;0
+Rotkohl;Rotkohl;Rotkohlköpfe;g;medium;0
+Kochsahne;;;ml;medium;0
+Salz;;;g;medium;100
+Sauerkraut;;;g;medium;0
+Schalotten;Schalotte;Schalotten;g;medium;0
+scharfes Paprikapulver;;;g;medium;100
+Schlagsahne;;;ml;medium;0
+Senf;;;g;medium;200
+Sojasauce;;;ml;medium;250
+Speisestärke;;;g;medium;400
+Spitzkohl;Spitzkohl;Spitzkohlköpfe;g;medium;0
+Stangensellerie;Stange Sellerie;Stangen Sellerie;g;medium;0
+Strauchtomaten;Strauchtomate;Strauchtomaten;g;medium;0
+süßes Paprikapulver;;;g;medium;100
+Tomatenmark;;;g;medium;200
+Trockenbackhefe;;;g;medium;42
+Vanilleextrakt;;;ml;medium;0
+Weißkohl;Weißkohl;Weißkohlköpfe;g;medium;0
+Wodka;;;ml;medium;0
+gemahlener Zimt;;;g;medium;100
+Zitronen;Zitrone;Zitronen;g;medium;0
+Zitronensaft;Zitrone;Zitronen;ml;medium;0
+Zitronenschale;Zitrone;Zitronen;g;medium;0
+Zucchini;Zucchini;Zucchini;g;medium;0
+Zucker;;;g;medium;1000
+Zwetschgen;Zwetschge;Zwetschgen;g;medium;0
+Zwiebeln;Zwiebel;Zwiebeln;g;medium;0
+Wasser;;;ml;medium;inf
+Kakaopulver;;;g;medium;250
+Leinsamen;;;g;medium;0
+weißer Sesam;;;g;medium;100
+schwarzer Sesam;;;g;medium;100
+Kürbiskerne;;;g;medium;0
+getrocknete Soja-Steaks;getrocknetes Soja-Steak;getrocknete Soja-Steaks;g;medium;0
+passierte Tomaten;;;g;medium;0
+Crème fraîche;;;g;medium;0
+Penne rigate;;;g;medium;0
+Joghurt;;;g;medium;800
+Skyr;;;g;medium;800
+Mayonnaise;;;g;medium;250
+Kokosmilch;;;ml;medium;0
+rote Linsen;rote Linse;rote Linsen;g;medium;0
+Linsen;Linse;Linsen;g;medium;0
+Olivenöl;;;ml;medium;1000
+Apfelessig;;;ml;medium;750
+Hokkaido-Kürbis;;;g;medium;0
+Feta;;;g;medium;0
+Walnusskerne;;;g;medium;0
+Ahornsirup;;;g;medium;375
+Hackfleisch;;;g;medium;0
+brauner Zucker;;;g;medium;0
+Gemüsebrühe;;;ml;medium;0
+Reis;;;g;medium;0
+Rosinen;;;g;medium;0
+Sojaschnetzel;;;g;medium;0
+Tahin;;;g;medium;0
+Süßkartoffeln;;;g;medium;0
+Tortillas;;;g;medium;0

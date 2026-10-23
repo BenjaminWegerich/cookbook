@@ -70,9 +70,9 @@ describe('planSubRecipes', () => {
     // The worked example's reorder points (docs/storage_format.md §9): B and D
     // are only ever cooked for a recipe, C is kept at 500 g.
     setIngredientMappings({
-      B: { bu: 'g', reorderPoint: 0, entries: [] },
-      C: { bu: 'g', reorderPoint: 500, entries: [] },
-      D: { bu: 'g', reorderPoint: 0, entries: [] },
+      B: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
+      C: { bu: 'g', precision: 'medium', reorderPoint: 500, entries: [] },
+      D: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
     });
   });
 
@@ -249,9 +249,9 @@ describe('planSubRecipes', () => {
       ['D', subRecipe('D', [use('Salz', 10)])],
     ]);
     setIngredientMappings({
-      B: { bu: 'g', reorderPoint: 0, entries: [] },
-      C: { bu: 'g', reorderPoint: 0, entries: [] },
-      D: { bu: 'g', reorderPoint: 0, entries: [] },
+      B: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
+      C: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
+      D: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
     });
 
     const plan = planSubRecipes([[use('B', 100), use('C', 100)]], recipes);
@@ -266,8 +266,8 @@ describe('planSubRecipes', () => {
 describe('a sub-recipe nothing requires', () => {
   beforeEach(() => {
     setIngredientMappings({
-      B: { bu: 'g', reorderPoint: 0, entries: [] },
-      C: { bu: 'g', reorderPoint: 0, entries: [] },
+      B: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
+      C: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
     });
   });
 
@@ -332,9 +332,9 @@ describe('a sub-recipe nothing requires', () => {
 describe('resolveSubRecipePlan', () => {
   beforeEach(() => {
     setIngredientMappings({
-      B: { bu: 'g', reorderPoint: 0, entries: [] },
-      C: { bu: 'g', reorderPoint: 500, entries: [] },
-      D: { bu: 'g', reorderPoint: 0, entries: [] },
+      B: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
+      C: { bu: 'g', precision: 'medium', reorderPoint: 500, entries: [] },
+      D: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [] },
     });
   });
 

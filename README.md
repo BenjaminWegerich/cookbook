@@ -5,7 +5,7 @@ quantity scaling, multi-unit support, optimization for smartphones, laptops
 and smart displays, and integration with Google Keep and Gemini for Home.
 
 > **Status:** v1 foundation in place. The web app (Vite + React + TypeScript) runs on
-> GitHub Pages and is connected to Google Drive via OAuth. The quantity optimizer, tolerance
+> GitHub Pages and is connected to Google Drive via OAuth. The quantity optimizer, precision
 > model, additional-unit display, recipe storage and HTML export are implemented, and the
 > shopping list, sub-recipe cooking and pantry/stock use the same exact quantity model.
 
@@ -28,14 +28,16 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
   base unit (g / kg / ml / l). The optimizer scores every compatible unit; there
   are no per-ingredient priorities.
 
-### 3. User-defined quantity scaling and tolerance
+### 3. User-defined quantity scaling and precision
 
 - Recipes store the unrounded target amount; scaling uses the exact factor between the
   written and requested size. Nothing is snapped to a ladder rung.
 - The deterministic optimizer chooses the displayed BQ/AQ from the allowed tables
   ([BQs.csv](docs/BQs.csv), [AQs.csv](docs/AQs.csv)) and the unit's number scheme.
-- A five-chip tolerance setting (0 / 0.25 / 0.5 / 0.75 / 1) balances exact metric amounts
-  against practical household/package measures. It never changes the target amount.
+- A five-level precision setting (very low / low / medium / high / very high) balances
+  exact metric amounts against practical household/package measures. It never changes the
+  target amount. Every ingredient states its precision in the master data; a single recipe
+  row may override it. There is no recipe-level or global default.
 - Example: a recipe written for 4 people with 500 g yogurt, scaled to 6 people, has a
   750 g target and may display as `1 ½ Becher (750 g)`; the metric target stays 750 g.
 
@@ -102,7 +104,7 @@ folder always stays in a loadable state.
 - [docs/CODING_CONVENTIONS.md](docs/CODING_CONVENTIONS.md) — binding style guidelines
 - [docs/ROADMAP.md](docs/ROADMAP.md) — open tasks and how they relate
 - [docs/storage_format.md](docs/storage_format.md) — canonical recipe file format (Markdown + YAML)
-- [docs/quantity_scaling.md](docs/quantity_scaling.md) — scaling, the BQ/AQ optimizer, tolerance and yield views
+- [docs/quantity_scaling.md](docs/quantity_scaling.md) — scaling, the BQ/AQ optimizer, precision and yield views
 - [docs/additional_quantity_specifications.md](docs/additional_quantity_specifications.md) — how quantities are displayed (base + additional units)
 - [recipe_scaling_algorithm.md](recipe_scaling_algorithm.md) — the scoring model behind the optimizer
 - [docs/ui_patterns.md](docs/ui_patterns.md) — reusable UI patterns (the snackbar)

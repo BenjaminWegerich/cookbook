@@ -9,6 +9,8 @@
  * ./validate.ts.
  */
 
+import type { PrecisionLevel } from '../precision.js';
+
 /** The two recipe types (recipe_structure.md §Recipe Type); never derived. */
 export type RecipeType = 'finished_dish' | 'ingredient_recipe';
 
@@ -43,11 +45,11 @@ export interface Ingredient {
   /** Stored base unit: g or ml (kg/l appear only in display), §4. */
   unit: Unit;
   /**
-   * Optional per-quantity tolerance in [0, 1] (the most specific level of the
-   * cascade). Absent = inherit the ingredient / recipe / global default. Stored
-   * as a trailing `{tolerance: 0.8}` tag on the ingredient row.
+   * Optional per-quantity precision (the most specific level of the cascade).
+   * Absent = the mandatory ingredient-level value applies. Stored as a trailing
+   * `{precision: high}` tag on the ingredient row.
    */
-  tolerance?: number;
+  precision?: PrecisionLevel;
 }
 
 /**
@@ -133,12 +135,6 @@ export interface Recipe {
    * Allowed on both recipe types.
    */
   theme?: RecipeTheme;
-  /**
-   * Optional recipe-level tolerance in [0, 1] (docs/recipe_scaling_algorithm.md
-   * §4.1). Absent = the global default 0.5. Ingredient and per-quantity
-   * settings override it.
-   */
-  tolerance?: number;
   /** finished_dish only: an allowed serving count (servingSizes.ts), e.g. 6. */
   servings?: number;
   /**
