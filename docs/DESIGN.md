@@ -120,7 +120,7 @@ tokens are the only source — no raw colour appears in the export's styles.
 
 *Applies to: web app.*
 
-**One typeface.** Noto Sans Variable, self-hosted and bundled at build time as the `latin`
+**One typeface family.** Noto Sans Variable, self-hosted and bundled at build time as the `latin`
 subset of `@fontsource`: no runtime font fetch, no server. Token: `--font-sans`. One generated
 companion face completes it (`styles/fonts.css`): the Number Forms fraction glyphs and the
 narrow no-break space that the latin subset omits, so `⅓ ⅒ ⅛` render in the same weight and
@@ -148,7 +148,7 @@ size as `¼ ½ ¾` instead of falling back to the operating system's font.
 
 *Applies to: cooking view.*
 
-**One typeface per recipe**, from the theme's `font`, self-hosted and embedded in the export —
+**One typeface family per recipe**, from the theme's `font`, self-hosted and embedded in the export —
 no runtime font fetch. The default typeface is Noto Sans. `Noto Serif Display` is the one
 exception: it sets only the main heading of each page, and Noto Serif renders the rest.
 
@@ -164,6 +164,20 @@ exception: it sets only the main heading of each page, and Noto Serif renders th
 Titles and captions are weight 600, body text weight 400. Step prose, its ingredient rows and
 the check-list read at arm's length and use `--text-lg`; the step title „Schritt x von y" shares
 that size.
+
+**Condensed is a data face.** *Applies to: both surfaces.* It is reserved for genuine tabular
+data — a matrix of rows and columns, not a list of rows — and never for a button, a form
+control, navigation, a caption, a badge, prose or an arrangement's bracketed note. A table that
+uses it sets its headers and cells in one condensed face of the surrounding text's family; the
+table's title, caption and explanatory text stay in the normal width. It keeps the normal size
+and line height: condensed text is never smaller, tighter or closer to its neighbours than the
+same text in the normal width. A table that does not fit a narrow viewport becomes stacked
+rows in the normal width; it never becomes a tighter table and never scrolls sideways. The
+condensed face is a width instance of one family — sans with sans, serif with serif, mono with
+mono — never a second typeface from another genre. A face that is unavailable falls back to
+that family's normal width, which must still fit or wrap. Outside such a table the normal width
+is the rule: the list screens and the cooking view's rows and prose are not table cells.
+*decided with the user*
 
 ### 4.3 Geometry: pixel ladder and spacing
 
@@ -574,6 +588,8 @@ A typeface joins the shortlist only when it meets every requirement:
 - The default theme is the web app's palette and typeface: a recipe without `theme` data
   renders in the app's look.
 - A recipe's `font` is one of the shortlist's five Noto faces; no other typeface is selectable.
+- A data table's condensed face is a width instance of the theme's body face; it is not a
+  sixth shortlist face and never a `font` choice (§4.2).
 - `Noto Serif Display` is the only two-face theme: the display serif for the main heading of
   each page, Noto Serif for everything else.
 - A recipe may override any subset; the rest fall back to the default.
