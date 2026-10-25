@@ -14,7 +14,7 @@
 import { StorefrontIcon } from './icons';
 
 interface ManageShoppingPlacesButtonProps {
-  /** Opens the „Einkaufsorte“ screen. */
+  /** Opens the „Einkaufsartikel“ screen. */
   onClick: () => void;
 }
 
@@ -22,7 +22,7 @@ function ManageShoppingPlacesButton({ onClick }: ManageShoppingPlacesButtonProps
   return (
     <button type="button" className="outlined-button" onClick={onClick}>
       <StorefrontIcon className="button-icon" optical={20} />
-      <span>Einkaufsorte verwalten</span>
+      <span>Einkaufsartikel verwalten</span>
     </button>
   );
 }

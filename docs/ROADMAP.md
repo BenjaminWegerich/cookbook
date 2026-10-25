@@ -55,9 +55,6 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
       surfaces name an ingredient with a count (e.g. the cooking view's Zutaten list, the
       shopping list) and render the matching form there, falling back to the canonical name
       when the pair is empty.
-- [ ] Shopping master data management: a second button next to „Zutaten verwalten" opens the
-      shopping route/item table for both ingredient and non-ingredient shopping-list entries
-      ([storage_format.md](storage_format.md) §10).
 
 ### Design system: follow-ups from the DESIGN.md compliance pass
 
@@ -219,9 +216,10 @@ below is building, not investigating: the frontend and the actual features.
    (`packages/core/src/shoppingSort.ts`) and the Drive set
    (`apps/web/src/drive/shoppingRouteMasterData.ts`, including the migration from
    `einkaufs-zuordnung.csv`); the create sheet asks for the stop in the „Einkauf“
-   field (store chips + section search). The aisle sort and its entry point for
-   items that are not ingredients are built on this data (see the `[x]` sort task
-   above and the `[x]` item-identity task).
+   field (store chips + section search), and the „Einkaufsartikel“ screen creates
+   and edits item rows and their synonyms through the same shared sheet. The aisle
+   sort and its entry point for items that are not ingredients are built on this
+   data (see the `[x]` sort task above and the `[x]` item-identity task).
 4. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
    (the size is a query parameter on the export host), replacing the entries recognized as the

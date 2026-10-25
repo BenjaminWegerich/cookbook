@@ -100,11 +100,12 @@
   forms) and `zutaten-umrechnungen.csv` (AU mappings), in the canonical formats of
   docs/ingredients.csv + docs/ingredient_unit_mappings.csv: the app loads both into the core
   ingredient registry at startup, and they are authoritative once they exist — the repo CSVs
-  are the built-in seed used on first run. New ingredients are created from the recipe editor
-  („Neue Zutat anlegen“), which collects name, base unit, reorder point and AU mappings,
-  appends to both files and re-registers them. The split keeps ingredient-level fields (name,
-  base unit, reorder point, display forms) in one row per ingredient, separate from the AU
-  mappings.
+  are the built-in seed used on first run. New ingredients are created from the recipe
+  editor's quantity sheet or the „Zutaten“ screen („Neue Zutat anlegen“), through the shared
+  `MasterDataSheet`: it collects name, base unit, display forms, reorder point, AU mappings,
+  precision and the shopping stop/synonyms, appends to both ingredient files and
+  creates/updates the item row. The split keeps ingredient-level fields (name, base unit,
+  reorder point, display forms) in one row per ingredient, separate from the AU mappings.
 - Where an item is bought is a separate master-data set in the same `Stammdaten` subfolder —
   `einkaufsweg.csv` (the route: store + section per row, in walking order),
   `einkaufs-artikel.csv` (the item table: item → store + section — the identity of everything
@@ -119,15 +120,23 @@
   stop in an „Einkauf“ field while it collects the other master-data fields — the store as
   chips, the section as a searchable list of that store's sections — and writes the item row
   before the ingredient row: a row without an ingredient is valid (the name set is a superset),
-  an ingredient without its row is not (it is then simply never bought).
+  an ingredient without its row is not (it is then simply never bought). The „Einkaufsartikel“
+  screen (`apps/web/src/components/ShoppingPlaces.tsx`) creates and edits item rows and their
+  synonym lists directly through the same shared sheet; a duplicate item name is rejected
+  case-folded.
 - **Master-data writes read before they write.** Every append, edit, rename and sort
   assignment first reads the authoritative file content from Drive and only then writes
   the set, so a spreadsheet edit made meanwhile is not overwritten. A save that writes
-  both sets (creating an ingredient stores its item row and then its ingredient row)
-  resolves the Cookbook folder and lists its subfolders once and shares that snapshot between
-  the two writes; independent file reads and uploads run in parallel, while no write starts
-  before every read of its set has finished. The snapshot carries only file ids and
-  names — file content is always read fresh.
+  both sets reads each set's files before its write; the create path resolves the Cookbook
+  folder and lists its subfolders once and shares that snapshot between the two writes, while
+  the edit path lets each write resolve its own snapshot (either may create the `Stammdaten`
+  folder). Independent file reads and uploads run in parallel, while no write starts before
+  every read of its set has finished. The snapshot carries only file
+  ids and names — file content is always read fresh. The shared write path for an ingredient
+  edit is `apps/web/src/components/ingredientMasterUpdate.tsx`: it writes the ingredient pair
+  first, then the item row/synonyms (creating the row when the ingredient has none), rolls the
+  ingredient back if the shopping write fails, and captures both previous states for the
+  notice's „Rückgängig“.
 - Resolving a Keep line to an item happens at read time in core
   (`packages/core/src/shoppingSort.ts`, [shopping_item_identity.md](shopping_item_identity.md)):
   the line's decoration is undone to a name field, that field must equal an item name (or a

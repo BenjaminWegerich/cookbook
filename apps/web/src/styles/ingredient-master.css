@@ -96,9 +96,17 @@
   line-height: var(--leading-sm);
 }
 
+/* The create action above the list: a quiet outlined button, left-aligned like
+   the home screen's master-data entries. It is a rare action, so it stays a
+   plain button instead of a floating action and sits with the search field. */
+.master-create {
+  display: flex;
+  justify-content: flex-start;
+}
+
 /* The home screen's entries into the master data: quiet outlined actions below
    the last recipe, left-aligned like the shopping-list buttons. Both sibling
-   entries („Zutaten verwalten“ and „Einkaufsorte verwalten“) sit on one line on
+   entries („Zutaten verwalten“ and „Einkaufsartikel verwalten“) sit on one line on
    a wide screen and wrap onto a second line on a phone, where two full labels
    would not fit. The container is the last content on the page, so the bottom
    padding keeps the FAB from covering it. */

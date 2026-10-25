@@ -4,7 +4,7 @@
  * Decided with the user:
  * - every step carries its own counted ingredient list (rows) that appears
  *   above the step text; rows are added, edited and reordered per step
- *   ("Zutat zur Liste hinzufügen", ↑/↓ on the row) and feed
+ *   ("Zutatenzeile hinzufügen", ↑/↓ on the row) and feed
  *   the derived master list (order of first use, duplicates merged with the
  *   total, storage_format.md §4);
  * - the step text is free prose; display-only inline artifacts ("Menge zum Text
@@ -58,6 +58,7 @@ import {
   deriveIngredients,
   displayTimeText,
   isHexColor,
+  mappingsFor,
   masterIngredientNames,
   masterUsesFor,
   parseRecipe,
@@ -69,6 +70,8 @@ import {
   artifactToText,
   SERVING_COUNTS,
   STANDARD_TIME_VALUES,
+  allShoppingItems,
+  shoppingNameKey,
   type Ingredient,
   type PrecisionLevel,
   type Recipe,
@@ -92,11 +95,13 @@ import {
 } from '../drive/recipeStorage';
 import { listCookbookFolder } from '../drive/cookbookFolder';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
-import { appendShoppingItem } from '../drive/shoppingRouteMasterData';
+import { createShoppingItem, saveShoppingItem } from '../drive/shoppingRouteMasterData';
 import { loadRecipePhoto } from '../drive/recipePhoto';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
+import type { SnackbarMessage } from '../hooks/useSnackbar';
 import AutoGrowTextarea from './AutoGrowTextarea';
+import EditIngredientSheet from './EditIngredientSheet';
 import IngredientSheet, {
   type IngredientRecipeOption,
   type IngredientSheetMode,
@@ -104,6 +109,10 @@ import IngredientSheet, {
 } from './IngredientSheet';
 import LeaveConfirmSheet from './LeaveConfirmSheet';
 import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientSheet';
+import {
+  updateIngredientMasterAndShopping,
+  type IngredientMasterSheetUpdate,
+} from './ingredientMasterUpdate';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
 import QuantityInput from './QuantityInput';
 import ArrangementLine from './ArrangementLine';
@@ -272,6 +281,8 @@ interface RecipeEditorProps {
   onSaved: (saved: Recipe | null) => void;
   /** Opens another recipe in the editor (jump to a linked sub-recipe). */
   onOpenRecipe?: (recipe: StoredRecipe) => void;
+  /** The app-root notice host, so a master-data save can offer its undo. */
+  showSnackbar: (message: SnackbarMessage) => void;
   /**
    * True while this level is the visible one. The editor chain mounts every
    * open level (the parent stays underneath, hidden), and only the visible one
@@ -1081,6 +1092,7 @@ function RecipeEditor({
   backLabel = 'Zurück',
   onSaved,
   onOpenRecipe,
+  showSnackbar,
   visible = true,
   ref,
 }: RecipeEditorProps) {
@@ -1160,6 +1172,21 @@ function RecipeEditor({
   } | null>(null);
   /** Prefill for a reopened ingredient sheet (add modes). */
   const [sheetPrefill, setSheetPrefill] = useState<{ name: string; quantity: number } | null>(null);
+  /**
+   * The ingredient whose master-data sheet is open above the quantity sheet.
+   * The quantity sheet stays mounted underneath, so its values survive the
+   * round trip instead of being reconstructed from a prefill.
+   */
+  const [masterEditName, setMasterEditName] = useState<string | null>(null);
+  const [masterEditSaving, setMasterEditSaving] = useState(false);
+  /** Synchronous mirror of masterEditSaving, for the Back/Escape guard. */
+  const masterEditSavingRef = useRef(false);
+  const [masterEditError, setMasterEditError] = useState<string | null>(null);
+  /**
+   * Bumped after the master-data write or its undo. The registry is
+   * module-level state, so this is what makes the quantity sheet read it again.
+   */
+  const [, setMasterRevision] = useState(0);
 
   const photoUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1449,7 +1476,7 @@ function RecipeEditor({
         list.push({
           path: `steps[${index}].text`,
           message:
-            'Der Schritt-Text darf nicht mit "- " beginnen (das ist Zutaten-Zeilen vorbehalten).',
+            'Der Schritt-Text darf nicht mit "- " beginnen (das ist Zutatenzeilen vorbehalten).',
         });
       }
       step.ingredients.forEach((ingredient, rowIndex) => {
@@ -1773,20 +1800,23 @@ function RecipeEditor({
    * the saved name and the quantity the user had typed, where they confirm
    * the actual recipe addition (decided with the user).
    *
-   * The shopping stop is written first: the assignment file's name set is a
+   * The shopping data is written first: the assignment file's name set is a
    * superset of the ingredient list by design (docs/storage_format.md §10), so a
    * row without an ingredient is valid master data and a retry overwrites it,
-   * while an ingredient without its row would be exactly the state the two
-   * mandatory fields in the create sheet exist to prevent. A failed assignment
-   * write therefore stops the flow before anything is created (the error names
-   * the cause, and the name is still free for a retry).
+   * while an ingredient without its row would be exactly the state the create
+   * sheet's „Einkauf“ field exists to prevent. A failed assignment write
+   * therefore stops the flow before anything is created (the error names the
+   * cause, and the name is still free for a retry). When the name already exists
+   * as a shopping item, its row is updated with the form's stop and synonyms
+   * instead of creating a second route.
    *
    * `stop` is null while the shopping route holds no stops at all — decided with
    * the user: the ingredient is then created without a shopping stop.
    *
-   * The folder is resolved and listed once and handed to both writes (they write
-   * into the same folder); each write path still reads the content of the files
-   * it is about to change, so the read-before-write guarantee is unchanged.
+   * The folder is resolved and listed once and handed to the ingredient write;
+   * the shopping write resolves its own snapshot because it may create the
+   * `Stammdaten` folder first. Each write path still reads the content of the
+   * files it is about to change, so the read-before-write guarantee is unchanged.
    */
   const handleCreateIngredient = async (
     name: string,
@@ -1795,13 +1825,26 @@ function RecipeEditor({
     entries: NewIngredientEntry[],
     precision: PrecisionLevel,
     stop: ShoppingStop | null,
+    variants: readonly string[],
   ): Promise<void> => {
     setCreateSaving(true);
     setCreateError(null);
     try {
       const folder = await listCookbookFolder(token);
       if (stop !== null) {
-        await appendShoppingItem(token, name, stop, folder);
+        // The name may already exist as a shopping item (the create sheet
+        // pre-fills its stop/synonyms in that case), and its stored spelling may
+        // differ in case. Update that row instead of creating a second one.
+        const itemKey = Object.keys(allShoppingItems()).find(
+          (candidate) => shoppingNameKey(candidate) === shoppingNameKey(name),
+        );
+        if (itemKey !== undefined) {
+          await saveShoppingItem(token, itemKey, stop, variants);
+        } else {
+          await createShoppingItem(token, name, stop, variants);
+        }
+      } else if (variants.length > 0) {
+        throw new Error('Ohne Einkaufsort lassen sich keine Synonyme speichern.');
       }
       await appendIngredientMasterData(token, name, bu, reorderPoint, entries, precision, folder);
       setCreateSheet(null);
@@ -1859,6 +1902,54 @@ function RecipeEditor({
   }, [createSaving, sheetContext]);
 
   /**
+   * Opens the selected master ingredient's sheet over the quantity sheet. The
+   * quantity sheet stays mounted underneath, so its name, amount, precision and
+   * unit choice are still there when the master sheet closes.
+   */
+  const handleEditIngredient = (name: string): void => {
+    setMasterEditError(null);
+    setMasterEditName(name);
+  };
+
+  /** Closes the master-data sheet without saving; a running write keeps it open. */
+  const handleMasterEditClose = useCallback((): void => {
+    if (masterEditSavingRef.current) return;
+    setMasterEditName(null);
+    setMasterEditError(null);
+  }, []);
+
+  /**
+   * Persists the master-data sheet's values through the same path the „Zutaten“
+   * screen uses: ingredient fields plus the name's shopping item, with the
+   * app-root notice offering „Rückgängig“. On success the quantity sheet is
+   * revealed again with its state untouched.
+   */
+  const handleMasterEditSave = async (input: IngredientMasterSheetUpdate): Promise<void> => {
+    if (masterEditName === null || masterEditSavingRef.current) return;
+    const name = masterEditName;
+    masterEditSavingRef.current = true;
+    setMasterEditSaving(true);
+    setMasterEditError(null);
+    try {
+      await updateIngredientMasterAndShopping(
+        {
+          token,
+          showSnackbar,
+          onChanged: () => setMasterRevision((current) => current + 1),
+        },
+        name,
+        input,
+      );
+      setMasterEditName(null);
+    } catch (err) {
+      setMasterEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      masterEditSavingRef.current = false;
+      setMasterEditSaving(false);
+    }
+  };
+
+  /**
    * The one exit hop every trigger uses (see useLeaveGuard). Layers inside the
    * editor consume the request first, in the order of the visible stack; only a
    * bare unsaved draft reaches the discard confirmation.
@@ -1876,6 +1967,12 @@ function RecipeEditor({
         // (a late error would be reported into a dead component).
         return true;
       }
+      if (masterEditName !== null) {
+        // The master-data sheet is the topmost layer; the shared helper guards
+        // a running write, so a Back cannot discard the form.
+        handleMasterEditClose();
+        return true;
+      }
       if (createSheet !== null) {
         // handleCreateClose guards against closing while a save runs.
         handleCreateClose();
@@ -1890,18 +1987,20 @@ function RecipeEditor({
     [
       pendingConfirm,
       saving,
+      masterEditName,
       createSheet,
       sheet,
       guard,
       executeLeave,
       handleCreateClose,
       handleCloseSheet,
+      handleMasterEditClose,
     ],
   );
 
   // Escape is the keyboard equivalent of the browser Back button and follows
-  // the same layer order as notifyBack below (create sheet, ingredient sheet,
-  // then the discard confirmation). Only the visible level listens: the levels
+  // the same layer order as notifyBack below (master-data sheet, create sheet,
+  // ingredient sheet, then the discard confirmation). Only the visible level listens: the levels
   // below stay mounted (hidden) and must not react.
   useEscapeTrigger(() => void requestLeave('escape'), visible);
 
@@ -1909,7 +2008,10 @@ function RecipeEditor({
   // this editor only while it is the visible topmost layer AND no sheet is open
   // on top of it — the sheet that is open registers its own shortcut instead,
   // so exactly one save action reacts (see useSaveShortcut).
-  useSaveShortcut(() => void handleSave(), visible && sheet === null && createSheet === null);
+  useSaveShortcut(
+    () => void handleSave(),
+    visible && sheet === null && createSheet === null && masterEditName === null,
+  );
 
   /** Toggles the reference role of a master-list row (§4; both recipe types). */
   const toggleReference = (name: string): void => {
@@ -2130,6 +2232,9 @@ function RecipeEditor({
   const globalIssues = sectionIssues('global');
   /** Any non-global issue exists → the top box shows the generic prompt. */
   const hasValidationIssues = liveIssues.length > globalIssues.length;
+
+  /** The entry behind the open master-data sheet, or undefined if the registry changed. */
+  const masterEditEntry = masterEditName === null ? undefined : mappingsFor(masterEditName);
 
   return (
     <main className="app app-narrow">
@@ -2640,7 +2745,7 @@ function RecipeEditor({
                   onClick={() => openSheet({ kind: 'row-add', stepIndex })}
                 >
                   <PlusIcon className="button-icon" optical={20} />
-                  <span>Zutat zur Liste hinzufügen</span>
+                  <span>Zutatenzeile hinzufügen</span>
                 </button>
               </div>
 
@@ -2730,7 +2835,7 @@ function RecipeEditor({
           {computedIngredients.length === 0 ? (
             <p className="empty-hint">
               Die Zutatenliste wird aus den Listen der Zubereitungsschritte zusammengestellt — füge
-              Zutaten über „Zutat zur Liste hinzufügen“ in den Schritten hinzu.
+              Zutatenzeilen über „Zutatenzeile hinzufügen“ in den Schritten hinzu.
             </p>
           ) : (
             <>
@@ -2856,43 +2961,64 @@ function RecipeEditor({
         )}
       </section>
 
+      {/* The quantity sheet stays mounted under a master-data sheet, so its
+          values survive the round trip. `inert` takes it out of the tab order
+          and the accessibility tree while the master sheet is on top; the
+          top-layer wrapper below makes the master backdrop dim it. */}
       {sheet !== null && (
-        <IngredientSheet
-          mode={sheetMode(sheet)}
-          initial={
-            sheet.kind === 'row-edit'
-              ? draft.steps[sheet.stepIndex]!.ingredients[sheet.rowIndex]
-              : sheet.kind === 'inline-edit'
-                ? sheet.artifact
-                : undefined
-          }
-          prefill={sheetPrefill ?? undefined}
-          ingredientRecipes={ingredientRecipes}
-          onConfirm={handleSheetConfirm}
-          onClose={handleCloseSheet}
-          onCreateNewIngredient={(name, quantity) => {
-            if (sheet === null) return;
-            setSheetContext({ sheet, mode: sheetMode(sheet), name, quantity });
-            handleCloseSheet();
-            // A fresh create flow must not start with the stale Drive error of
-            // a previous (failed or cancelled) attempt.
-            setCreateError(null);
-            setCreateSheet({ name });
-          }}
-        />
+        <div inert={masterEditName !== null ? true : undefined}>
+          <IngredientSheet
+            mode={sheetMode(sheet)}
+            initial={
+              sheet.kind === 'row-edit'
+                ? draft.steps[sheet.stepIndex]!.ingredients[sheet.rowIndex]
+                : sheet.kind === 'inline-edit'
+                  ? sheet.artifact
+                  : undefined
+            }
+            prefill={sheetPrefill ?? undefined}
+            ingredientRecipes={ingredientRecipes}
+            onConfirm={handleSheetConfirm}
+            onClose={handleCloseSheet}
+            onEditIngredient={handleEditIngredient}
+            shortcutEnabled={masterEditName === null}
+            onCreateNewIngredient={(name, quantity) => {
+              if (sheet === null) return;
+              setSheetContext({ sheet, mode: sheetMode(sheet), name, quantity });
+              handleCloseSheet();
+              // A fresh create flow must not start with the stale Drive error of
+              // a previous (failed or cancelled) attempt.
+              setCreateError(null);
+              setCreateSheet({ name });
+            }}
+          />
+        </div>
       )}
-
       {createSheet !== null && (
         <NewIngredientSheet
           initialName={createSheet.name}
           saving={createSaving}
           error={createError}
-          onSave={(name, bu, reorderPoint, entries, precision, stop) =>
-            void handleCreateIngredient(name, bu, reorderPoint, entries, precision, stop)
+          onSave={(name, bu, reorderPoint, entries, precision, stop, variants) =>
+            void handleCreateIngredient(name, bu, reorderPoint, entries, precision, stop, variants)
           }
           onEdited={() => setCreateError(null)}
           onClose={handleCreateClose}
         />
+      )}
+      {masterEditName !== null && masterEditEntry !== undefined && (
+        <div className="sheet-layer-top">
+          <EditIngredientSheet
+            key={masterEditName}
+            name={masterEditName}
+            entry={masterEditEntry}
+            saving={masterEditSaving}
+            error={masterEditError}
+            onSave={(update) => void handleMasterEditSave(update)}
+            onEdited={() => setMasterEditError(null)}
+            onClose={handleMasterEditClose}
+          />
+        </div>
       )}
       {confirmOpen && (
         <LeaveConfirmSheet

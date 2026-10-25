@@ -1,7 +1,7 @@
 /**
- * Shopping master-data screen („Einkaufsorte“) — component styles.
+ * Shopping master-data screen („Einkaufsartikel“) — component styles.
  *
- * The place behind the home screen's „Einkaufsorte verwalten“ button, plus the
+ * The place behind the home screen's „Einkaufsartikel verwalten“ button, plus the
  * one piece of its edit sheet that has no shared look yet: the synonym field's
  * input + add-button row. Colours and sizes reference the tokens in
  * styles/tokens.css; the list, rows, search and banner are the ingredient

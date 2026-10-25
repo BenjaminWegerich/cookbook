@@ -98,7 +98,8 @@ import './styles/snackbar.css';
  * 'ingredients' is the ingredient master-data screen
  * (components/IngredientMaster), a place of its own over the list.
  * 'shoppingPlaces' is the shopping master-data screen (components/ShoppingPlaces)
- * beside it: the article rows with their stops and synonyms.
+ * beside it: the article rows with their stops and synonyms. Its screen title is
+ * „Einkaufsartikel“ (the items, not the places).
  */
 type TopScreen =
   | 'editor'
@@ -438,7 +439,7 @@ function App() {
   /** Browser-Back consumer of the ingredient master-data screen. */
   const ingredientsHandleRef = useRef<IngredientMasterHandle | null>(null);
   /**
-   * The shopping master-data screen („Einkaufsorte“) is open — the sibling place
+   * The shopping master-data screen („Einkaufsartikel“) is open — the sibling place
    * of the ingredient screen, listing the article rows with their stops and
    * synonyms. Its edit sheet lives inside it, so the screen carries the same
    * kind of handle for the browser Back button.
@@ -2317,7 +2318,7 @@ function App() {
         />
       )}
 
-      {/* The shopping master data ("Einkaufsorte") — the sibling place of
+      {/* The shopping master data ("Einkaufsartikel") — the sibling place of
           „Zutaten“, listing the article rows with their stops and synonyms. Its
           article sheet is internal, so App only needs the Back handle. */}
       {shoppingPlacesOpen && (
@@ -2359,6 +2360,7 @@ function App() {
               onClose={closeEditor}
               onSaved={handleEditorSaved}
               onOpenRecipe={openSubRecipe}
+              showSnackbar={showSnackbar}
             />
           </div>
           {/* One mounted level per jumped sub-recipe: only the deepest is
@@ -2379,6 +2381,7 @@ function App() {
                 onClose={closeEditor}
                 onSaved={handleEditorSaved}
                 onOpenRecipe={openSubRecipe}
+                showSnackbar={showSnackbar}
               />
             </div>
           ))}

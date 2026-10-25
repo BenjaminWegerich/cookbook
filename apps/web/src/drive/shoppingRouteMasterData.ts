@@ -48,6 +48,7 @@ import {
   setShoppingRoute,
   setShoppingSynonyms,
   shoppingNameKey,
+  validateShoppingVariant,
   type ShoppingItems,
   type ShoppingRoute,
   type ShoppingStop,
@@ -417,6 +418,52 @@ export async function appendShoppingItem(
   folder?: CookbookFolder,
 ): Promise<void> {
   await appendShoppingItems(token, [{ item, stop }], folder);
+}
+
+/**
+ * Creates one item row **and** its initial synonyms in one write — the form
+ * behind the „Einkaufsartikel“ screen's create action.
+ *
+ * A create is not an upsert: the item table keys on the name, so a name that is
+ * already taken (case-folded, like the matching) is refused instead of silently
+ * overwriting the existing row and its route. The form validates the same rule
+ * live; this check is the defence in depth for a race with another tab.
+ *
+ * Every variant is validated against the item table the write is about to
+ * create, so a variant that shadows an item name or another item's synonym
+ * fails before anything is written. The route itself is written together with
+ * the two tables, as in every shopping write.
+ */
+export async function createShoppingItem(
+  token: string,
+  item: string,
+  stop: ShoppingStop,
+  variants: readonly string[],
+): Promise<void> {
+  const folder = await listCookbookFolder(token);
+  const current = await readCurrentMasterData(token, folder);
+  const key = shoppingNameKey(item);
+  const existing = Object.keys(current.items).find(
+    (candidate) => shoppingNameKey(candidate) === key,
+  );
+  if (existing !== undefined) {
+    throw new Error(`Einkaufsartikel: „${existing}“ existiert bereits.`);
+  }
+
+  // Build the target tables from the current content, validating each variant
+  // against the table state it would be written into.
+  const items: Record<string, ShoppingStop> = { ...current.items, [item]: stop };
+  const synonyms: Record<string, string> = { ...current.synonyms };
+  for (const variant of variants) {
+    const check = validateShoppingVariant(variant, item, items, synonyms);
+    if (!check.ok) {
+      throw new Error(`Einkaufsartikel: ${check.message}`);
+    }
+    synonyms[check.variant] = item;
+  }
+
+  const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+  await writeMasterData(token, dataFolderId, current, items, synonyms);
 }
 
 /**

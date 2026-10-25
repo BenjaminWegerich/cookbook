@@ -591,7 +591,7 @@ export function ShelfIcon({ className, optical }: IconProps) {
 }
 
 /**
- * Storefront — the shopping-places symbol on the home screen's „Einkaufsorte
+ * Storefront — the shopping-places symbol on the home screen's „Einkaufsartikel
  * verwalten“ button. The awning reads as "where shopping happens" without
  * repeating the cart, which already means "what is bought" on a pantry row.
  */

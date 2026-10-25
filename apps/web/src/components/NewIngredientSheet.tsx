@@ -1,67 +1,22 @@
 /**
  * Bottom sheet to create a new ingredient in the master data.
  *
- * Opened from the ingredient sheet ("Neue Zutat anlegen") when the typed name
- * is neither in the master data nor an ingredient recipe. It collects the
- * master-data fields (name, base unit g/ml, the reorder point, the shopping
- * stop, and an optional factor per known additional unit — Becher / EL / TL;
- * the mappings are all optional: an ingredient without additional units is
- * valid) and hands them to the parent, which persists them to the
- * Drive master data (ingredientMasterData.ts +
- * shoppingRouteMasterData.ts). After saving, the ingredient sheet re-appears
- * with the name now valid; the recipe addition is confirmed there separately
- * (decided with the user).
+ * The form is the shared `MasterDataSheet`, with the name and base unit editable
+ * (the edit sheet shows both disabled). Everything else — display forms, the
+ * additional-unit mappings, the precision, the reorder point and the shopping
+ * data („Einkauf“ + „Synonyme“) — is the same form the edit flow uses.
  *
- * The „Einkauf“ field (docs/storage_format.md §10) asks where the ingredient is
- * bought: level 1 (the store, „Markt“ in the UI) is picked with one tap on a
- * chip, level 2 (the section, „Bereich“ in the UI) from a search field with the
- * chosen store's sections listed below it (decided with the user). Both values
- * are mandatory — a section belongs to exactly one store, and a stop that the
- * route does not contain would fail the next master-data load — unless the route
- * holds no stops at all: then there is nothing to choose, the sheet says so and
- * the ingredient is created without a shopping stop (decided with the user).
- *
- * The reorder point is picked with the QuantityInput (suggested chips + BQ
- * stepper) and stored exactly as entered: no quantity optimization
- * applies to this field (decided with the user), so an additional unit never
- * snaps or rewrites it and there is no preview line. Its default is 0 ("only
- * ever bought for a recipe"); "∞" selects infinite stock.
- *
- * Every mapping is a conversion factor only: the optimizer scores every
- * compatible unit, and the app allows at most one shopping unit per ingredient.
- * The ingredient-level precision is mandatory (five chips, default `medium`):
- * it is the only precision level in the master data. As a convenience the mappings of an existing
- * ingredient with the same base-unit family can be copied in as a
- * starting point ("Von bekannter Zutat übernehmen", a text-autocomplete like
- * the ingredient sheet's name selector) and then edited / extended — factors
- * are expressed in the ingredient's own base unit, so only same-family
- * sources are offered.
+ * The create flow's name usually arrives from the recipe editor's ingredient
+ * sheet. When that name already exists as a shopping item, the shared sheet
+ * pre-fills the item's stop and synonyms; a change in those fields is handed to
+ * the parent, which updates the existing item instead of creating a second one.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useState } from 'react';
+import { type PrecisionLevel, type ShoppingStop } from '@cookbook/core';
 
-import {
-  formatDecimal,
-  masterIngredientNames,
-  mappingsFor,
-  shoppingSections,
-  shoppingStores,
-  type PrecisionLevel,
-  type ShoppingStop,
-} from '@cookbook/core';
-
-import IngredientMappingsField from './IngredientMappingsField';
-import QuantityInput from './QuantityInput';
-import PrecisionChips from './PrecisionChips';
-import {
-  buildMappingRows,
-  mappingEntriesFromRows,
-  validateMappingRows,
-  type MappingRow,
-} from './ingredientMasterForm';
-import { useSaveShortcut } from '../hooks/useSaveShortcut';
+import MasterDataSheet from './MasterDataSheet';
 
 /** One filled mapping row handed to the parent for persistence. */
 export interface NewIngredientEntry {
@@ -86,6 +41,7 @@ interface NewIngredientSheetProps {
     entries: NewIngredientEntry[],
     precision: PrecisionLevel,
     stop: ShoppingStop | null,
+    variants: readonly string[],
   ) => void;
   /** Called when the user edits any form field — the parent forgets the
    *  stale Drive error of the last attempt (its cause may be gone now). */
@@ -93,64 +49,9 @@ interface NewIngredientSheetProps {
   onClose: () => void;
 }
 
-/** The base unit family options (kg/l exist only in display). */
-const BASE_UNITS = ['g', 'ml'] as const;
-
 /**
- * The exact German message a save attempt would report for the current form:
- * empty/duplicate name first, then the first invalid mapping row. It is the
- * single source of truth for both the save attempt and the live error text.
- */
-function currentSaveErrorMessage(name: string, rows: MappingRow[]): string | null {
-  const trimmed = name.trim();
-  if (trimmed === '') {
-    return 'Bitte einen Namen angeben.';
-  }
-  if (masterIngredientNames().includes(trimmed)) {
-    return `„${trimmed}“ existiert bereits in der Stammdatenliste.`;
-  }
-  return validateMappingRows(rows);
-}
-
-/**
- * Validates the „Einkauf“ field against the route the app currently holds.
- * Returns a German error message, or null when the form can be saved.
- *
- * Both values are mandatory because the assignment file must name a stop of the
- * route (docs/storage_format.md §10) — a free-typed section could silently pair
- * a section with the wrong store. The one exception is a route without a single
- * stop: nothing can be picked then, so the ingredient is saved without a
- * shopping stop (decided with the user).
- *
- * The messages name level 1 „Markt“ and level 2 „Bereich“, the UI's words for
- * them; the data model and the CSV columns keep the English names `Store` and
- * `Section` (decided with the user).
- */
-function validateShoppingStop(
-  stores: readonly string[],
-  store: string | null,
-  sections: readonly string[],
-  sectionQuery: string,
-): string | null {
-  if (stores.length === 0) {
-    return null;
-  }
-  if (store === null) {
-    return 'Bitte einen Markt auswählen.';
-  }
-  const section = sectionQuery.trim();
-  if (section === '') {
-    return `Bitte einen Bereich für „${store}“ auswählen.`;
-  }
-  if (!sections.includes(section)) {
-    return `„${section}“ steht nicht im Einkaufsweg für „${store}“ — bitte einen der angebotenen Bereiche wählen.`;
-  }
-  return null;
-}
-
-/**
- * The bottom sheet with the master-data form (see file header). Renders on
- * top of the ingredient sheet; the backdrop closes it (back to the sheet).
+ * The create sheet (see file header). Renders on top of the ingredient sheet;
+ * the backdrop closes it (back to the sheet).
  */
 function NewIngredientSheet({
   initialName,
@@ -160,400 +61,28 @@ function NewIngredientSheet({
   onEdited,
   onClose,
 }: NewIngredientSheetProps) {
-  const [name, setName] = useState(initialName);
-  const [bu, setBu] = useState<'g' | 'ml'>('g');
-  /** The reorder point: a base-unit quantity, 0 (the default), or Infinity. */
-  const [reorderPoint, setReorderPoint] = useState(0);
-  /** Factor inputs keyed by additional-unit name; empty string = row skipped. */
-  const [factors, setFactors] = useState<Record<string, string>>({});
-  /** Mandatory ingredient-level precision; `medium` is the neutral start. */
-  const [precision, setPrecision] = useState<PrecisionLevel>('medium');
-  /** The copy-source autocomplete text ("" = nothing typed); applying resets it. */
-  const [copyQuery, setCopyQuery] = useState('');
-  /** The chosen store — level 1 of the shopping route; null = nothing picked. */
-  const [store, setStore] = useState<string | null>(null);
-  /**
-   * The section input text — level 2 of the shopping route. It is the picked
-   * section only while it names one of the chosen store's sections exactly
-   * (see validateShoppingStop); the field is a search field, not a free-text one.
-   */
-  const [sectionQuery, setSectionQuery] = useState('');
-  const [localError, setLocalError] = useState<string | null>(null);
-
-  const trimmedName = name.trim();
-
-  /**
-   * Whether the name input takes the focus when the sheet opens. On smartphones
-   * a focused input pops up the on-screen keyboard and hides the form, so the
-   * field is only focused when it is empty: this sheet is normally reached via
-   * "Neue Zutat anlegen", which always hands over the already typed name — an
-   * empty field therefore only happens in a genuinely blank create flow.
-   */
-  const focusNameOnOpen = initialName.trim() === '';
-
-  /**
-   * Ingredients whose mappings can be copied: master-data ingredients with at
-   * least one mapping and the same base-unit family as the current selection
-   * (factors are expressed in the ingredient's own base unit, so copying
-   * across g/ml would produce meaningless numbers). Re-read every render so a
-   * just-created ingredient appears once it is registered.
-   */
-  const copyCandidates = masterIngredientNames().filter((candidate) => {
-    if (candidate.toLowerCase() === trimmedName.toLowerCase()) {
-      return false;
-    }
-    const entry = mappingsFor(candidate);
-    return entry !== undefined && entry.bu === bu && entry.entries.length > 0;
-  });
-
-  /** The filled rows in AU order (Becher, EL, TL). */
-  const mappingRows = buildMappingRows(factors);
-
-  /** The rows that carry a mapping, in the order the parent will persist them. */
-  const entries: NewIngredientEntry[] = mappingEntriesFromRows(mappingRows);
-
-  /**
-   * The shopping route as the app currently holds it (core registry, read every
-   * render like the ingredient list above): the store chips and — once a store
-   * is picked — the section options of exactly that store.
-   */
-  const stores = shoppingStores();
-  const sections = store === null ? [] : shoppingSections(store);
-  const section = sectionQuery.trim();
-
-  /**
-   * The stop to hand to the parent: the picked pair, or null while the route
-   * holds no stops at all (nothing can be picked then, and the ingredient is
-   * created without a shopping stop — decided with the user).
-   */
-  const chosenStop: ShoppingStop | null =
-    store !== null && sections.includes(section) ? { store, section } : null;
-
-  /** The message the „Einkauf“ field would report for the current state. */
-  const shoppingError = validateShoppingStop(stores, store, sections, sectionQuery);
-
-  /**
-   * The options listed under the section field: every section of the chosen
-   * store while nothing is typed, so the options are visible without typing
-   * (decided with the user — a search field with the list below it, not a
-   * collapsed dropdown); the matching ones while a part is typed; none once the
-   * text names a section exactly — the list is then empty because the pick
-   * moved into the field, not because nothing was found.
-   */
-  const sectionSuggestions = sections.includes(section)
-    ? []
-    : sections.filter((candidate) => candidate.toLowerCase().includes(section.toLowerCase()));
-
-  /**
-   * The message of the last failed save attempt, shown only while the current
-   * form would still produce exactly that message. Deriving it every render
-   * (instead of clearing it on input events) makes the error disappear the
-   * moment its cause is resolved — typing a still-invalid value keeps it, a
-   * different problem is only announced by the next save attempt. The order is
-   * the form's order: name, mapping rows, then the „Einkauf“ field.
-   */
-  const saveErrorNow = currentSaveErrorMessage(trimmedName, mappingRows) ?? shoppingError;
-  const shownLocalError = localError !== null && localError === saveErrorNow ? localError : null;
-
-  /** Reports a form edit to the parent (drops the stale Drive error). */
-  const markEdited = (): void => onEdited();
-
-  /**
-   * Picks a store. A section belongs to exactly one store, so a section picked
-   * for the previous store is cleared — it would otherwise read as a valid
-   * choice while naming a section the new store does not have.
-   */
-  const chooseStore = (next: string): void => {
-    setStore(next);
-    setSectionQuery('');
-    markEdited();
-  };
-
-  /** Adopts a section option into the search field (same tap-to-apply as the
-   *  suggestion lists of the ingredient sheet). */
-  const adoptSection = (next: string): void => {
-    setSectionQuery(next);
-    markEdited();
-  };
-
-  /** Copies the mappings of `source` into the form (AU rows are overwritten).
-   *  Factors enter the inputs with the German decimal comma ("7,5"), the same
-   *  display form the edit sheet uses for its prefilled rows. */
-  const applyCopy = (source: string): void => {
-    const entry = mappingsFor(source);
-    if (entry === undefined) {
-      return;
-    }
-    const nextFactors = { ...factors };
-    for (const mapping of entry.entries) {
-      nextFactors[mapping.au] = formatDecimal(mapping.factor);
-    }
-    setFactors(nextFactors);
-    markEdited();
-  };
-
-  /**
-   * Adopts a copy suggestion: fills the AU rows from that ingredient and
-   * clears the autocomplete, mirroring the ingredient selector of the
-   * ingredient sheet (typed text + suggestion list, tap to apply).
-   */
-  const adoptCopy = (candidate: string): void => {
-    applyCopy(candidate);
-    setCopyQuery('');
-  };
-
-  /** Suggestion list of the copy autocomplete (same matching as the
-   *  ingredient selector: case-insensitive substring, capped at 6). */
-  const copyNeedle = copyQuery.trim().toLowerCase();
-  const copySuggestions =
-    copyNeedle === ''
-      ? []
-      : copyCandidates
-          .filter((candidate) => candidate.toLowerCase().includes(copyNeedle))
-          .slice(0, 6);
-
-  /**
-   * Validates and saves. On failure the exact message is stored; it stays
-   * visible only while the form would still produce it (see `shownLocalError`)
-   * and disappears the moment its cause is fixed.
-   */
-  const handleSave = (): void => {
-    // A write is already running: the button is disabled then, and the shortcut
-    // must honour the same state (a second in-flight write would append the
-    // ingredient twice).
-    if (saving) return;
-    if (saveErrorNow !== null) {
-      setLocalError(saveErrorNow);
-      return;
-    }
-    setLocalError(null);
-    onSave(trimmedName, bu, reorderPoint, entries, precision, chosenStop);
-  };
-
-  // Ctrl+S is the keyboard equivalent of the „Speichern" button. The sheet is
-  // only ever mounted while it is the topmost layer, so the shortcut is always
-  // enabled here; the ingredient sheet and the editor below are closed/hidden
-  // while this one is open and do not react.
-  useSaveShortcut(handleSave);
-
   return (
-    <>
-      <div
-        className="sheet-backdrop"
-        onClick={saving ? undefined : onClose}
-        role="presentation"
-        aria-hidden={saving}
-      />
-      <div className="sheet" role="dialog" aria-modal="true" aria-label="Neue Zutat anlegen">
-        <h3 className="sheet-title">Neue Zutat anlegen</h3>
-
-        <label className="field">
-          <span className="field-label">Name</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => {
-              setName(event.target.value);
-              markEdited();
-            }}
-            autoFocus={focusNameOnOpen}
-          />
-        </label>
-
-        <div className="field">
-          <span className="field-label">Basis-Einheit</span>
-          <div className="segmented" role="radiogroup" aria-label="Basis-Einheit">
-            {BASE_UNITS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="radio"
-                aria-checked={bu === option}
-                className={bu === option ? 'segmented-active' : undefined}
-                onClick={() => {
-                  setBu(option);
-                  markEdited();
-                }}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="field">
-          <span className="field-label">Zusatz-Einheiten</span>
-
-          {copyCandidates.length > 0 && (
-            <>
-              <p className="field-hint">Von bekannter Zutat übernehmen:</p>
-              <input
-                type="text"
-                value={copyQuery}
-                onChange={(event) => setCopyQuery(event.target.value)}
-                aria-label="Von bekannter Zutat übernehmen"
-              />
-              {copySuggestions.length > 0 && (
-                <ul className="suggestions">
-                  {copySuggestions.map((candidate) => (
-                    <li key={candidate}>
-                      <button type="button" className="chip" onClick={() => adoptCopy(candidate)}>
-                        {candidate}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
-
-          <p className="field-hint">Manuell anpassen:</p>
-          <IngredientMappingsField
-            bu={bu}
-            factors={factors}
-            onFactorChange={(au, value) => {
-              setFactors((current) => ({ ...current, [au]: value }));
-              markEdited();
-            }}
-          />
-        </div>
-
-        {/* The mandatory ingredient-level precision is a preference for the
-            display optimizer; higher values prefer exact metric amounts. */}
-        <div className="field">
-          <span className="field-label">Genauigkeit</span>
-          <p className="field-hint">
-            Bestimmt, wie genau die Mengen dieser Zutat dargestellt werden: „Sehr hoch“ bevorzugt
-            exakte metrische Mengen, „Sehr niedrig“ bevorzugt runde Haushalts- und Packungsmaße.
-          </p>
-          <PrecisionChips
-            value={precision}
-            onChange={(next) => {
-              setPrecision(next);
-              markEdited();
-            }}
-            ariaLabel="Genauigkeit der Zutat"
-          />
-        </div>
-
-        {/* The reorder point: what is on the shelf after a shopping trip. Same
-            picker as a recipe quantity, plus 0 and ∞; the value is stored as
-            entered, without quantity optimization. */}
-        <div className="field">
-          <span className="field-label">Vorrat</span>
-          <QuantityInput
-            value={reorderPoint}
-            onChange={(next) => {
-              setReorderPoint(next);
-              markEdited();
-            }}
-            family={bu}
-            allowZero
-            allowInfinite
-          />
-        </div>
-
-        {/* Where the ingredient is bought (docs/storage_format.md §10): level 1
-            the store („Markt“ in the UI, one tap on a chip), level 2 the section
-            („Bereich“ in the UI) as a search field with that store's sections
-            listed below (decided with the user). A route without a single stop
-            cannot be picked from: the sheet says so and saves the ingredient
-            without a shopping stop. */}
-        <div className="field">
-          <span className="field-label">Einkauf</span>
-
-          {stores.length === 0 ? (
-            <p className="field-hint">
-              Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — die Zutat wird ohne Einkaufsort
-              gespeichert.
-            </p>
-          ) : (
-            <>
-              <div className="store-chips" role="group" aria-label="Markt">
-                {stores.map((candidate) => (
-                  <button
-                    key={candidate}
-                    type="button"
-                    className={store === candidate ? 'chip chip-active' : 'chip'}
-                    aria-pressed={store === candidate}
-                    onClick={() => chooseStore(candidate)}
-                  >
-                    {candidate}
-                  </button>
-                ))}
-              </div>
-
-              {/* The section field follows the store: without a store there is no
-                  option to offer, and a section belongs to exactly one store. */}
-              {store !== null && (
-                <>
-                  <p className="field-hint">Bereich</p>
-                  <input
-                    type="text"
-                    value={sectionQuery}
-                    onChange={(event) => {
-                      setSectionQuery(event.target.value);
-                      markEdited();
-                    }}
-                    aria-label={`Bereich in ${store}`}
-                    placeholder="Suchen oder wählen"
-                  />
-                  {sectionSuggestions.length > 0 && (
-                    <ul className="suggestions">
-                      {sectionSuggestions.map((candidate) => (
-                        <li key={candidate}>
-                          <button
-                            type="button"
-                            className="chip"
-                            onClick={() => adoptSection(candidate)}
-                          >
-                            {candidate}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {/* Nothing matches the typed text: the established bare em dash
-                      placeholder, so the field never looks broken. Suppressed
-                      while the field names a section exactly — the list is empty
-                      because the pick moved into the field, not because nothing
-                      was found (same pattern as the recipe search). */}
-                  {section !== '' &&
-                    !sections.includes(section) &&
-                    sectionSuggestions.length === 0 && (
-                      <p className="field-hint" role="status">
-                        —
-                      </p>
-                    )}
-                </>
-              )}
-            </>
-          )}
-        </div>
-
-        {(shownLocalError ?? error) !== null && (
-          <p className="field-error" role="alert">
-            {shownLocalError ?? error}
-          </p>
-        )}
-
-        <div className="sheet-actions">
-          <button type="button" className="text-button" onClick={onClose} disabled={saving}>
-            Abbrechen
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={handleSave}
-            disabled={saving}
-            aria-busy={saving}
-          >
-            {saving ? 'Speichert …' : 'Speichern'}
-          </button>
-        </div>
-      </div>
-    </>
+    <MasterDataSheet
+      kind="ingredient"
+      creating
+      initialName={initialName}
+      busy={saving ? 'save' : null}
+      error={error}
+      onSave={(result) => {
+        if (result.kind !== 'ingredient') return;
+        onSave(
+          result.name,
+          result.bu,
+          result.reorderPoint,
+          result.entries.map((entry) => ({ au: entry.au, factor: entry.factor })),
+          result.precision,
+          result.stop,
+          result.variants,
+        );
+      }}
+      onEdited={onEdited}
+      onClose={onClose}
+    />
   );
 }
 

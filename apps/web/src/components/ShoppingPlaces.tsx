@@ -1,21 +1,20 @@
 /**
- * Shopping master-data screen — the „Einkaufsorte“ place behind the home
- * screen's „Einkaufsorte verwalten“ button, next to „Zutaten verwalten“.
+ * Shopping master-data screen — the „Einkaufsartikel“ place behind the home
+ * screen's „Einkaufsartikel verwalten“ button, next to „Zutaten verwalten“.
  *
  * The screen lists every **article row** of `einkaufs-artikel.csv`
  * (docs/storage_format.md §10). The name set is a superset of the ingredient
  * list, so non-ingredients („Klopapier“, „Seife“, „Blumen“) appear here beside
- * recipe ingredients. Only existing rows are listed and edited (decided with
- * the user): an ingredient without an item row is simply never bought, and
- * creating rows stays with the flows that already own it (the new-ingredient
- * sheet and the shopping-list sort).
+ * recipe ingredients. An ingredient without an item row is simply never bought
+ * and does not appear here; „Einkaufsartikel anlegen“ adds a row for anything
+ * that is bought but is not (yet) an ingredient.
  *
  * A row carries the article name only — the same one-line row as „Zutaten
- * verwalten“ (decided with the user). The stop is edited in the sheet behind
- * it, not repeated in the list. Tapping a row opens `EditShoppingItemSheet`,
- * which owns the two things this screen edits — the stop and the item's
- * synonyms. The route itself (stores and sections) is not edited here; the
- * sheet picks from it.
+ * verwalten“ (decided with the user). Tapping a row opens the shared
+ * `MasterDataSheet` in its item-edit mode („Einkaufsartikel verwalten“), which
+ * owns the two things this screen edits — the stop and the item's synonyms.
+ * The route itself (stores and sections) is not edited here; the sheet picks
+ * from it. Creating a row uses the same sheet with an editable name.
  *
  * Search matches the article name and its synonyms, so typing „Möhren“ finds
  * „Karotten“. A search without a match is the expected outcome and shows the
@@ -24,8 +23,7 @@
  * The screen is a *place* (DESIGN §6.1): its header carries „Zurück“ and stays
  * sticky; the edit sheet is a *change* and answers „Abbrechen“. Browser Back
  * and Escape close the topmost layer — first the sheet, then the screen — and
- * the screen refreshes the set from Drive when it opens, so a spreadsheet edit
- * made in the meantime is what the user sees.
+ * the screen refreshes the set from Drive when it opens.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -40,8 +38,10 @@ import {
 } from '@cookbook/core';
 
 import EditShoppingItemSheet, { type ShoppingItemUpdate } from './EditShoppingItemSheet';
-import { CloseIcon, SearchIcon, UndoIcon } from './icons';
+import MasterDataSheet from './MasterDataSheet';
+import { CloseIcon, PlusIcon, SearchIcon, UndoIcon } from './icons';
 import {
+  createShoppingItem,
   deleteShoppingItem,
   loadShoppingRouteMasterData,
   restoreShoppingItem,
@@ -94,13 +94,15 @@ function isUnchanged(
 }
 
 /**
- * The „Einkaufsorte“ screen (see file header). It owns the search, the selected
+ * The „Einkaufsartikel“ screen (see file header). It owns the search, the selected
  * item and the save/delete/undo cycle; the sheet owns its form values.
  */
 function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesProps) {
   const [query, setQuery] = useState('');
   /** The name of the item whose sheet is open, or null. */
   const [editingName, setEditingName] = useState<string | null>(null);
+  /** True while the „Einkaufsartikel anlegen“ sheet is open. */
+  const [creating, setCreating] = useState(false);
   /** Which write is running; the sheet keeps its contents and labels it. */
   const [saving, setSaving] = useState<'save' | 'delete' | null>(null);
   /**
@@ -110,8 +112,10 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
    * sheet from a Back/Escape that lands in that same window.
    */
   const savingRef = useRef(false);
-  /** Drive error of the last failed write (German), shown in the sheet. */
+  /** Drive error of the last failed edit write (German), shown in the edit sheet. */
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Drive error of the last failed create write (German), shown in the create sheet. */
+  const [createError, setCreateError] = useState<string | null>(null);
   /** Non-fatal failure of the refresh on open; the cached data stays visible. */
   const [loadWarning, setLoadWarning] = useState<string | null>(null);
   /**
@@ -155,6 +159,12 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
     ref,
     () => ({
       notifyBack: (): boolean => {
+        if (creating) {
+          if (savingRef.current) return true;
+          setCreating(false);
+          setCreateError(null);
+          return true;
+        }
         if (editingName === null) return false;
         if (savingRef.current) return true;
         setEditingName(null);
@@ -162,12 +172,19 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
         return true;
       },
     }),
-    [editingName],
+    [creating, editingName],
   );
 
   // Escape mirrors Back: the topmost layer closes, the screen only when no
   // sheet is open.
   useEscapeTrigger(() => {
+    if (creating) {
+      if (!savingRef.current) {
+        setCreating(false);
+        setCreateError(null);
+      }
+      return;
+    }
     if (editingName !== null) {
       if (!savingRef.current) {
         setEditingName(null);
@@ -253,6 +270,48 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
   };
 
   /**
+   * Creates one item row and its initial synonyms. The form refuses a name
+   * that is already taken; the write guards the same rule again. A successful
+   * create is reversible through the notice's „Rückgängig“.
+   */
+  const createEntry = async (
+    name: string,
+    stop: ShoppingStop,
+    variants: readonly string[],
+  ): Promise<void> => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving('save');
+    setCreateError(null);
+    try {
+      await createShoppingItem(token, name, stop, variants);
+      setCreating(false);
+      setRevision((current) => current + 1);
+      showSnackbar({
+        text: `„${name}“ angelegt.`,
+        action: {
+          label: 'Rückgängig',
+          busyLabel: 'Wird rückgängig gemacht …',
+          icon: <UndoIcon className="button-icon" optical={20} />,
+          run: async (): Promise<void> => {
+            try {
+              await deleteShoppingItem(token, name);
+              setRevision((current) => current + 1);
+            } catch (err) {
+              reportUndoFailure(name, err);
+            }
+          },
+        },
+      });
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : String(err));
+    } finally {
+      savingRef.current = false;
+      setSaving(null);
+    }
+  };
+
+  /**
    * Removes the item row and its synonyms. The removal is reversible, so it
    * happens on the tap and the notice offers the restore (DESIGN §6.4/§6.5).
    */
@@ -297,7 +356,7 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
           Zurück
         </button>
         <div className="app-header-title">
-          <h1>Einkaufsorte</h1>
+          <h1>Einkaufsartikel</h1>
         </div>
       </header>
 
@@ -326,6 +385,20 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
             </button>
           )}
         </div>
+      </div>
+
+      <div className="master-create">
+        <button
+          type="button"
+          className="outlined-button"
+          onClick={() => {
+            setCreateError(null);
+            setCreating(true);
+          }}
+        >
+          <PlusIcon className="button-icon" optical={20} />
+          <span>Einkaufsartikel anlegen</span>
+        </button>
       </div>
 
       {loadWarning !== null && (
@@ -357,8 +430,6 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
         <EditShoppingItemSheet
           key={editingName}
           name={editingName}
-          stop={editingStop}
-          variants={shoppingVariantsFor(editingName)}
           saving={saving}
           error={saveError}
           onSave={(update) => void saveEntry(update)}
@@ -368,6 +439,27 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
             if (savingRef.current) return;
             setEditingName(null);
             setSaveError(null);
+          }}
+        />
+      )}
+
+      {creating && (
+        <MasterDataSheet
+          key="new-shopping-item"
+          kind="item"
+          creating
+          initialName=""
+          busy={saving === 'save' ? 'save' : null}
+          error={createError}
+          onSave={(result) => {
+            if (result.kind !== 'item') return;
+            void createEntry(result.name, result.stop, result.variants);
+          }}
+          onEdited={() => setCreateError(null)}
+          onClose={() => {
+            if (savingRef.current) return;
+            setCreating(false);
+            setCreateError(null);
           }}
         />
       )}

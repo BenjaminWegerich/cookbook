@@ -55,33 +55,39 @@ function IngredientMappingsField({ bu, factors, onFactorChange }: IngredientMapp
     <div className="factor-grid">
       {/* The two captions name the grid's columns and deliberately use the
           same quiet .factor-head-cell style: „Zusatz-Einheit“ over the unit
-          names, „Menge [g]“ over the factors. They stay aria-hidden because
-          every input's aria-label already names its unit and the meaning of
-          the number, so a screen reader loses nothing. */}
+          names, „Menge“ over the factors. The base unit itself sits in every
+          factor field, so the header stays short and the unit is visible where
+          the number is typed. The captions stay aria-hidden because every
+          input's aria-label already names its unit and the meaning of the
+          number, so a screen reader loses nothing. */}
       <span className="factor-head-cell" aria-hidden="true">
         Zusatz-Einheit
       </span>
       <span className="factor-head-cell" aria-hidden="true">
-        Menge [{bu}]
+        Menge
       </span>
       {UNITS_ALPHABETICALLY.flatMap((unit) => [
         <span key={`${unit.name}:name`} className="factor-unit">
           {unit.name}
         </span>,
-        <input
-          key={`${unit.name}:menge`}
-          type="text"
-          inputMode="decimal"
-          aria-label={`${unit.name}: Menge in ${bu}`}
-          value={factors[unit.name] ?? ''}
-          onChange={(event) =>
-            // The display layer uses the German decimal comma. A dot typed on a
-            // numeric keypad (or pasted) is rewritten as the user types, so the
-            // field never shows two spellings of the same number; the stored CSV
-            // keeps the canonical dot (parseFactor).
-            onFactorChange(unit.name, event.target.value.replace('.', ','))
-          }
-        />,
+        <span key={`${unit.name}:menge`} className="factor-input">
+          <input
+            type="text"
+            inputMode="decimal"
+            aria-label={`${unit.name}: Menge in ${bu}`}
+            value={factors[unit.name] ?? ''}
+            onChange={(event) =>
+              // The display layer uses the German decimal comma. A dot typed on
+              // a numeric keypad (or pasted) is rewritten as the user types, so
+              // the field never shows two spellings of the same number; the
+              // stored CSV keeps the canonical dot (parseFactor).
+              onFactorChange(unit.name, event.target.value.replace('.', ','))
+            }
+          />
+          <span className="factor-input-unit" aria-hidden="true">
+            {bu}
+          </span>
+        </span>,
       ])}
     </div>
   );

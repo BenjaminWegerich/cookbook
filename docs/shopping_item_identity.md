@@ -44,6 +44,13 @@ An ingredient that is never bought (e.g. water) has an ingredient row and no ite
 row; an item that is not an ingredient has an item row and no ingredient row.
 Neither is an error.
 
+The two tables are edited from the „Einkaufsartikel“ screen (`ShoppingPlaces`):
+„Einkaufsartikel anlegen“ creates an item row with its initial synonyms,
+„Einkaufsartikel verwalten“ changes the stop and the complete synonym list, and
+„Einkaufsartikel löschen“ removes both (undo restores them). Creating an ingredient
+whose name already names an item pre-fills that item's stop and synonyms in the same
+shared sheet and updates the item instead of forking a second route.
+
 ## 2. The Resolution Pipeline
 
 Terms, in the order the pipeline uses them:

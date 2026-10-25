@@ -191,11 +191,12 @@
 }
 
 /* A read-only identity field (the name in the ingredient edit sheet): the value
-   stays readable, but the control visibly cannot be changed. The global disabled
-   look for buttons is the same opacity token (docs/CODING_CONVENTIONS.md). */
+   stays readable — it names the record the user is editing — so the field keeps
+   full text contrast and only the colour turns muted. The disabled attribute
+   already makes it unfocusable and non-editable. */
 .field input[type='text']:disabled {
   color: var(--color-ink-muted);
-  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
 }
 
 /* Auto-growing text fields (see AutoGrowTextarea): the manual grip is gone
@@ -944,6 +945,16 @@
   box-shadow: var(--shadow-md);
 }
 
+/* A sheet stacked over another sheet — the recipe editor's master-data sheet
+   over the Zutatenzeile sheet. The wrapper is an empty stacking context above
+   both normal sheet layers (backdrop 20, sheet 30), so the upper sheet's
+   backdrop dims the lower sheet instead of the lower sheet painting above it.
+   It stays below the snackbar (50), whose notice reports the save. */
+.sheet-layer-top {
+  position: relative;
+  z-index: 40;
+}
+
 /* Sheet head: title + optional explanatory line as one tight block. margin: 0
    on both clears the browser-default heading/paragraph margins — as with
    .editor-card-title, they do not collapse inside the sheet's grid and would
@@ -1030,6 +1041,21 @@
      14 px gap plus this 4 px difference is the 18 px control step. In a 10 px
      composer the same difference gives the 14 px block step. */
   margin-block-start: var(--space-1);
+}
+
+/* The master-data sheet's action row carries a long destructive label
+   („Einkaufsartikel löschen“) beside „Abbrechen“ and „Speichern“. On a phone the
+   three do not fit on one line, so the destructive lead takes its own full row
+   there instead of pushing the primary button into an awkward wrap. */
+.master-sheet-actions {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 28rem) {
+  .master-sheet-actions .danger-button {
+    flex: 1 1 100%;
+    margin-inline-end: 0;
+  }
 }
 
 /* A quiet line that explains why a row's primary action is unavailable, so the
@@ -1132,6 +1158,13 @@
 .not-in-master {
   display: grid;
   gap: var(--space-3);
+}
+
+/* The master-data action under the name field shares the create block's slot:
+   a single outlined action, left-aligned like the create button above it. */
+.master-edit-action {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .sheet-subtitle {

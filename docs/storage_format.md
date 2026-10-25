@@ -397,8 +397,9 @@ user's Drive files: they are built-in definitions compiled from `docs/additional
 into the core package. Only the ingredient list and the mappings are user data.
 
 The files are created on the first user addition („Neue Zutat anlegen“ in the recipe
-editor), seeded with the built-in repo data, and are the authoritative master data once
-they exist: the app loads both into the runtime registry at startup and renders/exports
+editor or on the „Zutaten“ screen), seeded with the built-in repo data, and are the
+authoritative master data once they exist: the app loads both into the runtime registry at
+startup and renders/exports
 every ingredient through them. Dot decimals; the parser tolerates German commas from
 spreadsheet edits. The canonical delimiter is `;`; a file exported comma-separated
 (spreadsheet apps do that in an English locale) still loads — the header row decides the
@@ -461,12 +462,14 @@ data like the ingredient files: the repo CSVs (docs/shopping_route.csv +
 docs/shopping_items.csv + docs/shopping_synonyms.csv) are the seed, the Drive files are
 authoritative once they exist.
 
-The files are created on the first shopping assignment the user enters (the „Einkauf“ field of
-„Neue Zutat anlegen“), seeded with the built-in repo data, and are authoritative once they
-exist (the synonym file empty at first and growing with every confirmed suggestion). That
-field picks the store as chips and the section from a searchable list of that store's
-sections, so a section can never be paired with the wrong store; an item that already has a
-row is overwritten — the name is the key, and the file holds exactly one stop per item. The
+The files are created on the first shopping assignment the user enters (the „Einkauf“ field
+of „Neue Zutat anlegen“ or „Einkaufsartikel anlegen“), seeded with the built-in repo data, and
+are authoritative once they exist (the synonym file empty at first and growing with every
+confirmed suggestion). That field picks the store as chips and the section from a searchable
+list of that store's sections, so a section can never be paired with the wrong store. The
+„Einkaufsartikel anlegen“ form rejects a name that already has a row (case-folded); the
+sort/assignment path still updates a row the user prepared in the spreadsheet — the name is
+the key, and the file holds exactly one stop per item. The
 item table was called `einkaufs-zuordnung.csv` before the item identity existed; the app reads
 that file once, writes its rows unchanged into `einkaufs-artikel.csv`, creates the synonym
 file next to it and deletes the old file afterwards.

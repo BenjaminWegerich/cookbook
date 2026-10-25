@@ -64,7 +64,7 @@ import {
 import ArrangementLine from './ArrangementLine';
 import PrecisionChips from './PrecisionChips';
 import QuantityInput, { type QuantityFamily } from './QuantityInput';
-import { LinkIcon, PlusIcon, TrashIcon } from './icons';
+import { LinkIcon, PencilIcon, PlusIcon, TrashIcon } from './icons';
 import { precisionLabel } from './precisionLabels';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
@@ -118,6 +118,14 @@ interface IngredientSheetProps {
   /** Opens the create-master-data sheet for an unregistered name; the current
    *  name+quantity are passed along so the sheet can be restored on return. */
   onCreateNewIngredient: (name: string, quantity: number) => void;
+  /** Opens the master-data sheet for the selected master ingredient, on top of
+   *  this sheet; this sheet stays mounted so its values survive the round trip. */
+  onEditIngredient?: (name: string) => void;
+  /**
+   * False while a master-data sheet is open above this one. That sheet owns
+   * Ctrl+S then, so this sheet must not react to the same shortcut.
+   */
+  shortcutEnabled?: boolean;
 }
 
 /**
@@ -132,6 +140,8 @@ function IngredientSheet({
   onConfirm,
   onClose,
   onCreateNewIngredient,
+  onEditIngredient,
+  shortcutEnabled = true,
 }: IngredientSheetProps) {
   /** The name the sheet opens with: a restored create-flow prefill wins over
    *  the value of an edited row/artifact. */
@@ -339,10 +349,10 @@ function IngredientSheet({
   };
 
   // Ctrl+S is the keyboard equivalent of the confirm button („Übernehmen" /
-  // „Hinzufügen" / „Einfügen"). The sheet is only ever mounted while it is the
-  // topmost layer, so the shortcut is always enabled here; the editor below
-  // disables its own while this sheet is open.
-  useSaveShortcut(handleConfirm);
+  // „Hinzufügen" / „Einfügen"). The sheet normally owns the shortcut, but a
+  // master-data sheet opened above it owns it instead (shortcutEnabled=false);
+  // the editor below always disables its own while this sheet is mounted.
+  useSaveShortcut(handleConfirm, shortcutEnabled);
 
   const showCreate = trimmedName !== '' && !validName;
 
@@ -359,8 +369,8 @@ function IngredientSheet({
               ? 'Menge zum Text hinzufügen'
               : 'Menge im Text bearbeiten'
             : mode === 'row-add'
-              ? 'Zutat zur Liste hinzufügen'
-              : 'Zutat in der Liste bearbeiten'
+              ? 'Zutatenzeile hinzufügen'
+              : 'Zutatenzeile bearbeiten'
         }
       >
         {/* Head block: title + explanatory line. Grouped into a single grid
@@ -373,8 +383,8 @@ function IngredientSheet({
                 ? 'Menge zum Text hinzufügen'
                 : 'Menge im Text bearbeiten'
               : mode === 'row-add'
-                ? 'Zutat zur Liste hinzufügen'
-                : 'Zutat in der Liste bearbeiten'}
+                ? 'Zutatenzeile hinzufügen'
+                : 'Zutatenzeile bearbeiten'}
           </h3>
           {rowMode && (
             <p className="sheet-subtitle">
@@ -438,6 +448,25 @@ function IngredientSheet({
             >
               <PlusIcon className="button-icon" optical={20} />
               <span>Neue Zutat anlegen</span>
+            </button>
+          </div>
+        )}
+
+        {/* The master-data counterpart of the create action above: the same
+            slot under the name field, but outlined (a change, not a new
+            record). It opens the shared master sheet over this one; the
+            quantity form stays mounted underneath, so its name, amount,
+            precision and unit choice survive the round trip. A sub-recipe is
+            not an ingredient record and therefore offers no such action. */}
+        {isMasterName && onEditIngredient !== undefined && (
+          <div className="master-edit-action">
+            <button
+              type="button"
+              className="outlined-button"
+              onClick={() => onEditIngredient(trimmedName)}
+            >
+              <PencilIcon className="button-icon" optical={20} />
+              <span>Stammdaten bearbeiten</span>
             </button>
           </div>
         )}
@@ -524,8 +553,9 @@ function IngredientSheet({
             ariaLabel="Genauigkeit der Menge"
           />
           <p className="field-hint">
-            Je niedriger die gewählte Genauigkeit, desto stärker wird die Menge auf glatte Zahlen
-            gerundet.
+            {`Je niedriger die Genauigkeit, desto stärker wird auf glatte Zahlen gerundet. Wird hier nichts gewählt, gilt ${
+              ingredientDefault !== undefined ? 'der Zutat-Standard' : 'der Standard'
+            }.`}
           </p>
         </div>
 

@@ -9,10 +9,15 @@
  * edited in the sheet behind the row, and repeating them here would turn a
  * quiet reference list into a data table.
  *
- * Tapping a row opens `EditIngredientSheet`. Saving goes through
- * `updateIngredientMasterData` (read the authoritative pair, replace exactly
- * this entry, round-trip check, write both files). The success notice at the
- * app root offers „Rückgängig“, which writes the entry's previous state back.
+ * Tapping a row opens the shared master-data sheet (`MasterDataSheet`) in its
+ * ingredient-edit mode. The sheet now also edits the same name's shopping data
+ * („Einkauf“ + „Synonyme“), because the ingredient and the shopping item are two
+ * views of one name; saving captures both previous states for „Rückgängig“.
+ *
+ * „Neue Zutat anlegen“ above the list opens the same sheet with the name and base
+ * unit editable. When the chosen name already exists as a shopping item, the
+ * sheet pre-fills the item's stop and synonyms; a changed one is written to that
+ * item instead of creating a second route.
  *
  * Search matches the canonical name and both display forms, so a user can find
  * „Karotten“ by typing „Karotte“. A search without a match is the expected
@@ -21,9 +26,8 @@
  *
  * The screen is a *place* (DESIGN §6.1): its header carries „Zurück“ and stays
  * sticky; the edit sheet is a *change* and answers „Abbrechen“. Browser Back
- * and Escape close the topmost layer — first the sheet, then the screen — and
- * the screen refreshes the master data when it opens, so a spreadsheet edit made
- * in Drive in the meantime is what the user sees.
+ * and Escape close the topmost layer — first a sheet, then the screen — and the
+ * screen refreshes both master-data sets when it opens.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -32,25 +36,41 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'reac
 
 import {
   allIngredientMappings,
+  allShoppingItems,
   masterIngredientNames,
   mappingsFor,
-  type IngredientEntry,
+  shoppingVariantsFor,
+  type ShoppingStop,
 } from '@cookbook/core';
 
 import EditIngredientSheet from './EditIngredientSheet';
-import { CloseIcon, SearchIcon, UndoIcon } from './icons';
+import NewIngredientSheet from './NewIngredientSheet';
 import {
+  findItemKey,
+  isShoppingUnchanged,
+  updateIngredientMasterAndShopping,
+  writeShoppingChange,
+  type IngredientMasterSheetUpdate,
+} from './ingredientMasterUpdate';
+import { CloseIcon, PlusIcon, SearchIcon } from './icons';
+import {
+  appendIngredientMasterData,
   loadIngredientMasterData,
-  updateIngredientMasterData,
   type IngredientMasterEntryInput,
 } from '../drive/ingredientMasterData';
+import {
+  deleteShoppingItem,
+  loadShoppingRouteMasterData,
+  restoreShoppingItem,
+  type ShoppingItemState,
+} from '../drive/shoppingRouteMasterData';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import type { SnackbarMessage } from '../hooks/useSnackbar';
 import '../styles/ingredient-master.css';
 
 /**
  * Imperative handle App uses for the browser Back button: Back must close the
- * open edit sheet first and only the next Back leave the screen.
+ * open sheet first and only the next Back leave the screen.
  */
 export interface IngredientMasterHandle {
   /** True when the sheet consumed the Back; false when the screen may close. */
@@ -68,43 +88,34 @@ interface IngredientMasterProps {
   ref?: Ref<IngredientMasterHandle>;
 }
 
-/**
- * True when the sheet's values equal the entry as the registry holds it. A save
- * without a change is a no-op: it closes the sheet without a write and without
- * a notice (DESIGN §5.1), so the undo of an earlier, unrelated save is not
- * buried under a pointless new one.
- */
-function isUnchanged(entry: IngredientEntry, update: IngredientMasterEntryInput): boolean {
-  if ((entry.singular ?? null) !== update.singular) return false;
-  if ((entry.plural ?? null) !== update.plural) return false;
-  if (entry.reorderPoint !== update.reorderPoint) return false;
-  if (entry.precision !== update.precision) return false;
-  if (entry.entries.length !== update.entries.length) return false;
-  return entry.entries.every((mapping, index) => {
-    const next = update.entries[index];
-    return next !== undefined && mapping.au === next.au && mapping.factor === next.factor;
-  });
+/** The German reason of a failed create step. */
+function reasonOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 /**
  * The „Zutaten“ screen (see file header). It owns the search, the selected
- * entry and the save/undo cycle; the sheet owns its form values.
+ * entry, the create flow and the save/undo cycle; the sheet owns its form values.
  */
 function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMasterProps) {
   const [query, setQuery] = useState('');
   /** The name of the entry whose sheet is open, or null. */
   const [editingName, setEditingName] = useState<string | null>(null);
-  /** True while a save/undo write runs; the sheet keeps its contents then. */
+  /** True while the „Neue Zutat anlegen“ sheet is open. */
+  const [creating, setCreating] = useState(false);
+  /** True while a save/undo/create write runs; the sheets keep their contents. */
   const [saving, setSaving] = useState(false);
   /**
    * Synchronous mirror of `saving`. A double tap (or a tap racing the shortcut)
    * can arrive before React has re-rendered the disabled button; the ref is what
    * actually keeps the second write from starting, and it also protects the
-   * sheet from a Back/Escape that lands in that same window.
+   * sheets from a Back/Escape that lands in that same window.
    */
   const savingRef = useRef(false);
-  /** Drive error of the last failed save (German), shown in the sheet. */
+  /** Drive error of the last failed save (German), shown in the edit sheet. */
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Drive error of the last failed create (German), shown in the create sheet. */
+  const [createError, setCreateError] = useState<string | null>(null);
   /** Non-fatal failure of the refresh on open; the cached data stays visible. */
   const [loadWarning, setLoadWarning] = useState<string | null>(null);
   /**
@@ -119,14 +130,13 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
    */
   const mountedRef = useRef(true);
 
-  // Refresh from Drive when the screen opens. The registry already carries the
-  // last loaded data (or the built-in seed), so the list is usable immediately;
-  // this only makes an external spreadsheet edit visible. A failure is a quiet
-  // warning: saves re-read the authoritative pair themselves and refuse corrupt
-  // files, so the visible list can never be written over bad data.
+  // Refresh both master-data sets from Drive when the screen opens. The screen
+  // now edits the shopping data behind the same names, so a stale item table
+  // would be as wrong as a stale ingredient table. A failure is a quiet warning:
+  // saves re-read the authoritative files themselves and refuse corrupt data.
   useEffect(() => {
     mountedRef.current = true;
-    void loadIngredientMasterData(token)
+    void Promise.all([loadIngredientMasterData(token), loadShoppingRouteMasterData(token)])
       .then(() => {
         if (!mountedRef.current) return;
         setLoadWarning(null);
@@ -134,7 +144,7 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
       })
       .catch((err: unknown) => {
         if (!mountedRef.current) return;
-        setLoadWarning(err instanceof Error ? err.message : String(err));
+        setLoadWarning(reasonOf(err));
       });
     return () => {
       mountedRef.current = false;
@@ -148,6 +158,12 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
     ref,
     () => ({
       notifyBack: (): boolean => {
+        if (creating) {
+          if (savingRef.current) return true;
+          setCreating(false);
+          setCreateError(null);
+          return true;
+        }
         if (editingName === null) return false;
         if (savingRef.current) return true;
         setEditingName(null);
@@ -155,12 +171,19 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
         return true;
       },
     }),
-    [editingName],
+    [creating, editingName],
   );
 
   // Escape mirrors Back: the topmost layer closes, the screen only when no
   // sheet is open.
   useEscapeTrigger(() => {
+    if (creating) {
+      if (!savingRef.current) {
+        setCreating(false);
+        setCreateError(null);
+      }
+      return;
+    }
     if (editingName !== null) {
       if (!savingRef.current) {
         setEditingName(null);
@@ -195,55 +218,89 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
   /**
    * Persists the sheet's validated values and reports the outcome. On success
    * the sheet closes and the app-root notice offers the previous state back;
-   * on failure the sheet stays open with the German reason.
+   * on failure the sheet stays open with the German reason. The write path is
+   * shared with the recipe editor's „Stammdaten bearbeiten“ action, so both
+   * surfaces persist the ingredient and its shopping item identically.
    */
-  const saveEntry = async (update: IngredientMasterEntryInput): Promise<void> => {
+  const saveEntry = async (input: IngredientMasterSheetUpdate): Promise<void> => {
     if (editingName === null || savingRef.current) return;
     const name = editingName;
-    // No value changed: the enabled „Speichern“ is a no-op that closes the sheet
-    // without a write and without a notice (§5.1). The sheet's values were
-    // initialized from this entry, so an unchanged form is a genuine no-op.
-    const current = mappingsFor(name);
-    if (current !== undefined && isUnchanged(current, update)) {
-      setEditingName(null);
-      setSaveError(null);
-      return;
-    }
     savingRef.current = true;
     setSaving(true);
     setSaveError(null);
     try {
-      const { previous } = await updateIngredientMasterData(token, name, update);
-      setEditingName(null);
-      setRevision((current) => current + 1);
-      showSnackbar({
-        text: `„${name}“ gespeichert.`,
-        action: {
-          label: 'Rückgängig',
-          busyLabel: 'Wird rückgängig gemacht …',
-          icon: <UndoIcon className="button-icon" optical={20} />,
-          run: async (): Promise<void> => {
-            try {
-              await updateIngredientMasterData(token, name, {
-                singular: previous.singular ?? null,
-                plural: previous.plural ?? null,
-                reorderPoint: previous.reorderPoint,
-                entries: previous.entries,
-                precision: previous.precision,
-              });
-              setRevision((current) => current + 1);
-            } catch (err) {
-              const reason = err instanceof Error ? err.message : String(err);
-              showSnackbar({
-                tone: 'error',
-                text: `„${name}“ konnte nicht zurückgesetzt werden. ${reason}`,
-              });
-            }
-          },
+      await updateIngredientMasterAndShopping(
+        {
+          token,
+          showSnackbar,
+          onChanged: () => setRevision((current) => current + 1),
         },
-      });
+        name,
+        input,
+      );
+      setEditingName(null);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      setSaveError(reasonOf(err));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  /**
+   * Creates a new ingredient and, when the form names a shopping item, writes
+   * the route/synonyms to that item. The shopping write runs first: a row
+   * without an ingredient is valid master data and a retry overwrites it, while
+   * an ingredient without its row is the state the create form's „Einkauf“
+   * field exists to prevent. If the ingredient write then fails, the shopping
+   * change is rolled back.
+   */
+  const createEntry = async (
+    name: string,
+    bu: string,
+    reorderPoint: number,
+    entries: ReadonlyArray<{ au: string; factor: number }>,
+    precision: IngredientMasterEntryInput['precision'],
+    stop: ShoppingStop | null,
+    variants: readonly string[],
+  ): Promise<void> => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setCreateError(null);
+    const itemKey = findItemKey(name);
+    let previousItem: ShoppingItemState | null = null;
+    let createdItem = false;
+    try {
+      if (stop !== null) {
+        const item = itemKey === undefined ? undefined : allShoppingItems()[itemKey];
+        const itemVariants = itemKey === undefined ? [] : shoppingVariantsFor(itemKey);
+        if (item === undefined || !isShoppingUnchanged(item, itemVariants, stop, variants)) {
+          const result = await writeShoppingChange(token, name, itemKey, stop, variants);
+          previousItem = result.previous;
+          createdItem = result.created;
+        }
+      } else if (variants.length > 0) {
+        throw new Error('Ohne Einkaufsort lassen sich keine Synonyme speichern.');
+      }
+
+      await appendIngredientMasterData(token, name, bu, reorderPoint, entries, precision);
+      setCreating(false);
+      setRevision((current) => current + 1);
+      showSnackbar({ text: `„${name}“ angelegt.` });
+    } catch (err) {
+      // Roll the shopping part back when it was written by this attempt and the
+      // ingredient write failed afterwards.
+      try {
+        if (createdItem) {
+          await deleteShoppingItem(token, name);
+        } else if (itemKey !== undefined && previousItem !== null) {
+          await restoreShoppingItem(token, itemKey, previousItem);
+        }
+      } catch {
+        // The create error below is the actionable one.
+      }
+      setCreateError(reasonOf(err));
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -288,6 +345,20 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
         </div>
       </div>
 
+      <div className="master-create">
+        <button
+          type="button"
+          className="outlined-button"
+          onClick={() => {
+            setCreateError(null);
+            setCreating(true);
+          }}
+        >
+          <PlusIcon className="button-icon" optical={20} />
+          <span>Neue Zutat anlegen</span>
+        </button>
+      </div>
+
       {loadWarning !== null && (
         <p className="master-banner" role="alert">
           {`Stammdaten konnten nicht geladen werden — die zuletzt geladenen Daten bleiben sichtbar. (${loadWarning})`}
@@ -323,6 +394,24 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
             if (savingRef.current) return;
             setEditingName(null);
             setSaveError(null);
+          }}
+        />
+      )}
+
+      {creating && (
+        <NewIngredientSheet
+          key="new-ingredient"
+          initialName=""
+          saving={saving}
+          error={createError}
+          onSave={(name, bu, reorderPoint, entries, precision, stop, variants) =>
+            void createEntry(name, bu, reorderPoint, entries, precision, stop, variants)
+          }
+          onEdited={() => setCreateError(null)}
+          onClose={() => {
+            if (savingRef.current) return;
+            setCreating(false);
+            setCreateError(null);
           }}
         />
       )}

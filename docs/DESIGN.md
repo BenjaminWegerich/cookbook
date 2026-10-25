@@ -595,7 +595,7 @@ A typeface joins the shortlist only when it meets every requirement:
 | Danger | danger fill, `--color-on-accent` label | a destructive action („Rezept löschen", „Entfernen") |
 | Outlined | surface fill, hairline border, ink label | secondary actions in a row („Einplanen", „Mehr", photo „Auswählen" / „Ersetzen") *decided with the user* |
 | Text | no fill, no border, muted label | navigation („Zurück") and quiet answers („Abbrechen", „Rückgängig") |
-| Add | surface fill, olive border, olive label | a creation action inside a card or list („Schritt hinzufügen", „Zutat hinzufügen", „Zutat anlegen") |
+| Add | surface fill, olive border, olive label | a creation action inside a card or list („Schritt hinzufügen", „Zutatenzeile hinzufügen", „Neue Zutat anlegen") |
 
 **Geometry.** Action buttons: `--radius-md`, padding `--space-3` / `--space-4`, label
 `--text-md` weight 600, `--space-2` gap to an 18px symbol (`--icon-md`). The 10px inline
@@ -1135,21 +1135,54 @@ checkmarks.
 *Applies to: web app.*
 
 **The master data is a place over the list.** „Zutaten verwalten" opens `IngredientMaster`
-with a sticky stacked header (§5.5: „Zurück", `h1` „Zutaten"), one search field and one rows
-list (§5.4). The screen refreshes the pair from Drive when it opens; a failed refresh shows the
-established danger banner above the cached rows.
+with a sticky stacked header (§5.5: „Zurück", `h1` „Zutaten"), one search field, one create
+action and one rows list (§5.4). The screen refreshes the ingredient pair and the shopping set
+from Drive when it opens; a failed refresh shows the established danger banner above the
+cached rows.
 
 **A row carries the canonical name only.** The base unit, the reorder point and the mappings are
 edited in the sheet behind the row; repeating them in the list would turn the reference list
 into a data table. Search matches the canonical name and both display forms; a search without a
 match is the bare „—". *decided with the user*
 
-**„Zutat bearbeiten" is a change.** The sheet edits the optional Singular/Plural pair (§5.3), the
-reorder point (§5.3, the create sheet's picker) and the AU mappings. The canonical name and the
-base unit are the entry's identity and are shown in the sheet head, not offered as fields. The
-shopping stop belongs to the shopping master data and is not part of this sheet. A save without
+**„Zutat bearbeiten" is a change.** The shared `MasterDataSheet` edits the optional
+Singular/Plural pair (§5.3), the reorder point (§5.3, the create sheet's picker), the AU
+mappings, the ingredient-level precision, the shopping stop („Einkauf", §5.13) and the item's
+synonyms. The canonical name and the base unit are the entry's identity: the name is a
+disabled field under the „Name" caption, the base unit a disabled g/ml toggle. A save without
 a change closes the sheet without a write or a notice (§5.1); a successful save reports
-„<Name>" gespeichert. and offers „Rückgängig" (§5.9, §6.5). *decided with the user*
+„<Name>" gespeichert. and offers „Rückgängig" (§5.9, §6.5), restoring the ingredient and the
+item. *decided with the user*
+
+**„Neue Zutat anlegen" is the same sheet.** Its name and base unit are editable. When the name
+already exists as a shopping item, the Einkauf and Synonyme sections are pre-filled; a change
+there updates that item instead of creating a second row. A duplicate ingredient name is
+reported under the name field as soon as the field is left. *decided with the user*
+
+**The recipe row offers the master data.** In the recipe editor's quantity sheet, a selected
+master ingredient shows an outlined „Stammdaten bearbeiten" action under the name field (the
+same slot as „Neue Zutat anlegen" for an unknown name). It opens the shared sheet over the
+quantity sheet; the quantity sheet stays mounted, so its amount, precision and unit choice
+survive the round trip. *decided with the user*
+
+*Cooking view: not applicable.*
+
+### 5.13 Shopping master data
+
+*Applies to: web app.*
+
+**The item table is a place over the list.** „Einkaufsartikel verwalten" opens
+`ShoppingPlaces` with a sticky stacked header (§5.5: „Zurück", `h1` „Einkaufsartikel"), one
+search field, one create action and one rows list (§5.4). A row carries the item name only;
+the stop and the synonyms are edited in the sheet behind it. Search matches the item name and
+its synonyms, so „Möhren" finds „Karotten"; no match is the bare „—". The screen refreshes
+the shopping set from Drive when it opens.
+
+**„Einkaufsartikel verwalten" is a change.** The shared sheet shows the name (disabled), the
+„Einkauf" field (Markt/Bereich) and the synonyms. „Einkaufsartikel löschen" removes the row
+and its synonyms and the notice offers „Rückgängig" (§5.9, §6.5). „Einkaufsartikel anlegen"
+uses the same sheet with an editable name; a duplicate item name is reported under the name
+field as soon as the field is left. *decided with the user*
 
 *Cooking view: not applicable.*
 
@@ -1486,10 +1519,12 @@ The cooking view (`.html`) has its own inventory, written below.
 | „Vorräte auswählen — Teil 1: Zutaten-Rezepte" | `setNav('pantrySub')`, `SubRecipeSelect` | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 2: Zutaten" | `setNav('pantry')`, `PantrySelect` | place (flow step) | „Zurück" (asks) |
 | „Zutaten" | `setNav('ingredients')`, `IngredientMaster` | place | „Zurück" |
+| „Einkaufsartikel" | `setNav('shoppingPlaces')`, `ShoppingPlaces` | place | „Zurück" |
 | „Zum Essensplan hinzufügen" / „Übernehmen" | `MealPlanSheet` | change | „Abbrechen" |
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
-| Ingredient sheet / new ingredient | `IngredientSheet`, `NewIngredientSheet` | change | „Abbrechen" |
-| „Zutat bearbeiten" | `EditIngredientSheet` | change | „Abbrechen" |
+| „Zutatenzeile bearbeiten" / „Zutatenzeile hinzufügen" | `IngredientSheet` | change | „Abbrechen" |
+| „Neue Zutat anlegen" / „Einkaufsartikel anlegen" | `NewIngredientSheet` / `MasterDataSheet` | change | „Abbrechen" |
+| „Zutat bearbeiten" / „Einkaufsartikel verwalten" | `EditIngredientSheet` / `EditShoppingItemSheet` (shared `MasterDataSheet`) | change | „Abbrechen" |
 | „Änderungen verwerfen?" | `LeaveConfirmSheet` (over the editor and the AI screen) | change | „Abbrechen", scrim, Escape, Back |
 | Snackbar | `Snackbar` (app root) | transient, never a layer | none |
 
@@ -1520,7 +1555,7 @@ that file.
 | §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.outlined-button`, `.text-button`, `.add-button`, `.sheet-actions`) |
 | §5.2 Chips and segmented controls | `apps/web/src/styles/editor.css`, `apps/web/src/components/quantityChips.ts` |
 | §5.3 Form fields | `apps/web/src/styles/editor.css` (`.field`, `.field-label`, `.field-error`), `apps/web/src/index.css` (the shared text-field focus outline) |
-| §5.3 master-data form (shared) | `apps/web/src/components/ingredientMasterForm.ts`, `apps/web/src/components/IngredientMappingsField.tsx` |
+| §5.3 master-data form (shared) | `apps/web/src/components/MasterDataSheet.tsx`, `apps/web/src/components/ingredientMasterForm.ts`, `apps/web/src/components/ingredientMasterUpdate.tsx`, `apps/web/src/components/IngredientMappingsField.tsx` |
 | §5.4 Cards and list items | `apps/web/src/styles/recipe-list.css`, `apps/web/src/components/RecipeList.tsx`, `apps/web/src/styles/pantry-select.css` (`.pantry-row--attention`, `.pantry-attention-note`) |
 | §5.5 Headers and sticky bars | `apps/web/src/styles/recipe-list.css` (`.app-header`, `.app-header-stacked`, `.app-header-title`, `.app-header-subtitle`) |
 | §5.6 Sheets | `apps/web/src/styles/editor.css` (`.sheet`, `.sheet-backdrop`, `.sheet-actions`) |
@@ -1528,7 +1563,8 @@ that file.
 | §5.8 Media | `apps/web/src/components/RecipeThumb.tsx`, `apps/web/src/styles/recipe-list.css`, `apps/web/src/styles/recipe-overview.css` |
 | §5.9 Snackbar | `apps/web/src/components/Snackbar.tsx`, `apps/web/src/hooks/useSnackbar.ts`, `apps/web/src/styles/snackbar.css` |
 | §5.10 FAB and create menu | `apps/web/src/App.tsx`, `apps/web/src/styles/recipe-list.css` |
-| §5.12 Ingredient master data | `apps/web/src/components/IngredientMaster.tsx`, `apps/web/src/components/EditIngredientSheet.tsx`, `apps/web/src/components/ManageIngredientsButton.tsx`, `apps/web/src/styles/ingredient-master.css` |
+| §5.12 Ingredient master data | `apps/web/src/components/IngredientMaster.tsx`, `apps/web/src/components/MasterDataSheet.tsx`, `apps/web/src/components/ingredientMasterUpdate.tsx`, `apps/web/src/components/EditIngredientSheet.tsx`, `apps/web/src/components/NewIngredientSheet.tsx`, `apps/web/src/components/ManageIngredientsButton.tsx`, `apps/web/src/styles/ingredient-master.css` |
+| §5.13 Shopping master data | `apps/web/src/components/ShoppingPlaces.tsx`, `apps/web/src/components/MasterDataSheet.tsx`, `apps/web/src/components/EditShoppingItemSheet.tsx`, `apps/web/src/components/ManageShoppingPlacesButton.tsx`, `apps/web/src/drive/shoppingRouteMasterData.ts`, `apps/web/src/styles/shopping-places.css` |
 | §6 Patterns | `apps/web/src/App.tsx` (navigation, flows), `apps/web/src/hooks/useLeaveGuard.ts`, `apps/web/src/components/LeaveConfirmSheet.tsx` |
 | §7 Language | the component strings (source of truth); the rules bind every component above |
 | §8 Accessibility | the components above (`aria-*`, `role`, `alt` live in the markup) |
