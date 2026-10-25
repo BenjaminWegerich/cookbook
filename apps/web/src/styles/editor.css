@@ -190,6 +190,14 @@
   line-height: var(--leading-md);
 }
 
+/* A read-only identity field (the name in the ingredient edit sheet): the value
+   stays readable, but the control visibly cannot be changed. The global disabled
+   look for buttons is the same opacity token (docs/CODING_CONVENTIONS.md). */
+.field input[type='text']:disabled {
+  color: var(--color-ink-muted);
+  opacity: var(--opacity-disabled);
+}
+
 /* Auto-growing text fields (see AutoGrowTextarea): the manual grip is gone
    and overflow is clipped — the component sizes the box so nothing ever
    scrolls. The min-height is the start size of an empty field (one line; the
@@ -327,6 +335,46 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4); /* the chip row gap — see .quantity-chips above */
+}
+
+/* Adaptive suggestion row (components/SuggestionChips): exactly one measured
+   line. Chips that do not fit are hidden — no wrap, no scroll and no "andere"
+   chip (decided with the user). The wrapper anchors the off-screen measurement
+   strip that supplies the chip widths. */
+.suggestion-chips-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.suggested-chips.suggested-chips-one-line {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* A chip never shrinks to fit: the row clips instead, so a suggestion stays
+   readable and its measured width matches the rendered one. */
+.suggested-chips-one-line .chip {
+  flex: none;
+}
+
+/* The measurement strip: every candidate chip laid out off-screen, so the
+   visible row can hide its overflow without losing a width it still needs on a
+   wider layout or after the font loads. Mirrors .stock-chips-measure. */
+.suggested-chips-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-4);
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.suggested-chips-measure .chip {
+  flex: none;
 }
 
 /* − / + stepper row (one BQ rung per tap; a hold repeats it). */
@@ -613,11 +661,14 @@
   text-align: center;
 }
 
+/* The photo row's two peers („Auswählen"/„Ersetzen" and „Entfernen") stack in
+   one column. Their gap is 10px, so the two equally prominent buttons read as
+   separate controls (decided with the user). */
 .photo-actions {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
 
 /* ---- Steps (one card each) ---------------------------------------------- */
@@ -1114,21 +1165,44 @@
   line-height: var(--leading-sm);
 }
 
-/* Tighter inline padding than the generic .field inputs: inside a 4.5 rem
-   column the standard --space-4 gutter would leave very little room for the
-   digits themselves. Right-aligned because the column holds numbers only
-   (DESIGN.md §5.3). */
-.factor-grid input {
-  width: 100%;
-  padding: var(--space-3) var(--space-3);
+/* One factor field: the number input and the base unit inside one control, so
+   the unit sits in every field of the second column instead of the column
+   header. The wrapper carries the field look; the input itself is transparent
+   and borderless. Tighter inline padding than the generic .field inputs leaves
+   room for the digits and the unit inside the 4.5 rem column. */
+.factor-input {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3) var(--space-2);
   background: var(--color-bg);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
+}
+
+/* The selector repeats the .field scope so it wins over the shared
+   `.field input[type='text']` rule regardless of stylesheet order. */
+.field .factor-input input[type='text'] {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
   color: var(--color-ink);
   font-size: var(--text-md);
   line-height: var(--leading-md);
   font-family: var(--font-sans);
   text-align: right;
+}
+
+.factor-input-unit {
+  flex: none;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
 
 .factor-unit {
