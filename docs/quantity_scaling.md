@@ -76,8 +76,10 @@ multiplied by powers of ten, and the penalty is copied from the base value.
 - `1100 = 11 × 100`, penalty `0.66`
 
 Values that are not in the `10 … 95` block (for example `96 … 99`, `105`,
-`111`) do not exist. The table starts at `1`; a `V0` below `1` has no BQ
-candidate and is shown in the plain base form unless an exact unit fits.
+`111`) do not exist. The table starts at `1`. A `V0` below `1` can still reach
+the `1 g` BQ when `1` lies in its factor-2 band (`V0 ≥ 0.5`); a smaller target
+(e.g. `0.1 g`) has no BQ candidate and is shown in the plain base form unless an
+exact unit fits.
 
 `allowedBQValuesInRange(min, max)` in
 [quantityValues.ts](../packages/core/src/quantityValues.ts) expands the table for
@@ -150,7 +152,10 @@ The full formulas are in [recipe_scaling_algorithm.md](../recipe_scaling_algorit
 §5–§6. The runtime parameters are fixed:
 
 - `p = 0.5` (user proportion, `USER_PROPORTION_P`);
-- `ε_max = 0.5` (candidate search cutoff, `EPSILON_MAX`);
+- candidate band `[V0 / 2, 2·V0]` (`CANDIDATE_BAND_FACTOR = 2`,
+  `MAX_LOG_DISTANCE = 1`), with accuracy measured as `|log₂(x/V0)|`;
+- conflict guard `log₂(1.5) ≈ 0.585` (`MAX_LOG_CONFLICT`), with the non-exact
+  BQ/AQ conflict measured as `|log₂(BQ/AQ)|`;
 - exact boundary (`very high`) weights `W_exact = (0.70, 0.20, 0.05, 0.05)`;
 - practical boundary (`very low`) weights `W_practical = (0.20, 0.30, 0.35, 0.15)`.
 
@@ -161,12 +166,13 @@ The optimizer evaluates three branches:
    **non-integer**, the derived BQ is rounded to whole grams/millilitres for
    display (`1/3` of a 1000 g pack → `333 g`, not `333,33 g`). The unrounded
    `q_AQ × c_u` stays the accuracy reference for the score.
-2. **NON_EXACT unit** — BQ and AQ are selected independently; a conflict penalty
-   applies when they disagree.
+2. **NON_EXACT unit** — BQ and AQ are selected independently; a log conflict
+   penalty applies when they disagree.
 3. **Metric-only** — a BQ from the table, no AQ. The missing-AQ penalty applies.
 
-Candidates are limited to `V0 × (1 ± ε_max)`. A non-exact pair is skipped when
-its BQ/AQ conflict exceeds `ε_max`. If **no** candidate exists, the renderer uses
+Candidates are limited to the factor-2 band `[V0 / 2, 2·V0]`; accuracy and the
+non-exact BQ/AQ conflict are symmetric log distances. A non-exact pair is skipped
+when `|log₂(BQ/AQ)| > log₂(1.5)`. If **no** candidate exists, the renderer uses
 the plain base form with `V0` and no AQ; it never throws.
 
 Ties within `1e-5` are broken by the strict hierarchy: higher BQ, then higher AQ
@@ -180,7 +186,9 @@ Examples:
 - The same amount with `Packung (teilbar)` (all fractions) may be
   `1/4 Packung (250 g)`.
 - `250 g` Joghurt with a `500 g` Becher may be `1/2 Becher (250 g)`.
-- `0.5 g` has no BQ candidate; it is shown as `0,5 g`.
+- `0.5 g` has no BQ below `1 g`; the nearest allowed BQ `1 g` sits on the `2×`
+  band edge, so it is shown as `1 g`. A target with no BQ in `[V0/2, 2·V0]`
+  (e.g. `0.1 g`) keeps its plain base form.
 
 ### Master-list quantities
 
@@ -252,9 +260,9 @@ the primary number table: the count is chosen by accuracy and roundness, with no
 additional unit. A count has no ingredient, so the only applicable level is the
 optional artifact override; without one, the internal neutral `medium` is used.
 
-If no AQ value fits `ε_max`, the artifact keeps its unrounded count. AQ values
-keep their canonical notation (`{{1/2}}`, `{{1+1/4}}`); other positive counts are
-stored as decimals.
+If no AQ value fits the factor-2 band, the artifact keeps its unrounded count.
+AQ values keep their canonical notation (`{{1/2}}`, `{{1+1/4}}`); other positive
+counts are stored as decimals.
 
 ## 9. Shopping list, cooking and stock (migrated)
 

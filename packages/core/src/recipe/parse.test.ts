@@ -474,9 +474,11 @@ describe('parseRecipe — rows and artifacts validation (§4)', () => {
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +
         '---\n## Zubereitung\n1. - 450 g Mehl\n   Vermengen.\n',
     );
-    // The row target is 450 g, but the master list sums the *displayed* BQ
-    // (500 g: the clean 500 BQ beats the clumsy 450 one on the balanced weights).
-    expect(arbitrary.ingredients[0]).toEqual({ name: 'Mehl', quantity: 500, unit: 'g' });
+    // The row target is 450 g; with the log-distance model the clumsy 450 BQ
+    // (penalty 0.33) now beats the clean 500 BQ, because 500's distance cost
+    // exceeds 450's roundness cost. The master list sums the displayed BQ, so
+    // it stays 450.
+    expect(arbitrary.ingredients[0]).toEqual({ name: 'Mehl', quantity: 450, unit: 'g' });
 
     const zero = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\nprep_time: 10 min\n' +

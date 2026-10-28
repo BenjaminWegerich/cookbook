@@ -157,7 +157,10 @@ The detailed formula is in
 [quantity_scaling.md](quantity_scaling.md) §6. In short, the optimizer evaluates
 metric-only BQs, exact-unit AQs (where `BQ = q·c`) and non-exact BQ/AQ pairs,
 scores each candidate and picks the best; ties use higher BQ, higher AQ, then the
-unit name. Candidate values are limited to `V0·(1 ± 0.5)`.
+unit name. Candidate values are limited to the factor-2 band `[V0/2, 2·V0]`;
+accuracy is the symmetric log distance `|log₂(x/V0)|`. A non-exact pair is skipped
+when its two readings differ by more than 50 % multiplicatively
+(`|log₂(BQ/AQ)| > log₂(1.5)`).
 
 ### 6.1 Exact vs. approximate units
 

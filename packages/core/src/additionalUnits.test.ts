@@ -90,8 +90,14 @@ describe('renderAQS (optimizer-backed)', () => {
     expect(renderAQS('Mehl', 1000, 'g')).toBe(`1${NB}Packung Mehl (1${NB}kg)`);
   });
 
+  it('accepts a 2× metric BQ at the band edge', () => {
+    // The factor-2 band reaches 1 g, so a 0.5 g target with no closer candidate
+    // now reads "1 g" instead of falling back to "0,5 g".
+    expect(renderAQS('Mehl', 0.5, 'g')).toBe(`1${NB}g Mehl`);
+  });
+
   it('falls back to the plain base form when no candidate fits', () => {
-    expect(renderAQS('Mehl', 0.5, 'g')).toBe(`0,5${NB}g Mehl`);
+    expect(renderAQS('Mehl', 0.1, 'g')).toBe(`0,1${NB}g Mehl`);
   });
 
   it('selectAQ returns null when only a metric BQ fits', () => {

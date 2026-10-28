@@ -30,6 +30,7 @@ export * from './additionalUnitsData.js';
 export * from './aqLadder.js';
 export * from './quantityValues.js';
 export * from './quantityOptimizer.js';
+export * from './quantitySuggestions.js';
 export * from './servingSizes.js';
 export * from './precision.js';
 export * from './ingredientCsv.js';

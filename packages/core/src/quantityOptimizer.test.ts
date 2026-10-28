@@ -111,10 +111,19 @@ describe('optimizeQuantity', () => {
     expect(result.bq).toBe(2);
   });
 
+  it('accepts a 2× metric BQ at the band edge (0.5 g reads as 1 g)', () => {
+    // The factor-2 band reaches 1 g; with no closer candidate the log-distance
+    // penalty does not block it. This is the intended consequence of the wider
+    // window (previously 0.5 g had no candidate and fell back to "0,5 g").
+    const result = optimizeQuantity(0.5, bare, 'g');
+    expect(result.branch).toBe('metric');
+    expect(result.bq).toBe(1);
+  });
+
   it('falls back to V0 when no BQ or AQ candidate fits', () => {
-    const result: OptimizedQuantity = optimizeQuantity(0.5, bare, 'g');
+    const result: OptimizedQuantity = optimizeQuantity(0.1, bare, 'g');
     expect(result.fallback).toBe(true);
-    expect(result.bq).toBe(0.5);
+    expect(result.bq).toBe(0.1);
     expect(result.aq).toBeUndefined();
   });
 

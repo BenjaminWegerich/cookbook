@@ -39,8 +39,38 @@ import {
   type QuantityWeights,
 } from './precision.js';
 
-/** Maximum relative error considered during candidate generation (precision-independent). */
-export const EPSILON_MAX = 0.5;
+/**
+ * Candidate band around the target: `[V0 / 2, V0 · 2]`. The window is
+ * symmetric in log space, so half and double the target are equally far
+ * (decided with the user; it is the same band the suggestions use).
+ */
+export const CANDIDATE_BAND_FACTOR = 2;
+
+/** The log-distance edge of the band: `log2(2) = 1`. */
+export const MAX_LOG_DISTANCE = Math.log2(CANDIDATE_BAND_FACTOR);
+
+/**
+ * Maximum BQ/AQ log conflict still allowed for a non-exact pair. This is a
+ * separate textual guard, not the candidate window: the two readings on one
+ * line may differ by at most 50 % multiplicatively (`log2(1.5) ≈ 0.585`), so a
+ * "8 EL (300 g)" contradiction is impossible regardless of the weights. The
+ * limit is scale-free: the same factor applies at 20 g and at 2 kg.
+ */
+export const MAX_LOG_CONFLICT = Math.log2(1.5);
+
+/**
+ * The symmetric log distance between two positive quantities:
+ * `|log₂(candidate / target)|`. Used for the accuracy penalty and the candidate
+ * band, so ½× and 2× are equally far (docs/recipe_scaling_algorithm.md §5).
+ */
+export function logDistance(candidate: number, target: number): number {
+  return Math.abs(Math.log2(candidate / target));
+}
+
+/** True when `candidate` lies inside the factor-2 band around `v0`. */
+export function withinCandidateBand(candidate: number, v0: number): boolean {
+  return logDistance(candidate, v0) <= MAX_LOG_DISTANCE + 1e-9;
+}
 
 /**
  * Estimated fraction of cooks who use the metric reading (BQ) rather than the
@@ -138,21 +168,24 @@ interface Candidate {
 /** Applies the scoring formula of §5 to a candidate. */
 function scoreCandidate(candidate: Candidate, v0: number, weights: QuantityWeights): number {
   const p = USER_PROPORTION_P;
-  const bqError = Math.abs(candidate.bq - v0) / v0;
+  // Both errors use the symmetric log distance (decided with the user):
+  // accuracy is the distance to the target, conflict is the distance between
+  // the two readings on the same line. ½× and 2× are equally far in both.
+  const bqError = logDistance(candidate.bq, v0);
   if (candidate.branch === 'metric') {
     const accuracy = bqError;
     const roundness = candidate.bqPenalty;
     return weights.accuracy * accuracy + weights.roundness * roundness + weights.missing * 1;
   }
   const aqBase = candidate.aqBase!;
-  const aqError = Math.abs(aqBase - v0) / v0;
+  const aqError = logDistance(aqBase, v0);
   const aqPenaltyValue = candidate.aq!.penalty;
   if (candidate.branch === 'exact') {
     // The physical package dictates the BQ: P_conflict = 0, R_BQ = 0.
     return weights.accuracy * aqError + weights.roundness * (1 - p) * aqPenaltyValue;
   }
   const accuracy = p * bqError + (1 - p) * aqError;
-  const conflict = Math.abs(candidate.bq - aqBase) / v0;
+  const conflict = logDistance(candidate.bq, aqBase);
   const roundness = p * candidate.bqPenalty + (1 - p) * aqPenaltyValue;
   return weights.accuracy * accuracy + weights.conflict * conflict + weights.roundness * roundness;
 }
@@ -190,7 +223,7 @@ function schemeAqValues(au: AdditionalUnit): AQValue[] {
 
 /**
  * Builds every candidate that can represent `V0`, scores them and returns the
- * winner. If no candidate fits `ε_max`, the fallback is `{ bq: V0, aq: undefined }`
+ * winner. If no candidate fits the factor-2 band, the fallback is `{ bq: V0, aq: undefined }`
  * — the caller renders the plain base form without rounding or AQ
  * (decided with the user).
  */
@@ -209,8 +242,8 @@ export function optimizeQuantity(
   });
   const weights = weightsFor(precision);
 
-  const lower = v0 * (1 - EPSILON_MAX);
-  const upper = v0 * (1 + EPSILON_MAX);
+  const lower = v0 / CANDIDATE_BAND_FACTOR;
+  const upper = v0 * CANDIDATE_BAND_FACTOR;
   const bqValues = allowedBQValuesInRange(lower, upper);
   const candidates: Candidate[] = [];
 
@@ -237,7 +270,7 @@ export function optimizeQuantity(
     const aqValues = schemeAqValues(au);
     for (const aq of aqValues) {
       const aqBase = aq.value * mapping.factor;
-      if (Math.abs(aqBase - v0) / v0 > EPSILON_MAX) continue;
+      if (!withinCandidateBand(aqBase, v0)) continue;
       if (au.exact) {
         // Branch 1: the package count fixes the base amount. When the count is
         // not an integer, the derived BQ is rounded to whole grams/millilitres
@@ -258,10 +291,10 @@ export function optimizeQuantity(
         candidates.push({ ...candidate, score: scoreCandidate(candidate, v0, weights) });
         continue;
       }
-      // Branch 2: BQ and AQ are chosen independently; skip pairs whose text
-      // contradiction would exceed the search window.
+      // Branch 2: BQ and AQ are chosen independently; skip pairs whose two
+      // readings contradict each other by more than the factor-1.5 guard.
       for (const bq of bqValues) {
-        if (Math.abs(bq.value - aqBase) / v0 > EPSILON_MAX) continue;
+        if (logDistance(bq.value, aqBase) > MAX_LOG_CONFLICT) continue;
         const candidate: Candidate = {
           branch: 'non-exact',
           bq: bq.value,
@@ -391,7 +424,7 @@ function scoreMasterCandidate(
   weights: QuantityWeights,
 ): number {
   if (candidate.branch === 'metric') return weights.missing;
-  const aqError = Math.abs(candidate.aqBase! - masterBq) / masterBq;
+  const aqError = logDistance(candidate.aqBase!, masterBq);
   const roundness = (1 - USER_PROPORTION_P) * candidate.aq!.penalty;
   return (
     weights.accuracy * (1 - USER_PROPORTION_P) * aqError +
@@ -506,7 +539,7 @@ export function optimizeMasterQuantity(
       // AQ table if need be, and carries no clumsiness penalty.
       const sum = aqSum.get(au.name)!;
       const aqBase = sum * mapping.factor;
-      if (Math.abs(aqBase - masterBq) / masterBq > EPSILON_MAX) continue;
+      if (!withinCandidateBand(aqBase, masterBq)) continue;
       addCandidate({
         branch: 'non-exact',
         bq: masterBq,
@@ -527,7 +560,7 @@ export function optimizeMasterQuantity(
     for (const aq of schemeAqValues(au)) {
       if (stepMax !== undefined && aq.value <= stepMax + 1e-9) continue;
       const aqBase = aq.value * mapping.factor;
-      if (Math.abs(aqBase - masterBq) / masterBq > EPSILON_MAX) continue;
+      if (!withinCandidateBand(aqBase, masterBq)) continue;
       // An exact unit promises that its count restates the amount. A count that
       // does not bring exactly the BQ sum home would contradict the master line
       // ("2 Becher (900 g)"), so it is no candidate. The shared-AU sum above is
@@ -578,7 +611,7 @@ export function optimizeMasterQuantity(
  * precision, so only the optional per-artifact override applies; without one,
  * the internal neutral level is used.
  *
- * If no count fits `ε_max`, the artifact keeps its unrounded target (fallback).
+ * If no count fits the factor-2 band, the artifact keeps its unrounded target (fallback).
  */
 export function optimizeUnitless(v0: number, context: PrecisionContext = {}): OptimizedUnitless {
   if (!(v0 > 0) || !Number.isFinite(v0)) {
@@ -586,15 +619,15 @@ export function optimizeUnitless(v0: number, context: PrecisionContext = {}): Op
   }
   const precision = resolvePrecision({ quantity: context.quantity });
   const weights = weightsFor(precision);
-  const lower = v0 * (1 - EPSILON_MAX);
-  const upper = v0 * (1 + EPSILON_MAX);
+  const lower = v0 / CANDIDATE_BAND_FACTOR;
+  const upper = v0 * CANDIDATE_BAND_FACTOR;
   const candidates: { entry: AQValue; score: number }[] = [];
   for (const entry of AQ_VALUES) {
     if (entry.value < lower || entry.value > upper) continue;
     // Branch 3 scoring with the AQ table as the primary number table. The
     // missing penalty is a constant for a count (there is no additional unit to
     // omit), so it does not affect the ranking.
-    const accuracy = Math.abs(entry.value - v0) / v0;
+    const accuracy = logDistance(entry.value, v0);
     const roundness = entry.penalty;
     const score = weights.accuracy * accuracy + weights.roundness * roundness;
     candidates.push({ entry, score });

@@ -651,6 +651,34 @@ export function renderAQSDisplay(
 }
 
 /**
+ * Renders the **label of a quantity suggestion chip** for one target: the
+ * arrangement the optimizer selects, with the ingredient name omitted —
+ * "1 Becher (500 g)" instead of "1 Becher Joghurt (500 g)".
+ *
+ * `result` is the optimizer's answer for the same target (`v0`), so a caller
+ * that already enumerated and scored its anchors (quantitySuggestions.ts) does
+ * not score each of them twice. The name is omitted deliberately: the field
+ * already sits under the ingredient's caption, and repeating the name in every
+ * chip would crowd the single chip line (decided with the user). The
+ * arrangement's note keeps its brackets in `text`; `ArrangementLine` splits the
+ * note out for the muted, italic chip run, exactly like a pantry chip.
+ */
+export function renderOptimizedChipDisplay(
+  entry: AuSelectableEntry | undefined,
+  result: OptimizedQuantity,
+  bu: string,
+): ArrangementDisplay {
+  if (result.aq === undefined) {
+    // Metric-only winner or fallback: the base amount alone, no name.
+    const text = formatBQ(result.bq, bu);
+    return { text, parts: [{ kind: 'text', value: text }] };
+  }
+  // An empty <IN> leaves a double space before the note ("1 Becher  (500 g)").
+  // Collapse it, exactly like the create form's name-less preview.
+  return collapseDisplaySpaces(renderOptimizedAQ('', result, bu, formatAQ, entry));
+}
+
+/**
  * The master-list counterpart of `renderAQSDisplay`: renders one derived master
  * row from the step uses it was merged from, with the constrained master
  * optimizer (quantityOptimizer.optimizeMasterQuantity). A single use renders

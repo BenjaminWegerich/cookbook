@@ -8,7 +8,19 @@
  *   arbitrary increment. Holding a button repeats that walk, exactly like
  *   tapping it quickly (see StepperButton);
  * - a non-BQ target is only reachable through the keyboard. The field accepts
- *   any positive number; the suggestion chips are BQ shortcuts, not limits;
+ *   any positive number; the suggestion chips are shortcuts, not limits;
+ * - two suggestion modes. The **adaptive** mode (recipe quantities and yields)
+ *   offers the optimizer's arrangements near the current value — "1 Becher
+ *   (500 g)", "400 g" — in one measured line, no wrapping and no "andere"
+ *   (components/SuggestionChips, core quantitySuggestions.ts). Tapping a chip
+ *   stores its displayed, rounded BQ, so the field then reads exactly the
+ *   chip's label; the chip is active when the field equals that BQ, and a row
+ *   without an active chip is a valid state (the current amount has no
+ *   particularly clean arrangement). The **fixed** mode keeps the old decade
+ *   shortcuts and is what the reorder-point fields still use; those are
+ *   unchanged in this session. A real field is never empty (every call site
+ *   initializes a quantity), so the adaptive row has no fallback: without a
+ *   value it simply offers nothing;
  * - the value shows its unit in the family unit or in kg / l from 1000
  *   (`formatBQ`): "400 g", "1,5 kg". While the field has keyboard focus it
  *   shows the plain family-unit number, so typing enters a value the same way
@@ -26,19 +38,25 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   formatAQValue,
   formatBQ,
   formatDecimal,
   isAQValue,
+  mappingsFor,
   nextAllowedBQ,
   previousAllowedBQ,
+  suggestQuantities,
+  suggestUnitlessQuantities,
+  type PrecisionLevel,
 } from '@cookbook/core';
 
+import ArrangementLine from './ArrangementLine';
 import QuantityValue from './QuantityValue';
 import StepperButton from './StepperButton';
+import SuggestionChips from './SuggestionChips';
 
 /** The two authorable base-unit families. */
 export type QuantityFamily = 'g' | 'ml';
@@ -55,6 +73,23 @@ interface QuantityInputProps {
   allowInfinite?: boolean;
   /** Accessible name of the input (defaults to "Menge"). */
   ariaLabel?: string;
+  /**
+   * Offer the optimizer's arrangements near the current value in one measured
+   * line instead of the fixed decade shortcuts (see the file header). The
+   * reorder-point fields leave this off.
+   */
+  adaptive?: boolean;
+  /**
+   * The ingredient whose additional units feed the adaptive chips; absent for
+   * a recipe yield or a unitless count (metric-only / count-only suggestions).
+   */
+  ingredient?: string;
+  /**
+   * The effective precision of this quantity (the row's precision override or
+   * the ingredient default). The optimizer picks the arrangement with it, so
+   * the chip label matches the preview exactly.
+   */
+  precision?: PrecisionLevel;
 }
 
 /** Suggested family-unit values (all BQs; shortcuts only, not a pool limit). */
@@ -94,6 +129,9 @@ function QuantityInput({
   allowZero,
   allowInfinite,
   ariaLabel = 'Menge',
+  adaptive = false,
+  ingredient,
+  precision,
 }: QuantityInputProps) {
   /** True while the text field owns keyboard focus (then it shows the raw number). */
   const [editing, setEditing] = useState(false);
@@ -126,6 +164,31 @@ function QuantityInput({
   }, [editing]);
 
   const text = editing && draft !== null ? draft : displayText(value, family);
+
+  /**
+   * The adaptive chips in ranking order (see the file header). They are derived
+   * from the current value, so the row follows the field: a step or a keystroke
+   * recenters it. The core normalizes each chip to its tap state, and tapping
+   * stores the chip's displayed BQ — so the row and the preview can never
+   * disagree. The optimizer runs with the field's effective precision.
+   *
+   * No fallback: a real field always carries a number (every call site
+   * initializes one), and without a value there is no anchor to adapt to.
+   */
+  const adaptiveChips = useMemo(() => {
+    if (adaptive !== true || value === undefined || !(value > 0) || !Number.isFinite(value)) {
+      return [];
+    }
+    const context = precision === undefined ? {} : { quantity: precision };
+    const list =
+      family === null
+        ? suggestUnitlessQuantities(value, context)
+        : suggestQuantities(value, mappingsFor(ingredient ?? ''), family, context);
+    return list.map((suggestion) => ({
+      value: suggestion.value,
+      label: <ArrangementLine display={suggestion.display} />,
+    }));
+  }, [adaptive, value, family, ingredient, precision]);
 
   const suggestions = family === null ? UNITLESS_SUGGESTIONS : FAMILY_SUGGESTIONS;
   const zeroChip = allowZero === true && family !== null ? 0 : null;
@@ -176,37 +239,46 @@ function QuantityInput({
 
   return (
     <div className="quantity-picker">
-      <div className="suggested-chips" role="group" aria-label="Vorgeschlagene Mengen">
-        {zeroChip !== null && (
-          <button
-            type="button"
-            className={value === 0 ? 'chip chip-active' : 'chip'}
-            onClick={() => onChange(0)}
-          >
-            0
-          </button>
-        )}
-        {suggestions.map((suggestion) => (
-          <button
-            key={suggestion}
-            type="button"
-            className={value === suggestion ? 'chip chip-active' : 'chip'}
-            onClick={() => onChange(suggestion)}
-          >
-            {chipText(suggestion, family)}
-          </button>
-        ))}
-        {infinite && (
-          <button
-            type="button"
-            className={value === Infinity ? 'chip chip-active' : 'chip'}
-            onClick={() => onChange(Infinity)}
-            aria-label="Unbegrenzt vorrätig"
-          >
-            ∞
-          </button>
-        )}
-      </div>
+      {adaptive === true ? (
+        <SuggestionChips
+          chips={adaptiveChips}
+          value={value}
+          ariaLabel="Vorgeschlagene Mengen"
+          onChange={onChange}
+        />
+      ) : (
+        <div className="suggested-chips" role="group" aria-label="Vorgeschlagene Mengen">
+          {zeroChip !== null && (
+            <button
+              type="button"
+              className={value === 0 ? 'chip chip-active' : 'chip'}
+              onClick={() => onChange(0)}
+            >
+              0
+            </button>
+          )}
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              className={value === suggestion ? 'chip chip-active' : 'chip'}
+              onClick={() => onChange(suggestion)}
+            >
+              {chipText(suggestion, family)}
+            </button>
+          ))}
+          {infinite && (
+            <button
+              type="button"
+              className={value === Infinity ? 'chip chip-active' : 'chip'}
+              onClick={() => onChange(Infinity)}
+              aria-label="Unbegrenzt vorrätig"
+            >
+              ∞
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="quantity-row">
         <StepperButton

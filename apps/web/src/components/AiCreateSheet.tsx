@@ -1075,6 +1075,9 @@ export default function AiCreateSheet({
                             value={yieldQuantity}
                             onChange={setYieldQuantity}
                             family={yieldUnit === 'ml' ? 'ml' : 'g'}
+                            // A yield has no ingredient: the adaptive row offers
+                            // the clean metric targets near the current amount.
+                            adaptive
                           />
                         </div>
                       )}

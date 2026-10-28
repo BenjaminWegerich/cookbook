@@ -98,9 +98,10 @@ Because both boundary vectors sum to $1.0$, $\mathbf{W}(g)$ is guaranteed to sum
 > This reverses the old tolerance scale: a **higher** value now means **more precision** (more metric accuracy), not more practical output.
 
 ### 4.3 Remaining System Parameters
-Beyond the weights, two system-level constants are required:
+Beyond the weights, three system-level constants are required:
 1. **$p \in [0, 1]$ (User Proportion, Default: $0.5$):** Estimated fraction of cooks who use BQ (scales) vs. $(1-p)$ who use AQ (spoons/units).
-2. **$\varepsilon_{\max}$ (Candidate Search Cutoff, Default: $0.50$):** Maximum relative error ($\pm 50\%$) considered during candidate generation.
+2. **Candidate band (Default: factor $2$):** candidates lie in $[V_0/2, 2 \cdot V_0]$. Distance is measured symmetrically in log space, $d(x) = |\log_2(x / V_0)|$, so $\frac{1}{2}\times$ and $2\times$ are equally far; the band edge is $d = 1$.
+3. **Conflict guard (Default: factor $1.5$):** a non-exact BQ/AQ pair is discarded when $|\log_2(V_{\text{BQ}} / V_{\text{AQ}})| > \log_2(1.5) \approx 0.585$, i.e. when the two readings on one line differ by more than 50 % multiplicatively.
 
 ---
 
@@ -114,26 +115,26 @@ $$S_{\text{total}} = W_{\text{acc}} P_{\text{acc}} + W_{\text{conflict}} P_{\tex
 
 | Penalty | Branch 1: `EXACT` AQ Present | Branch 2: `NON_EXACT` AQ Present | Branch 3: AQ Omitted |
 | :--- | :--- | :--- | :--- |
-| **$P_{\text{acc}}$** | $\frac{\|V_{\text{AQ}} - V_0\|}{V_0}$ | $p \cdot \frac{\|V_{\text{BQ}} - V_0\|}{V_0} + (1 - p) \cdot \frac{\|V_{\text{AQ}} - V_0\|}{V_0}$ | $\frac{\|V_{\text{BQ}} - V_0\|}{V_0}$ |
-| **$P_{\text{conflict}}$** | $0.0$ | $\frac{\|V_{\text{BQ}} - V_{\text{AQ}}\|}{V_0}$ | $0.0$ |
+| **$P_{\text{acc}}$** | $\lvert\log_2(V_{\text{AQ}} / V_0)\rvert$ | $p \cdot \lvert\log_2(V_{\text{BQ}} / V_0)\rvert + (1 - p) \cdot \lvert\log_2(V_{\text{AQ}} / V_0)\rvert$ | $\lvert\log_2(V_{\text{BQ}} / V_0)\rvert$ |
+| **$P_{\text{conflict}}$** | $0.0$ | $\lvert\log_2(V_{\text{BQ}} / V_{\text{AQ}})\rvert$ | $0.0$ |
 | **$P_{\text{round}}$** | $(1 - p) \cdot R_{\text{AQ}}$ | $p \cdot R_{\text{BQ}} + (1 - p) \cdot R_{\text{AQ}}$ | $R_{\text{BQ}}$ |
 | **$P_{\text{missing}}$** | $0.0$ | $0.0$ | $1.0$ |
 
-*All deviations are normalized by $V_0$ to ensure uniform scale across all factors.*
+*Accuracy and conflict are symmetric log distances: $0$ means identical, $1$ means a factor of $2$. They are scale-free; roundness and missing remain table penalties. A non-exact pair is discarded when its conflict exceeds $\log_2(1.5)$.*
 
 ---
 
 ## 6. Optimization & Selection Algorithm
 
 ### Step 1: Candidate Generation (Windowing)
-Filter master tables to values within $\varepsilon_{\max}$ of target $V_0$:
-* **$\mathcal{C}_{\text{BQ}}$:** BQs where $\frac{|q_{\text{BQ}} - V_0|}{V_0} \le \varepsilon_{\max}$.
-* **$\mathcal{C}_{\text{AQ}}(u)$:** For each applicable unit $u$, AQs where $\frac{|q_{\text{AQ}} \cdot c_u - V_0|}{V_0} \le \varepsilon_{\max}$.
+Filter master tables to the factor-$2$ band around target $V_0$:
+* **$\mathcal{C}_{\text{BQ}}$:** BQs where $|\log_2(q_{\text{BQ}} / V_0)| \le 1$.
+* **$\mathcal{C}_{\text{AQ}}(u)$:** For each applicable unit $u$, AQs where $|\log_2(q_{\text{AQ}} \cdot c_u / V_0)| \le 1$.
 
 ### Step 2: Evaluation
 1. **Metric-Only:** Score each $q_{\text{BQ}} \in \mathcal{C}_{\text{BQ}}$ using Branch 3.
 2. **Exact Units:** For each unit $u \in \text{EXACT}$ and each $q_{\text{AQ}} \in \mathcal{C}_{\text{AQ}}(u)$, compute $V_{\text{BQ}} = q_{\text{AQ}} \cdot c_u$ and score using Branch 1.
-3. **Non-Exact Units:** For each unit $u \in \text{NON\_EXACT}$, evaluate all pairs $(q_{\text{BQ}}, q_{\text{AQ}}) \in \mathcal{C}_{\text{BQ}} \times \mathcal{C}_{\text{AQ}}(u)$ using Branch 2. *(Skip pairs where $\frac{|V_{\text{BQ}} - V_{\text{AQ}}|}{V_0} > \varepsilon_{\max}$)*.
+3. **Non-Exact Units:** For each unit $u \in \text{NON\_EXACT}$, evaluate all pairs $(q_{\text{BQ}}, q_{\text{AQ}}) \in \mathcal{C}_{\text{BQ}} \times \mathcal{C}_{\text{AQ}}(u)$ using Branch 2. *(Skip pairs where $|\log_2(V_{\text{BQ}} / V_{\text{AQ}})| > \log_2(1.5)$)*.
 
 ### Step 3: Strict Tie-Breaking Hierarchy
 When two candidates produce equivalent scores ($|S_A - S_B| \le 10^{-5}$), break ties using the following strict priority sequence:

@@ -523,6 +523,12 @@ function IngredientSheet({
               setQuantityTouched(true);
             }}
             family={family}
+            // Adaptive chips: the arrangement the optimizer will show for a
+            // target, recentered on the current amount. A valid name supplies
+            // the compatible units; a sub-recipe or a free amount stays metric.
+            adaptive
+            ingredient={validName ? trimmedName : undefined}
+            precision={effectivePrecision}
           />
         </div>
 
