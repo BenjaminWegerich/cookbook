@@ -574,11 +574,12 @@ describe('stockCountText', () => {
 
   it('names only whole packs of an exact shopping unit', () => {
     // Flour is bought in 1000 g packs: two packs read as two packs, but 200 g is
-    // no whole pack and would name a shelf that cannot exist.
+    // no whole pack and would name a shelf that cannot exist. An empty shelf is
+    // still plural („0 Packungen“).
     expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 2000)).toBe(
       `2${NB}Packungen`,
     );
-    expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 0)).toBe(`0${NB}Packung`);
+    expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 0)).toBe(`0${NB}Packungen`);
     expect(stockCountText(need({ ingredient: 'Mehl', needed: 2000 }), 200)).toBeNull();
   });
 

@@ -10,9 +10,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  auDisplayName,
   formatAQ,
   formatAQValue,
   formatBQ,
+  ingredientDisplayName,
   masterIngredientNames,
   NNBSP,
   renderAQS,
@@ -166,6 +168,32 @@ describe('formatting', () => {
 
   it('formats a mixed AQ value with the narrow no-break space', () => {
     expect(formatAQValue(1.25)).toBe(`1${NB}¼`);
+  });
+});
+
+describe('singular and plural display forms (§3.2)', () => {
+  const packung = ADDITIONAL_UNITS.find((unit) => unit.name === 'Packung (teilbar)')!;
+
+  it('uses the singular only for one and the unit fractions', () => {
+    // A unit fraction is a proper fraction with numerator 1: ½, ⅓, ¼, ⅙, ⅛.
+    for (const count of [1, 1 / 2, 1 / 3, 1 / 4, 1 / 6, 1 / 8]) {
+      expect(auDisplayName(packung, count), String(count)).toBe('Packung');
+    }
+  });
+
+  it('uses the plural for zero, larger fractions and mixed numbers', () => {
+    for (const count of [0, 2 / 3, 3 / 4, 5 / 6, 7 / 8, 1.5, 2, 30]) {
+      expect(auDisplayName(packung, count), String(count)).toBe('Packungen');
+    }
+  });
+
+  it('applies the same rule to the ingredient count form (<INF>)', () => {
+    expect(ingredientDisplayName('Zwiebeln', 1)).toBe('Zwiebel');
+    expect(ingredientDisplayName('Zwiebeln', 1 / 2)).toBe('Zwiebel');
+    expect(ingredientDisplayName('Zwiebeln', 1 / 4)).toBe('Zwiebel');
+    expect(ingredientDisplayName('Zwiebeln', 3 / 4)).toBe('Zwiebeln');
+    expect(ingredientDisplayName('Zwiebeln', 0)).toBe('Zwiebeln');
+    expect(ingredientDisplayName('Zwiebeln', 1.5)).toBe('Zwiebeln');
   });
 });
 

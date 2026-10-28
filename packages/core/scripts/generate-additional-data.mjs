@@ -362,10 +362,12 @@ function buildUnits(schemeNames) {
     return {
       name,
       // "Singular" / "Plural": the display forms shown in place of <AU> for a
-      // count of one / above one; both empty for an invariant unit, whose name
-      // then serves for every count. Display data only — the canonical `name`
-      // stays the key the mappings reference. A qualifier in the name
-      // ("Packung (teilbar)") is a key too, so such a unit must state its pair.
+      // count of one or a unit fraction / for every other count (docs/
+      // additional_quantity_specifications.md §3.2); both empty for an invariant
+      // unit, whose name then serves for every count. Display data only — the
+      // canonical `name` stays the key the mappings reference. A qualifier in
+      // the name ("Packung (teilbar)") is a key too, so such a unit must state
+      // its pair.
       ...parseDisplayForms(singularCell, pluralCell, name, UNITS_CSV),
       // <NNBSP> stays a placeholder in the arrangement; the runtime renderer
       // substitutes it with the narrow no-break space (U+202F) like any other
@@ -518,11 +520,11 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push('  readonly name: string;');
   lines.push(
-    '  /** Singular display form of the unit (count 1), e.g. "Packung"; absent = the name is invariant and serves for every count. Present exactly when `plural` is. */',
+    '  /** Singular display form of the unit (AQ 1 or a unit fraction such as ½), e.g. "Packung"; absent = the name is invariant and serves for every count. Present exactly when `plural` is. */',
   );
   lines.push('  readonly singular?: string;');
   lines.push(
-    '  /** Plural display form of the unit (count above one), e.g. "Packungen"; absent = invariant (see `singular`). */',
+    '  /** Plural display form of the unit (every other AQ, including 0 and mixed numbers), e.g. "Packungen"; absent = invariant (see `singular`). */',
   );
   lines.push('  readonly plural?: string;');
   lines.push(
@@ -566,11 +568,11 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push('  readonly precision: PrecisionLevel;');
   lines.push(
-    '  /** Singular display form of the name (count 1), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */',
+    '  /** Singular display form of the name (count 1 or a unit fraction such as ½), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */',
   );
   lines.push('  readonly singular?: string;');
   lines.push(
-    '  /** Plural display form of the name (count ≠ 1), e.g. "Karotten"; absent = invariant (see `singular`). */',
+    '  /** Plural display form of the name (every other count, including 0 and mixed numbers), e.g. "Karotten"; absent = invariant (see `singular`). */',
   );
   lines.push('  readonly plural?: string;');
   lines.push(

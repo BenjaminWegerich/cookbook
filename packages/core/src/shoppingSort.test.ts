@@ -66,9 +66,9 @@ describe('shoppingNameField', () => {
   });
 
   it('undoes the app’s plural unit form', () => {
-    // A count above one makes the app write the unit's plural form
-    // (docs/additional_quantity_specifications.md §3), so the derived
-    // vocabulary carries it too.
+    // Every count but one and the unit fractions makes the app write the unit's
+    // plural form (docs/additional_quantity_specifications.md §3.2), so the
+    // derived vocabulary carries it too.
     expect(shoppingNameField('2 Packungen Mehl (2 kg)')).toBe('Mehl');
     expect(shoppingNameField(`2${N}Packungen${N}Mehl${N}(2${N}kg)`)).toBe('Mehl');
   });

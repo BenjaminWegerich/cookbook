@@ -170,16 +170,6 @@ not where it is used.
       `einkaufs-artikel.csv` + the empty `einkaufs-synonyme.csv`, then deletes the
       old file. Out of scope: an automatic similarity ("fuzzy") merge, and any
       normalization written back into the tables.
-- [ ] Refine when a unit shows its singular and when its plural form. The rule implemented
-      with the unit display forms is the coarse „count above one → plural“
-      (`auDisplayName` in `packages/core/src/additionalUnits.ts`), so `0` reads „0 Packung“,
-      a fraction below one stays singular („½ Packung“) and a mixed number above one is plural
-      („1 ½ Packungen“). Decide the rule with Ben against German number agreement: whether `0`
-      takes the plural („0 Packungen“), whether a decimal count does, and whether the choice
-      keys on the numeric value or on the rendered count text. Align it with the ingredient
-      display-forms task above, which carries the same question for `<INF>` („1 Stück
-      Karotte“ vs. „1 Stück Karotten“), then update §3.2 of
-      additional_quantity_specifications.md and the tests.
 
 ### Next steps, in order
 

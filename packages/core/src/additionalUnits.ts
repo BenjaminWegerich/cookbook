@@ -300,21 +300,43 @@ export function formatAQValue(value: number): string {
 }
 
 /**
- * Whether a count takes the plural display form. The current, coarse rule is
- * "above one", so `0` and a fraction below one stay singular („½ Packung“).
+ * Tolerance of the unit-fraction test (`usesPlural`). A value like 1/3 is
+ * stored as 0.3333333333333333, so its reciprocal misses 3 by a few ulps; the
+ * slack is far below the distance between any two distinct AQ values.
+ */
+const UNIT_FRACTION_EPSILON = 1e-9;
+
+/**
+ * Whether a count takes the plural display form
+ * (docs/additional_quantity_specifications.md §3.2, decided with the user):
+ * singular only for exactly one and for a **unit fraction** — a proper fraction
+ * whose numerator is 1 (1/2, 1/3, 1/4, 1/8). Every other count is plural,
+ * including `0` („0 Packungen“) and mixed numbers („1 ½ Packungen“); a proper
+ * fraction with a larger numerator is plural too („¾ Packungen“).
+ *
  * Both the unit forms (`auDisplayName`) and the ingredient forms
- * (`ingredientDisplayName`) share it, so a refinement of the rule
- * (docs/ROADMAP.md) has a single home.
+ * (`ingredientDisplayName`) share the rule, so it has a single home. The test is
+ * numeric rather than textual because callers also pass whole stock counts that
+ * are not AQ table values: a count in (0, 1) is a unit fraction exactly when its
+ * reciprocal is a whole number.
  */
 function usesPlural(count: number): boolean {
-  return count > 1;
+  if (count === 1) {
+    return false;
+  }
+  if (count > 0 && count < 1) {
+    const denominator = 1 / count;
+    return Math.abs(denominator - Math.round(denominator)) > UNIT_FRACTION_EPSILON;
+  }
+  return true;
 }
 
 /**
  * The unit text to show for a count (docs/additional_quantity_specifications.md
- * §3): the unit's **plural** form when the count is above one and the unit has
- * one („2 Packungen Mehl“), otherwise its **singular** form — or the canonical
- * name when the pair is empty (an invariant unit).
+ * §3.2): the unit's **plural** form when the count takes one („2 Packungen
+ * Mehl“), otherwise its **singular** form — or the canonical name when the pair
+ * is empty (an invariant unit). §3.2 of the spec defines which counts are
+ * singular: one and the unit fractions (½, ¼, ⅛).
  */
 export function auDisplayName(au: AdditionalUnit, count: number): string {
   if (usesPlural(count) && au.plural !== undefined) {

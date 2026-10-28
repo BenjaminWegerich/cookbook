@@ -11,9 +11,9 @@ import type { PrecisionLevel } from './precision.js';
 export interface AdditionalUnit {
   /** Canonical unit name: the identity the mappings reference and the runtime registry keys units by; without `singular`/`plural` it is also the form the display line shows. */
   readonly name: string;
-  /** Singular display form of the unit (count 1), e.g. "Packung"; absent = the name is invariant and serves for every count. Present exactly when `plural` is. */
+  /** Singular display form of the unit (AQ 1 or a unit fraction such as ½), e.g. "Packung"; absent = the name is invariant and serves for every count. Present exactly when `plural` is. */
   readonly singular?: string;
-  /** Plural display form of the unit (count above one), e.g. "Packungen"; absent = invariant (see `singular`). */
+  /** Plural display form of the unit (every other AQ, including 0 and mixed numbers), e.g. "Packungen"; absent = invariant (see `singular`). */
   readonly plural?: string;
   /** Display template; placeholders <AQ> <AU> <IN> (canonical ingredient name) <INF> (its singular/plural form) <BQ> <BU> <NNBSP> (narrow no-break space). */
   readonly arrangement: string;
@@ -41,9 +41,9 @@ export interface IngredientEntry {
   readonly reorderPoint: number;
   /** Mandatory ingredient-level precision: how exact vs practical the quantities of this ingredient are displayed (docs/recipe_scaling_algorithm.md §4.1). */
   readonly precision: PrecisionLevel;
-  /** Singular display form of the name (count 1), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */
+  /** Singular display form of the name (count 1 or a unit fraction such as ½), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */
   readonly singular?: string;
-  /** Plural display form of the name (count ≠ 1), e.g. "Karotten"; absent = invariant (see `singular`). */
+  /** Plural display form of the name (every other count, including 0 and mixed numbers), e.g. "Karotten"; absent = invariant (see `singular`). */
   readonly plural?: string;
   /** The ingredient's additional-unit mappings; empty = bare ingredient without additional units. */
   readonly entries: readonly IngredientMapping[];

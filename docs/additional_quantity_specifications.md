@@ -96,10 +96,12 @@ mandatory ingredient-level precision and the reorder point. An ingredient withou
   count). A half-filled pair is a master-data error.
 - A qualifier in the canonical name (`Packung (teilbar)`) is a key, never the
   display; such a unit must state its display pair.
-- `<AU>` renders the **plural** form when the count is above one and the unit
-  has one, otherwise the **singular** form (or the canonical name for an
-  invariant unit). A fraction below one stays singular (`½ Packung`); a mixed
-  number above one is plural (`1 ½ Packungen`).
+- `<AU>` and `<INF>` render the **singular** form only when the count (AQ) is
+  exactly `1` or a **unit fraction** — a proper fraction whose numerator is `1`
+  (`½`, `⅓`, `¼`, `⅛`): `1 Packung`, `½ Packung`, `¼ Zwiebel`. Every other count
+  takes the **plural** form, including `0` (`0 Packungen`), a fraction with a
+  larger numerator (`¾ Packungen`) and a mixed number (`1 ½ Packungen`). An
+  invariant unit keeps its canonical name for every count.
 
 ## 4. Display arrangement
 
@@ -118,7 +120,7 @@ Each unit defines an **arrangement**: the order of the parts and the punctuation
 Everything that is not a placeholder is free text and passes through unchanged.
 `<BQ>` and `<BU>` may stand apart; `<IN>` and `<INF>` are two name placeholders
 (canonical vs. count form). `<INF>` falls back to the canonical name when the
-pair is empty; the count above one selects the plural.
+pair is empty; the count selects the form with the same rule as `<AU>` (§3.2).
 
 Examples:
 
