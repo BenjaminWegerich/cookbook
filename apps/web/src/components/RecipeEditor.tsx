@@ -110,6 +110,7 @@ import IngredientSheet, {
 import LeaveConfirmSheet from './LeaveConfirmSheet';
 import NewIngredientSheet, { type NewIngredientEntry } from './NewIngredientSheet';
 import {
+  scheduleExportRefresh,
   updateIngredientMasterAndShopping,
   type IngredientMasterSheetUpdate,
 } from './ingredientMasterUpdate';
@@ -1849,6 +1850,9 @@ function RecipeEditor({
         throw new Error('Ohne Einkaufsort lassen sich keine Synonyme speichern.');
       }
       await appendIngredientMasterData(token, name, bu, reorderPoint, entries, precision, folder);
+      // Other saved recipes may already use this name; the current draft is not
+      // affected yet — its export is written when the recipe is saved.
+      scheduleExportRefresh(token, name, undefined, showSnackbar);
       setCreateSheet(null);
       if (sheetContext !== null) {
         setSheet(sheetContext.sheet);

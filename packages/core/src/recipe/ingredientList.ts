@@ -13,7 +13,8 @@
 
 import { mappingsFor } from '../ingredientRegistry.js';
 import { optimizeQuantity } from '../quantityOptimizer.js';
-import type { Ingredient, MasterIngredient, Step } from './types.js';
+import { splitArtifacts } from './artifacts.js';
+import type { Ingredient, MasterIngredient, Recipe, Step } from './types.js';
 
 /** Rounds a derived sum to millionths, removing binary floating-point noise. */
 function roundSum(value: number): number {
@@ -105,5 +106,32 @@ export function deriveIngredients(
   const referenceNames = new Set(reference.map((name) => name.trim()));
   return mergeIngredientUses(entries).map((entry) =>
     referenceNames.has(entry.name) ? { ...entry, reference: true } : entry,
+  );
+}
+
+/**
+ * Whether a recipe can display the given ingredient anywhere
+ * (storage_format.md §4): in a counted step row or in an inline `{{… Name}}`
+ * artifact.
+ *
+ * The derived master list already covers every counted step row, so checking
+ * `recipe.ingredients` is enough for the ingredient lists. Inline artifacts are
+ * *not* part of that list — an ingredient may appear only in the prose — so the
+ * step texts are scanned separately.
+ *
+ * Callers use this to find the recipes an ingredient's master-data change can
+ * make stale: both surfaces bake display forms from the runtime registry (the
+ * HTML export, the app's lists), so a change affects the recipe when the name
+ * occurs in either place. Names are compared exactly; the parser trims them.
+ *
+ * @param recipe a parsed recipe
+ * @param name the canonical ingredient name
+ */
+export function recipeUsesIngredient(recipe: Recipe, name: string): boolean {
+  if (recipe.ingredients.some((ingredient) => ingredient.name === name)) {
+    return true;
+  }
+  return recipe.steps.some((step) =>
+    splitArtifacts(step.text).spans.some((span) => span.artifact.name === name),
   );
 }

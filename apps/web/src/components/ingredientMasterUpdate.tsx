@@ -29,6 +29,10 @@ import {
 } from '@cookbook/core';
 
 import {
+  isExportRelevantChange,
+  refreshExportsForIngredient,
+} from '../drive/ingredientExportRefresh';
+import {
   updateIngredientMasterData,
   type IngredientMasterEntryInput,
 } from '../drive/ingredientMasterData';
@@ -146,6 +150,58 @@ export interface IngredientMasterUpdateDeps {
 }
 
 /**
+ * Serializes the background export refreshes of this page session.
+ *
+ * The refresh writes several export files; a second master-data write (an undo,
+ * or a quick edit of another ingredient) must not interleave with that batch.
+ * Chaining also means every job bakes from the registry state at the moment it
+ * runs, so the last job for an ingredient always writes the latest values. Each
+ * job catches its own errors, so the chain itself never rejects.
+ */
+let exportRefreshQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Re-bakes the HTML exports that a successful ingredient write made stale.
+ *
+ * Runs in the background so saving master data keeps its current speed: the CSV
+ * pair is the write the user waits for, and a failed export must never look like
+ * a failed save. Only export-relevant fields trigger a pass (see
+ * `isExportRelevantChange`); the affected recipes are found in
+ * ../drive/ingredientExportRefresh. A partial failure is reported, because the
+ * user may share one of those links immediately.
+ *
+ * @param token the Drive access token
+ * @param name the canonical ingredient name that changed
+ * @param before the entry as stored before the write (undefined on create)
+ * @param showSnackbar the app-root notice host
+ */
+export function scheduleExportRefresh(
+  token: string,
+  name: string,
+  before: IngredientEntry | undefined,
+  showSnackbar: (message: SnackbarMessage) => void,
+): void {
+  if (!isExportRelevantChange(before, mappingsFor(name))) return;
+  const run = async (): Promise<void> => {
+    try {
+      const result = await refreshExportsForIngredient(token, name, before);
+      if (result.failed.length === 0) return;
+      const first = result.failed[0]!;
+      showSnackbar({
+        tone: 'error',
+        text: `Die HTML-Exporte für „${name}“ konnten nicht vollständig aktualisiert werden (${result.failed.length}). ${first.reason}`,
+      });
+    } catch (error) {
+      showSnackbar({
+        tone: 'error',
+        text: `Die HTML-Exporte für „${name}“ konnten nicht aktualisiert werden: ${reasonOf(error)}`,
+      });
+    }
+  };
+  exportRefreshQueue = exportRefreshQueue.then(run, run);
+}
+
+/**
  * Persists one ingredient edit and its shopping data. Returns false when the
  * form equals the registry (the caller then closes the sheet without a write or
  * a notice, DESIGN §5.1); throws a German error when a write fails, after
@@ -201,6 +257,11 @@ export async function updateIngredientMasterAndShopping(
   }
 
   onChanged?.();
+  // The CSV write is what the user waited for; the export refresh is derived
+  // and runs in the background (the notice's undo would otherwise race it).
+  if (previousIngredient !== null) {
+    scheduleExportRefresh(token, name, previousIngredient, showSnackbar);
+  }
   showSnackbar({
     text: `„${name}“ gespeichert.`,
     action: {
@@ -208,10 +269,15 @@ export async function updateIngredientMasterAndShopping(
       busyLabel: 'Wird rückgängig gemacht …',
       icon: <UndoIcon className="button-icon" optical={20} />,
       run: async (): Promise<void> => {
+        // The registry state the undo replaces, so the export refresh knows
+        // whether the restored entry is export-relevant.
+        const beforeUndo = mappingsFor(name);
         const problems: string[] = [];
+        let ingredientRestored = false;
         if (previousIngredient !== null) {
           try {
             await updateIngredientMasterData(token, name, toIngredientInput(previousIngredient));
+            ingredientRestored = true;
           } catch (err) {
             problems.push(reasonOf(err));
           }
@@ -226,6 +292,9 @@ export async function updateIngredientMasterAndShopping(
           problems.push(reasonOf(err));
         }
         onChanged?.();
+        if (ingredientRestored) {
+          scheduleExportRefresh(token, name, beforeUndo, showSnackbar);
+        }
         if (problems.length > 0) {
           showSnackbar({
             tone: 'error',

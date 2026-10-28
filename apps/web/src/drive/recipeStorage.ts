@@ -32,7 +32,7 @@ import {
 } from '@cookbook/core';
 
 import { EXPORT_HOST_URL } from '../config';
-import { ensureCookbookArea, listCookbookFolder } from './cookbookFolder';
+import { ensureCookbookArea, listCookbookFolder, type CookbookFolder } from './cookbookFolder';
 import {
   createFileWithContent,
   deleteFile,
@@ -362,14 +362,25 @@ export async function updateRecipe(
  * links keep working) or creating it on first save. Called automatically by
  * createRecipe/updateRecipe and internally by the rename flow — the recipe
  * file itself stays the single source of truth.
+ *
+ * The optional `folder` snapshot lets a batch write several exports from one
+ * listing (the master-data refresh, see ./ingredientExportRefresh). Only ids and
+ * names are taken from it; file contents (the photo, the recipe) are still read
+ * fresh, so the read-before-write guarantee is unchanged. Callers that update
+ * an existing export do not change the file set, which keeps the snapshot's
+ * sub-recipe link map valid for the whole batch.
  */
-export async function writeRecipeExport(token: string, recipe: Recipe): Promise<DriveFile> {
+export async function writeRecipeExport(
+  token: string,
+  recipe: Recipe,
+  folder?: CookbookFolder,
+): Promise<DriveFile> {
   // The export lives in `Exporte`; the photo it embeds is read from `Bilder`.
   // The snapshot gives both listings at once, and the ensure call creates the
   // export folder on the first save of an empty collection.
-  const folder = await listCookbookFolder(token);
-  const folderId = await ensureCookbookArea(token, 'exports', folder);
-  const files = folder.exports.files;
+  const snapshot = folder ?? (await listCookbookFolder(token));
+  const folderId = await ensureCookbookArea(token, 'exports', snapshot);
+  const files = snapshot.exports.files;
   const fileName = `${recipe.title}${EXPORT_EXTENSION}`;
   const existing = files.find((file) => file.name === fileName);
   // Sub-recipe links (recipe_structure.md "The link means"): sub-recipes are
@@ -386,7 +397,7 @@ export async function writeRecipeExport(token: string, recipe: Recipe): Promise<
     if (title === '') continue;
     links[title] = recipeExportUrl(file.id);
   }
-  const photo = await loadExportPhoto(token, recipe.title, folder.images.files);
+  const photo = await loadExportPhoto(token, recipe.title, snapshot.images.files);
   const content = generateRecipeHtml(recipe, links, photo);
   if (existing !== undefined) {
     return updateFileWithContent(token, existing.id, {

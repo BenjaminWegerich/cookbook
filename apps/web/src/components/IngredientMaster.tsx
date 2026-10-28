@@ -48,6 +48,7 @@ import NewIngredientSheet from './NewIngredientSheet';
 import {
   findItemKey,
   isShoppingUnchanged,
+  scheduleExportRefresh,
   updateIngredientMasterAndShopping,
   writeShoppingChange,
   type IngredientMasterSheetUpdate,
@@ -285,6 +286,9 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
       }
 
       await appendIngredientMasterData(token, name, bu, reorderPoint, entries, precision);
+      // Already-saved recipes that used this name before it was registered get
+      // their baked display forms now; the new entry is a create (no `before`).
+      scheduleExportRefresh(token, name, undefined, showSnackbar);
       setCreating(false);
       setRevision((current) => current + 1);
       showSnackbar({ text: `„${name}“ angelegt.` });

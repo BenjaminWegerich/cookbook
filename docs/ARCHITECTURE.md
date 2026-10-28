@@ -156,8 +156,15 @@
   file needs no font fetch or sibling asset (`packages/core/src/recipe/embeddedFonts.ts`, generated
   by `scripts/generate-embedded-fonts.mjs`). A `Noto Serif Display` theme embeds both faces: the
   display serif for the page headings and Noto Serif for the body.
-- Generated from the core logic and a recipe file, stored in Drive and regenerated automatically
-  on every recipe save (updated in place, so shared links stay valid).
+- Generated from the core logic and a recipe file, stored in Drive and updated in place, so
+  shared links stay valid. The app rewrites an export on every recipe save and whenever one of
+  the ingredient's export-relevant master-data fields changes: AU mappings and their factors,
+  precision, or the Singular/Plural display forms. That refresh finds the saved recipes that use
+  the changed ingredient — counted step rows and inline artifacts — and re-bakes their existing
+  exports in a serialized background pass; a recipe without an export stays untouched until its
+  first save. Only writes made in the app trigger it. A CSV edit made directly in Drive is not
+  detected by that pass, so the affected exports stay stale until the recipe is saved or the
+  ingredient is edited in the app (a startup sweep is a follow-up).
 - The page opens on the written size or on the size the URL asks for (`?portionen=6`,
   `&menge=500g`); a meal-plan entry links the export with that size, so a planned dish opens at
   exactly the amount it was planned for.

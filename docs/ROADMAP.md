@@ -50,11 +50,12 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
       through the web app („Neue Zutat anlegen“) and land in the Drive `zutaten.csv` +
       `zutaten-umrechnungen.csv`; the repo CSVs are the seed that initializes those files
       on first use.
-- [ ] Use the ingredient display forms: `zutaten.csv` now carries `Singular;Plural`
-      ([storage_format.md](storage_format.md) §9), but nothing reads them yet. Decide which
-      surfaces name an ingredient with a count (e.g. the cooking view's Zutaten list, the
-      shopping list) and render the matching form there, falling back to the canonical name
-      when the pair is empty.
+- [ ] Catch master-data edits made directly in Drive and refresh the affected exports at
+      startup. The in-app refresh (ARCHITECTURE.md, "HTML share export") only runs when the
+      ingredient is saved in the app; a CSV edit in Google Sheets leaves the exports stale
+      until the recipe is saved or the ingredient is edited in the app. Decide the detection
+      (file mtime vs a stored diff) and the scope (affected recipes vs every stale export)
+      before building.
 
 ### Design system: follow-ups from the DESIGN.md compliance pass
 
