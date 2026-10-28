@@ -32,10 +32,11 @@
  *   as the ingredient master data and is always offered, before a name is
  *   chosen too. Its baseline is the ingredient's master-data level, or the
  *   neutral medium level when the quantity has no ingredient entry (a
- *   sub-recipe, a unitless mention, or no name yet). The chip matching that
- *   baseline means "no override", so a quantity is only stored with a
- *   `{precision: …}` tag when it deviates; the baseline is named beside the
- *   caption (there is no separate reset control);
+ *   sub-recipe, a unitless mention, or no name yet). No active chip means the
+ *   quantity follows that baseline live (the caption names it); an active chip
+ *   pins its level, which is stored as a `{precision: …}` tag even when it
+ *   equals the baseline today, so it keeps its value when the baseline changes
+ *   later. The dashed „Entfernen“ chip drops the pin;
  * - the live preview shows the full display form ("1 Becher Joghurt (400 g)",
  *   "1,5 l Wasser", "½") via core renderAQS/formatBQ/formatAQValue;
  * - the reference role is set on the *master list* only — this sheet never
@@ -95,7 +96,8 @@ export type FreeUnit = QuantityFamily | 'none';
 
 /** A confirmed row/artifact value. Rows always carry a name and a unit;
  *  quantity-only inline artifacts may omit the name and/or the unit. The
- *  precision is present only when it overrides the ingredient default. */
+ *  precision is present only when the author pinned a level (it may equal the
+ *  ingredient default); absent means the quantity follows that default. */
 export type SheetResult =
   Ingredient | { quantity: number; unit?: Unit; precision?: PrecisionLevel };
 
@@ -167,8 +169,9 @@ function IngredientSheet({
   });
   const [error, setError] = useState<string | null>(null);
   /**
-   * The quantity-level precision override. `undefined` means the ingredient
-   * default applies; the chips show the effective value in both cases.
+   * The quantity-level precision chosen for this quantity. `undefined` means
+   * the ingredient default applies live; a level is pinned, so it keeps its
+   * value when the ingredient default changes later.
    */
   const [precisionOverride, setPrecisionOverride] = useState<PrecisionLevel | undefined>(
     initial?.precision,
@@ -318,15 +321,14 @@ function IngredientSheet({
       return;
     }
     /**
-     * Only a deviating value is stored: a quantity whose precision equals its
+     * Every chosen level is stored, even one that currently equals the
      * baseline (the ingredient default, or the neutral level for a sub-recipe /
-     * unitless mention) writes no `{precision: …}` tag. This also drops an old
-     * redundant tag that matched the baseline.
+     * unitless mention): the tag is the pin that keeps the value when the
+     * baseline changes later. Only “no choice” writes no tag and follows the
+     * baseline. The remove chip clears the choice, so an old redundant tag is
+     * dropped the same way.
      */
-    const savedPrecision =
-      precisionOverride !== undefined && precisionOverride !== baselinePrecision
-        ? precisionOverride
-        : undefined;
+    const savedPrecision = precisionOverride;
     const value: SheetResult =
       trimmedName !== ''
         ? {
@@ -532,12 +534,13 @@ function IngredientSheet({
           />
         </div>
 
-        {/* Quantity-level precision: the optional override of the quantity's
-            baseline. The chips always show the effective value; the chip that
-            matches the baseline means "no override" (the passive caption names
-            that baseline, so no reset button is needed). The field is offered
-            for every quantity — a master ingredient, a sub-recipe, a unitless
-            mention, and the still-empty form (neutral medium). */}
+        {/* Quantity-level precision: the optional pin of the quantity's
+            baseline. No active chip means the quantity follows the baseline
+            live (the passive caption names it); an active chip stores that
+            level, so it keeps its value when the baseline changes later. The
+            dashed clear chip (the „Gesamtzeit“ idiom) drops the pin. The field
+            is offered for every quantity — a master ingredient, a sub-recipe, a
+            unitless mention, and the still-empty form (neutral medium). */}
         <div className="field">
           <div className="field-head">
             <span className="field-label">
@@ -550,12 +553,11 @@ function IngredientSheet({
             </span>
           </div>
           <PrecisionChips
-            value={effectivePrecision}
-            onChange={(next) =>
-              // Tapping the chip that equals the current baseline means "follow
-              // the baseline": clear the override instead of storing it.
-              setPrecisionOverride(next === baselinePrecision ? undefined : next)
-            }
+            // No active chip while the quantity follows the baseline; any chip
+            // tap pins its level, even one that equals the baseline today.
+            value={precisionOverride}
+            onChange={setPrecisionOverride}
+            onClear={() => setPrecisionOverride(undefined)}
             ariaLabel="Genauigkeit der Menge"
           />
           <p className="field-hint">

@@ -143,8 +143,11 @@ Storage:
 | Quantity | ingredient row | trailing `{precision: high}`; artifacts use `{{1/2\|precision: high}}` |
 | Ingredient | `zutaten.csv` / `docs/ingredients.csv` | mandatory `Precision` column before `Reorder Point` |
 
-The quantity level is meant for exceptions; the ingredient master data carries
-the ingredient's usual setting.
+The quantity level pins that use: it keeps its value when the ingredient default
+changes later, and it may deliberately repeat the current default — the tag, not
+a difference in value, is what makes the pin. A quantity without a tag follows
+the ingredient default live. The master data carries the ingredient's usual
+setting; the quantity level is for exceptions.
 
 ## 6. Scoring and selection
 

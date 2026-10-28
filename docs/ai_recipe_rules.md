@@ -98,9 +98,10 @@ Schritte — sonst nichts:
   verdoppeln; der Zielwert bleibt unverändert.
 - Es gibt **keine Rezept- und keine globale Stufe** mehr. Die Genauigkeit steht verpflichtend
   in den Zutaten-Stammdaten; du schreibst sie **nicht** ins Frontmatter.
-- Eine Zeilen-Genauigkeit ist die Ausnahme für eine einzelne Menge, die bewusst anders
-  behandelt werden soll: `- 250 g Mehl {precision: high}`. Setze sie sparsam ein — die
-  Stammdaten enthalten bereits passende Werte, die du nicht wiederholst.
+- Eine Zeilen-Genauigkeit fixiert eine einzelne Menge: Sie behält diesen Wert auch dann,
+  wenn sich der Zutat-Standard später ändert. Deshalb ist auch ein Tag, das dem aktuellen
+  Standard entspricht, ein bewusstes Fixieren. Setze ein Tag nur, wenn die Menge nicht dem
+  Standard folgen soll; sonst lass es weg — die Stammdaten enthalten bereits passende Werte.
 - Erlaubte Werte: `very low` (praktisch), `low`, `medium`, `high`, `very high` (exakt).
 - Die App berechnet BQ/AQ (Anzeigewerte) selbst. Schreibe **nie** eine zusätzliche Einheit
   oder einen Anzeigewert in die Zeile; schreibe nur den Zielwert.

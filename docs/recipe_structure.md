@@ -34,7 +34,7 @@
 
 - Precision is a **display preference**, not a scale factor; it never changes a target amount. A higher value prefers exact metric amounts, a lower value practical household/package measures.
 - Every ingredient states its precision in the **ingredient master data** — the level is mandatory there. There is **no recipe-level value and no global default**; a recipe's front matter must not contain a precision field.
-- A single ingredient row may override the ingredient's value with a trailing tag: `- 250 g Reis {precision: high}`. Use it only for exceptions.
+- A single ingredient row may pin a level with a trailing tag: `- 250 g Reis {precision: high}`. A pinned row keeps that value when the ingredient default changes later — so a tag that equals the current default is a deliberate pin, not a redundant one. A row without a tag follows the ingredient default live. Use a tag only where a row must not follow the default.
 - The five levels are `very low`, `low`, `medium`, `high`, `very high`.
 - See [quantity_scaling.md](quantity_scaling.md) §5 for the cascade and the storage format.
 

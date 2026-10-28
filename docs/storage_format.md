@@ -128,8 +128,10 @@ layout). The rows are written in a natural, amount-first phrase:
 - **Row grammar:** `- MENGE EINHEIT NAME` (e.g. `- 250 g Reis`,
   `- 400 ml Kokosmilch`). The quantity is the unrounded target `V0`: any positive
   finite number in the ingredient's family unit. A row may end with an optional
-  precision tag: `- 250 g Reis {precision: high}`. The row is the only way an
-  ingredient enters the recipe's lists.
+  precision tag: `- 250 g Reis {precision: high}`. The tag pins the level for
+  that use: it survives later changes of the ingredient default and may
+  deliberately repeat the current default; a row without the tag follows the
+  default live. The row is the only way an ingredient enters the recipe's lists.
 - The **master ingredient list is derived** from the rows of all steps (§7.1):
   - order = order of first use across the steps (each step's rows in their order);
   - an ingredient used several times appears **once, with the total of the rows'

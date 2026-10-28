@@ -36,8 +36,10 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
   ([BQs.csv](docs/BQs.csv), [AQs.csv](docs/AQs.csv)) and the unit's number scheme.
 - A five-level precision setting (very low / low / medium / high / very high) balances
   exact metric amounts against practical household/package measures. It never changes the
-  target amount. Every ingredient states its precision in the master data; a single recipe
-  row may override it. There is no recipe-level or global default.
+  target amount. Every ingredient states its precision in the master data; a recipe row
+  either follows that default live or pins a level with a trailing tag. A pinned level
+  keeps its value when the ingredient default changes later, even when both are equal
+  today. There is no recipe-level or global default.
 - Example: a recipe written for 4 people with 500 g yogurt, scaled to 6 people, has a
   750 g target and may display as `1 ½ Becher (750 g)`; the metric target stays 750 g.
 - The derived master list stays tied to the step rows: a once-used ingredient repeats the
