@@ -35,6 +35,7 @@
   --line: var(--theme-line);
   --muted: #7e7870;
   --on-accent: #faf5ec;
+  --press: #e1dcd3;
 }
 
   /* The cooking view is always light; it does not follow the OS dark preference
@@ -127,14 +128,36 @@
   .reference { margin: var(--space-3) 0 0; padding: 0; list-style: none; color: var(--muted);
                font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
-  /* Ingredient-recipe stepper (§5.2 "exactly as today"). */
-  .yield-row { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-3) 0 0; }
-  .yield-step-button { font: inherit; font-size: var(--text-md); line-height: var(--leading-md); min-width: var(--space-9);
-                       min-height: 42px; padding: var(--space-3); border-radius: var(--radius-md);
-                       border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
-  .yield-step-button svg { width: var(--icon-size); height: var(--icon-size); fill: currentColor; }
+  /* Ingredient-recipe stepper (§5.2 "exactly as today"). Each button is the
+     app's 42 px circle with the 24 px Material „remove" / „add" drawing centred
+     by the grid, not by a line box — the SVG would otherwise sit on the text
+     baseline and read high in the circle. The circle is structural, like the
+     app's .step-button, so it is not clamped to the radius ladder. The
+     press-and-hold guards (no selection, callout or double-tap zoom) let a
+     long press read purely as a hold, and the :active fill is the solid
+     equivalent of the app's shared press wash. The row copies the app's
+     .quantity-row gap; the value slot copies QuantityValue, whose hidden probe
+     keeps the width fixed and the digits right-aligned while the stepper walks
+     the views. */
+  .yield-row { display: flex; align-items: center; gap: var(--space-6); margin: var(--space-3) 0 0; }
+  .yield-step-button { width: var(--space-9); height: var(--space-9); padding: 0;
+                       display: inline-grid; place-items: center; border-radius: 50%;
+                       border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer;
+                       -webkit-user-select: none; user-select: none;
+                       -webkit-touch-callout: none; touch-action: manipulation; }
+  .yield-step-button svg { display: block; width: var(--icon-size); height: var(--icon-size); fill: currentColor; }
+  .yield-step-button:active:not(:disabled) { background: var(--press); }
   .yield-step-button:disabled { opacity: 0.5; cursor: default; }
-  .yield-value { font-weight: 600; min-width: var(--space-10); text-align: center; }
+  .yield-value-slot { position: relative; display: inline-block; flex: none; }
+  .yield-value-measure { display: block; padding: var(--space-3) var(--space-4);
+                         border: 1px solid transparent; font-size: var(--text-md);
+                         line-height: var(--leading-md); font-weight: 600;
+                         white-space: nowrap; visibility: hidden; }
+  .yield-value { position: absolute; inset: 0; display: flex; align-items: center;
+                 justify-content: flex-end; padding: var(--space-3) var(--space-4);
+                 border: 1px solid transparent; font-size: var(--text-md);
+                 line-height: var(--leading-md); font-weight: 600;
+                 white-space: nowrap; text-align: right; }
 
   /* ---- Zutaten ---- */
   .screen-caption { font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600;
@@ -996,8 +1019,54 @@
     yieldChips.forEach(function (btn) {
       btn.addEventListener('click', function () { selectYield(btn.getAttribute('data-yield')); });
     });
-    if (stepDown) { stepDown.addEventListener('click', function () { selectYieldAt(yieldIndex - 1); }); }
-    if (stepUp) { stepUp.addEventListener('click', function () { selectYieldAt(yieldIndex + 1); }); }
+    // Press-and-hold on the yield stepper (§5.2): a tap steps once, a hold
+    // repeats the step at the app's cadence — the first repeat after 450 ms,
+    // then every 100 ms — until the baked-view list ends or the finger lifts.
+    // A click and a keyboard activation both arrive as a click, so the click
+    // performs the single step; the pointerdown only arms the hold. The
+    // closing click of a hold is swallowed so the release adds no extra step.
+    var HOLD_FIRST_REPEAT_MS = 450;
+    var HOLD_REPEAT_INTERVAL_MS = 100;
+    function bindStepper(button, direction) {
+      if (button === null) { return; }
+      var holdTimer = null;
+      var repeatTimer = null;
+      var repeated = false;
+
+      function stopHold() {
+        if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
+        if (repeatTimer !== null) { clearInterval(repeatTimer); repeatTimer = null; }
+      }
+      function canStep() {
+        return direction < 0 ? yieldIndex > 0 : yieldIndex < yieldValues.length - 1;
+      }
+      function step() { selectYieldAt(yieldIndex + direction); }
+
+      button.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0) { return; }
+        stopHold();
+        repeated = false;
+        holdTimer = setTimeout(function () {
+          holdTimer = null;
+          if (!canStep()) { return; }
+          step();
+          repeated = true;
+          repeatTimer = setInterval(function () {
+            if (!canStep()) { stopHold(); return; }
+            step();
+          }, HOLD_REPEAT_INTERVAL_MS);
+        }, HOLD_FIRST_REPEAT_MS);
+      });
+      button.addEventListener('pointerup', stopHold);
+      button.addEventListener('pointerleave', stopHold);
+      button.addEventListener('pointercancel', stopHold);
+      button.addEventListener('click', function () {
+        if (repeated) { repeated = false; return; }
+        if (canStep()) { step(); }
+      });
+    }
+    bindStepper(stepDown, -1);
+    bindStepper(stepUp, 1);
   }
 
   // A fragment yield is normalized to the family base unit, so a hand-written

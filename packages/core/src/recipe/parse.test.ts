@@ -391,6 +391,18 @@ prep_time: 15 min
     expectIssueAt(issues, 'theme.font', 'Kurzliste');
   });
 
+  it('still accepts a retired face an old recipe stored', () => {
+    // Condensed left the shortlist when condensed type became a data face, and
+    // mono when the technical voice was dropped; old files must keep loading
+    // (and exporting) in their stored face.
+    for (const font of ['Noto Sans Condensed', 'Noto Sans Mono']) {
+      const recipe = parseRecipe(
+        `---\ntitle: X\ntype: finished_dish\nservings: 2\ntheme:\n  font: ${font}\nprep_time: 15 min\n---\n## Zubereitung\n1. x\n`,
+      );
+      expect(recipe.theme?.font).toBe(font);
+    }
+  });
+
   it('rejects colours that are not canonical 6-digit hex', () => {
     const named = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 2\ntheme:\n  accent: red\n---\n## Zubereitung\n1. x\n',

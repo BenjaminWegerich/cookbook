@@ -39,7 +39,7 @@ import { parseArtifactContent, parseIngredientPhrase, replaceArtifacts } from '.
 import { isServingCount } from '../servingSizes.js';
 import { parsePrecisionLevel, PRECISION_LEVELS, type PrecisionLevel } from '../precision.js';
 import { deriveIngredients } from './ingredientList.js';
-import { isHexColor, THEME_FONT_SHORTLIST } from './theme.js';
+import { isHexColor, THEME_FONT_VALUES } from './theme.js';
 import { RecipeParseError } from './types.js';
 import type {
   Ingredient,
@@ -139,8 +139,9 @@ function readOptionalString(
 /**
  * Validates the optional `theme` front-matter field (DESIGN §4.8): a map of up
  * to five optional tokens, each falling back to the default theme. Every token
- * is validated independently (font against the shortlist, colours as canonical
- * hex); unknown sub-fields are rejected like unknown top-level fields. Returns
+ * is validated independently (font against the shortlist — or a retired face
+ * an old file still carries — colours as canonical hex); unknown sub-fields are
+ * rejected like unknown top-level fields. Returns
  * undefined when the field is absent or empty — an empty theme is equivalent to
  * no theme.
  */
@@ -169,7 +170,7 @@ function readTheme(
   if (font !== undefined) {
     if (typeof font !== 'string') {
       issues.push({ path: 'theme.font', message: '"font" muss ein String sein.' });
-    } else if (!THEME_FONT_SHORTLIST.includes(font)) {
+    } else if (!THEME_FONT_VALUES.includes(font)) {
       issues.push({
         path: 'theme.font',
         message: `"font" muss eine Schriftart aus der Kurzliste sein (gefunden: ${JSON.stringify(font)}).`,

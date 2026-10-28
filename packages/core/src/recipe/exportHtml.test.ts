@@ -259,6 +259,41 @@ prep_time: 15 min
     expect(html).not.toContain('class="chip yield-chip" data-yield="100000"');
   });
 
+  it('draws the stepper as the app\u2019s circular 42 px buttons with centred symbols', () => {
+    expect(html).toContain('width: var(--space-9); height: var(--space-9); padding: 0;');
+    expect(html).toContain('display: inline-grid; place-items: center; border-radius: 50%;');
+    // The inline SVG must not sit on the text baseline, or it reads high.
+    expect(html).toContain('.yield-step-button svg { display: block;');
+    // Press-and-hold guards for touch.
+    expect(html).toContain('touch-action: manipulation;');
+  });
+
+  it('copies the app\u2019s stepper row: 18 px gap, measured right-aligned value', () => {
+    // The app's .quantity-row gap is --space-6, not the card gap.
+    expect(html).toContain('gap: var(--space-6); margin: var(--space-3) 0 0;');
+    // QuantityValue's hidden probe fixes the slot; the visible value is
+    // right-aligned over it, so the buttons never move while stepping.
+    expect(html).toContain('class="yield-value-slot"');
+    expect(html).toContain('class="yield-value-measure" aria-hidden="true"');
+    expect(html).toContain('.yield-value { position: absolute; inset: 0;');
+    expect(html).toContain('text-align: right;');
+    // The pressed state is the app's wash, as a solid theme colour.
+    expect(html).toContain(
+      '.yield-step-button:active:not(:disabled) { background: var(--press); }',
+    );
+  });
+
+  it('repeats a held stepper button at the app\u2019s cadence', () => {
+    // A hold steps once after 450 ms, then every 100 ms, and swallows the
+    // closing click; a plain tap still steps exactly once.
+    expect(html).toContain('var HOLD_FIRST_REPEAT_MS = 450;');
+    expect(html).toContain('var HOLD_REPEAT_INTERVAL_MS = 100;');
+    expect(html).toContain("button.addEventListener('pointerdown'");
+    expect(html).toContain("button.addEventListener('pointerup', stopHold)");
+    expect(html).toContain("button.addEventListener('pointercancel', stopHold)");
+    expect(html).toContain('if (repeated) { repeated = false; return; }');
+  });
+
   it('opens on the fragment yield and normalizes kg/l', () => {
     expect(html).toContain("params['menge']");
     expect(html).toContain('.check-list.is-written[data-yield]');
@@ -440,12 +475,14 @@ prep_time: 15 min
     );
   });
 
-  it('computes the derived colours (muted and on-accent) as solid hex', () => {
+  it('computes the derived colours (muted, on-accent and press) as solid hex', () => {
     const html = generateRecipeHtml(WRAPS);
     // muted = ink #2b241d blended 40% toward paper #faf5ec → #7e7870.
     expect(html).toContain('--muted: #7e7870;');
     // The default clay accent takes the light paper as its on-accent.
     expect(html).toContain('--on-accent: #faf5ec;');
+    // press = ink blended 12% onto paper → #e1dcd3.
+    expect(html).toContain('--press: #e1dcd3;');
     // No runtime colour math (color-mix) is emitted into the file.
     expect(html).not.toContain('color-mix');
   });
@@ -475,6 +512,17 @@ type: finished_dish
 servings: 2
 theme:
   font: Noto Sans Condensed
+prep_time: 15 min
+---
+## Zubereitung
+1. x
+`);
+  const mono = parseRecipe(`---
+title: X
+type: finished_dish
+servings: 2
+theme:
+  font: Noto Sans Mono
 prep_time: 15 min
 ---
 ## Zubereitung
@@ -514,12 +562,19 @@ prep_time: 15 min
     expect(html).toContain("font-family: 'Noto Serif';");
   });
 
-  it('embeds the generated condensed width instance as one variable face', () => {
-    const html = generateRecipeHtml(condensed);
-    expect(html).toContain("font-family: 'Noto Sans Condensed';");
-    expect(html).toContain('font-weight: 400 600;');
-    // The theme face plus its matching companion, both under the theme family.
-    expect(html.match(/@font-face/g)).toHaveLength(2);
+  it('still embeds a retired face a stored recipe carries', () => {
+    // Condensed and mono are no longer selectable, but a recipe saved before
+    // that decision must keep exporting in the face it stored.
+    for (const [recipe, family] of [
+      [condensed, 'Noto Sans Condensed'],
+      [mono, 'Noto Sans Mono'],
+    ] as const) {
+      const html = generateRecipeHtml(recipe);
+      expect(html).toContain(`font-family: '${family}';`);
+      expect(html).toContain('font-weight: 400 600;');
+      // The theme face plus its matching companion, both under the theme family.
+      expect(html.match(/@font-face/g)).toHaveLength(2);
+    }
   });
 
   it('embeds the matching fraction/space companion beside the theme face', () => {

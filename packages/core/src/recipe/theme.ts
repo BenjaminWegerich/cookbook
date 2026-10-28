@@ -20,22 +20,41 @@
 import type { RecipeTheme } from './types.js';
 
 /**
- * The export font shortlist (DESIGN §4.8): five Noto faces. `font` must name
+ * The export font shortlist (DESIGN §4.8): three Noto faces. `font` must name
  * exactly one of these — no other typeface is selectable.
  *
  * The list is deliberate about what Noto can and cannot express: the project
  * has no slab, handwriting or rounded Latin text family, so the shortlist
  * trades the old eleven-genre spread for one coherent superfamily (grotesque,
- * serif, display serif, monospace, and the condensed width instance). The
- * condensed name is the width-axis instance of Noto Sans (see the web app's
- * generate-noto-faces script), not a separate Google family.
+ * serif, display serif).
+ *
+ * Condensed is not on the list. It is a data face (DESIGN §4.2 "Condensed is a
+ * data face"): a width instance reserved for genuine tables and never a theme
+ * choice. Mono is retired as well. {@link THEME_FONT_RETIRED} keeps a recipe
+ * that stored either face loadable.
  */
 export const THEME_FONT_SHORTLIST: readonly string[] = [
   'Noto Sans',
   'Noto Serif',
   'Noto Serif Display',
-  'Noto Sans Mono',
-  'Noto Sans Condensed',
+];
+
+/**
+ * Faces a stored recipe may still name although the picker no longer offers
+ * them. Condensed left the shortlist when condensed type was reserved for data
+ * tables; Mono left it with this change. Old files keep parsing, exporting and
+ * serializing unchanged, while new recipes can no longer choose either face
+ * (and the editor shows no active chip for them).
+ *
+ * The faces stay embedded (embeddedFonts.ts) so such a recipe still exports in
+ * its stored face; the list is deliberately not a second "selectable" set.
+ */
+export const THEME_FONT_RETIRED: readonly string[] = ['Noto Sans Condensed', 'Noto Sans Mono'];
+
+/** Every value `theme.font` may hold: the shortlist plus the retired faces. */
+export const THEME_FONT_VALUES: readonly string[] = [
+  ...THEME_FONT_SHORTLIST,
+  ...THEME_FONT_RETIRED,
 ];
 
 /** The default theme: the web app's palette and typeface (DESIGN §4.8). */

@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 /**
- * Generates `src/recipe/embeddedFonts.ts` from the export font shortlist's
- * WOFF2 files (docs/DESIGN.md §4.8).
+ * Generates `src/recipe/embeddedFonts.ts` from the export theme faces' WOFF2
+ * files (docs/DESIGN.md §4.8).
+ *
+ * The faces are the three selectable shortlist faces plus the retired condensed
+ * width instance and mono face. Condensed is a data face and mono a dropped
+ * technical voice; neither is a theme choice any more, but both stay embedded
+ * so an old recipe that stored one still exports in that face.
  *
  * The source of the bytes are the committed WOFF2 files the web app serves
  * (`apps/web/src/fonts`, built by apps/web/scripts/generate-noto-faces.mjs from
@@ -18,14 +23,14 @@
  * narrow no-break space (U+202F). Noto Serif Display gets none: it only renders
  * page headings, which carry no quantities.
  *
- * All five shortlist faces are variable fonts covering the whole weight axis,
+ * All five embedded faces are variable fonts covering the whole weight axis,
  * so each is embedded once and declared over the two weights the cooking view
  * uses (`400 600`, DESIGN §4.2). Their companions do the same.
  *
  * The generator is a drift guard like the other `generate-*` scripts: a missing,
  * empty or non-WOFF2 file fails the run with an explicit message. Keeping the
- * emitted key sets in step with `theme.ts`'s THEME_FONT_SHORTLIST is a test's
- * job (theme.test.ts), because a `.mjs` script cannot import the TypeScript
+ * emitted key sets in step with `theme.ts`'s THEME_FONT_VALUES is a test's job
+ * (theme.test.ts), because a `.mjs` script cannot import the TypeScript
  * shortlist.
  *
  * Usage:
@@ -44,10 +49,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/recipe/embeddedFonts.ts');
 
 /**
- * The export font shortlist in DESIGN §4.8 order, mapped to the committed
- * latin WOFF2 the web app also serves (apps/web/src/fonts). The export embeds
- * those exact files, so a themed cooking view and its editor preview render
- * identical bytes.
+ * The export theme faces in DESIGN §4.8 order, mapped to the committed latin
+ * WOFF2 the web app also serves (apps/web/src/fonts). The export embeds those
+ * exact files, so a themed cooking view and its editor preview render identical
+ * bytes. The Noto Sans Mono and Noto Sans Condensed entries are retired: neither
+ * is selectable, but they keep old recipes exportable (condensed also ships as
+ * the data face).
  */
 const FONTS = [
   { family: 'Noto Sans', path: 'apps/web/src/fonts/noto-sans-latin.woff2' },
@@ -127,7 +134,7 @@ function buildCompanion(companion) {
 function render(byFamily, companions) {
   const lines = [];
   lines.push('/**');
-  lines.push(" * AUTO-GENERATED from the shortlist faces' WOFF2 files by");
+  lines.push(" * AUTO-GENERATED from the theme faces' WOFF2 files by");
   lines.push(' * scripts/generate-embedded-fonts.mjs (the @fontsource latin subsets, plus the');
   lines.push(' * generated Condensed, fraction and narrow-space companion faces).');
   lines.push(
@@ -150,8 +157,10 @@ function render(byFamily, companions) {
   lines.push('}');
   lines.push('');
   lines.push('/**');
-  lines.push(" * The export font shortlist's faces (DESIGN §4.8), keyed by the theme `font`");
-  lines.push(' * name — the same names theme.ts exposes in THEME_FONT_SHORTLIST. Each face is');
+  lines.push(' * The export theme faces (DESIGN §4.8), keyed by the theme `font`');
+  lines.push(' * name — the same names theme.ts exposes in THEME_FONT_VALUES. The three');
+  lines.push(' * selectable faces come first; the retired condensed data face and mono face');
+  lines.push(' * follow so a recipe that stored one still exports in it. Each face is');
   lines.push(' * the latin subset: Basic Latin + Latin-1 (German letters included) plus the');
   lines.push(' * typographic punctuation the cooking view renders, so the embedded font stays');
   lines.push(' * practical in size.');

@@ -17,7 +17,7 @@
  * stub cannot drift from the real markup without failing here.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateRecipeHtml } from './exportHtml.js';
 import { parseRecipe } from './parse.js';
@@ -179,6 +179,10 @@ interface Page {
   checkLists: ElementStub[];
   /** The size chips, so a test can press one. */
   chips: ElementStub[];
+  /** The yield stepper: its −/+ buttons and readout (ingredient recipes only). */
+  stepDown: ElementStub | null;
+  stepUp: ElementStub | null;
+  yieldValue: ElementStub | null;
   /** The bar's two buttons, so a test can press them. */
   backButton: ElementStub;
   forwardButton: ElementStub;
@@ -201,6 +205,14 @@ function buildPage(html: string, hash: string, injected?: string): Page {
   const yieldChips = [...html.matchAll(/<button[^>]*class="[^"]*yield-chip[^"]*"[^>]*>/g)].map(
     (match) => stubFromTag(match[0]),
   );
+  // The yield stepper (absent for a finished dish). Its handlers are bound from
+  // these exact stubs, so a test can press them like a finger.
+  const stepDownStub = /<button[^>]*yield-step-down[^>]*>/.exec(html);
+  const stepUpStub = /<button[^>]*yield-step-up[^>]*>/.exec(html);
+  const stepDown = stepDownStub === null ? null : stubFromTag(stepDownStub[0]);
+  const stepUp = stepUpStub === null ? null : stubFromTag(stepUpStub[0]);
+  const yieldValue =
+    /<span class="yield-value"[^>]*>/.exec(html) === null ? null : new ElementStub('yield-value');
 
   const backButton = stubFromTag(
     /<button class="btn prev"[^>]*>/.exec(html)?.[0] ?? '<button class="btn prev">',
@@ -274,6 +286,12 @@ function buildPage(html: string, hash: string, injected?: string): Page {
           return servingChips[0] ?? null;
         case '.check-list.is-written[data-yield]':
           return writtenView ?? null;
+        case '.yield-value':
+          return yieldValue;
+        case '.yield-step-down':
+          return stepDown;
+        case '.yield-step-up':
+          return stepUp;
         default:
           return null;
       }
@@ -312,6 +330,9 @@ function buildPage(html: string, hash: string, injected?: string): Page {
     window,
     checkLists,
     chips: [...servingChips, ...yieldChips],
+    stepDown,
+    stepUp,
+    yieldValue,
     backButton: backButton ?? new ElementStub(),
     forwardButton: forwardButton ?? new ElementStub(),
     screens,
@@ -510,5 +531,51 @@ describe('embedded script — ingredient recipe', () => {
 
   it('falls back to the written view for a yield outside the baked range', () => {
     expect(visibleSizes(SAUCE, '#menge=99999g')).toEqual(['500']);
+  });
+});
+
+describe('embedded script — the yield stepper (§5.2)', () => {
+  it('steps once on a tap and repeats on a hold without an extra closing step', () => {
+    vi.useFakeTimers();
+    try {
+      const page = runPage(SAUCE, '');
+      const up = page.stepUp!;
+      // The baked views in document order: the visible one's index moves by
+      // exactly one per step.
+      const allValues = page.checkLists.map((list) => list.getAttribute('data-yield'));
+      const shownIndex = (): number => {
+        const visible = page.checkLists.filter((list) => !list.hidden);
+        return allValues.indexOf(visible[0]!.getAttribute('data-yield'));
+      };
+      const start = shownIndex();
+      expect(start).toBe(allValues.indexOf('500'));
+
+      // A tap: the pointerdown only arms the hold, and the click does the one
+      // step. 200 ms is below the 450 ms first repeat.
+      up.fire('pointerdown', { button: 0 });
+      vi.advanceTimersByTime(200);
+      up.fire('pointerup');
+      up.fire('click');
+      expect(shownIndex()).toBe(start + 1);
+
+      // A hold: nothing before 450 ms, one step then, nothing for 100 ms, one
+      // more after it.
+      up.fire('pointerdown', { button: 0 });
+      vi.advanceTimersByTime(449);
+      expect(shownIndex()).toBe(start + 1);
+      vi.advanceTimersByTime(1);
+      expect(shownIndex()).toBe(start + 2);
+      vi.advanceTimersByTime(99);
+      expect(shownIndex()).toBe(start + 2);
+      vi.advanceTimersByTime(1);
+      expect(shownIndex()).toBe(start + 3);
+
+      // The release's click is swallowed: the hold already stepped.
+      up.fire('pointerup');
+      up.fire('click');
+      expect(shownIndex()).toBe(start + 3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

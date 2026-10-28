@@ -1,5 +1,5 @@
 /**
- * AUTO-GENERATED from the shortlist faces' WOFF2 files by
+ * AUTO-GENERATED from the theme faces' WOFF2 files by
  * scripts/generate-embedded-fonts.mjs (the @fontsource latin subsets, plus the
  * generated Condensed, fraction and narrow-space companion faces).
  * Do not edit by hand — re-run 'npm run generate:fonts' (packages/core) after a font change.
@@ -16,8 +16,10 @@ export interface EmbeddedFontFace {
 }
 
 /**
- * The export font shortlist's faces (DESIGN §4.8), keyed by the theme `font`
- * name — the same names theme.ts exposes in THEME_FONT_SHORTLIST. Each face is
+ * The export theme faces (DESIGN §4.8), keyed by the theme `font`
+ * name — the same names theme.ts exposes in THEME_FONT_VALUES. The three
+ * selectable faces come first; the retired condensed data face and mono face
+ * follow so a recipe that stored one still exports in it. Each face is
  * the latin subset: Basic Latin + Latin-1 (German letters included) plus the
  * typographic punctuation the cooking view renders, so the embedded font stays
  * practical in size.

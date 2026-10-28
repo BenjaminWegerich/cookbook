@@ -107,7 +107,9 @@ export interface RecipePhoto {
  *
  * - `muted` is `ink` blended 40 % toward `paper`;
  * - `on-accent` is `ink` when the accent is light, `paper` otherwise — the
- *   choice whose contrast against `accent` is the higher (WCAG AA).
+ *   choice whose contrast against `accent` is the higher (WCAG AA);
+ * - `press` is `ink` blended 12 % onto `paper`: the solid equivalent of the
+ *   app's shared press wash for a control whose fill is the page colour.
  */
 
 /** Parses a 6-digit hex colour into its RGB channels (0–255). */
@@ -156,6 +158,10 @@ function themeCss(theme: ResolvedTheme): string {
     contrastRatio(theme.ink, theme.accent) >= contrastRatio(theme.paper, theme.accent)
       ? theme.ink
       : theme.paper;
+  // The app paints its press feedback as a 12 % ink layer over the control's
+  // own fill; in the export a control's fill is the page's paper, so the same
+  // look is one solid colour computed once here.
+  const press = blend(theme.ink, theme.paper, 0.12);
   const fonts = resolveThemeFonts(theme.font);
   const headingFallback = fonts.heading === fonts.body ? '' : `'${fonts.body}', `;
   return (
@@ -182,6 +188,7 @@ function themeCss(theme: ResolvedTheme): string {
     `  --line: var(--theme-line);\n` +
     `  --muted: ${muted};\n` +
     `  --on-accent: ${onAccent};\n` +
+    `  --press: ${press};\n` +
     `}`
   );
 }
@@ -198,9 +205,9 @@ const THEME_FACE_UNICODE_RANGE =
 
 /**
  * The `@font-face` rules of one family, or '' when the family has no embedded
- * face (§4.8). The face is the latin subset of the shortlist typeface
+ * face (§4.8). The face is the latin subset of the theme typeface
  * (embeddedFonts.ts), inlined as a `data:` URI so the export stays
- * self-contained: no runtime font fetch and no sibling file. Every shortlist
+ * self-contained: no runtime font fetch and no sibling file. Every embedded
  * face is a variable font, declared once over the two weights the cooking view
  * uses (`400 600`, §4.2).
  *
@@ -285,6 +292,14 @@ const STEP_DOWN_SVG =
 const STEP_UP_SVG =
   '<svg viewBox="0 0 960 960" aria-hidden="true" focusable="false">' +
   '<path d="M440,520L240,520Q223,520 211.5,508.5Q200,497 200,480Q200,463 211.5,451.5Q223,440 240,440L440,440L440,240Q440,223 451.5,211.5Q463,200 480,200Q497,200 508.5,211.5Q520,223 520,240L520,440L720,440Q737,440 748.5,451.5Q760,463 760,480Q760,497 748.5,508.5Q737,520 720,520L520,520L520,720Q520,737 508.5,748.5Q497,760 480,760Q463,760 451.5,748.5Q440,737 440,720L440,520Z" fill="currentColor"/></svg>';
+
+/**
+ * The invisible width probe of the yield stepper's value slot — the same text
+ * the app's QuantityValue uses. 999,99 ml is the widest quantity label below
+ * the 10 kg / 10 l bar; every baked yield view is narrower, so the slot never
+ * changes width while the stepper walks the views.
+ */
+const YIELD_VALUE_PROBE = formatBQ(1000 - 0.01, 'ml');
 
 /** Chain link of the sub-recipe „Rezept" badge. */
 const LINK_ICON_SVG =
@@ -607,7 +622,7 @@ function renderYieldPicker(
     `  <div class="chips" role="radiogroup" aria-label="Menge wählen">\n    ${chips}\n  </div>\n` +
     `  <div class="yield-row">\n` +
     `    <button type="button" class="yield-step-button yield-step-down" aria-label="Menge um eine Stufe verringern">${STEP_DOWN_SVG}</button>\n` +
-    `    <span class="yield-value">${escapeHtml(formatBQ(activeValue, unit))}</span>\n` +
+    `    <span class="yield-value-slot"><span class="yield-value-measure" aria-hidden="true">${escapeHtml(YIELD_VALUE_PROBE)}</span><span class="yield-value">${escapeHtml(formatBQ(activeValue, unit))}</span></span>\n` +
     `    <button type="button" class="yield-step-button yield-step-up" aria-label="Menge um eine Stufe erhöhen">${STEP_UP_SVG}</button>\n` +
     `  </div>\n`
   );
@@ -837,8 +852,54 @@ const NAVIGATION_SCRIPT = `
     yieldChips.forEach(function (btn) {
       btn.addEventListener('click', function () { selectYield(btn.getAttribute('data-yield')); });
     });
-    if (stepDown) { stepDown.addEventListener('click', function () { selectYieldAt(yieldIndex - 1); }); }
-    if (stepUp) { stepUp.addEventListener('click', function () { selectYieldAt(yieldIndex + 1); }); }
+    // Press-and-hold on the yield stepper (§5.2): a tap steps once, a hold
+    // repeats the step at the app's cadence — the first repeat after 450 ms,
+    // then every 100 ms — until the baked-view list ends or the finger lifts.
+    // A click and a keyboard activation both arrive as a click, so the click
+    // performs the single step; the pointerdown only arms the hold. The
+    // closing click of a hold is swallowed so the release adds no extra step.
+    var HOLD_FIRST_REPEAT_MS = 450;
+    var HOLD_REPEAT_INTERVAL_MS = 100;
+    function bindStepper(button, direction) {
+      if (button === null) { return; }
+      var holdTimer = null;
+      var repeatTimer = null;
+      var repeated = false;
+
+      function stopHold() {
+        if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
+        if (repeatTimer !== null) { clearInterval(repeatTimer); repeatTimer = null; }
+      }
+      function canStep() {
+        return direction < 0 ? yieldIndex > 0 : yieldIndex < yieldValues.length - 1;
+      }
+      function step() { selectYieldAt(yieldIndex + direction); }
+
+      button.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0) { return; }
+        stopHold();
+        repeated = false;
+        holdTimer = setTimeout(function () {
+          holdTimer = null;
+          if (!canStep()) { return; }
+          step();
+          repeated = true;
+          repeatTimer = setInterval(function () {
+            if (!canStep()) { stopHold(); return; }
+            step();
+          }, HOLD_REPEAT_INTERVAL_MS);
+        }, HOLD_FIRST_REPEAT_MS);
+      });
+      button.addEventListener('pointerup', stopHold);
+      button.addEventListener('pointerleave', stopHold);
+      button.addEventListener('pointercancel', stopHold);
+      button.addEventListener('click', function () {
+        if (repeated) { repeated = false; return; }
+        if (canStep()) { step(); }
+      });
+    }
+    bindStepper(stepDown, -1);
+    bindStepper(stepUp, 1);
   }
 
   // A fragment yield is normalized to the family base unit, so a hand-written
@@ -1164,14 +1225,36 @@ const STYLES = `
   .reference { margin: var(--space-3) 0 0; padding: 0; list-style: none; color: var(--muted);
                font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
-  /* Ingredient-recipe stepper (§5.2 "exactly as today"). */
-  .yield-row { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-3) 0 0; }
-  .yield-step-button { font: inherit; font-size: var(--text-md); line-height: var(--leading-md); min-width: var(--space-9);
-                       min-height: 42px; padding: var(--space-3); border-radius: var(--radius-md);
-                       border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
-  .yield-step-button svg { width: var(--icon-size); height: var(--icon-size); fill: currentColor; }
+  /* Ingredient-recipe stepper (§5.2 "exactly as today"). Each button is the
+     app's 42 px circle with the 24 px Material „remove" / „add" drawing centred
+     by the grid, not by a line box — the SVG would otherwise sit on the text
+     baseline and read high in the circle. The circle is structural, like the
+     app's .step-button, so it is not clamped to the radius ladder. The
+     press-and-hold guards (no selection, callout or double-tap zoom) let a
+     long press read purely as a hold, and the :active fill is the solid
+     equivalent of the app's shared press wash. The row copies the app's
+     .quantity-row gap; the value slot copies QuantityValue, whose hidden probe
+     keeps the width fixed and the digits right-aligned while the stepper walks
+     the views. */
+  .yield-row { display: flex; align-items: center; gap: var(--space-6); margin: var(--space-3) 0 0; }
+  .yield-step-button { width: var(--space-9); height: var(--space-9); padding: 0;
+                       display: inline-grid; place-items: center; border-radius: 50%;
+                       border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer;
+                       -webkit-user-select: none; user-select: none;
+                       -webkit-touch-callout: none; touch-action: manipulation; }
+  .yield-step-button svg { display: block; width: var(--icon-size); height: var(--icon-size); fill: currentColor; }
+  .yield-step-button:active:not(:disabled) { background: var(--press); }
   .yield-step-button:disabled { opacity: 0.5; cursor: default; }
-  .yield-value { font-weight: 600; min-width: var(--space-10); text-align: center; }
+  .yield-value-slot { position: relative; display: inline-block; flex: none; }
+  .yield-value-measure { display: block; padding: var(--space-3) var(--space-4);
+                         border: 1px solid transparent; font-size: var(--text-md);
+                         line-height: var(--leading-md); font-weight: 600;
+                         white-space: nowrap; visibility: hidden; }
+  .yield-value { position: absolute; inset: 0; display: flex; align-items: center;
+                 justify-content: flex-end; padding: var(--space-3) var(--space-4);
+                 border: 1px solid transparent; font-size: var(--text-md);
+                 line-height: var(--leading-md); font-weight: 600;
+                 white-space: nowrap; text-align: right; }
 
   /* ---- Zutaten ---- */
   .screen-caption { font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600;

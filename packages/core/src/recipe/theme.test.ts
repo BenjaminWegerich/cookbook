@@ -8,7 +8,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_THEME,
+  THEME_FONT_RETIRED,
   THEME_FONT_SHORTLIST,
+  THEME_FONT_VALUES,
   isHexColor,
   resolveTheme,
   resolveThemeFonts,
@@ -16,10 +18,22 @@ import {
 import { EMBEDDED_FONT_COMPANIONS, EMBEDDED_FONTS } from './embeddedFonts.js';
 
 describe('THEME_FONT_SHORTLIST', () => {
-  it('holds the five Noto faces of DESIGN §4.8, no duplicates', () => {
-    expect(THEME_FONT_SHORTLIST).toHaveLength(5);
-    expect(new Set(THEME_FONT_SHORTLIST).size).toBe(5);
+  it('holds the three selectable Noto faces of DESIGN §4.8, no duplicates', () => {
+    expect(THEME_FONT_SHORTLIST).toHaveLength(3);
+    expect(new Set(THEME_FONT_SHORTLIST).size).toBe(3);
     expect(THEME_FONT_SHORTLIST[0]).toBe('Noto Sans');
+  });
+
+  it('no longer offers condensed or mono, but old recipes still parse in them', () => {
+    expect(THEME_FONT_SHORTLIST).not.toContain('Noto Sans Condensed');
+    expect(THEME_FONT_SHORTLIST).not.toContain('Noto Sans Mono');
+    // Old recipes that stored either face still parse and export in it.
+    expect(THEME_FONT_RETIRED).toEqual(['Noto Sans Condensed', 'Noto Sans Mono']);
+    expect(THEME_FONT_VALUES).toEqual([
+      ...THEME_FONT_SHORTLIST,
+      'Noto Sans Condensed',
+      'Noto Sans Mono',
+    ]);
   });
 });
 
@@ -51,11 +65,13 @@ describe('isHexColor', () => {
 });
 
 describe('EMBEDDED_FONTS', () => {
-  it('embeds every shortlist typeface, and only those, each with non-empty WOFF2', () => {
+  it('embeds every selectable and retired theme face, and only those', () => {
     // Drift guard between theme.ts and the generated embeddedFonts.ts: a new
-    // shortlist face without an embedded WOFF2 (or a stale embedded face) fails
-    // here instead of silently exporting a system font.
-    expect(Object.keys(EMBEDDED_FONTS).sort()).toEqual([...THEME_FONT_SHORTLIST].sort());
+    // face without an embedded WOFF2 (or a stale embedded face) fails here
+    // instead of silently exporting a system font. The retired condensed and
+    // mono faces stay embedded so an old recipe still exports in its stored
+    // face.
+    expect(Object.keys(EMBEDDED_FONTS).sort()).toEqual([...THEME_FONT_VALUES].sort());
     for (const [family, faces] of Object.entries(EMBEDDED_FONTS)) {
       expect(faces.length, family).toBeGreaterThan(0);
       for (const face of faces) {
@@ -65,15 +81,16 @@ describe('EMBEDDED_FONTS', () => {
   });
 
   it('declares every face over the two required weights as one variable rule', () => {
-    for (const family of THEME_FONT_SHORTLIST) {
+    for (const family of THEME_FONT_VALUES) {
       expect(EMBEDDED_FONTS[family]!.map((face) => face.weight)).toEqual(['400 600']);
     }
   });
 
   it('embeds a fraction/space companion for every export body face', () => {
-    // Every shortlist face renders body text except the display serif, which is
-    // a heading face only (resolveThemeFonts pairs it with Noto Serif).
-    const bodyFaces = THEME_FONT_SHORTLIST.filter((name) => name !== 'Noto Serif Display');
+    // Every theme face renders body text except the display serif, which is a
+    // heading face only (resolveThemeFonts pairs it with Noto Serif). The
+    // retired condensed and mono faces embed one too, for old recipes.
+    const bodyFaces = THEME_FONT_VALUES.filter((name) => name !== 'Noto Serif Display');
     expect(Object.keys(EMBEDDED_FONT_COMPANIONS).sort()).toEqual([...bodyFaces].sort());
     for (const family of bodyFaces) {
       const companion = EMBEDDED_FONT_COMPANIONS[family];
@@ -88,7 +105,7 @@ describe('EMBEDDED_FONTS', () => {
 
 describe('resolveThemeFonts', () => {
   it('keeps the selected face in both roles for every face but the display serif', () => {
-    for (const font of THEME_FONT_SHORTLIST.filter((name) => name !== 'Noto Serif Display')) {
+    for (const font of THEME_FONT_VALUES.filter((name) => name !== 'Noto Serif Display')) {
       expect(resolveThemeFonts(font)).toEqual({ heading: font, body: font });
     }
   });

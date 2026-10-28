@@ -46,10 +46,10 @@ theme:                    (optional, beide Typen — s. u.)
   sonst lass es weg (es gilt das Standard-Design). Jedes Unterfeld ist einzeln optional — schreibe
   nur, was du bewusst setzt.
   - `font`: genau eine Schriftart der Kurzliste: `Noto Sans`, `Noto Serif`,
-    `Noto Serif Display`, `Noto Sans Mono`, `Noto Sans Condensed`. Wähle passend zum Charakter
-    des Gerichts — z. B. `Noto Serif Display` elegant, `Noto Serif` klassisch,
-    `Noto Sans Mono` technisch. Bei `Noto Serif Display` erscheint nur die Hauptüberschrift
-    jeder Seite in der Display-Schrift, der übrige Text in `Noto Serif`.
+    `Noto Serif Display`. Wähle passend zum Charakter des Gerichts — z. B.
+    `Noto Serif Display` elegant, `Noto Serif` klassisch. Bei `Noto Serif Display`
+    erscheint nur die Hauptüberschrift jeder Seite in der Display-Schrift, der übrige Text
+    in `Noto Serif`.
   - `accent`/`paper`/`ink`/`line`: Hex-Farben `#rrggbb`, immer in Anführungszeichen
     (`accent: "#b85c38"`) — ein `#` ohne Anführungszeichen wäre ein YAML-Kommentar. Freie
     Farbwahl; als Orientierung: `paper` hell und `ink` dunkel (gut lesbar), `line` dezent.
