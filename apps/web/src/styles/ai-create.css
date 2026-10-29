@@ -122,16 +122,14 @@
    the bundled shopping-list selection and lives in styles/recipe-list.css as
    .app-header-stacked — one definition, so the two screens cannot drift apart. */
 
-/* The composer follows the transcript directly. The former
-   `margin-block-start: auto` pushed it to the window bottom, which opened a
-   viewport-sized void between the newest bubble and the entry field on any
-   window taller than the conversation; with the void gone, the padding is the
-   only separation needed (--space-2, the same step the bubbles use). */
-.ai-composer {
-  display: grid;
-  gap: var(--space-4);
-  padding-top: var(--space-2);
-}
+/* The composer form also carries .editor-card: on the bare page its controls
+   (textarea, chips, segmented switch) had their --color-bg fill equal to the
+   page background, so only their hairline borders separated them from the page
+   — while the same controls sit on a --color-surface card in the manual editor
+   and read as recessed fields. The card supplies that surface, its padding and
+   the 14 px card rhythm for free, so no control has a colour override here and
+   the two create paths cannot drift apart. The form still follows the
+   transcript at the screen's own block gap (.ai-screen). */
 
 /* Entry fields that grow with their content (§5.3): the height is set from the
    content in the component, so the field never scrolls inside itself, and the

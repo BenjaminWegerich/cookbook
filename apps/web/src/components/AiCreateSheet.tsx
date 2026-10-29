@@ -958,7 +958,7 @@ export default function AiCreateSheet({
               </section>
 
               <form
-                className="ai-composer"
+                className="editor-card ai-composer"
                 onKeyDown={handleComposerKeyDown}
                 onSubmit={(event) => {
                   event.preventDefault();
