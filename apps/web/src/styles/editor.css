@@ -430,7 +430,8 @@
 }
 
 /* The fixed-width value slot of a quantity stepper (QuantityValue). The hidden
-   probe sizes it to the widest display up to the 10 kg / 10 l bar in the
+   probe sizes it to the widest display the caller puts in it — the free input's
+   "999,99 ml", or a read-only BQ stepper's narrower "950 g" / "950 ml" — in the
    element's own font, so the buttons never move while the value changes. */
 .quantity-field {
   position: relative;

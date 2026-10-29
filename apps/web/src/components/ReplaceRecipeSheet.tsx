@@ -26,9 +26,11 @@
  *   selects it too;
  * - once a recipe is picked and its file has been read, the familiar size input
  *   for the recipe type — the serving chips for a finished dish, the
- *   ValueStepper (suggested chips + baked views) for an ingredient recipe —
- *   starting on the size the recipe is written in, exactly like "Einplanen", so
- *   an untouched size replaces the entry with the dish as it stands;
+ *   ValueStepper for an ingredient recipe, whose adaptive chips use the
+ *   ingredient sheet's logic with the recipe's master-data AU links (when that
+ *   row exists) and are capped to the export's pre-baked yield views — starting
+ *   on the size the recipe is written in, exactly like "Einplanen", so an
+ *   untouched size replaces the entry with the dish as it stands;
  * - below the size input, the recipe's reference ingredients scaled to the
  *   choice, one per line — the same readout the meal-plan overlay shows, and
  *   the sanity check described in docs/recipe_structure.md ("the reference
@@ -246,14 +248,17 @@ function ReplaceRecipeSheet({
   const family = details?.yield_unit === 'ml' ? 'ml' : 'g';
 
   /**
-   * The yields the recipe's export bakes a view for (±2 decades around the
+   * The yields the recipe's export bakes a view for (±1 decade around the
    * written yield, core's recipe/yieldViews.ts). The picker is bounded by it, so
    * every size offered here is one the Keep entry's link can really open.
    */
-  const bakedYields =
-    details !== null && !isDish && details.yield !== undefined
-      ? yieldViewQuantities(details.yield)
-      : null;
+  const bakedYields = useMemo(
+    () =>
+      details !== null && !isDish && details.yield !== undefined
+        ? yieldViewQuantities(details.yield)
+        : null,
+    [details, isDish],
+  );
   /** The default view is the written yield when it is a BQ value. */
   const defaultYield =
     details !== null && details.yield !== undefined
@@ -454,7 +459,10 @@ function ReplaceRecipeSheet({
           ) : (
             // The unit is fixed to the recipe's own family unit (the meal plan
             // only accepts a size that fits the recipe), so only the quantity is
-            // chosen here — no g/ml switch.
+            // chosen here — no g/ml switch. The stepper's chips follow the
+            // ingredient sheet's adaptive logic; `values` caps every chip to a
+            // baked view and the title lets it use the recipe's master-data AU
+            // links when that row exists.
             <div className="field">
               <span className="field-label">Menge</span>
               <ValueStepper
@@ -463,6 +471,8 @@ function ReplaceRecipeSheet({
                 onChange={setYieldQuantity}
                 format={(candidate) => formatBQ(candidate, family)}
                 ariaLabel="Menge"
+                ingredient={details.title}
+                family={family}
               />
             </div>
           ))}

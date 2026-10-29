@@ -26,6 +26,10 @@
  * - an **ingredient recipe** has the allowed BQ yields within ±1 decade of its
  *   written yield (`recipe/yieldViews.ts`), which is the same range the meal
  *   plan accepts — so the link in a Keep line can always open the exact amount.
+ *   Its yield picker uses the app's adaptive chip logic (`suggestQuantities`,
+ *   including the recipe's master-data AU links) with the baked views as a hard
+ *   cap; one pre-rendered row per view keeps the chips recentred while the
+ *   script only fits and toggles them.
  *
  * The page opens on the recipe's written size, or on the size the URL asks for
  * (`?portionen=6` on the export host, `#portionen=6` on a bare Drive link — the
@@ -66,7 +70,10 @@ import {
   renderMasterAQSDisplay,
   type ArrangementDisplay,
 } from '../additionalUnits.js';
+import { mappingsFor } from '../ingredientRegistry.js';
 import { optimizeUnitless } from '../quantityOptimizer.js';
+import { suggestQuantities } from '../quantitySuggestions.js';
+import { previousAllowedBQ } from '../quantityValues.js';
 import { SERVING_COUNTS } from '../servingSizes.js';
 import type { PrecisionContext } from '../precision.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
@@ -294,12 +301,14 @@ const STEP_UP_SVG =
   '<path d="M440,520L240,520Q223,520 211.5,508.5Q200,497 200,480Q200,463 211.5,451.5Q223,440 240,440L440,440L440,240Q440,223 451.5,211.5Q463,200 480,200Q497,200 508.5,211.5Q520,223 520,240L520,440L720,440Q737,440 748.5,451.5Q760,463 760,480Q760,497 748.5,508.5Q737,520 720,520L520,520L520,720Q520,737 508.5,748.5Q497,760 480,760Q463,760 451.5,748.5Q440,737 440,720L440,520Z" fill="currentColor"/></svg>';
 
 /**
- * The invisible width probe of the yield stepper's value slot — the same text
- * the app's QuantityValue uses. 999,99 ml is the widest quantity label below
- * the 10 kg / 10 l bar; every baked yield view is narrower, so the slot never
- * changes width while the stepper walks the views.
+ * The invisible width probe of the yield stepper's value slot. Every baked view
+ * is an allowed BQ, so the app's free-input probe ("999,99 ml") would reserve
+ * decimals this picker can never show. 950 is the largest BQ under 1000 (the
+ * decade block is 10…95 × 10ⁿ); above 1000 the display steps to kg / l and stays
+ * within the same width for every realistic yield. Derived from the BQ table,
+ * not hand-tuned.
  */
-const YIELD_VALUE_PROBE = formatBQ(1000 - 0.01, 'ml');
+const YIELD_VALUE_PROBE_BQ = previousAllowedBQ(1000) ?? 950;
 
 /** Chain link of the sub-recipe „Rezept" badge. */
 const LINK_ICON_SVG =
@@ -578,19 +587,77 @@ function renderServingPicker(recipe: Recipe): string {
   );
 }
 
-/** True for a power of ten (`0.1`, `1`, `10`, `100`, …) — the yield chip row. */
-function isPowerOfTen(value: number): boolean {
-  if (!(value > 0)) return false;
-  const exponent = Math.log10(value);
-  return Math.abs(exponent - Math.round(exponent)) < 1e-9;
+/** True when two yield values are the same view (floating-point safe). */
+function sameYieldValue(a: number, b: number): boolean {
+  return Math.abs(a - b) < 1e-9;
 }
 
 /**
- * The yield picker of an ingredient recipe: a row of suggested chips (powers of
- * ten plus the default view) and a −/+ stepper that moves one baked view per
- * press. Every value belongs to a baked view, so a tap only toggles visibility;
- * no scaling runs at runtime. The default view is the written yield when it is
- * a BQ value, otherwise the nearest allowed BQ.
+ * One baked view's adaptive chip row — the ingredient sheet's logic applied to
+ * the export: core's `suggestQuantities` around this view, with the recipe's
+ * master-data AU links when its row exists, and the baked-view list as the hard
+ * cap. The view itself is always a chip, so the row's radiogroup has a checked
+ * option even when an additional unit normalizes the target to another BQ.
+ *
+ * The chips are rendered ascending, so the row, the arrow-key walk and the
+ * screen reader all read left to right. Each chip carries its ranking as
+ * `data-rank`; the one-line fit walks that ranking (highest priority first)
+ * and hides the chips that do not fit, exactly like the app's
+ * `SuggestionChips` (rank decides which survive, not the display order).
+ */
+function renderYieldChipRow(
+  recipe: Recipe,
+  quantities: readonly number[],
+  view: number,
+  unit: string,
+  hidden: boolean,
+): string {
+  const suggestions = suggestQuantities(view, mappingsFor(recipe.title), unit, {
+    allowedValues: quantities,
+  });
+  const chips = suggestions.map((suggestion) => ({
+    value: suggestion.value,
+    label: arrangementHtml(suggestion.display, 'bare'),
+  }));
+  // The current view's chip is promoted to rank 0, so the one-line fit can
+  // never hide it: this row is a radiogroup and must keep a checked option.
+  // `suggestQuantities` normally offers the view, but an additional unit may
+  // normalize the target to another BQ; then the plain base form is the chip.
+  let activeChip = chips.find((chip) => sameYieldValue(chip.value, view));
+  if (activeChip === undefined) {
+    activeChip = { value: view, label: escapeHtml(formatBQ(view, unit)) };
+    chips.push(activeChip);
+  }
+  const ranked = [activeChip, ...chips.filter((chip) => chip !== activeChip)];
+  // The ranking survives in `data-rank`; the markup itself reads ascending.
+  const rankByValue = new Map(ranked.map((chip, index) => [chip.value, index]));
+  const buttons = [...ranked]
+    .sort((a, b) => a.value - b.value)
+    .map((chip) => {
+      const active = sameYieldValue(chip.value, view);
+      // Radio semantics, as in the serving picker above (§5.2, §8).
+      return (
+        `<button type="button" role="radio" aria-checked="${active}" tabindex="${active ? '0' : '-1'}" class="chip yield-chip${active ? ' active' : ''}" data-yield="${formatLinkQuantity(chip.value)}" data-rank="${rankByValue.get(chip.value)}">` +
+        `${chip.label}</button>`
+      );
+    })
+    .join('\n    ');
+  return (
+    `  <div class="chips yield-chips size-scoped" data-yield="${formatLinkQuantity(view)}" role="radiogroup" aria-label="Menge wählen"${hidden ? ' hidden' : ''}>\n` +
+    `    ${buttons}\n` +
+    `  </div>\n`
+  );
+}
+
+/**
+ * The yield picker of an ingredient recipe: one adaptive chip row per baked
+ * view (only the current view's row is visible), plus the −/+ stepper that
+ * moves one baked view per press. Generating a row per view is what keeps the
+ * chips recentred on the current amount — the app's ingredient sheet does the
+ * same on every keystroke — while every value still belongs to a baked view, so
+ * a tap only toggles visibility and no scaling runs at runtime. The default
+ * view is the written yield when it is a BQ value, otherwise the nearest
+ * allowed BQ.
  */
 function renderYieldPicker(
   recipe: Recipe,
@@ -598,25 +665,15 @@ function renderYieldPicker(
   activeValue: number,
 ): string {
   const unit = recipe.yield_unit!;
-  const chipValues = quantities.filter((quantity) => isPowerOfTen(quantity));
-  if (!chipValues.includes(activeValue)) chipValues.push(activeValue);
-  chipValues.sort((a, b) => a - b);
-  const chips = chipValues
-    .map((quantity) => {
-      const active = quantity === activeValue;
-      // Radio semantics, as in the serving picker above (§5.2, §8).
-      return (
-        `<button type="button" role="radio" aria-checked="${active}" tabindex="${active ? '0' : '-1'}" class="chip yield-chip${active ? ' active' : ''}" data-yield="${formatLinkQuantity(quantity)}">` +
-        `${escapeHtml(formatBQ(quantity, unit))}</button>`
-      );
-    })
-    .join('\n    ');
+  const rows = quantities
+    .map((value) => renderYieldChipRow(recipe, quantities, value, unit, value !== activeValue))
+    .join('');
   return (
     `  <p class="picker-caption">Menge</p>\n` +
-    `  <div class="chips" role="radiogroup" aria-label="Menge wählen">\n    ${chips}\n  </div>\n` +
+    rows +
     `  <div class="yield-row">\n` +
     `    <button type="button" class="yield-step-button yield-step-down" aria-label="Menge um eine Stufe verringern">${STEP_DOWN_SVG}</button>\n` +
-    `    <span class="yield-value-slot"><span class="yield-value-measure" aria-hidden="true">${escapeHtml(YIELD_VALUE_PROBE)}</span><span class="yield-value">${escapeHtml(formatBQ(activeValue, unit))}</span></span>\n` +
+    `    <span class="yield-value-slot"><span class="yield-value-measure" aria-hidden="true">${escapeHtml(formatBQ(YIELD_VALUE_PROBE_BQ, unit))}</span><span class="yield-value">${escapeHtml(formatBQ(activeValue, unit))}</span></span>\n` +
     `    <button type="button" class="yield-step-button yield-step-up" aria-label="Menge um eine Stufe erhöhen">${STEP_UP_SVG}</button>\n` +
     `  </div>\n`
   );
@@ -780,7 +837,11 @@ const NAVIGATION_SCRIPT = `
     var step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1
       : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (step === 0) { return; }
-    var chips = isServing ? servingChips : yieldChips;
+    // Only the visible row is a radio group: the other yield rows are hidden,
+    // and the one-line fit hides whole chips that do not fit.
+    var chips = Array.prototype.slice
+      .call(e.currentTarget.parentNode.querySelectorAll('.chip'))
+      .filter(function (chip) { return !chip.hidden; });
     var index = Array.prototype.indexOf.call(chips, e.currentTarget);
     var next = chips[index + step];
     if (next === undefined) { return; }
@@ -792,7 +853,9 @@ const NAVIGATION_SCRIPT = `
     btn.addEventListener('keydown', onChipKeydown);
   });
   function activeChipValue() {
-    var active = document.querySelector('.chip.active');
+    var active = isServing
+      ? document.querySelector('.chip.active')
+      : document.querySelector('.yield-chips:not([hidden]) .chip.active');
     return active === null ? null : active.getAttribute(sizeKey);
   }
 
@@ -803,6 +866,46 @@ const NAVIGATION_SCRIPT = `
   var stepDown = null;
   var stepUp = null;
   var yieldIndex = 0;
+
+  /**
+   * The visible yield row keeps one line, like the app's SuggestionChips: a
+   * chip that fits is kept, one that does not is hidden and the next one is
+   * tried. The walk follows data-rank (the ranking), not the ascending DOM
+   * order. Re-run after a size change, a resize and the font load, and only
+   * while the row is actually on screen.
+   */
+  function fitYieldChips() {
+    var row = document.querySelector('.yield-chips:not([hidden])');
+    if (!row) { return; }
+    var available = row.getBoundingClientRect().width;
+    if (available <= 0) { return; }
+    var chips = Array.prototype.slice.call(row.querySelectorAll('.chip'));
+    chips.sort(function (a, b) {
+      return Number(a.getAttribute('data-rank')) - Number(b.getAttribute('data-rank'));
+    });
+    var gap = parseFloat(getComputedStyle(row).columnGap) || 10;
+    var used = 0;
+    var kept = 0;
+    for (var i = 0; i < chips.length; i += 1) {
+      var chip = chips[i];
+      // Reset first: a chip hidden by the previous fit has no width to measure.
+      chip.hidden = false;
+      var width = chip.getBoundingClientRect().width;
+      var next = used + (kept > 0 ? gap : 0) + width;
+      if (next <= available) {
+        used = next;
+        kept += 1;
+      } else {
+        chip.hidden = true;
+      }
+    }
+  }
+  if (!isServing) {
+    window.addEventListener('resize', fitYieldChips);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fitYieldChips).catch(function () {});
+    }
+  }
 
   function selectServing(n) {
     var found = false;
@@ -818,6 +921,7 @@ const NAVIGATION_SCRIPT = `
     yieldIndex = index;
     var value = yieldValues[index];
     toggleSize(value);
+    fitYieldChips();
     setActiveChip(value);
     if (yieldValue) { yieldValue.textContent = yieldLabels[value]; }
     if (stepDown) { stepDown.disabled = index === 0; }
@@ -961,6 +1065,7 @@ const NAVIGATION_SCRIPT = `
     screens.intro.classList.toggle('active', node === 'intro');
     screens.zutaten.classList.toggle('active', node === 'zutaten');
     screens.zubereitung.classList.toggle('active', onSteps);
+    if (node === 'intro') { fitYieldChips(); }
 
     // The swipe animation plays for the intro and Zutaten screens too, not only
     // the steps: the newly shown screen slides in with the motion direction.
@@ -1209,6 +1314,10 @@ const STYLES = `
      to the 42px floor, as in the app (§5.2). */
   .chip::before { content: ''; position: absolute; inset: -5px; }
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  /* The yield rows are one measured line, like the app's SuggestionChips: the
+     row clips, never wraps, and the fit hides whole chips that do not fit. */
+  .yield-chips { flex-wrap: nowrap; overflow: hidden; }
+  .yield-chips .chip { flex: none; }
   /* A note inside a filled chip keeps the chip's on-accent ink: --muted on
      --accent is 1.17:1, and no lightened tint reaches the AA 4.5:1 bar on that
      clay. The italic run alone carries the quiet cue (as in the app, editor.css). */
@@ -1232,9 +1341,9 @@ const STYLES = `
      press-and-hold guards (no selection, callout or double-tap zoom) let a
      long press read purely as a hold, and the :active fill is the solid
      equivalent of the app's shared press wash. The row copies the app's
-     .quantity-row gap; the value slot copies QuantityValue, whose hidden probe
-     keeps the width fixed and the digits right-aligned while the stepper walks
-     the views. */
+     .quantity-row gap; the value slot copies QuantityValue with the BQ probe
+     ("950 g" / "950 ml"), so the width is fixed and the digits right-aligned
+     while the stepper walks the views without reserving free-input decimals. */
   .yield-row { display: flex; align-items: center; gap: var(--space-6); margin: var(--space-3) 0 0; }
   .yield-step-button { width: var(--space-9); height: var(--space-9); padding: 0;
                        display: inline-grid; place-items: center; border-radius: 50%;

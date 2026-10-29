@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { EN_SPACE, NNBSP, formatBQ, renderAQSDisplay } from '../additionalUnits.js';
 import { escapeHtml } from './artifacts.js';
 import { parseRecipe } from './parse.js';
+import { yieldViewQuantities } from './yieldViews.js';
 import { generateRecipeHtml } from './exportHtml.js';
 import type { RecipePhoto } from './exportHtml.js';
 import type { Recipe } from './types.js';
@@ -248,14 +249,53 @@ prep_time: 15 min
     expect(html).toContain(amountHtml('Butter', 250, 'g'));
   });
 
-  it('offers the chips and the stepper, with the powers of ten plus the written size', () => {
+  it('offers one adaptive chip row per baked view, recentred on that view', () => {
+    expect(html.match(/class="chips yield-chips size-scoped/g) ?? []).toHaveLength(65);
+    // The row for the written view is the only one visible before the script
+    // runs, and it carries the checked radio.
     expect(html).toContain('class="chip yield-chip active" data-yield="500"');
-    expect(html).toContain('class="chip yield-chip" data-yield="1000"');
-    expect(html).toContain('class="yield-value"');
+    expect(html).toMatch(/class="chips yield-chips size-scoped" data-yield="500"[^>]*>/);
+    expect(html).toMatch(/class="chips yield-chips size-scoped" data-yield="50"[^>]* hidden>/);
+    // The row is adaptive, not the old powers of ten: 450/600 are BQ
+    // neighbours whose rank rides in data-rank while the row reads ascending.
+    const row =
+      /<div class="chips yield-chips size-scoped" data-yield="500"[^>]*>([\s\S]*?)<\/div>/.exec(
+        html,
+      )?.[1] ?? '';
+    expect(row).toContain('data-yield="450"');
+    expect(row).toContain('data-yield="600"');
+    expect(row).toContain('data-rank=');
+    // Every offered chip is a baked view (the hard cap).
+    const allowed = new Set(yieldViewQuantities(500));
+    const chipValues = [...html.matchAll(/class="chip yield-chip[^"]*" data-yield="([^"]+)"/g)].map(
+      (match) => Number(match[1]),
+    );
+    expect(chipValues.length).toBeGreaterThan(0);
+    for (const value of chipValues) {
+      expect(allowed.has(value)).toBe(true);
+    }
     expect(html).toContain('class="yield-step-button yield-step-down"');
     expect(html).toContain('class="yield-step-button yield-step-up"');
-    // Out of the baked range, so never offered.
-    expect(html).not.toContain('class="chip yield-chip" data-yield="100000"');
+  });
+
+  it('uses the ingredient recipe master data (AU links) for the chip arrangements', () => {
+    const joghurt: Recipe = parseRecipe(`---
+title: Joghurt
+type: ingredient_recipe
+yield: 500
+yield_unit: g
+prep_time: 5 min
+---
+## Zubereitung
+1. - 300 ml Milch
+   Verrühren.
+`);
+    const joghurtHtml = generateRecipeHtml(joghurt);
+    // The seed master data maps Joghurt to a 500 g Becher, so the active chip
+    // for the written view reads as an arrangement, not as a plain 500 g.
+    expect(joghurtHtml).toContain('class="chip yield-chip active" data-yield="500"');
+    expect(joghurtHtml).toContain('Becher');
+    expect(joghurtHtml).toContain('arrangement-note');
   });
 
   it('draws the stepper as the app\u2019s circular 42 px buttons with centred symbols', () => {
@@ -276,10 +316,17 @@ prep_time: 15 min
     expect(html).toContain('class="yield-value-measure" aria-hidden="true"');
     expect(html).toContain('.yield-value { position: absolute; inset: 0;');
     expect(html).toContain('text-align: right;');
+    // The slot reserves BQ widths ("950 ml"), not the free input's decimals.
+    expect(html).toContain(escapeHtml(formatBQ(950, 'ml')));
+    expect(html).not.toContain(escapeHtml(formatBQ(1000 - 0.01, 'ml')));
     // The pressed state is the app's wash, as a solid theme colour.
     expect(html).toContain(
       '.yield-step-button:active:not(:disabled) { background: var(--press); }',
     );
+    // The adaptive rows are one measured line, like SuggestionChips.
+    expect(html).toContain('.yield-chips { flex-wrap: nowrap; overflow: hidden; }');
+    expect(html).toContain('function fitYieldChips()');
+    expect(html).toContain("e.currentTarget.parentNode.querySelectorAll('.chip')");
   });
 
   it('repeats a held stepper button at the app\u2019s cadence', () => {

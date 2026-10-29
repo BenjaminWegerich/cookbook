@@ -28,8 +28,10 @@
  * - the heading names the action with the recipe ("<Titel> einplanen" /
  *   "<Titel> umplanen");
  * - the size input is the editor's own control for the recipe type — the
- *   serving chips for a finished dish, the ValueStepper (suggested chips +
- *   baked views) for an ingredient recipe;
+ *   serving chips for a finished dish, the ValueStepper for an ingredient
+ *   recipe: its adaptive chips use the same logic as the ingredient sheet,
+ *   with the recipe's master data (AU links) when that row exists, but every
+ *   chip is capped to the export's pre-baked yield views;
  * - below it a small muted readout lists the recipe's reference ingredients,
  *   one per line, scaled to the selected size: the sanity check described in
  *   docs/recipe_structure.md ("the reference ingredient's amount moves by the
@@ -54,7 +56,7 @@
  * (packages/core/src/mealPlan.ts): a finished dish takes an integer standard
  * number 1–30 ("6 Portionen"), an ingredient recipe a ladder value in its own
  * family unit that also has a baked export view — the picker is bounded by
- * `yieldViewQuantities` (±2 decades around the written yield, see
+ * `yieldViewQuantities` (±1 decade around the written yield, see
  * packages/core/src/recipe/yieldViews.ts). Because the controls only ever
  * produce such a value, the write needs no re-validation.
  *
@@ -68,7 +70,7 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   SERVING_COUNTS,
@@ -182,8 +184,10 @@ function MealPlanSheet({
    * bounded by it, so every size offered here is one the Keep entry's link can
    * really open; the core's fit check refuses anything outside it too.
    */
-  const bakedYields =
-    isDish || recipe.yield === undefined ? null : yieldViewQuantities(recipe.yield);
+  const bakedYields = useMemo(
+    () => (isDish || recipe.yield === undefined ? null : yieldViewQuantities(recipe.yield)),
+    [isDish, recipe.yield],
+  );
   /** The view the recipe opens at: the written yield when it is a BQ value. */
   const defaultYield = recipe.yield === undefined ? initialYield : defaultYieldView(recipe.yield);
 
@@ -311,7 +315,10 @@ function MealPlanSheet({
         ) : (
           // The unit is fixed to the recipe's own family unit (the meal plan
           // only accepts a size that fits the recipe, mealPlan.ts), so only the
-          // quantity is chosen here — no g/ml switch.
+          // quantity is chosen here — no g/ml switch. The stepper's chips
+          // follow the ingredient sheet's adaptive logic; `values` caps every
+          // chip to a baked view and the title lets it use the recipe's
+          // master-data AU links when that row exists.
           <div className="field">
             <span className="field-label">Menge</span>
             <ValueStepper
@@ -320,6 +327,8 @@ function MealPlanSheet({
               onChange={setYieldQuantity}
               format={(candidate) => formatBQ(candidate, family)}
               ariaLabel="Menge"
+              ingredient={recipe.title}
+              family={family}
             />
           </div>
         )}

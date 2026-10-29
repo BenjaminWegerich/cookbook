@@ -118,6 +118,10 @@
      to the 42px floor, as in the app (§5.2). */
   .chip::before { content: ''; position: absolute; inset: -5px; }
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  /* The yield rows are one measured line, like the app's SuggestionChips: the
+     row clips, never wraps, and the fit hides whole chips that do not fit. */
+  .yield-chips { flex-wrap: nowrap; overflow: hidden; }
+  .yield-chips .chip { flex: none; }
   /* A note inside a filled chip keeps the chip's on-accent ink: --muted on
      --accent is 1.17:1, and no lightened tint reaches the AA 4.5:1 bar on that
      clay. The italic run alone carries the quiet cue (as in the app, editor.css). */
@@ -141,9 +145,9 @@
      press-and-hold guards (no selection, callout or double-tap zoom) let a
      long press read purely as a hold, and the :active fill is the solid
      equivalent of the app's shared press wash. The row copies the app's
-     .quantity-row gap; the value slot copies QuantityValue, whose hidden probe
-     keeps the width fixed and the digits right-aligned while the stepper walks
-     the views. */
+     .quantity-row gap; the value slot copies QuantityValue with the BQ probe
+     ("950 g" / "950 ml"), so the width is fixed and the digits right-aligned
+     while the stepper walks the views without reserving free-input decimals. */
   .yield-row { display: flex; align-items: center; gap: var(--space-6); margin: var(--space-3) 0 0; }
   .yield-step-button { width: var(--space-9); height: var(--space-9); padding: 0;
                        display: inline-grid; place-items: center; border-radius: 50%;
@@ -962,7 +966,11 @@
     var step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1
       : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (step === 0) { return; }
-    var chips = isServing ? servingChips : yieldChips;
+    // Only the visible row is a radio group: the other yield rows are hidden,
+    // and the one-line fit hides whole chips that do not fit.
+    var chips = Array.prototype.slice
+      .call(e.currentTarget.parentNode.querySelectorAll('.chip'))
+      .filter(function (chip) { return !chip.hidden; });
     var index = Array.prototype.indexOf.call(chips, e.currentTarget);
     var next = chips[index + step];
     if (next === undefined) { return; }
@@ -974,7 +982,9 @@
     btn.addEventListener('keydown', onChipKeydown);
   });
   function activeChipValue() {
-    var active = document.querySelector('.chip.active');
+    var active = isServing
+      ? document.querySelector('.chip.active')
+      : document.querySelector('.yield-chips:not([hidden]) .chip.active');
     return active === null ? null : active.getAttribute(sizeKey);
   }
 
@@ -985,6 +995,46 @@
   var stepDown = null;
   var stepUp = null;
   var yieldIndex = 0;
+
+  /**
+   * The visible yield row keeps one line, like the app's SuggestionChips: a
+   * chip that fits is kept, one that does not is hidden and the next one is
+   * tried. The walk follows data-rank (the ranking), not the ascending DOM
+   * order. Re-run after a size change, a resize and the font load, and only
+   * while the row is actually on screen.
+   */
+  function fitYieldChips() {
+    var row = document.querySelector('.yield-chips:not([hidden])');
+    if (!row) { return; }
+    var available = row.getBoundingClientRect().width;
+    if (available <= 0) { return; }
+    var chips = Array.prototype.slice.call(row.querySelectorAll('.chip'));
+    chips.sort(function (a, b) {
+      return Number(a.getAttribute('data-rank')) - Number(b.getAttribute('data-rank'));
+    });
+    var gap = parseFloat(getComputedStyle(row).columnGap) || 10;
+    var used = 0;
+    var kept = 0;
+    for (var i = 0; i < chips.length; i += 1) {
+      var chip = chips[i];
+      // Reset first: a chip hidden by the previous fit has no width to measure.
+      chip.hidden = false;
+      var width = chip.getBoundingClientRect().width;
+      var next = used + (kept > 0 ? gap : 0) + width;
+      if (next <= available) {
+        used = next;
+        kept += 1;
+      } else {
+        chip.hidden = true;
+      }
+    }
+  }
+  if (!isServing) {
+    window.addEventListener('resize', fitYieldChips);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fitYieldChips).catch(function () {});
+    }
+  }
 
   function selectServing(n) {
     var found = false;
@@ -1000,6 +1050,7 @@
     yieldIndex = index;
     var value = yieldValues[index];
     toggleSize(value);
+    fitYieldChips();
     setActiveChip(value);
     if (yieldValue) { yieldValue.textContent = yieldLabels[value]; }
     if (stepDown) { stepDown.disabled = index === 0; }
@@ -1143,6 +1194,7 @@
     screens.intro.classList.toggle('active', node === 'intro');
     screens.zutaten.classList.toggle('active', node === 'zutaten');
     screens.zubereitung.classList.toggle('active', onSteps);
+    if (node === 'intro') { fitYieldChips(); }
 
     // The swipe animation plays for the intro and Zutaten screens too, not only
     // the steps: the newly shown screen slides in with the motion direction.
