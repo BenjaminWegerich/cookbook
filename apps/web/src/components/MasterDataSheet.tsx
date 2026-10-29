@@ -697,7 +697,12 @@ function MasterDataSheet({
                 is read. In a create it is disabled too while the name is a
                 Zutaten-Rezept: the recipe's yield unit owns that value. */}
             <div className="field">
-              <span className="field-label">Basis-Einheit</span>
+              <span className="field-label">
+                Basis-Einheit
+                {subRecipeUnit !== undefined && (
+                  <span className="optional-mark">vom Rezept übernommen</span>
+                )}
+              </span>
               <div className="segmented" role="radiogroup" aria-label="Basis-Einheit">
                 {BASE_UNITS.map((option) => (
                   <button
@@ -716,11 +721,6 @@ function MasterDataSheet({
                   </button>
                 ))}
               </div>
-              {subRecipeUnit !== undefined && (
-                <p className="field-hint">
-                  Vom Zutaten-Rezept übernommen — die Basis-Einheit folgt der Ergiebigkeit.
-                </p>
-              )}
             </div>
 
             {/* The mapping group: the caption names the field, the grid renders
