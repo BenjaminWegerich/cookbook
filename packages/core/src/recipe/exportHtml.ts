@@ -1215,6 +1215,10 @@ const STYLES = `
      to the 42px floor, as in the app (§5.2). */
   .chip::before { content: ''; position: absolute; inset: -5px; }
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  /* A note inside a filled chip keeps the chip's on-accent ink: --muted on
+     --accent is 1.17:1, and no lightened tint reaches the AA 4.5:1 bar on that
+     clay. The italic run alone carries the quiet cue (as in the app, editor.css). */
+  .chip.active .arrangement-note { color: inherit; }
   /* The quiet aside of an ingredient arrangement (§5.4): the note left its
      brackets and follows one en space, muted and italic. Step prose keeps its
      brackets and a regular space (the span then wraps both, §5.11), and the

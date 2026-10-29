@@ -869,6 +869,15 @@
   font-style: italic;
 }
 
+/* A note inside a filled (active) chip: the clay fill leaves no room for a
+   muted grey — --color-ink-muted on --color-accent is 1.17:1, and every visibly
+   lightened tint falls below the AA 4.5:1 bar (near-white itself reaches only
+   4.94:1). So the note keeps the chip's on-accent ink and the italic run alone
+   carries the "quiet aside" cue (DESIGN §5.2 / §5.4; decided with the user). */
+.chip-active .arrangement-note {
+  color: inherit;
+}
+
 /* ---- Danger zone (delete) ------------------------------------------------ */
 
 /* Danger zone (delete): the delete button and its "Abbrechen" sit next to each

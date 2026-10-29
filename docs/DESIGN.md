@@ -692,6 +692,13 @@ the rest behind that slot. *decided with the user*
 | olive outline + check symbol | olive border and label | the special answer („Nichts zu kaufen") |
 | dashed, muted, close symbol | dashed hairline, muted label, 14px symbol | clears an optional value |
 
+**A note inside a selected chip also takes `--color-on-accent`; the italics carry the
+aside.** The clay fill has no room for a muted tint: `--color-ink-muted` on
+`--color-accent` is 1.17:1, and every visibly lightened tint falls below the AA 4.5:1 bar
+(near-white itself reaches only 4.94:1). So an arrangement note inside an accent chip
+(`.arrangement-note`, §5.4) keeps the chip's ink and is told apart by its italic run alone.
+*decided with the user*
+
 **A segmented control is one exclusive mode.** Track: `--color-bg` fill, hairline border,
 `--radius-md`, `--space-1` padding and gap. Option: `--radius-sm`, `--text-sm`, muted label;
 the active option is an olive fill with an `--color-on-accent` label. Used for two or three
