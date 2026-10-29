@@ -9,18 +9,16 @@
  *   tapping it quickly (see StepperButton);
  * - a non-BQ target is only reachable through the keyboard. The field accepts
  *   any positive number; the suggestion chips are shortcuts, not limits;
- * - two suggestion modes. The **adaptive** mode (recipe quantities and yields)
- *   offers the optimizer's arrangements near the current value — "1 Becher
- *   (500 g)", "400 g" — in one measured line, no wrapping and no "andere"
- *   (components/SuggestionChips, core quantitySuggestions.ts). Tapping a chip
- *   stores its displayed, rounded BQ, so the field then reads exactly the
- *   chip's label; the chip is active when the field equals that BQ, and a row
- *   without an active chip is a valid state (the current amount has no
- *   particularly clean arrangement). The **fixed** mode keeps the old decade
- *   shortcuts and is what the reorder-point fields still use; those are
- *   unchanged in this session. A real field is never empty (every call site
- *   initializes a quantity), so the adaptive row has no fallback: without a
- *   value it simply offers nothing;
+ * - one adaptive suggestion row. It offers the optimizer's arrangements near
+ *   the current value — "1 Becher (500 g)", "400 g" — in one measured line, no
+ *   wrapping and no "andere" (components/SuggestionChips, core
+ *   quantitySuggestions.ts). Tapping a chip stores its displayed, rounded BQ,
+ *   so the field then reads exactly the chip's label; the chip is active when
+ *   the field equals that BQ, and a row without an active chip is a valid state
+ *   (the current amount has no particularly clean arrangement). A real field is
+ *   never empty (every call site initializes a quantity), so the row has no
+ *   fallback: without a positive value it offers no ranked chip (the reorder
+ *   point's pinned chips below still show);
  * - the value shows its unit in the family unit or in kg / l from 1000
  *   (`formatBQ`): "400 g", "1,5 kg". While the field has keyboard focus it
  *   shows the plain family-unit number, so typing enters a value the same way
@@ -29,8 +27,11 @@
  *   to 10 kg / 10 l (see QuantityValue); a live preview below the field stays
  *   left-aligned;
  * - zero and infinity are special reorder-point states, not BQ table values:
- *   `allowZero` adds the 0 chip and lets "−" leave the smallest BQ for 0,
- *   `allowInfinite` adds the ∞ chip. Neither applies to a unitless count.
+ *   `allowZero` pins the 0 chip (and lets "−" leave the smallest BQ for 0),
+ *   `allowInfinite` pins the ∞ chip. Pinned means the row always shows them,
+ *   even when no measured suggestion fits; they sit around the ranked chips
+ *   (0 first, ∞ last) and are not part of the ranking. Neither applies to a
+ *   unitless count.
  *
  * A unitless inline count (`{{…}}`) has no BQ table and keeps a plain ±1 step;
  * its display falls back to the AQ fraction typography.
@@ -56,7 +57,7 @@ import {
 import ArrangementLine from './ArrangementLine';
 import QuantityValue from './QuantityValue';
 import StepperButton from './StepperButton';
-import SuggestionChips from './SuggestionChips';
+import SuggestionChips, { type SuggestionChip } from './SuggestionChips';
 
 /** The two authorable base-unit families. */
 export type QuantityFamily = 'g' | 'ml';
@@ -74,14 +75,8 @@ interface QuantityInputProps {
   /** Accessible name of the input (defaults to "Menge"). */
   ariaLabel?: string;
   /**
-   * Offer the optimizer's arrangements near the current value in one measured
-   * line instead of the fixed decade shortcuts (see the file header). The
-   * reorder-point fields leave this off.
-   */
-  adaptive?: boolean;
-  /**
-   * The ingredient whose additional units feed the adaptive chips; absent for
-   * a recipe yield or a unitless count (metric-only / count-only suggestions).
+   * The ingredient whose additional units feed the chips; absent for a recipe
+   * yield or a unitless count (metric-only / count-only suggestions).
    */
   ingredient?: string;
   /**
@@ -92,10 +87,6 @@ interface QuantityInputProps {
   precision?: PrecisionLevel;
 }
 
-/** Suggested family-unit values (all BQs; shortcuts only, not a pool limit). */
-const FAMILY_SUGGESTIONS = [1, 10, 100, 1000, 10000];
-/** Suggested unitless counts. */
-const UNITLESS_SUGGESTIONS = [0.5, 1, 2, 3, 5, 10];
 /** Floor of a unitless stepped value; the field itself accepts any positive number. */
 const UNITLESS_STEP_FLOOR = 0.000001;
 
@@ -115,12 +106,6 @@ function editText(value: number | undefined, family: QuantityFamily | null): str
   return formatDecimal(value);
 }
 
-/** Display form of a chip: the full quantity with its unit where applicable. */
-function chipText(value: number, family: QuantityFamily | null): string {
-  if (family === null) return isAQValue(value) ? formatAQValue(value) : formatDecimal(value);
-  return formatBQ(value, family);
-}
-
 /** A quantity field with suggestion chips and a BQ-only −/+ stepper. */
 function QuantityInput({
   value,
@@ -129,7 +114,6 @@ function QuantityInput({
   allowZero,
   allowInfinite,
   ariaLabel = 'Menge',
-  adaptive = false,
   ingredient,
   precision,
 }: QuantityInputProps) {
@@ -173,10 +157,12 @@ function QuantityInput({
    * disagree. The optimizer runs with the field's effective precision.
    *
    * No fallback: a real field always carries a number (every call site
-   * initializes one), and without a value there is no anchor to adapt to.
+   * initializes one), and without a positive value there is no anchor to adapt
+   * to. The Vorrat's 0 is exactly such a state; its pinned chips below still
+   * give the row something to show and tap.
    */
-  const adaptiveChips = useMemo(() => {
-    if (adaptive !== true || value === undefined || !(value > 0) || !Number.isFinite(value)) {
+  const suggestionChips = useMemo<readonly SuggestionChip[]>(() => {
+    if (value === undefined || !(value > 0) || !Number.isFinite(value)) {
       return [];
     }
     const context = precision === undefined ? {} : { quantity: precision };
@@ -188,11 +174,25 @@ function QuantityInput({
       value: suggestion.value,
       label: <ArrangementLine display={suggestion.display} />,
     }));
-  }, [adaptive, value, family, ingredient, precision]);
+  }, [value, family, ingredient, precision]);
 
-  const suggestions = family === null ? UNITLESS_SUGGESTIONS : FAMILY_SUGGESTIONS;
-  const zeroChip = allowZero === true && family !== null ? 0 : null;
-  const infinite = allowInfinite === true && family !== null;
+  /**
+   * The reorder point's two special states are pinned to the row's ends, not
+   * ranked: 0 ("only bought for a recipe") and ∞ ("always in stock"). They stay
+   * visible whatever the measured row has room for, and a Vorrat of 0 or ∞ (no
+   * ranked anchor) still shows them. A recipe quantity has neither.
+   */
+  const leadingChips = useMemo<readonly SuggestionChip[]>(
+    () => (allowZero === true && family !== null ? [{ value: 0, label: '0' }] : []),
+    [allowZero, family],
+  );
+  const trailingChips = useMemo<readonly SuggestionChip[]>(
+    () =>
+      allowInfinite === true && family !== null
+        ? [{ value: Infinity, label: '∞', ariaLabel: 'Unbegrenzt vorrätig' }]
+        : [],
+    [allowInfinite, family],
+  );
 
   /** Parses the field; invalid/empty input is ignored (and reset on blur). */
   const commit = (raw: string): void => {
@@ -239,46 +239,14 @@ function QuantityInput({
 
   return (
     <div className="quantity-picker">
-      {adaptive === true ? (
-        <SuggestionChips
-          chips={adaptiveChips}
-          value={value}
-          ariaLabel="Vorgeschlagene Mengen"
-          onChange={onChange}
-        />
-      ) : (
-        <div className="suggested-chips" role="group" aria-label="Vorgeschlagene Mengen">
-          {zeroChip !== null && (
-            <button
-              type="button"
-              className={value === 0 ? 'chip chip-active' : 'chip'}
-              onClick={() => onChange(0)}
-            >
-              0
-            </button>
-          )}
-          {suggestions.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              className={value === suggestion ? 'chip chip-active' : 'chip'}
-              onClick={() => onChange(suggestion)}
-            >
-              {chipText(suggestion, family)}
-            </button>
-          ))}
-          {infinite && (
-            <button
-              type="button"
-              className={value === Infinity ? 'chip chip-active' : 'chip'}
-              onClick={() => onChange(Infinity)}
-              aria-label="Unbegrenzt vorrätig"
-            >
-              ∞
-            </button>
-          )}
-        </div>
-      )}
+      <SuggestionChips
+        chips={suggestionChips}
+        leading={leadingChips}
+        trailing={trailingChips}
+        value={value}
+        ariaLabel="Vorgeschlagene Mengen"
+        onChange={onChange}
+      />
 
       <div className="quantity-row">
         <StepperButton

@@ -2483,9 +2483,8 @@ function RecipeEditor({
                   value={draft.yield}
                   onChange={(yieldValue) => patchDraft({ yield: yieldValue })}
                   family={draft.yield_unit === 'ml' ? 'ml' : 'g'}
-                  // A yield has no ingredient: the adaptive row offers the
-                  // clean metric targets near the current amount.
-                  adaptive
+                  // A yield has no ingredient: the row offers the clean metric
+                  // targets near the current amount.
                 />
               </div>
             </>

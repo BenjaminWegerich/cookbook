@@ -13,6 +13,12 @@
  * no clean arrangement, or its chip is too wide to fit, the row may show no
  * clay chip. That absence is information, not a bug.
  *
+ * Two optional **pinned** groups flank the ranked set: `leading` before it and
+ * `trailing` after it (the reorder point's 0 and ∞). They are not candidates:
+ * their widths and gaps are subtracted first, so they stay visible whatever the
+ * row's width, while the ranked chips fit into what is left. A row that has
+ * only pinned chips still renders — a Vorrat of 0 or ∞ has no ranked anchor.
+ *
  * How many fit is a measurement, not a guess: an off-screen strip holds every
  * chip so its natural width stays measurable after the visible row hides the
  * overflow. A ResizeObserver on the row and the strip, plus one re-measure after
@@ -34,6 +40,11 @@ export interface SuggestionChip {
    * a muted run (`ArrangementLine`).
    */
   readonly label: ReactNode;
+  /**
+   * Accessible name when the visible label is a symbol (the Vorrat's ∞ chip).
+   * Absent leaves the visible text as the name.
+   */
+  readonly ariaLabel?: string;
 }
 
 interface SuggestionChipsProps {
@@ -45,7 +56,14 @@ interface SuggestionChipsProps {
   ariaLabel: string;
   /** Reports the chip the user tapped. */
   onChange: (value: number) => void;
+  /** Pinned chips before the ranked set; never hidden (the Vorrat's 0). */
+  leading?: readonly SuggestionChip[];
+  /** Pinned chips after the ranked set; never hidden (the Vorrat's ∞). */
+  trailing?: readonly SuggestionChip[];
 }
+
+/** The default pinned groups; a stable empty array keeps the memo/effect calm. */
+const NO_CHIPS: readonly SuggestionChip[] = [];
 
 /** The gap between two chips (space-4, mirrored in editor.css). */
 const CHIP_GAP = 10;
@@ -53,23 +71,41 @@ const CHIP_GAP = 10;
 /**
  * The ranked chips that fit on one line, in ranking order (the caller displays
  * them ascending). The walk does not stop at the first chip that does not fit:
- * a later, narrower chip may use the remaining space. A chip is only compared
- * against the space already taken by *chosen* chips, so the leading gap is
- * added only after the first one.
+ * a later, narrower chip may use the remaining space.
+ *
+ * `fixed` indices are pinned chips: they are always laid out and are not
+ * candidates. Their widths (and the gaps between them) are subtracted first,
+ * so a ranked chip is only compared against the space already taken by the
+ * fixed chips and the *chosen* ranked chips — the leading gap is added only
+ * after the first kept chip. With no fixed chips this is the previous greedy.
  *
  * This greedy is lexicographically optimal by rank: it keeps the best chip that
  * fits, then the next best that fits alongside it, and so on. A different set
  * could only be obtained by dropping a higher-ranked chip to make room for two
  * lower-ranked ones, which is not what the row is for.
  */
-function chooseFitting(rowWidth: number, chipWidths: readonly number[], gap: number): number[] {
+function chooseFitting(
+  rowWidth: number,
+  chipWidths: readonly number[],
+  gap: number,
+  fixed: readonly number[] = [],
+): number[] {
+  const isFixed = new Set(fixed);
+  let used = fixed.reduce((sum, index) => sum + (chipWidths[index] ?? 0), 0);
+  let kept = fixed.length;
+  if (kept > 0) {
+    used += gap * (kept - 1);
+  }
   const chosen: number[] = [];
-  let used = 0;
   for (let index = 0; index < chipWidths.length; index += 1) {
-    const next = used + (chosen.length > 0 ? gap : 0) + chipWidths[index]!;
+    if (isFixed.has(index)) {
+      continue;
+    }
+    const next = used + (kept > 0 ? gap : 0) + chipWidths[index]!;
     if (next <= rowWidth) {
       chosen.push(index);
       used = next;
+      kept += 1;
     }
   }
   return chosen;
@@ -80,16 +116,29 @@ function isActive(value: number | undefined, candidate: number): boolean {
   if (value === undefined) {
     return false;
   }
+  // 0 and ∞ are the reorder point's special states, not BQ table values:
+  // compare them exactly, because the distance test would yield NaN for ∞.
+  if (!Number.isFinite(value) || !Number.isFinite(candidate)) {
+    return value === candidate;
+  }
   return Math.abs(value - candidate) <= 1e-9 * Math.max(1, Math.abs(value));
 }
 
 /**
  * The one-line chip row of a quantity field (see the file header). It renders
- * nothing when the field has no value: without a current value there is no
- * anchor to adapt to, and the fixed decade chips are not used here (a real
- * field is never empty — every call site initializes its quantity).
+ * nothing at all only when there is neither a ranked chip nor a pinned one:
+ * without a positive value there is no anchor to adapt to (a real field is
+ * never empty — every call site initializes its quantity), but the Vorrat's
+ * 0/∞ chips must still be tappable in exactly that state.
  */
-function SuggestionChips({ chips, value, ariaLabel, onChange }: SuggestionChipsProps) {
+function SuggestionChips({
+  chips,
+  value,
+  ariaLabel,
+  onChange,
+  leading = NO_CHIPS,
+  trailing = NO_CHIPS,
+}: SuggestionChipsProps) {
   /**
    * The values of the chosen chips, in no particular order. Values rather than
    * indices, so a value that disappears between renders cannot point at the
@@ -118,7 +167,16 @@ function SuggestionChips({ chips, value, ariaLabel, onChange }: SuggestionChipsP
     // The visible row's own gap token is the truthful value (editor.css mirrors
     // CHIP_GAP); reading it keeps the measurement correct if the ladder moves.
     const gap = Number.parseFloat(getComputedStyle(row).columnGap) || CHIP_GAP;
-    const chosen = chooseFitting(rowWidth, chipWidths, gap).map((index) => chips[index]!.value);
+    // The strip mirrors the row's order: pinned leading chips, then every ranked
+    // chip, then the pinned trailing ones. Only the ranked ones are candidates.
+    const leadingCount = leading.length;
+    const fixed = [
+      ...leading.map((_, index) => index),
+      ...trailing.map((_, index) => leadingCount + chips.length + index),
+    ];
+    const chosen = chooseFitting(rowWidth, chipWidths, gap, fixed).map(
+      (index) => chips[index - leadingCount]!.value,
+    );
     // Keep the old array when the choice did not change, so a resize or a font
     // event does not re-render the row.
     setVisibleValues((previous) =>
@@ -126,7 +184,7 @@ function SuggestionChips({ chips, value, ariaLabel, onChange }: SuggestionChipsP
         ? previous
         : chosen,
     );
-  }, [chips]);
+  }, [chips, leading, trailing]);
 
   useLayoutEffect(() => {
     measure();
@@ -161,7 +219,7 @@ function SuggestionChips({ chips, value, ariaLabel, onChange }: SuggestionChipsP
     };
   }, [measure]);
 
-  if (chips.length === 0) {
+  if (chips.length === 0 && leading.length === 0 && trailing.length === 0) {
     return null;
   }
 
@@ -177,24 +235,48 @@ function SuggestionChips({ chips, value, ariaLabel, onChange }: SuggestionChipsP
         role="group"
         aria-label={ariaLabel}
       >
+        {leading.map((chip) => (
+          <button
+            key={`leading-${chip.value}`}
+            type="button"
+            className={isActive(value, chip.value) ? 'chip chip-active' : 'chip'}
+            onClick={() => onChange(chip.value)}
+            aria-label={chip.ariaLabel}
+          >
+            {chip.label}
+          </button>
+        ))}
         {sorted.map((chip) => (
           <button
             key={chip.value}
             type="button"
             className={isActive(value, chip.value) ? 'chip chip-active' : 'chip'}
             onClick={() => onChange(chip.value)}
+            aria-label={chip.ariaLabel}
+          >
+            {chip.label}
+          </button>
+        ))}
+        {trailing.map((chip) => (
+          <button
+            key={`trailing-${chip.value}`}
+            type="button"
+            className={isActive(value, chip.value) ? 'chip chip-active' : 'chip'}
+            onClick={() => onChange(chip.value)}
+            aria-label={chip.ariaLabel}
           >
             {chip.label}
           </button>
         ))}
       </div>
 
-      {/* The measurement strip: every chip, laid out off-screen so the visible
-          row can hide its overflow without losing a width it still needs after
-          a viewport or font change. Non-interactive and screen-reader hidden. */}
+      {/* The measurement strip: every pinned and ranked chip, in the row's
+          order, laid out off-screen so the visible row can hide its overflow
+          without losing a width it still needs after a viewport or font change.
+          Non-interactive and screen-reader hidden. */}
       <div className="suggested-chips-measure" ref={stripRef} aria-hidden="true">
-        {chips.map((chip) => (
-          <button key={chip.value} type="button" tabIndex={-1} data-chip className="chip">
+        {[...leading, ...chips, ...trailing].map((chip, index) => (
+          <button key={index} type="button" tabIndex={-1} data-chip className="chip">
             {chip.label}
           </button>
         ))}

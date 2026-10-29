@@ -756,8 +756,10 @@ function MasterDataSheet({
             </div>
 
             {/* The reorder point: what is on the shelf after a shopping trip.
-                Same picker as a recipe quantity, plus 0 and ∞; the value is
-                stored as entered, without quantity optimization. */}
+                The adaptive chips of a recipe quantity, with its two pinned
+                states around them: 0 ("only bought for a recipe") and ∞
+                ("always in stock"). A value typed into the field is still
+                stored exactly as entered, without snapping. */}
             <div className="field">
               <span className="field-label">Vorrat</span>
               <QuantityInput
@@ -767,6 +769,12 @@ function MasterDataSheet({
                   markEdited();
                 }}
                 family={bu}
+                // A registered name supplies its additional units; the form's
+                // precision picks the arrangement. A new (or not yet valid)
+                // name stays metric-only until it is saved and the registry
+                // knows it.
+                ingredient={nameErrorNow === null ? trimmedName : undefined}
+                precision={precision}
                 allowZero
                 allowInfinite
               />
