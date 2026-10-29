@@ -118,6 +118,10 @@
      to the 42px floor, as in the app (§5.2). */
   .chip::before { content: ''; position: absolute; inset: -5px; }
   .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  /* A note inside a filled chip keeps the chip's on-accent ink: --muted on
+     --accent is 1.17:1, and no lightened tint reaches the AA 4.5:1 bar on that
+     clay. The italic run alone carries the quiet cue (as in the app, editor.css). */
+  .chip.active .arrangement-note { color: inherit; }
   /* The quiet aside of an ingredient arrangement (§5.4): the note left its
      brackets and follows one en space, muted and italic. Step prose keeps its
      brackets and a regular space (the span then wraps both, §5.11), and the
@@ -340,7 +344,7 @@
   <li class="check-row"><input type="checkbox" id="c-y17-1"><label class="qty" for="c-y17-1">10 EL Milch <span class="arrangement-note">100 ml</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="180" data-yield-label="180 ml" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y18-0"><label class="qty" for="c-y18-0">10 g Butter</label></li>
+  <li class="check-row"><input type="checkbox" id="c-y18-0"><label class="qty" for="c-y18-0">9 g Butter</label></li>
   <li class="check-row"><input type="checkbox" id="c-y18-1"><label class="qty" for="c-y18-1">10 EL Milch <span class="arrangement-note">100 ml</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="190" data-yield-label="190 ml" role="group" aria-label="Zutaten">
@@ -353,7 +357,7 @@
 </ul>
 <ul class="check-list size-scoped" data-yield="220" data-yield-label="220 ml" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-y21-0"><label class="qty" for="c-y21-0">10 g Butter</label></li>
-  <li class="check-row"><input type="checkbox" id="c-y21-1"><label class="qty" for="c-y21-1">10 EL Milch <span class="arrangement-note">100 ml</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y21-1"><label class="qty" for="c-y21-1">150 ml Milch</label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="250" data-yield-label="250 ml" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-y22-0"><label class="qty" for="c-y22-0">12 g Butter</label></li>
@@ -365,14 +369,14 @@
 </ul>
 <ul class="check-list size-scoped" data-yield="300" data-yield-label="300 ml" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-y24-0"><label class="qty" for="c-y24-0">15 g Butter</label></li>
-  <li class="check-row"><input type="checkbox" id="c-y24-1"><label class="qty" for="c-y24-1">200 ml Milch</label></li>
+  <li class="check-row"><input type="checkbox" id="c-y24-1"><label class="qty" for="c-y24-1">180 ml Milch</label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="320" data-yield-label="320 ml" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-y25-0"><label class="qty" for="c-y25-0">15 g Butter</label></li>
   <li class="check-row"><input type="checkbox" id="c-y25-1"><label class="qty" for="c-y25-1">200 ml Milch</label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="350" data-yield-label="350 ml" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y26-0"><label class="qty" for="c-y26-0">20 g Butter</label></li>
+  <li class="check-row"><input type="checkbox" id="c-y26-0"><label class="qty" for="c-y26-0">18 g Butter</label></li>
   <li class="check-row"><input type="checkbox" id="c-y26-1"><label class="qty" for="c-y26-1">200 ml Milch</label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="380" data-yield-label="380 ml" role="group" aria-label="Zutaten">
@@ -412,12 +416,12 @@
   <li class="check-row"><input type="checkbox" id="c-y35-1"><label class="qty" for="c-y35-1">400 ml Milch</label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="700" data-yield-label="700 ml" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y36-0"><label class="qty" for="c-y36-0">⅛ Packung Butter <span class="arrangement-note">31 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y36-0"><label class="qty" for="c-y36-0">35 g Butter</label></li>
   <li class="check-row"><input type="checkbox" id="c-y36-1"><label class="qty" for="c-y36-1">400 ml Milch</label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="750" data-yield-label="750 ml" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y37-0"><label class="qty" for="c-y37-0">⅛ Packung Butter <span class="arrangement-note">31 g</span></label></li>
-  <li class="check-row"><input type="checkbox" id="c-y37-1"><label class="qty" for="c-y37-1">500 ml Milch</label></li>
+  <li class="check-row"><input type="checkbox" id="c-y37-0"><label class="qty" for="c-y37-0">40 g Butter</label></li>
+  <li class="check-row"><input type="checkbox" id="c-y37-1"><label class="qty" for="c-y37-1">450 ml Milch</label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="800" data-yield-label="800 ml" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-y38-0"><label class="qty" for="c-y38-0">40 g Butter</label></li>
@@ -456,7 +460,7 @@
   <li class="check-row"><input type="checkbox" id="c-y46-1"><label class="qty" for="c-y46-1">1 Packung Milch <span class="arrangement-note">1 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="1500" data-yield-label="1,5 l" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y47-0"><label class="qty" for="c-y47-0">¼ Packung Butter <span class="arrangement-note">63 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y47-0"><label class="qty" for="c-y47-0">⅓ Packung Butter <span class="arrangement-note">83 g</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-y47-1"><label class="qty" for="c-y47-1">1 Packung Milch <span class="arrangement-note">1 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="1600" data-yield-label="1,6 l" role="group" aria-label="Zutaten">
@@ -472,11 +476,11 @@
   <li class="check-row"><input type="checkbox" id="c-y50-1"><label class="qty" for="c-y50-1">1 Packung Milch <span class="arrangement-note">1 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="1900" data-yield-label="1,9 l" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y51-0"><label class="qty" for="c-y51-0">⅜ Packung Butter <span class="arrangement-note">94 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y51-0"><label class="qty" for="c-y51-0">⅜ Packungen Butter <span class="arrangement-note">94 g</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-y51-1"><label class="qty" for="c-y51-1">1 Packung Milch <span class="arrangement-note">1 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="2000" data-yield-label="2 l" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y52-0"><label class="qty" for="c-y52-0">⅜ Packung Butter <span class="arrangement-note">94 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y52-0"><label class="qty" for="c-y52-0">100 g Butter</label></li>
   <li class="check-row"><input type="checkbox" id="c-y52-1"><label class="qty" for="c-y52-1">1 Packung Milch <span class="arrangement-note">1 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="2200" data-yield-label="2,2 l" role="group" aria-label="Zutaten">
@@ -492,28 +496,28 @@
   <li class="check-row"><input type="checkbox" id="c-y55-1"><label class="qty" for="c-y55-1">2 Packungen Milch <span class="arrangement-note">2 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="3000" data-yield-label="3 l" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y56-0"><label class="qty" for="c-y56-0">½ Packung Butter <span class="arrangement-note">125 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y56-0"><label class="qty" for="c-y56-0">⅝ Packungen Butter <span class="arrangement-note">156 g</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-y56-1"><label class="qty" for="c-y56-1">2 Packungen Milch <span class="arrangement-note">2 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="3200" data-yield-label="3,2 l" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y57-0"><label class="qty" for="c-y57-0">⅔ Packung Butter <span class="arrangement-note">167 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y57-0"><label class="qty" for="c-y57-0">⅔ Packungen Butter <span class="arrangement-note">167 g</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-y57-1"><label class="qty" for="c-y57-1">2 Packungen Milch <span class="arrangement-note">2 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="3500" data-yield-label="3,5 l" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y58-0"><label class="qty" for="c-y58-0">¾ Packung Butter <span class="arrangement-note">188 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y58-0"><label class="qty" for="c-y58-0">¾ Packungen Butter <span class="arrangement-note">188 g</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-y58-1"><label class="qty" for="c-y58-1">2 Packungen Milch <span class="arrangement-note">2 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="3800" data-yield-label="3,8 l" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y59-0"><label class="qty" for="c-y59-0">¾ Packung Butter <span class="arrangement-note">188 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y59-0"><label class="qty" for="c-y59-0">¾ Packungen Butter <span class="arrangement-note">188 g</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-y59-1"><label class="qty" for="c-y59-1">2 Packungen Milch <span class="arrangement-note">2 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="4000" data-yield-label="4 l" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y60-0"><label class="qty" for="c-y60-0">¾ Packung Butter <span class="arrangement-note">188 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y60-0"><label class="qty" for="c-y60-0">¾ Packungen Butter <span class="arrangement-note">188 g</span></label></li>
   <li class="check-row"><input type="checkbox" id="c-y60-1"><label class="qty" for="c-y60-1">2 Packungen Milch <span class="arrangement-note">2 l</span></label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="4200" data-yield-label="4,2 l" role="group" aria-label="Zutaten">
-  <li class="check-row"><input type="checkbox" id="c-y61-0"><label class="qty" for="c-y61-0">¾ Packung Butter <span class="arrangement-note">188 g</span></label></li>
-  <li class="check-row"><input type="checkbox" id="c-y61-1"><label class="qty" for="c-y61-1">3 Packungen Milch <span class="arrangement-note">3 l</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y61-0"><label class="qty" for="c-y61-0">¾ Packungen Butter <span class="arrangement-note">188 g</span></label></li>
+  <li class="check-row"><input type="checkbox" id="c-y61-1"><label class="qty" for="c-y61-1">2,5 l Milch</label></li>
 </ul>
 <ul class="check-list size-scoped" data-yield="4500" data-yield-label="4,5 l" role="group" aria-label="Zutaten">
   <li class="check-row"><input type="checkbox" id="c-y62-0"><label class="qty" for="c-y62-0">1 Packung Butter <span class="arrangement-note">250 g</span></label></li>
@@ -751,7 +755,7 @@
 <div class="step-wrap size-scoped" data-yield="180">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">10 g Butter</span></li>
+  <li><span class="step-ingredient">9 g Butter</span></li>
   <li><span class="step-ingredient">10 EL Milch <span class="arrangement-note">100 ml</span></span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -788,7 +792,7 @@
   <div class="step" data-step="1">
 <ul class="step-rows">
   <li><span class="step-ingredient">10 g Butter</span></li>
-  <li><span class="step-ingredient">10 EL Milch <span class="arrangement-note">100 ml</span></span></li>
+  <li><span class="step-ingredient">150 ml Milch</span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
   </div>
@@ -824,7 +828,7 @@
   <div class="step" data-step="1">
 <ul class="step-rows">
   <li><span class="step-ingredient">15 g Butter</span></li>
-  <li><span class="step-ingredient">200 ml Milch</span></li>
+  <li><span class="step-ingredient">180 ml Milch</span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
   </div>
@@ -847,7 +851,7 @@
 <div class="step-wrap size-scoped" data-yield="350">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">20 g Butter</span></li>
+  <li><span class="step-ingredient">18 g Butter</span></li>
   <li><span class="step-ingredient">200 ml Milch</span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -967,7 +971,7 @@
 <div class="step-wrap size-scoped" data-yield="700">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">⅛ Packung Butter <span class="arrangement-note">31 g</span></span></li>
+  <li><span class="step-ingredient">35 g Butter</span></li>
   <li><span class="step-ingredient">400 ml Milch</span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -979,8 +983,8 @@
 <div class="step-wrap size-scoped" data-yield="750">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">⅛ Packung Butter <span class="arrangement-note">31 g</span></span></li>
-  <li><span class="step-ingredient">500 ml Milch</span></li>
+  <li><span class="step-ingredient">40 g Butter</span></li>
+  <li><span class="step-ingredient">450 ml Milch</span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
   </div>
@@ -1099,7 +1103,7 @@
 <div class="step-wrap size-scoped" data-yield="1500">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">¼ Packung Butter <span class="arrangement-note">63 g</span></span></li>
+  <li><span class="step-ingredient">⅓ Packung Butter <span class="arrangement-note">83 g</span></span></li>
   <li><span class="step-ingredient">1 Packung Milch <span class="arrangement-note">1 l</span></span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -1147,7 +1151,7 @@
 <div class="step-wrap size-scoped" data-yield="1900">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">⅜ Packung Butter <span class="arrangement-note">94 g</span></span></li>
+  <li><span class="step-ingredient">⅜ Packungen Butter <span class="arrangement-note">94 g</span></span></li>
   <li><span class="step-ingredient">1 Packung Milch <span class="arrangement-note">1 l</span></span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -1159,7 +1163,7 @@
 <div class="step-wrap size-scoped" data-yield="2000">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">⅜ Packung Butter <span class="arrangement-note">94 g</span></span></li>
+  <li><span class="step-ingredient">100 g Butter</span></li>
   <li><span class="step-ingredient">1 Packung Milch <span class="arrangement-note">1 l</span></span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -1207,7 +1211,7 @@
 <div class="step-wrap size-scoped" data-yield="3000">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">½ Packung Butter <span class="arrangement-note">125 g</span></span></li>
+  <li><span class="step-ingredient">⅝ Packungen Butter <span class="arrangement-note">156 g</span></span></li>
   <li><span class="step-ingredient">2 Packungen Milch <span class="arrangement-note">2 l</span></span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -1219,7 +1223,7 @@
 <div class="step-wrap size-scoped" data-yield="3200">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">⅔ Packung Butter <span class="arrangement-note">167 g</span></span></li>
+  <li><span class="step-ingredient">⅔ Packungen Butter <span class="arrangement-note">167 g</span></span></li>
   <li><span class="step-ingredient">2 Packungen Milch <span class="arrangement-note">2 l</span></span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -1231,7 +1235,7 @@
 <div class="step-wrap size-scoped" data-yield="3500">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">¾ Packung Butter <span class="arrangement-note">188 g</span></span></li>
+  <li><span class="step-ingredient">¾ Packungen Butter <span class="arrangement-note">188 g</span></span></li>
   <li><span class="step-ingredient">2 Packungen Milch <span class="arrangement-note">2 l</span></span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -1243,7 +1247,7 @@
 <div class="step-wrap size-scoped" data-yield="3800">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">¾ Packung Butter <span class="arrangement-note">188 g</span></span></li>
+  <li><span class="step-ingredient">¾ Packungen Butter <span class="arrangement-note">188 g</span></span></li>
   <li><span class="step-ingredient">2 Packungen Milch <span class="arrangement-note">2 l</span></span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -1255,7 +1259,7 @@
 <div class="step-wrap size-scoped" data-yield="4000">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">¾ Packung Butter <span class="arrangement-note">188 g</span></span></li>
+  <li><span class="step-ingredient">¾ Packungen Butter <span class="arrangement-note">188 g</span></span></li>
   <li><span class="step-ingredient">2 Packungen Milch <span class="arrangement-note">2 l</span></span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
@@ -1267,8 +1271,8 @@
 <div class="step-wrap size-scoped" data-yield="4200">
   <div class="step" data-step="1">
 <ul class="step-rows">
-  <li><span class="step-ingredient">¾ Packung Butter <span class="arrangement-note">188 g</span></span></li>
-  <li><span class="step-ingredient">3 Packungen Milch <span class="arrangement-note">3 l</span></span></li>
+  <li><span class="step-ingredient">¾ Packungen Butter <span class="arrangement-note">188 g</span></span></li>
+  <li><span class="step-ingredient">2,5 l Milch</span></li>
 </ul>
     <p class="step-text">Butter schmelzen, Mehl anschwitzen und mit Milch aufgießen.</p>
   </div>
