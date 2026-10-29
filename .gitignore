@@ -40,3 +40,6 @@ coverage/
 
 # Wrangler's local cache/state (apps/tiktok-extractor)
 .wrangler/
+
+# Local scratch prototypes (standalone HTML experiments, not shipped)
+/quantity-weight-lab.html
