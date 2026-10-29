@@ -1170,10 +1170,34 @@
 }
 
 /* The master-data action under the name field shares the create block's slot:
-   a single outlined action, left-aligned like the create button above it. */
+   a single quiet action, left-aligned like the create button above it. It takes
+   the shared text button (§5.1) — no fill, no border, muted label — because it
+   changes an existing record rather than creating one, and must not compete
+   with the sheet's accent-filled save. */
 .master-edit-action {
   display: flex;
   justify-content: flex-start;
+  /* The action belongs to the name field above it, not to the sheet's rhythm.
+     The button's own 6 px top padding already provides the air below the input,
+     so the sheet's full 14 px grid gap on top of it would read as a gap between
+     two unrelated blocks. One ladder step back (6 px, --space-2) leaves the
+     field's own caption-to-input gap plus the button's padding. */
+  margin-block-start: calc(-1 * var(--space-2));
+}
+
+/* The quiet action's label lines up with the field's own text: the text button's
+   symmetric 6 px padding would indent it past the „Name" caption and the input
+   above. Only the leading padding is dropped; the other three sides keep the tap
+   area (the same correction as .back-button, see recipe-list.css). */
+.master-edit-action .text-button {
+  padding-inline-start: 0;
+}
+
+/* Its pencil drops one step with the label (--icon-sm next to --text-sm):
+   .button-icon's 18 px belongs beside an 18 px label, an action variant. */
+.master-edit-action .button-icon {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 .sheet-subtitle {

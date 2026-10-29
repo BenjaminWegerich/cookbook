@@ -455,8 +455,11 @@ function IngredientSheet({
         )}
 
         {/* The master-data counterpart of the create action above: the same
-            slot under the name field, but outlined (a change, not a new
-            record). It opens the shared master sheet over this one; the
+            slot under the name field, but quiet (a change of an existing
+            record, not a new one), so it reads as a utility beneath the field
+            instead of competing with the form's own save action. It uses the
+            shared text-button variant: no fill, no border, muted label. It opens
+            the shared master sheet over this one; the
             quantity form stays mounted underneath, so its name, amount,
             precision and unit choice survive the round trip. A sub-recipe is
             not an ingredient record and therefore offers no such action. */}
@@ -464,7 +467,7 @@ function IngredientSheet({
           <div className="master-edit-action">
             <button
               type="button"
-              className="outlined-button"
+              className="text-button"
               onClick={() => onEditIngredient(trimmedName)}
             >
               <PencilIcon className="button-icon" optical={20} />
