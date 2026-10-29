@@ -734,10 +734,14 @@ exactly as today. The picker lives only on the intro screen.
 displayed in ALL CAPS by CSS (`text-transform`); the markup and every string keep normal
 German case („Titel"), so a screen reader announces the plain word.
 
-**An optional field is marked, a required one is not.** The marker is ` (optional)`, italic,
+**An optional field is marked, a required one is not.** The marker is `optional`, italic,
 lowercase, muted, appended to the caption and separated from it by one En space
 (`margin-inline-start: 0.5em`, 7px at the caption size — a second-priority ladder step). No
 asterisks, no „Pflichtfeld".
+
+**A passive annotation on the right is italic.** The quantity sheet's `Zutat-Standard: …`
+beside „Genauigkeit" and the plan size beside a dish title are muted, italic and sit at the
+row's right edge, at least one En space from the text before them.
 
 **Controls.** Text inputs and text areas: `--color-bg` fill, hairline border, `--radius-md`,
 `--text-md` text, padding `--space-3` / `--space-4`. A focused text field shows a solid 2px
@@ -799,7 +803,9 @@ widening the sheet.
 
 **Sections on the home screen** are captioned groups of the same card grid: the caption uses
 the field-caption typography (`--text-sm`, weight 600, muted, ALL CAPS by CSS), an optional
-action may sit beside it in the same row, and `--space-7` separates two sections.
+action may sit beside it in the same row, and `--space-7` separates two sections. The
+section's counter is right-aligned in the caption row, at least one En space after the caption,
+and carries no parentheses (`Essensplan 5 Einträge, davon 2 unbekannt`).
 
 **A collection-level action that is used only rarely sits below the last card.** It is one
 outlined button, left-aligned with the card grid, `--space-7` above it; it is not a caption
@@ -814,11 +820,15 @@ such action. *decided with the user*
   line or set in a smaller size to fit.
 - A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
   muted) beneath it.
-- An ingredient arrangement's parenthesized note is muted and italic. The editor's ingredient
-  lists and the reference readout keep the brackets after one en space (`1 Becher
-  Joghurt␣(500 g)`); the pantry surfaces drop them (`1 Becher Joghurt␣500 g`). Step prose keeps
-  a regular space and the brackets, styled with their content (§5.11); the written shopping
+- An ingredient arrangement's parenthesized note is muted and italic. Every list, chip and
+  readout drops the brackets after one en space (`1 Becher Joghurt␣500 g`); step prose keeps a
+  regular space and the brackets, styled with their content (§5.11); the written shopping
   list keeps its bracketed wording.
+- Trailing badges (`Neu`, `Rezept`, `Referenz`, `Unbekannt`) sit in a right-aligned column of
+  their own at the row's end, at least one En space from the text before them; a multi-line
+  text never pushes a badge into its last line. A badge inside a content-sized chip gives way
+  to its symbol — the recipe suggestion chip shows only the muted link symbol. The quantity
+  sheet's preview repeats the `Rezept` badge as a button that opens the named recipe.
 - A row whose value changed under the user marks itself and keeps the mark until it is
   confirmed: a tinted surface, a `--space-1` accent line along its leading edge and one muted
   line naming the consequence (`.pantry-row--attention`, `.pantry-attention-note`). The mark is
@@ -1119,8 +1129,8 @@ and no personalisation.
 (all-caps muted captions, bold values) — the size picker under an all-caps „Portionen" /
 „Menge" caption (§5.2), and, when the recipe defines reference ingredients, a small muted
 readout of them below the picker (the Einplanen sheet's look). The readout stacks its amounts:
-one reference ingredient per line, with no comma between the lines. An arrangement note keeps
-its brackets, styled with their content, and follows one en space in the muted, italic run.
+one reference ingredient per line, with no comma between the lines. An arrangement note drops
+its brackets and follows one en space in the muted, italic run.
 Scaling happens here and only here. A meal-plan link opens this screen with the promised size
 pre-selected.
 

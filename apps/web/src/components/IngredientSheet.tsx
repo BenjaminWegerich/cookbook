@@ -21,8 +21,8 @@
  *   family) as soon as the name is chosen, there is no unit selector in row
  *   modes;
  * - sub-recipes behave like regular ingredients: their titles appear in the
- *   same name autofill (tagged "Zutaten-Rezept"), the quantity family comes
- *   from the sub-recipe's yield unit, and picking a title makes the row/
+ *   same name autofill (marked with the muted link symbol), the quantity family
+ *   comes from the sub-recipe's yield unit, and picking a title makes the row/
  *   artifact a sub-recipe use implicitly (there is no link field);
  * - the quantity is entered freely (recipes store the unrounded target): the
  *   field accepts any positive number, with suggestion chips and an adaptive
@@ -38,7 +38,9 @@
  *   equals the baseline today, so it keeps its value when the baseline changes
  *   later. The dashed „Entfernen“ chip drops the pin;
  * - the live preview shows the full display form ("1 Becher Joghurt (400 g)",
- *   "1,5 l Wasser", "½") via core renderAQS/formatBQ/formatAQValue;
+ *   "1,5 l Wasser", "½") via core renderAQS/formatBQ/formatAQValue; when the
+ *   name is an ingredient recipe, the preview carries the clickable „Rezept"
+ *   badge that opens that recipe;
  * - the reference role is set on the *master list* only — this sheet never
  *   offers it (recipe_structure.md §Reference).
  *
@@ -124,6 +126,12 @@ interface IngredientSheetProps {
    *  this sheet; this sheet stays mounted so its values survive the round trip. */
   onEditIngredient?: (name: string) => void;
   /**
+   * Opens the ingredient recipe named by the current value — the clickable
+   * „Rezept" badge in the preview. Omitted when the sheet has no recipe
+   * navigation (the badge is then not offered).
+   */
+  onOpenRecipe?: (title: string) => void;
+  /**
    * False while a master-data sheet is open above this one. That sheet owns
    * Ctrl+S then, so this sheet must not react to the same shortcut.
    */
@@ -143,6 +151,7 @@ function IngredientSheet({
   onClose,
   onCreateNewIngredient,
   onEditIngredient,
+  onOpenRecipe,
   shortcutEnabled = true,
 }: IngredientSheetProps) {
   /** The name the sheet opens with: a restored create-flow prefill wins over
@@ -405,7 +414,7 @@ function IngredientSheet({
           <span className="field-label">
             {inlineMode ? (
               <>
-                Zutat<span className="optional-mark">(optional)</span>
+                Zutat<span className="optional-mark">optional</span>
               </>
             ) : (
               'Name'
@@ -426,19 +435,24 @@ function IngredientSheet({
         </label>
         {suggestions.length > 0 && (
           <ul className="suggestions">
-            {suggestions.map((candidate) => (
-              <li key={candidate}>
-                <button type="button" className="chip" onClick={() => adoptSuggestion(candidate)}>
-                  {candidate}
-                  {recipeTitles.has(candidate) && (
-                    <span className="ingredient-tag tag-recipe">
-                      <LinkIcon className="tag-icon" optical={20} />
-                      <span>Rezept</span>
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
+            {suggestions.map((candidate) => {
+              const isRecipe = recipeTitles.has(candidate);
+              return (
+                <li key={candidate}>
+                  <button
+                    type="button"
+                    className="chip"
+                    onClick={() => adoptSuggestion(candidate)}
+                    // The link symbol alone carries the "ingredient recipe"
+                    // cue visually; the chip's accessible name spells it out.
+                    aria-label={isRecipe ? `${candidate} — Zutaten-Rezept` : undefined}
+                  >
+                    {candidate}
+                    {isRecipe && <LinkIcon className="chip-link-icon" optical={20} />}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
         {showCreate && (
@@ -461,8 +475,9 @@ function IngredientSheet({
             shared text-button variant: no fill, no border, muted label. It opens
             the shared master sheet over this one; the
             quantity form stays mounted underneath, so its name, amount,
-            precision and unit choice survive the round trip. A sub-recipe is
-            not an ingredient record and therefore offers no such action. */}
+            precision and unit choice survive the round trip. A sub-recipe has
+            an ingredient record too (auto-created on save), but its sheet hides
+            the shopping fields — it is cooked, never bought. */}
         {isMasterName && onEditIngredient !== undefined && (
           <div className="master-edit-action">
             <button
@@ -546,7 +561,7 @@ function IngredientSheet({
         <div className="field">
           <div className="field-head">
             <span className="field-label">
-              Genauigkeit<span className="optional-mark">(optional)</span>
+              Genauigkeit<span className="optional-mark">optional</span>
             </span>
             <span className="field-default">
               {ingredientDefault !== undefined
@@ -571,19 +586,34 @@ function IngredientSheet({
 
         <div className="field">
           <span className="field-label">Vorschau</span>
-          {/* Live preview of the display form (§2). */}
+          {/* Live preview of the display form (§2). A chosen ingredient recipe
+              carries the same „Rezept" badge as the editor's rows; here it is a
+              button that opens that recipe. */}
           <p className="aqs-preview" aria-live="polite">
-            {trimmedName !== '' && validName ? (
-              <ArrangementLine
-                noteForm="bracketed"
-                display={renderAQSDisplay(trimmedName, quantity, unit ?? 'g', {
-                  quantity: effectivePrecision,
-                })}
-              />
-            ) : unit !== undefined ? (
-              formatBQ(quantity, unit)
-            ) : (
-              unitlessPreview()
+            <span className="aqs-preview-value">
+              {trimmedName !== '' && validName ? (
+                <ArrangementLine
+                  display={renderAQSDisplay(trimmedName, quantity, unit ?? 'g', {
+                    quantity: effectivePrecision,
+                  })}
+                />
+              ) : unit !== undefined ? (
+                formatBQ(quantity, unit)
+              ) : (
+                unitlessPreview()
+              )}
+            </span>
+            {isRecipeTitle && onOpenRecipe !== undefined && (
+              <button
+                type="button"
+                className="ingredient-tag tag-recipe aqs-preview-recipe"
+                onClick={() => onOpenRecipe(trimmedName)}
+                title={`Zutaten-Rezept „${trimmedName}“ öffnen`}
+                aria-label={`Zutaten-Rezept „${trimmedName}“ öffnen`}
+              >
+                <LinkIcon className="tag-icon" optical={20} />
+                <span>Rezept</span>
+              </button>
             )}
           </p>
         </div>

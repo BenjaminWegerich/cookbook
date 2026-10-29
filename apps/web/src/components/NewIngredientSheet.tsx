@@ -47,6 +47,14 @@ interface NewIngredientSheetProps {
    *  stale Drive error of the last attempt (its cause may be gone now). */
   onEdited: () => void;
   onClose: () => void;
+  /** True when the typed name is an ingredient recipe title: no shopping fields. */
+  subRecipe?: boolean;
+  /**
+   * Ingredient recipes by title with their yield unit. A typed name matching
+   * one locks the base unit and hides the shopping fields, even when the name
+   * is changed inside the form.
+   */
+  subRecipeUnits?: ReadonlyMap<string, 'g' | 'ml'>;
 }
 
 /**
@@ -60,6 +68,8 @@ function NewIngredientSheet({
   onSave,
   onEdited,
   onClose,
+  subRecipe = false,
+  subRecipeUnits,
 }: NewIngredientSheetProps) {
   return (
     <MasterDataSheet
@@ -68,6 +78,8 @@ function NewIngredientSheet({
       initialName={initialName}
       busy={saving ? 'save' : null}
       error={error}
+      subRecipe={subRecipe}
+      subRecipeUnits={subRecipeUnits}
       onSave={(result) => {
         if (result.kind !== 'ingredient') return;
         onSave(

@@ -168,12 +168,12 @@ interface RecipeListProps {
  *   each group alphabetically (decided with the user): a dish is what the user
  *   cooks, a base is what they use in one.
  *
- * Each caption carries its counter ("Essensplan (5 Einträge, davon 2 unbekannt)",
- * "Restliche Sammlung (8 Rezepte)", "Einkaufsliste (4 Einträge, davon 1
- * unbekannt)"). The captions copy the editor's field-caption typography
+ * Each caption carries its counter ("Essensplan 5 Einträge, davon 2 unbekannt",
+ * "Restliche Sammlung 8 Rezepte", "Einkaufsliste 4 Einträge, davon 1
+ * unbekannt"). The captions copy the editor's field-caption typography
  * (.field-label: small, semibold, muted, all caps), with the counter itself set
- * exactly like the editor's quiet "(optional)" marker: normal case, italic,
- * slightly translucent, one en space after the caption word. The two card
+ * like the editor's quiet "optional" marker (normal case, italic) but
+ * right-aligned, at least one en space after the caption word. The two card
  * sections' counters disappear while the search is active — the field is focused
  * or carries a query — because each counts its section, not the result; their
  * captions stay: they are the sections' headings, and a section that is empty
@@ -316,13 +316,13 @@ function RecipeList({
   const planCounter =
     mealPlanCards === null
       ? null
-      : `(${mealPlanCards.length} ${mealPlanCards.length === 1 ? 'Eintrag' : 'Einträge'}, davon ${
-          mealPlanCards.filter((card) => card.recipe === null).length
-        } unbekannt)`;
+      : `${mealPlanCards.length} ${
+          mealPlanCards.length === 1 ? 'Eintrag' : 'Einträge'
+        }, davon ${mealPlanCards.filter((card) => card.recipe === null).length} unbekannt`;
 
   /** The counter of the "Restliche Sammlung" caption: `x Rezepte`. */
   const collectionCounter = collectionCountable
-    ? `(${remainingRecipes.length} ${remainingRecipes.length === 1 ? 'Rezept' : 'Rezepte'})`
+    ? `${remainingRecipes.length} ${remainingRecipes.length === 1 ? 'Rezept' : 'Rezepte'}`
     : null;
 
   /**
@@ -340,17 +340,17 @@ function RecipeList({
    * (core's `matchShoppingItem` returns null), exactly the lines the sort page
    * has to ask about. Null while Keep is off, connecting, still loading or
    * failed: the app must not claim a zero it cannot know, the same honesty the
-   * plan counter keeps. An empty but known list reads "(0 Einträge, davon 0
-   * unbekannt)".
+   * plan counter keeps. An empty but known list reads "0 Einträge, davon 0
+   * unbekannt".
    */
   const shoppingCounter =
     uncheckedShoppingItems === null
       ? null
-      : `(${uncheckedShoppingItems.length} ${
+      : `${uncheckedShoppingItems.length} ${
           uncheckedShoppingItems.length === 1 ? 'Eintrag' : 'Einträge'
         }, davon ${
           uncheckedShoppingItems.filter((item) => matchShoppingItem(item.text) === null).length
-        } unbekannt)`;
+        } unbekannt`;
 
   /** The "Essensplan" section body: connection states, then the entry cards. */
   function renderMealPlan(): ReactNode {

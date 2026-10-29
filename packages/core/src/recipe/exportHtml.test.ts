@@ -22,14 +22,14 @@ import type { Recipe } from './types.js';
 /**
  * The export's HTML for one amount line: the note leaves its brackets and
  * follows an en space in `.arrangement-note`, except in step prose, which keeps
- * the brackets and a regular space, and in the reference readout, which keeps
- * the brackets after an en space.
+ * the brackets and a regular space. The reference readout uses the same bare
+ * form as the rows.
  */
 function amountHtml(
   name: string,
   value: number,
   bu: string,
-  noteForm: 'bare' | 'parenthesised' | 'reference' = 'bare',
+  noteForm: 'bare' | 'parenthesised' = 'bare',
 ): string {
   return renderAQSDisplay(name, value, bu)
     .parts.map((part) => {
@@ -40,8 +40,7 @@ function amountHtml(
       if (noteForm === 'bare') {
         return `${EN_SPACE}<span class="arrangement-note">${note}</span>`;
       }
-      const space = noteForm === 'reference' ? EN_SPACE : ' ';
-      return `${space}<span class="arrangement-note">(${note})</span>`;
+      return ` <span class="arrangement-note">(${note})</span>`;
     })
     .join('');
 }
@@ -98,7 +97,7 @@ describe('generateRecipeHtml — finished dish', () => {
     // The written size's reference readout: one muted line per amount.
     expect(html).toContain(
       `<ul class="reference size-scoped" data-servings="6">\n` +
-        `    <li>${amountHtml('Tortillas', 250, 'g', 'reference')}</li>`,
+        `    <li>${amountHtml('Tortillas', 250, 'g')}</li>`,
     );
   });
 
@@ -142,13 +141,13 @@ reference:
       {},
     );
     // The written size's readout: two lines, no comma joining them, and the
-    // Joghurt keeps its bracketed note after an en space.
+    // Joghurt drops its brackets like every other row and readout.
     const readout =
       /<ul class="reference size-scoped" data-servings="2">([\s\S]*?)<\/ul>/.exec(stacked)?.[1] ??
       '';
     expect(readout.match(/<li>/g)).toHaveLength(2);
     expect(readout).not.toContain(', ');
-    expect(readout).toContain(amountHtml('Joghurt', 200, 'g', 'reference'));
+    expect(readout).toContain(amountHtml('Joghurt', 200, 'g'));
   });
 
   it('renders each step with its own rows above the prose', () => {
@@ -355,7 +354,7 @@ prep_time: 15 min
     // "300 ml Milch" under the size picker.
     expect(html).toContain(
       `<ul class="reference size-scoped" data-yield="500">\n` +
-        `    <li>${amountHtml('Milch', 300, 'ml', 'reference')}</li>`,
+        `    <li>${amountHtml('Milch', 300, 'ml')}</li>`,
     );
   });
 

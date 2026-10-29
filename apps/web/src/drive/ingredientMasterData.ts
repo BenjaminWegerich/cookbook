@@ -56,6 +56,13 @@ const LIST_FILE_NAME = 'zutaten.csv';
 const MAPPINGS_FILE_NAME = 'zutaten-umrechnungen.csv';
 /** MIME type of the master data files. */
 const MASTER_DATA_MIME_TYPE = 'text/csv';
+/**
+ * The precision an auto-created sub-recipe row starts with. It deliberately
+ * equals the value of the internal neutral level (what an unregistered
+ * sub-recipe displayed), but it is a real stored level: the CSV requires one,
+ * and the internal constant is documented as never being written to a file.
+ */
+const AUTO_CREATED_PRECISION: PrecisionLevel = 'medium';
 
 /**
  * Set when a create-write lands after a load started. The load must then not
@@ -425,4 +432,100 @@ export async function renameIngredientMasterData(
   writtenSinceLoad = true;
   setIngredientMappings(renamed);
   return true;
+}
+
+/**
+ * Ensures that an ingredient recipe has its ingredient-master-data row.
+ *
+ * Saving a recipe of type `ingredient_recipe` registers its title as an
+ * ingredient (auto-create, decided with the user). The row carries the same
+ * ingredient-level fields as any other ingredient — display forms, precision,
+ * reorder point and AU mappings — but never a shopping stop or synonyms: a
+ * sub-recipe is cooked, never bought (docs/recipe_structure.md, "The link
+ * means …"), so it has no item row in the shopping master data. The
+ * auto-created row starts with neutral values: reorder point 0, precision
+ * `medium` (the internal neutral level), no mappings and no display forms.
+ * Those neutral values are exactly what an unregistered name displayed before,
+ * so registering a sub-recipe never changes an existing recipe's rendering.
+ *
+ * An existing row is never overwritten: its reorder point, precision, display
+ * forms and mappings are the user's data. The base unit is the one field with
+ * two sources — the recipe's `yield_unit` and the row's `Base Unit` — so the
+ * row follows the recipe:
+ * - without AU mappings, the base unit is updated in place;
+ * - with AU mappings, a unit change is refused, because every factor is
+ *   expressed in the base unit and would silently mean something else. The
+ *   caller's save fails with the German message; the user clears the mappings
+ *   in „Zutaten“ first or keeps the recipe's unit.
+ *
+ * The write uses the same read-modify-write path as the other master-data
+ * writes: the authoritative pair is read first, so a spreadsheet edit made
+ * meanwhile survives, and a missing pair is materialized from the built-in
+ * seed. Deleting a recipe leaves its row in place — the name remains a valid
+ * ingredient (other recipes may still use it) and a row can carry user
+ * settings that a recipe delete must not destroy.
+ *
+ * @param token Drive access token
+ * @param title the ingredient recipe's title, which is the ingredient name
+ * @param bu the base unit family the recipe yields in ("g" or "ml")
+ * @param precision the precision of a newly created row; defaults to the
+ *   auto-created level (medium), the same value the internal neutral fallback
+ *   used, so registration never changes a recipe's rendering
+ * @throws {Error} when the base unit conflicts with existing AU mappings, the
+ *   title is empty, or the master data is corrupt
+ */
+export async function ensureIngredientRecipeMasterData(
+  token: string,
+  title: string,
+  bu: 'g' | 'ml',
+  precision: PrecisionLevel = AUTO_CREATED_PRECISION,
+): Promise<void> {
+  if (title.trim() === '') {
+    throw new Error('Zutaten-Stammdaten: Das Zutaten-Rezept braucht einen Titel.');
+  }
+  if (!isPrecisionLevel(precision)) {
+    throw new Error('Zutaten-Stammdaten: Die Genauigkeit muss eine der fünf Stufen sein.');
+  }
+
+  const folder = await listCookbookFolder(token);
+  const { listFile, mappingsFile } = findMasterDataFiles(folder);
+  const current = await readAuthoritativeMasterData(token, listFile, mappingsFile);
+  const entry = current[title];
+
+  let next: IngredientMappings;
+  if (entry === undefined) {
+    next = {
+      ...current,
+      [title]: {
+        bu,
+        // Nothing is on the shelf yet, and the display must not change: the
+        // default precision equals the level an unregistered name displayed.
+        reorderPoint: 0,
+        precision,
+        entries: [],
+      },
+    };
+  } else if (entry.bu === bu) {
+    // The row is already registered with the recipe's unit — keep every field.
+    // Publish what was read even without a write: the Drive pair can be newer
+    // than this session's registry (another device, or a failed startup load),
+    // and the master sheet that follows this save must find the row.
+    setIngredientMappings(current);
+    return;
+  } else if (entry.entries.length > 0) {
+    throw new Error(
+      `Das Zutaten-Rezept „${title}“ liefert jetzt ${bu}, die Zutat ist aber mit der ` +
+        `Basiseinheit ${entry.bu} und Zusatz-Einheiten hinterlegt. Bitte zuerst die ` +
+        `Zusatz-Einheiten der Zutat entfernen oder die Ergiebigkeit wieder auf ` +
+        `${entry.bu} stellen.`,
+    );
+  } else {
+    // No mappings depend on the unit, so the row can follow the recipe.
+    next = { ...current, [title]: { ...entry, bu } };
+  }
+
+  const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+  await writeMasterDataFiles(token, dataFolderId, listFile, mappingsFile, next);
+  writtenSinceLoad = true;
+  setIngredientMappings(next);
 }

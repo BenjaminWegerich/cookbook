@@ -138,6 +138,38 @@ describe('suggestQuantities', () => {
     expectRanked(suggestions);
   });
 
+  it('caps the chips to the targets the caller can actually store', () => {
+    // The meal plan passes the export's pre-baked yield views here: a chip
+    // outside that list would set a size the link cannot open.
+    const baked = [200, 250, 300, 400];
+    const capped = suggestQuantities(437, joghurt, 'g', { allowedValues: baked });
+    expect(capped.length).toBeGreaterThan(0);
+    for (const suggestion of capped) {
+      expect(baked).toContain(suggestion.value);
+    }
+    // The cap removes the unrestricted winner (500 g, "1 Becher") and keeps
+    // the ranking of what remains untouched.
+    expect(capped[0]?.value).toBe(400);
+    const full = suggestQuantities(437, joghurt, 'g');
+    expect(capped.map((suggestion) => suggestion.value)).toEqual(
+      full
+        .filter((suggestion) => baked.includes(suggestion.value))
+        .map((suggestion) => suggestion.value),
+    );
+    // Labels come from the same optimizer result, so a surviving chip still
+    // reads exactly what the field will show after the tap.
+    for (const suggestion of capped) {
+      const tapped = optimizeQuantity(suggestion.value, joghurt, 'g');
+      expect(renderOptimizedChipDisplay(joghurt, tapped, 'g').text).toBe(suggestion.display.text);
+    }
+  });
+
+  it('offers no chip when the cap excludes every candidate', () => {
+    expect(
+      suggestQuantities(437, joghurt, 'g', { allowedValues: [1, 2, 3] }),
+    ).toEqual([]);
+  });
+
   it('returns nothing for a value the field cannot hold', () => {
     expect(suggestQuantities(0, joghurt, 'g')).toEqual([]);
     expect(suggestQuantities(Number.NaN, joghurt, 'g')).toEqual([]);

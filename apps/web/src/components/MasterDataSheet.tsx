@@ -16,6 +16,12 @@
  * unit, the additional-unit mappings, the precision and the reorder point in
  * addition to the shopping data.
  *
+ * A third, narrower variant edits the ingredient row of an **ingredient
+ * recipe** (a sub-recipe): it shows the same ingredient fields but no
+ * „Einkauf“ and no „Synonyme“, because a sub-recipe is cooked and never bought
+ * (docs/recipe_structure.md, "The link means …"). The row is created
+ * automatically when the recipe is saved; this sheet only edits it.
+ *
  * Creating an ingredient whose name already exists as a shopping item adopts
  * that item's stop and synonyms when the name field is left (or on open, when
  * the create flow already carries a name). The user's resulting Einkauf/
@@ -120,6 +126,20 @@ interface MasterDataSheetProps {
   /** Called when the user edits any field — the parent forgets a stale error. */
   onEdited: () => void;
   onClose: () => void;
+  /**
+   * True for the ingredient row of an ingredient recipe (a sub-recipe). The
+   * shopping fields are hidden because the sub-recipe is cooked, never bought;
+   * any item row that already exists under the name is left untouched.
+   */
+  subRecipe?: boolean;
+  /**
+   * Ingredient recipes by title with the base-unit family of their yield. A
+   * create form whose current name matches one is registering a sub-recipe:
+   * its base unit is fixed to that unit and the shopping fields disappear.
+   * The lookup uses the live name, so it also applies while the name is typed.
+   * An edit needs only `subRecipe` — its unit is already not editable.
+   */
+  subRecipeUnits?: ReadonlyMap<string, 'g' | 'ml'>;
 }
 
 /** The two base-unit families (kg/l exist only in display). */
@@ -180,6 +200,8 @@ function MasterDataSheet({
   onDelete,
   onEdited,
   onClose,
+  subRecipe = false,
+  subRecipeUnits,
 }: MasterDataSheetProps) {
   const ingredientMode = kind === 'ingredient';
   /**
@@ -190,7 +212,7 @@ function MasterDataSheet({
   const initialItem = findItem(initialName);
 
   const [name, setName] = useState(initialName);
-  const [bu, setBu] = useState<'g' | 'ml'>(entry?.bu === 'ml' ? 'ml' : 'g');
+  const [buChoice, setBuChoice] = useState<'g' | 'ml'>(entry?.bu === 'ml' ? 'ml' : 'g');
   const [singular, setSingular] = useState(entry?.singular ?? '');
   const [plural, setPlural] = useState(entry?.plural ?? '');
   const [reorderPoint, setReorderPoint] = useState(entry?.reorderPoint ?? 0);
@@ -233,6 +255,21 @@ function MasterDataSheet({
   const trimmedName = name.trim();
   /** Whether the name field is an input (create) or a disabled identity (edit). */
   const nameEditable = creating;
+
+  /**
+   * The yield unit of the ingredient recipe this create form currently names,
+   * or undefined. Only a create can still change its name; an edit's unit is
+   * fixed by the stored entry (and the toggle is disabled anyway).
+   */
+  const subRecipeUnit = creating ? subRecipeUnits?.get(trimmedName) : undefined;
+  /** A sub-recipe is never bought, so its shopping fields are absent. */
+  const shoppingHidden = subRecipe || subRecipeUnit !== undefined;
+  /**
+   * The unit that is shown and saved. A sub-recipe's recipe owns it: the row's
+   * base unit must equal the recipe's `yield_unit`, so it wins over the toggle
+   * choice (which is disabled while it applies).
+   */
+  const bu = subRecipeUnit ?? buChoice;
 
   const rows = buildMappingRows(factors);
   const displayError = validateDisplayForms(singular, plural);
@@ -282,12 +319,13 @@ function MasterDataSheet({
    * An ingredient is optional: it may stay unbought, and clearing an existing
    * row is a sanctioned change (the write deletes the row). Synonyms are the one
    * exception — they exist only on an item row, so the stop is required while
-   * the form carries any.
+   * the form carries any. A sub-recipe has no shopping fields at all.
    */
-  const stopRequired = !ingredientMode || variants.length > 0;
+  const stopRequired = !shoppingHidden && (!ingredientMode || variants.length > 0);
 
   /** The message the „Einkauf“ field would report for the current state. */
   const stopError = ((): string | null => {
+    if (shoppingHidden) return null;
     if (stores.length === 0) {
       if (!ingredientMode) {
         return 'Kein Einkaufsweg hinterlegt — der Einkaufsort kann nicht gewählt werden.';
@@ -351,7 +389,7 @@ function MasterDataSheet({
     if (!creating) return;
     setNameError(nameErrorNow);
     setVariantError(null);
-    if (nameErrorNow === null && ingredientMode && !shoppingTouched) {
+    if (nameErrorNow === null && ingredientMode && !shoppingHidden && !shoppingTouched) {
       adoptItemForName(name);
     }
   };
@@ -614,7 +652,7 @@ function MasterDataSheet({
                 quiet hint text, not field captions (decided with the user). */}
             <fieldset className="field display-form-field">
               <legend className="field-label">
-                Anzeigeform <span className="optional-mark">(optional)</span>
+                Anzeigeform<span className="optional-mark">optional</span>
               </legend>
               <label className="field">
                 <span className="field-hint">Singular</span>
@@ -656,7 +694,8 @@ function MasterDataSheet({
 
             {/* The base unit is a card toggle like the create sheet's; in an
                 edit it is disabled because it decides how every stored quantity
-                is read. */}
+                is read. In a create it is disabled too while the name is a
+                Zutaten-Rezept: the recipe's yield unit owns that value. */}
             <div className="field">
               <span className="field-label">Basis-Einheit</span>
               <div className="segmented" role="radiogroup" aria-label="Basis-Einheit">
@@ -667,9 +706,9 @@ function MasterDataSheet({
                     role="radio"
                     aria-checked={bu === option}
                     className={bu === option ? 'segmented-active' : undefined}
-                    disabled={!creating || busy !== null}
+                    disabled={!creating || subRecipeUnit !== undefined || busy !== null}
                     onClick={() => {
-                      setBu(option);
+                      setBuChoice(option);
                       markEdited();
                     }}
                   >
@@ -677,6 +716,11 @@ function MasterDataSheet({
                   </button>
                 ))}
               </div>
+              {subRecipeUnit !== undefined && (
+                <p className="field-hint">
+                  Vom Zutaten-Rezept übernommen — die Basis-Einheit folgt der Ergiebigkeit.
+                </p>
+              )}
             </div>
 
             {/* The mapping group: the caption names the field, the grid renders
@@ -691,7 +735,7 @@ function MasterDataSheet({
               ref={mappingFieldRef}
             >
               <span className="field-label" id="mapping-field-label">
-                Zusatz-Einheiten <span className="optional-mark">(optional)</span>
+                Zusatz-Einheiten<span className="optional-mark">optional</span>
               </span>
 
               {creating && copyCandidates.length > 0 && (
@@ -789,183 +833,188 @@ function MasterDataSheet({
         {/* Where the record is bought (docs/storage_format.md §10): level 1 the
             store („Markt“ in the UI, one tap on a chip), level 2 the section
             („Bereich“ in the UI) as a search field with that store's sections
-            listed below it. The sub-captions use the quiet hint style. */}
-        <div
-          className="field"
-          role="group"
-          aria-labelledby="shopping-stop-label"
-          aria-describedby={attempted && stopError !== null ? 'shopping-stop-error' : undefined}
-          tabIndex={-1}
-          ref={stopFieldRef}
-        >
-          <span className="field-label" id="shopping-stop-label">
-            Einkauf
-            {/* The item row is the route, so only the ingredient form may leave
+            listed below it. The sub-captions use the quiet hint style. A
+            sub-recipe is never bought, so this whole block is absent for it. */}
+        {!shoppingHidden && (
+          <>
+            <div
+              className="field"
+              role="group"
+              aria-labelledby="shopping-stop-label"
+              aria-describedby={attempted && stopError !== null ? 'shopping-stop-error' : undefined}
+              tabIndex={-1}
+              ref={stopFieldRef}
+            >
+              <span className="field-label" id="shopping-stop-label">
+                Einkauf
+                {/* The item row is the route, so only the ingredient form may leave
                 the field empty — and only while it carries no synonyms, which
                 cannot live without a row (see the file header). */}
-            {ingredientMode && !stopRequired && <span className="optional-mark">optional</span>}
-          </span>
+                {ingredientMode && !stopRequired && <span className="optional-mark">optional</span>}
+              </span>
 
-          {stores.length === 0 ? (
-            <p className="field-hint">
-              {ingredientMode
-                ? 'Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — die Zutat wird ohne Einkaufsort gespeichert.'
-                : 'Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — der Einkaufsort kann nicht gewählt werden.'}
-            </p>
-          ) : (
-            <>
-              <p className="field-hint">Markt</p>
-              <div className="store-chips" role="group" aria-label="Markt">
-                {stores.map((candidate) => (
-                  <button
-                    key={candidate}
-                    type="button"
-                    className={store === candidate ? 'chip chip-active' : 'chip'}
-                    aria-pressed={store === candidate}
-                    onClick={() => chooseStore(candidate)}
-                    disabled={busy !== null}
-                  >
-                    {candidate}
-                  </button>
-                ))}
-                {/* The way back to "not bought": the chip row has no empty
+              {stores.length === 0 ? (
+                <p className="field-hint">
+                  {ingredientMode
+                    ? 'Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — die Zutat wird ohne Einkaufsort gespeichert.'
+                    : 'Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — der Einkaufsort kann nicht gewählt werden.'}
+                </p>
+              ) : (
+                <>
+                  <p className="field-hint">Markt</p>
+                  <div className="store-chips" role="group" aria-label="Markt">
+                    {stores.map((candidate) => (
+                      <button
+                        key={candidate}
+                        type="button"
+                        className={store === candidate ? 'chip chip-active' : 'chip'}
+                        aria-pressed={store === candidate}
+                        onClick={() => chooseStore(candidate)}
+                        disabled={busy !== null}
+                      >
+                        {candidate}
+                      </button>
+                    ))}
+                    {/* The way back to "not bought": the chip row has no empty
                     slot, so the ingredient form needs its own clear action
                     (the same dashed clear chip as the optional fields in the
                     quantity sheet). The item form omits it — its row is the
                     route and a missing store would be a dead end. */}
-                {ingredientMode && store !== null && (
-                  <button
-                    type="button"
-                    className="chip chip-clear"
-                    onClick={removeStop}
-                    title="Einkauf entfernen"
-                    disabled={busy !== null}
-                  >
-                    <CloseIcon className="chip-icon" optical={20} />
-                    <span>Entfernen</span>
-                  </button>
-                )}
-              </div>
-
-              {/* The section field follows the store: without a store there is
-                  no option to offer, and a section belongs to exactly one store. */}
-              {store !== null && (
-                <>
-                  <p className="field-hint">Bereich</p>
-                  <input
-                    type="text"
-                    value={sectionQuery}
-                    onChange={(event) => {
-                      setSectionQuery(event.target.value);
-                      markShoppingEdited();
-                    }}
-                    aria-label={`Bereich in ${store}`}
-                    placeholder="Suchen oder wählen"
-                    disabled={busy !== null}
-                  />
-                  {sectionSuggestions.length > 0 && (
-                    <ul className="suggestions">
-                      {sectionSuggestions.map((candidate) => (
-                        <li key={candidate}>
-                          <button
-                            type="button"
-                            className="chip"
-                            onClick={() => adoptSection(candidate)}
-                            disabled={busy !== null}
-                          >
-                            {candidate}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {/* Nothing matches: the established bare em dash, suppressed
-                      while the field names a section exactly. */}
-                  {section !== '' &&
-                    !sections.includes(section) &&
-                    sectionSuggestions.length === 0 && (
-                      <p className="field-hint" role="status">
-                        —
-                      </p>
+                    {ingredientMode && store !== null && (
+                      <button
+                        type="button"
+                        className="chip chip-clear"
+                        onClick={removeStop}
+                        title="Einkauf entfernen"
+                        disabled={busy !== null}
+                      >
+                        <CloseIcon className="chip-icon" optical={20} />
+                        <span>Entfernen</span>
+                      </button>
                     )}
+                  </div>
+
+                  {/* The section field follows the store: without a store there is
+                  no option to offer, and a section belongs to exactly one store. */}
+                  {store !== null && (
+                    <>
+                      <p className="field-hint">Bereich</p>
+                      <input
+                        type="text"
+                        value={sectionQuery}
+                        onChange={(event) => {
+                          setSectionQuery(event.target.value);
+                          markShoppingEdited();
+                        }}
+                        aria-label={`Bereich in ${store}`}
+                        placeholder="Suchen oder wählen"
+                        disabled={busy !== null}
+                      />
+                      {sectionSuggestions.length > 0 && (
+                        <ul className="suggestions">
+                          {sectionSuggestions.map((candidate) => (
+                            <li key={candidate}>
+                              <button
+                                type="button"
+                                className="chip"
+                                onClick={() => adoptSection(candidate)}
+                                disabled={busy !== null}
+                              >
+                                {candidate}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {/* Nothing matches: the established bare em dash, suppressed
+                      while the field names a section exactly. */}
+                      {section !== '' &&
+                        !sections.includes(section) &&
+                        sectionSuggestions.length === 0 && (
+                          <p className="field-hint" role="status">
+                            —
+                          </p>
+                        )}
+                    </>
+                  )}
                 </>
               )}
-            </>
-          )}
 
-          {attempted && stopError !== null && (
-            <p className="field-error" id="shopping-stop-error" role="alert">
-              {stopError}
-            </p>
-          )}
-        </div>
+              {attempted && stopError !== null && (
+                <p className="field-error" id="shopping-stop-error" role="alert">
+                  {stopError}
+                </p>
+              )}
+            </div>
 
-        {/* What else the item is called (docs/shopping_item_identity.md §1):
+            {/* What else the item is called (docs/shopping_item_identity.md §1):
             one chip per variant and a field that adds the next one. */}
-        <div className="field">
-          <span className="field-label">Synonyme</span>
-          <p className="field-hint">
-            Weitere Schreibweisen auf der Einkaufsliste, die auf diesen Artikel verweisen. Groß- und
-            Kleinschreibung wird ignoriert.
-          </p>
+            <div className="field">
+              <span className="field-label">Synonyme</span>
+              <p className="field-hint">
+                Weitere Schreibweisen auf der Einkaufsliste, die auf diesen Artikel verweisen. Groß-
+                und Kleinschreibung wird ignoriert.
+              </p>
 
-          {variants.length === 0 ? (
-            <p className="field-hint">Noch keine Synonyme.</p>
-          ) : (
-            <ul className="suggestions">
-              {variants.map((variant) => (
-                <li key={variant}>
-                  <button
-                    type="button"
-                    className="chip chip-clear"
-                    onClick={() => removeVariant(variant)}
-                    aria-label={`Synonym „${variant}“ entfernen`}
-                    disabled={busy !== null}
-                  >
-                    <span>{variant}</span>
-                    <CloseIcon className="chip-icon" optical={20} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+              {variants.length === 0 ? (
+                <p className="field-hint">Noch keine Synonyme.</p>
+              ) : (
+                <ul className="suggestions">
+                  {variants.map((variant) => (
+                    <li key={variant}>
+                      <button
+                        type="button"
+                        className="chip chip-clear"
+                        onClick={() => removeVariant(variant)}
+                        aria-label={`Synonym „${variant}“ entfernen`}
+                        disabled={busy !== null}
+                      >
+                        <span>{variant}</span>
+                        <CloseIcon className="chip-icon" optical={20} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-          <div className="synonym-add">
-            <input
-              type="text"
-              value={variantQuery}
-              onChange={(event) => {
-                setVariantQuery(event.target.value);
-                setVariantError(null);
-                markEdited();
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter') return;
-                event.preventDefault();
-                addVariant();
-              }}
-              placeholder="Synonym"
-              aria-label="Neues Synonym"
-              aria-describedby={variantError === null ? undefined : 'shopping-variant-error'}
-              disabled={busy !== null}
-            />
-            <button
-              type="button"
-              className="add-button"
-              onClick={addVariant}
-              disabled={busy !== null}
-            >
-              Hinzufügen
-            </button>
-          </div>
+              <div className="synonym-add">
+                <input
+                  type="text"
+                  value={variantQuery}
+                  onChange={(event) => {
+                    setVariantQuery(event.target.value);
+                    setVariantError(null);
+                    markEdited();
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    addVariant();
+                  }}
+                  placeholder="Synonym"
+                  aria-label="Neues Synonym"
+                  aria-describedby={variantError === null ? undefined : 'shopping-variant-error'}
+                  disabled={busy !== null}
+                />
+                <button
+                  type="button"
+                  className="add-button"
+                  onClick={addVariant}
+                  disabled={busy !== null}
+                >
+                  Hinzufügen
+                </button>
+              </div>
 
-          {variantError !== null && (
-            <p className="field-error" id="shopping-variant-error" role="alert">
-              {variantError}
-            </p>
-          )}
-        </div>
+              {variantError !== null && (
+                <p className="field-error" id="shopping-variant-error" role="alert">
+                  {variantError}
+                </p>
+              )}
+            </div>
+          </>
+        )}
 
         <div className="sheet-actions master-sheet-actions">
           {!creating && !ingredientMode && onDelete !== undefined && (

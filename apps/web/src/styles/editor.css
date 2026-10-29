@@ -110,13 +110,14 @@
    sheet's ingredient default next to „Genauigkeit“. Baseline-aligned and
    allowed to wrap: on a narrow phone the annotation moves below the caption
    instead of squeezing it. The label's top margin is meant for the stacked
-   field layout, so it is reset inside this row (see .theme-color-head). */
+   field layout, so it is reset inside this row (see .theme-color-head). At
+   least one en space separates the caption from the annotation. */
 .field-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-2) 0.5em;
 }
 
 .field-head .field-label {
@@ -124,11 +125,13 @@
 }
 
 /* Read-only value in a .field-head: the same quiet typography as .field-hint,
-   but never a control — it only names a value. */
+   but never a control — it only names a value. Italic like the other quiet
+   asides (the optional marker and the section counter). */
 .field-default {
   min-width: 0;
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
+  font-style: italic;
   color: var(--color-ink-muted);
 }
 
@@ -845,13 +848,38 @@
   color: var(--color-ink);
 }
 
+/* The arrangement text and the badge group on one line: the text takes the
+   free width, the badges form a right-aligned column of their own. They never
+   wrap below the text, so a multi-line arrangement cannot push its badges into
+   the last line (the same row shape as the HTML export's check rows). At least
+   one en space separates the text from the leftmost badge. */
 .ingredient-line {
   font-size: var(--text-md);
   line-height: var(--leading-md);
   display: flex;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 0;
+}
+
+/* The arrangement keeps the free width and wraps there, so a long name never
+   pushes the badge column off the row. */
+.ingredient-line > .arrangement-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The badges ("NEU" / "REZEPT" / "REFERENZ") sit together as one right-aligned
+   column. `margin-inline-start: auto` pushes them to the row's right edge; the
+   parent's gap keeps a minimum en space even when the text runs long. */
+.ingredient-tags {
+  flex: none;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  margin-inline-start: auto;
 }
 
 .ingredient-hint {
@@ -862,8 +890,9 @@
 
 /* The quiet aside of an ingredient arrangement ("1 Becher Joghurt␣500 g",
    DESIGN §5.4): muted and italic, separated from the line by one en space. The
-   separator comes from ArrangementLine; step prose keeps its brackets and a
-   regular space and still uses this look for the brackets' content (§5.11). */
+   separator comes from ArrangementLine; every list and readout drops the
+   brackets, while step prose keeps them with a regular space and styles only
+   their content (§5.11). */
 .arrangement-note {
   color: var(--color-ink-muted);
   font-style: italic;
@@ -1007,6 +1036,9 @@
   /* margin: 0 — like .field-hint: this paragraph often sits directly under a
      .field-label caption, and UA margins would push it far below the caption
      (only the .field's own space-2 gap belongs there). */
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
   margin: 0;
   padding: var(--space-4);
   background: var(--color-bg);
@@ -1018,6 +1050,19 @@
   /* The quantity value above is right-aligned; the live preview stays a normal
      left-aligned line. */
   text-align: start;
+}
+
+/* The amount takes the free width; its own inline text may wrap there. */
+.aqs-preview-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The preview's „Rezept“ badge keeps its own right-aligned column and is a
+   button, so it never shrinks with the amount. */
+.aqs-preview-recipe {
+  flex: none;
 }
 
 .checkbox-field {
@@ -1289,16 +1334,16 @@
 }
 
 /* Ingredient tags ("NEU" / "REZEPT" / "REFERENZ"), one style for all: a small
-   all-caps marker directly after the ingredient name, always led by its symbol.
-   "NEU" (star badge) warns that the name is not in the master data yet, "REZEPT"
-   (chain link) marks a sub-recipe use (tapping it jumps to the ingredient
-   recipe) and "REFERENZ" (outline star) mirrors the star toggle: its × clears the
-   reference role, exactly like tapping the star again. */
+   all-caps marker in the row's right-aligned badge column, always led by its
+   symbol. "NEU" (star badge) warns that the name is not in the master data yet,
+   "REZEPT" (chain link) marks a sub-recipe use (tapping it jumps to the
+   ingredient recipe) and "REFERENZ" (outline star) mirrors the star toggle: its
+   × clears the reference role, exactly like tapping the star again. */
 .ingredient-tag {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  margin-left: var(--space-2);
+  margin-left: 0;
   padding: 0 var(--space-3) 0 var(--space-2);
   border: none;
   border-radius: var(--radius-sm);
@@ -1309,6 +1354,18 @@
   font-weight: 600;
   text-transform: uppercase;
   vertical-align: middle;
+}
+
+/* The ingredient-recipe mark in a name suggestion chip: only the chain-link
+   symbol (the chip's text is the name) in the muted ink, one en space after it.
+   A chip is content-sized, so there is no row edge to align a badge to. */
+.chip-link-icon {
+  display: inline-block;
+  width: var(--space-5);
+  height: var(--space-5);
+  margin-inline-start: 0.5em;
+  vertical-align: middle;
+  color: var(--color-ink-muted);
 }
 
 .tag-new {

@@ -2,16 +2,15 @@
  * ArrangementLine — renders a core `ArrangementDisplay` with its notes styled.
  *
  * An ingredient arrangement may end in a parenthesized note ("1 Becher Joghurt
- * (500 g)"). The note is always the muted, italic `.arrangement-note` run; how
- * it is attached depends on the surface. `bracketed` keeps the brackets after
- * one en space (the editor's ingredient lists and the reference readout),
- * `parenthesised` keeps a regular space and styles brackets and content alike
- * for step prose, because the sentence's punctuation must stay visible
- * (docs/DESIGN.md §5.11). `bare` drops the brackets after one en space for the
- * pantry surfaces, where the amount still reads as one phrase (§5.4).
+ * (500 g)"). The note is always the muted, italic `.arrangement-note` run. Every
+ * list, chip and readout drops the brackets and follows the note after one en
+ * space, where the amount still reads as one phrase (docs/DESIGN.md §5.4).
  *
- * The written shopping list never uses this component — it keeps the bracketed
- * text from core's `renderAQS`/`renderPantryLine`.
+ * Step prose is the exception and does not use this component: it keeps the
+ * brackets and a regular space so the sentence's punctuation stays visible
+ * (StepEditor.tsx, docs/DESIGN.md §5.11). The written shopping list also never
+ * uses this component — it keeps the bracketed text from core's
+ * `renderAQS`/`renderPantryLine`.
  */
 
 import { Fragment } from 'react';
@@ -21,13 +20,6 @@ import { EN_SPACE, type ArrangementDisplay } from '@cookbook/core';
 interface ArrangementLineProps {
   /** The rendered line from core (`renderAQSDisplay`, `renderPantryChipDisplay`, …). */
   display: ArrangementDisplay;
-  /**
-   * How a note is attached: `bare` (the default) uses one en space before the
-   * bracket-less note, `parenthesised` keeps a regular space and the brackets
-   * for step prose, `bracketed` keeps the brackets after one en space (the
-   * editor's ingredient lists and the reference readout).
-   */
-  noteForm?: 'bare' | 'parenthesised' | 'bracketed';
 }
 
 /**
@@ -36,7 +28,7 @@ interface ArrangementLineProps {
  * and the separator around a note is part of this component so every surface
  * words it the same way.
  */
-export default function ArrangementLine({ display, noteForm = 'bare' }: ArrangementLineProps) {
+export default function ArrangementLine({ display }: ArrangementLineProps) {
   return (
     // One wrapper keeps the runs a single inline phrase when the component is
     // dropped into a flex row (.ingredient-line, .chip): without it every text
@@ -46,11 +38,10 @@ export default function ArrangementLine({ display, noteForm = 'bare' }: Arrangem
         if (part.kind === 'text') {
           return <Fragment key={index}>{part.value}</Fragment>;
         }
-        const bracketed = noteForm !== 'bare';
         return (
           <Fragment key={index}>
-            {noteForm === 'parenthesised' ? ' ' : EN_SPACE}
-            <span className="arrangement-note">{bracketed ? `(${part.value})` : part.value}</span>
+            {EN_SPACE}
+            <span className="arrangement-note">{part.value}</span>
           </Fragment>
         );
       })}

@@ -683,7 +683,7 @@ export function renderAQSDisplay(
  * already sits under the ingredient's caption, and repeating the name in every
  * chip would crowd the single chip line (decided with the user). The
  * arrangement's note keeps its brackets in `text`; `ArrangementLine` splits the
- * note out for the muted, italic chip run, exactly like a pantry chip.
+ * note out of them for the muted, italic chip run, exactly like a pantry chip.
  */
 export function renderOptimizedChipDisplay(
   entry: AuSelectableEntry | undefined,

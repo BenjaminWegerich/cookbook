@@ -63,6 +63,23 @@ import {
 } from './additionalUnits.js';
 import type { PrecisionContext } from './precision.js';
 
+/**
+ * The precision context of a chip row, plus an optional hard target cap.
+ *
+ * `allowedValues` exists for callers whose field may only hold one of a fixed
+ * set of targets: the meal plan offers an ingredient recipe's pre-baked yield
+ * views, so a chip outside that list would promise a size the export link
+ * cannot open. The ingredient sheet leaves the cap out and gets the full band.
+ */
+export interface QuantitySuggestionContext extends PrecisionContext {
+  /**
+   * When set, a chip is only offered when the value it would store is in this
+   * list (up to floating-point noise). Order is irrelevant; the ranking below
+   * still decides which chips survive and in which order they are tried.
+   */
+  readonly allowedValues?: readonly number[];
+}
+
 /** One suggested chip: the target to store and the arrangement it displays. */
 export interface QuantitySuggestion {
   /** The BQ to store when the chip is tapped (the displayed, rounded amount). */
@@ -278,7 +295,8 @@ function compareSuggestions(a: ScoredSuggestion, b: ScoredSuggestion): number {
  * @param entry the ingredient's master-data entry, or undefined for a sub-recipe,
  *   a free amount or a yield (those offer metric chips only)
  * @param bu the base-unit family the target is expressed in
- * @param context the precision context (quantity override / ingredient level)
+ * @param context the precision context (quantity override / ingredient level),
+ *   optionally with a hard `allowedValues` cap (see QuantitySuggestionContext)
  * @returns the chips in ranking order (round 6 picks what fits); empty for an
  *   invalid value
  */
@@ -286,15 +304,26 @@ export function suggestQuantities(
   v0: number,
   entry: OptimizableEntry | undefined,
   bu: string,
-  context: PrecisionContext = {},
+  context: QuantitySuggestionContext = {},
 ): QuantitySuggestion[] {
   if (!(v0 > 0) || !Number.isFinite(v0)) {
     return [];
   }
+  // The hard cap is checked against the tap state, not the candidate: a
+  // candidate outside the cap may still settle on a value the field can hold.
+  // `toFixed(6)` is the same identity the BQ dedupe uses, so 1/3-derived
+  // values compare without binary floating-point noise.
+  const allowed =
+    context.allowedValues === undefined
+      ? undefined
+      : new Set(context.allowedValues.map((value) => value.toFixed(6)));
   const scored: ScoredSuggestion[] = [];
   for (const candidate of familyCandidates(v0, entry)) {
     const result = familyTapState(candidate, entry, bu, context);
     if (result === null || !withinCandidateBand(result.bq, v0)) {
+      continue;
+    }
+    if (allowed !== undefined && !allowed.has(result.bq.toFixed(6))) {
       continue;
     }
     scored.push({

@@ -1217,6 +1217,22 @@ function App() {
   }, [overviewTarget, mealPlanResolution]);
 
   /**
+   * The collection's ingredient recipes by title, with the base-unit family
+   * their yield declares. Their ingredient-master rows exist (auto-created on
+   * save) but must not offer „Einkauf“ or „Synonyme“; and a create form for
+   * the same title locks its base unit to the recipe's yield unit.
+   */
+  const ingredientRecipes = useMemo(
+    () =>
+      new Map(
+        (recipes ?? [])
+          .filter((recipe) => recipe.type === 'ingredient_recipe')
+          .map((recipe): [string, 'g' | 'ml'] => [recipe.title, recipe.yieldUnit ?? 'g']),
+      ),
+    [recipes],
+  );
+
+  /**
    * The open overview's *live* plan state, derived from the current resolution,
    * or null when there is none (Keep off, the resolution is between two Keep
    * states, or the target is an unrecognized entry — nothing of this applies to
@@ -2313,6 +2329,7 @@ function App() {
         <IngredientMaster
           ref={ingredientsHandleRef}
           token={token ?? ''}
+          subRecipes={ingredientRecipes}
           onClose={() => setNav(null)}
           showSnackbar={showSnackbar}
         />

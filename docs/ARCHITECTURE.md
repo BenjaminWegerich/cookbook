@@ -283,11 +283,11 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   and changed in the section above, never twice on one screen). The two card sections render
   the same card grid and the one search field filters both at once. The „Einkaufsliste“ heading
   has no body of its own: the caption names the shopping list on its own line, with the
-  list's counter („Einkaufsliste (4 Einträge, davon 1 unbekannt)“ — the list's unchecked lines
+  list's counter („Einkaufsliste 4 Einträge, davon 1 unbekannt“ — the list's unchecked lines
   and how many of them name no item) in that line and the list's two actions in a row
   beneath it, the bundled write („Einkaufsliste schreiben“) and the aisle sort („sortieren“).
-  The card captions carry their counter („Essensplan (5 Einträge, davon 2 unbekannt)“,
-  „Restliche Sammlung (8 Rezepte)“) in the editor's field-caption typography; a card section's
+  The card captions carry their counter („Essensplan 5 Einträge, davon 2 unbekannt“,
+  „Restliche Sammlung 8 Rezepte“) in the editor's field-caption typography; a card section's
   counter disappears as soon as the search field is focused or carries a query, its caption
   stays and the body carries the placeholder sentence, so a section that is empty only because
   of the search still says which section it is. The whole „Einkaufsliste“ heading — caption,

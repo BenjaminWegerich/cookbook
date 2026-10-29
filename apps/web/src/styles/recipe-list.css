@@ -288,8 +288,14 @@
 
 /* Section caption. Same typography as the editor's field captions
    (.field-label in editor.css): small, semibold, muted, all caps — so a section
-   heading on the list reads exactly like a field caption in the editor. */
+   heading on the list reads exactly like a field caption in the editor. The
+   caption is a full-width flex row so its counter can sit at the right edge. */
 .recipe-section-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5em;
+  width: 100%;
   margin: 0;
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
@@ -298,13 +304,13 @@
   text-transform: uppercase;
 }
 
-/* The count in the caption: "(5 Einträge, davon 2 unbekannt)". Normal case, one
-   en space after the caption word, italic and slightly translucent — character
-   for character the editor's "(optional)" marker (.optional-mark in editor.css,
-   decided with the user): the caps are the caption's own look, while the count
-   in brackets reads as a quiet aside in normal case. */
+/* The count in the caption: "5 Einträge, davon 2 unbekannt". Normal case,
+   italic and right-aligned in the caption row, at least one en space after
+   the caption word — the same quiet type as the editor's optional marker
+   (.optional-mark in editor.css, decided with the user): the caps are the
+   caption's own look, while the count reads as an aside in normal case. */
 .recipe-section-counter {
-  margin-inline-start: 0.5em;
+  margin-inline-start: auto;
   font-style: italic;
   font-weight: 400;
   text-transform: none;

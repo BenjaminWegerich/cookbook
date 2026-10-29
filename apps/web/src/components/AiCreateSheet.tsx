@@ -997,7 +997,7 @@ export default function AiCreateSheet({
                         every other recipe link belongs in the field above. */}
                     <div className="field ai-field ai-source-field">
                       <span className="field-label">
-                        Quelltext<span className="optional-mark">(optional)</span>
+                        Quelltext<span className="optional-mark">optional</span>
                       </span>
                       <textarea
                         ref={sourceFieldRef}

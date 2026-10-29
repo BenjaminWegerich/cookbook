@@ -12,6 +12,8 @@
  * The shopping fields are part of this sheet because the ingredient and the
  * shopping item are two views of one name. A save that changes them writes the
  * item row too; the parent captures both previous states for „Rückgängig“.
+ * For the row of an ingredient recipe (`subRecipe`) those fields are hidden:
+ * a sub-recipe is cooked, never bought.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -35,6 +37,8 @@ interface EditIngredientSheetProps {
   /** Called when the user edits any field — the parent forgets a stale error. */
   onEdited: () => void;
   onClose: () => void;
+  /** True for the ingredient row of an ingredient recipe: no shopping fields. */
+  subRecipe?: boolean;
 }
 
 /**
@@ -50,6 +54,7 @@ function EditIngredientSheet({
   onSave,
   onEdited,
   onClose,
+  subRecipe = false,
 }: EditIngredientSheetProps) {
   return (
     <MasterDataSheet
@@ -59,6 +64,7 @@ function EditIngredientSheet({
       entry={entry}
       busy={saving ? 'save' : null}
       error={error}
+      subRecipe={subRecipe}
       onSave={(result) => {
         if (result.kind !== 'ingredient') return;
         onSave({

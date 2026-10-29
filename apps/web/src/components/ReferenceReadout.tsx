@@ -8,9 +8,9 @@
  * readout of amounts, not a form field and not a sentence (docs/DESIGN.md
  * §5.11).
  *
- * An arrangement note keeps its brackets here and follows one en space in the
- * muted, italic `.arrangement-note` run, like the editor's ingredient lists
- * (docs/DESIGN.md §5.11).
+ * An arrangement note drops its brackets here and follows one en space in the
+ * muted, italic `.arrangement-note` run, like every other list and readout
+ * (docs/DESIGN.md §5.4/§5.11).
  *
  * Both overlays that show the readout — the meal-plan overlay („Einplanen" /
  * „Umplanen") and „Bestehendes Rezept auswählen" — render this component, so
@@ -41,7 +41,7 @@ export default function ReferenceReadout({ items }: ReferenceReadoutProps) {
         // The list is static for the sheet's lifetime; its order follows the
         // recipe's ingredient list, so the position is a stable key.
         <li key={index}>
-          <ArrangementLine display={display} noteForm="bracketed" />
+          <ArrangementLine display={display} />
         </li>
       ))}
     </ul>

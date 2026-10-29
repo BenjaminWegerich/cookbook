@@ -334,16 +334,12 @@ function unitlessText(value: number, context: PrecisionContext): string {
 /**
  * Renders one arrangement display as HTML. The default form (`bare`) lifts the
  * note out of its brackets and follows an en space in the muted, italic
- * `.arrangement-note` run (DESIGN §5.4). Step prose passes `parenthesised`,
- * which keeps a regular space and the brackets (DESIGN §5.11). The reference
- * readout passes `reference`: it keeps the brackets too, but one en space
- * precedes them and they are styled with their content like the note
- * (DESIGN §5.11). Every value is escaped; the surrounding markup is fixed here.
+ * `.arrangement-note` run (DESIGN §5.4) — every list, row and readout uses it.
+ * Step prose passes `parenthesised`, which keeps a regular space and the
+ * brackets (DESIGN §5.11). Every value is escaped; the surrounding markup is
+ * fixed here.
  */
-function arrangementHtml(
-  display: ArrangementDisplay,
-  noteForm: 'bare' | 'parenthesised' | 'reference',
-): string {
+function arrangementHtml(display: ArrangementDisplay, noteForm: 'bare' | 'parenthesised'): string {
   return display.parts
     .map((part) => {
       if (part.kind === 'text') {
@@ -353,8 +349,7 @@ function arrangementHtml(
       if (noteForm === 'bare') {
         return `${EN_SPACE}<span class="arrangement-note">${note}</span>`;
       }
-      const space = noteForm === 'reference' ? EN_SPACE : ' ';
-      return `${space}<span class="arrangement-note">(${note})</span>`;
+      return ` <span class="arrangement-note">(${note})</span>`;
     })
     .join('');
 }
@@ -439,14 +434,13 @@ function masterDisplay(
 
 /**
  * The reference ingredients of one view, scaled by the view's factor, as HTML
- * lines. Unlike the ingredient rows, the readout keeps an arrangement note's
- * brackets and shows them with their content in the muted, italic run
- * (DESIGN §5.11).
+ * lines. Like every other readout, the note drops its brackets and follows one
+ * en space in the muted, italic run (DESIGN §5.4/§5.11).
  */
 function referenceLines(recipe: Recipe, factor: number): string[] {
   return recipe.ingredients
     .filter((ingredient) => ingredient.reference)
-    .map((ingredient) => arrangementHtml(masterDisplay(recipe, ingredient, factor), 'reference'));
+    .map((ingredient) => arrangementHtml(masterDisplay(recipe, ingredient, factor), 'bare'));
 }
 
 /**
@@ -1220,9 +1214,10 @@ const STYLES = `
      clay. The italic run alone carries the quiet cue (as in the app, editor.css). */
   .chip.active .arrangement-note { color: inherit; }
   /* The quiet aside of an ingredient arrangement (§5.4): the note left its
-     brackets and follows one en space, muted and italic. Step prose keeps its
-     brackets and a regular space (the span then wraps both, §5.11), and the
-     reference readout keeps the brackets after an en space. */
+     brackets and follows one en space, muted and italic — in the rows, the
+     reference readout and the pantry surfaces alike. Step prose keeps its
+     brackets and a regular space (the span then wraps both, §5.11); the written
+     shopping list keeps its bracketed wording. */
   .arrangement-note { color: var(--muted); font-style: italic; }
   /* Reference-ingredient readout under the size picker (amounts only, muted):
      one amount per line, no bullet and no comma between them (§5.11). */
@@ -1300,10 +1295,14 @@ const STYLES = `
      visible — the default white-space:normal trims a space at a line-box edge,
      which silently dropped the leading one (§5.11). */
   .step-rows li::before { content: " • "; white-space: pre; color: var(--muted); }
-  .step-ingredient { min-width: 0; overflow-wrap: anywhere; }
+  /* The ingredient takes the free width, so its badge sits in a right-aligned
+     column of its own and a multi-line row can never push it into the last
+     line (the same shape as .check-row). */
+  .step-ingredient { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   /* The row no longer uses flex gap (the bullet's spaces are the marker spacing),
-     so the sub-recipe badge keeps its gap from the ingredient via a margin. */
-  .step-rows li .badge { margin-left: var(--space-3); }
+     so the sub-recipe badge keeps at least one en space from the ingredient via
+     a margin. */
+  .step-rows li .badge { margin-left: 0.5em; }
   .step-text { margin: 0; font-size: var(--text-lg); line-height: var(--leading-lg); overflow-wrap: anywhere; }
 
   /* ---- Sub-recipe badge (§5.7): all-caps like the web app. ---- */

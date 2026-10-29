@@ -91,25 +91,28 @@
   format display numbers through the core helpers (`formatDecimal`, or formatters built on it —
   `formatBQ`, `renderAQS`) — never build numbers into strings by hand.
 - **Mandatory vs. optional fields:** mandatory fields keep a plain label; optional fields
-  append a single muted, italic marker `(optional)` (class `optional-mark`) to their label.
-  No asterisks, no `Pflichtfeld` wording — required is the implicit default, only the
-  exception is named.
+  append a single muted, italic marker `optional` (class `optional-mark`) to their label,
+  separated from it by one En space. No asterisks, no `Pflichtfeld` wording — required is the
+  implicit default, only the exception is named.
 - **Inline badges lead with a symbol:** every inline badge — the small marker that
-  sits directly after a value to label its state, i.e. the ingredient tags (`Neu`,
-  `Rezept`, `Referenz`) — carries a symbol in front of its text, so a badge is
-  readable at a glance and never plain coloured text. The symbol comes from the
-  shared icon set (`components/icons.tsx`) and follows the badge's meaning, not its
-  colour: `Neu` = "new releases" (the name is not in the master data yet), `Rezept`
-  = "link" (opens the ingredient's own recipe), `Referenz` = outline "star" (mirrors
-  the star toggle). A badge's own controls follow the same rule as any other icon
-  (an icon-only control like the reference tag's × never replaces the badge's
-  leading symbol). Badges keep one shared style and the text stays a short noun in
-  source case — the all caps are a CSS effect, as with `.field-label`.
+  labels a value's state, i.e. the ingredient tags (`Neu`, `Rezept`, `Referenz`)
+  and the meal-plan `Unbekannt` badge — carries a symbol in front of its text, so a
+  badge is readable at a glance and never plain coloured text. The symbol comes from
+  the shared icon set (`components/icons.tsx`) and follows the badge's meaning, not
+  its colour: `Neu` = "new releases" (the name is not in the master data yet),
+  `Rezept` = "link" (opens the ingredient's own recipe), `Referenz` = outline
+  "star" (mirrors the star toggle). A badge's own controls follow the same rule as
+  any other icon (an icon-only control like the reference tag's × never replaces
+  the badge's leading symbol). Badges keep one shared style and the text stays a
+  short noun in source case — the all caps are a CSS effect, as with `.field-label`.
+  Trailing row badges sit in the row's right-aligned badge column, at least one En
+  space from the text before them; a name-suggestion chip marks an ingredient recipe
+  with the muted link symbol only, not a text badge.
 - **Field captions are all caps:** form labels above inputs/controls (`.field-label`) are
   displayed in all caps via `text-transform: uppercase` in the CSS. Keep the markup and
   stored strings in normal German case (`"Titel"`, not `"TITEL"`) — the caps are purely
   visual, so source text stays readable and screen readers announce the normal form. The
-  muted `(optional)` marker stays lowercase.
+  muted `optional` marker stays lowercase.
 - **Button labels are sentence case:** a button's visible text is normal German prose
   starting with a capital letter; nouns keep their capitals, nothing else is forced. No
   all-lowercase, no Title Case, no all-caps in the source string — ALL CAPS stays a

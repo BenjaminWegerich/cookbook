@@ -43,7 +43,10 @@ import {
   updateFileWithContent,
   type DriveFile,
 } from './driveClient';
-import { renameIngredientMasterData } from './ingredientMasterData';
+import {
+  ensureIngredientRecipeMasterData,
+  renameIngredientMasterData,
+} from './ingredientMasterData';
 import { cacheRecipePhoto, invalidateRecipePhoto, loadRecipePhoto } from './recipePhoto';
 
 /** MIME type of the recipe files. */
@@ -76,6 +79,14 @@ export interface StoredRecipe {
    * file never vanishes among the ingredient recipes.
    */
   type: RecipeType | null;
+  /**
+   * For an ingredient recipe: the base-unit family its `yield_unit` resolves
+   * to ("g" or "ml"), read while listing. This is the unit its ingredient
+   * master row must carry, so a create form for the same title can lock the
+   * base unit to it. Undefined for a finished dish and for a recipe whose type
+   * could not be read.
+   */
+  yieldUnit?: 'g' | 'ml';
   /** The recipe's photo sibling, when one exists. */
   image?: RecipeImage;
   /**
@@ -183,7 +194,19 @@ export async function listRecipes(token: string): Promise<StoredRecipe[]> {
     recipes.map(async (recipe): Promise<StoredRecipe> => {
       try {
         const loaded = await readRecipe(token, recipe.fileId);
-        return { ...recipe, type: loaded.type };
+        // `kg`/`l` are display units normalized by the parser; mapping them to
+        // their family keeps the value the master row stores.
+        const yieldUnit: 'g' | 'ml' | undefined =
+          loaded.type !== 'ingredient_recipe' || loaded.yield_unit === undefined
+            ? undefined
+            : loaded.yield_unit === 'ml' || loaded.yield_unit === 'l'
+              ? 'ml'
+              : 'g';
+        return {
+          ...recipe,
+          type: loaded.type,
+          ...(yieldUnit !== undefined ? { yieldUnit } : {}),
+        };
       } catch (error) {
         if (isDriveAuthError(error)) throw error;
         console.warn(
@@ -306,6 +329,34 @@ export async function writeRecipeExportSafely(token: string, recipe: Recipe): Pr
   }
 }
 
+/**
+ * The base unit an ingredient recipe's master-data row must carry, or null for
+ * a finished dish. `kg`/`l` are display units that the parser normalizes to
+ * `g`/`ml` before a recipe reaches storage; folding them into their family here
+ * keeps a draft safe even if it skipped that normalization.
+ */
+function ingredientRecipeBaseUnit(recipe: Recipe): 'g' | 'ml' | null {
+  if (recipe.type !== 'ingredient_recipe') return null;
+  return recipe.yield_unit === 'ml' || recipe.yield_unit === 'l' ? 'ml' : 'g';
+}
+
+/**
+ * Registers an ingredient recipe in the ingredient master data (auto-create,
+ * decided with the user) and keeps that row's base unit in sync with the
+ * recipe's yield unit. A finished dish is a no-op — the master row exists only
+ * for names that other recipes can use as an ingredient.
+ *
+ * The row is keyed by the recipe title, the same implicit identity a sub-recipe
+ * use has (docs/storage_format.md §4/§6). Registration never overwrites the
+ * user's precision, reorder point, display forms or mappings; only the base
+ * unit has to follow the recipe (see ensureIngredientRecipeMasterData).
+ */
+async function ensureRecipeMasterData(token: string, recipe: Recipe): Promise<void> {
+  const bu = ingredientRecipeBaseUnit(recipe);
+  if (bu === null) return;
+  await ensureIngredientRecipeMasterData(token, recipe.title, bu);
+}
+
 /** Creates a new recipe file inside the recipe folder. */
 export async function createRecipe(
   token: string,
@@ -325,6 +376,25 @@ export async function createRecipe(
   // The written text is the new truth — cache it so an immediate re-read (e.g.
   // reopening the new recipe) does not hit Drive again.
   cacheRecipeContent(file.id, content);
+  try {
+    // Creating an ingredient recipe includes registering its ingredient row.
+    // The file exists at this point, so a refusal (e.g. a base-unit conflict
+    // with existing AU mappings) has to remove it again: otherwise the editor
+    // would retry the create and Drive would hold two files with the same name.
+    await ensureRecipeMasterData(token, recipe);
+  } catch (error) {
+    try {
+      await deleteFile(token, file.id);
+      invalidateRecipeContent(file.id);
+    } catch (cleanupError) {
+      console.warn(
+        `Das Rezept „${recipe.title}“ konnte nach dem fehlgeschlagenen Stammdaten-Schreiben nicht entfernt werden: ${
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        }`,
+      );
+    }
+    throw error;
+  }
   if (options?.regenerateExport !== false) {
     await writeRecipeExportSafely(token, recipe);
   }
@@ -601,6 +671,10 @@ export async function saveRecipe(
 ): Promise<void> {
   const current = await readRecipe(token, fileId);
   if (current.title === recipe.title) {
+    // Register before the recipe write: a refusal here (base-unit conflict)
+    // leaves the stored recipe untouched, so the save can be retried after the
+    // user resolved it.
+    await ensureRecipeMasterData(token, recipe);
     // Plain save: content update + export regeneration.
     await updateRecipe(token, fileId, recipe);
     return;
@@ -669,7 +743,19 @@ export async function saveRecipe(
     //    renamed in step 3 in place; creates it when there was none).
     await writeRecipeExportSafely(token, recipe);
 
-    // 5. Update every other recipe that used the old title as an implicit
+    // 5. Carry the master-data entry of the old title along. A sub-recipe's
+    //    ingredient entry holds its reorder point, precision and mappings
+    //    (docs/storage_format.md §9), and nothing looks an entry up under a
+    //    title that no longer exists. This runs *before* the parents' exports
+    //    are regenerated in step 6: those exports bake the entry's display
+    //    values, so the registry must already know the new title. The rename
+    //    is a no-op for a finished dish (only ingredient recipes have such an
+    //    entry) and while the built-in seed is active (no file yet).
+    if (await renameIngredientMasterData(token, current.title, recipe.title)) {
+      undoSteps.push(() => renameIngredientMasterData(token, recipe.title, current.title));
+    }
+
+    // 6. Update every other recipe that used the old title as an implicit
     //    sub-recipe reference (rows, inline artifacts and reference names, in
     //    name == title semantics, decided with the user). The pure
     //    transformation lives in core (renameRecipeInCollection, §6) — only
@@ -713,15 +799,12 @@ export async function saveRecipe(
       }
     }
 
-    // 6. Carry the master-data entry of the old title along. A sub-recipe's
-    //    ingredient entry holds its reorder point (docs/storage_format.md §9),
-    //    and nothing looks an entry up under a title that no longer exists —
-    //    without this step the renamed sub-recipe would silently lose it. The
-    //    rename is a no-op for a finished dish (only ingredient recipes have
-    //    such an entry) and while the built-in seed is active (no file yet).
-    if (await renameIngredientMasterData(token, current.title, recipe.title)) {
-      undoSteps.push(() => renameIngredientMasterData(token, recipe.title, current.title));
-    }
+    // 7. Register the new title as an ingredient when the recipe is (or has
+    //    become) an ingredient recipe and has no row yet — e.g. a title that
+    //    was saved before auto-create existed, or a finished dish turned into a
+    //    sub-recipe in the same save. An existing row (renamed in step 5) is
+    //    only checked: its unit must match the recipe's yield unit.
+    await ensureRecipeMasterData(token, recipe);
   } catch (error) {
     // Best-effort rollback: revert every step that already succeeded.
     let rollbackFailed = false;

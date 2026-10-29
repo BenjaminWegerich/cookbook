@@ -85,9 +85,19 @@ interface IngredientMasterProps {
   onClose: () => void;
   /** The app-root notice host, so the save can offer its undo. */
   showSnackbar: (message: SnackbarMessage) => void;
+  /**
+   * The collection's ingredient recipes by title, with the base-unit family
+   * their yield declares. Their master rows hide the shopping fields (a
+   * sub-recipe is cooked, never bought), and creating one locks the base unit
+   * to the recipe's unit.
+   */
+  subRecipes?: ReadonlyMap<string, 'g' | 'ml'>;
   /** App's handle for the browser Back button. */
   ref?: Ref<IngredientMasterHandle>;
 }
+
+/** No ingredient recipes — the default for callers that do not track them. */
+const NO_SUB_RECIPES: ReadonlyMap<string, 'g' | 'ml'> = new Map();
 
 /** The German reason of a failed create step. */
 function reasonOf(err: unknown): string {
@@ -98,7 +108,13 @@ function reasonOf(err: unknown): string {
  * The „Zutaten“ screen (see file header). It owns the search, the selected
  * entry, the create flow and the save/undo cycle; the sheet owns its form values.
  */
-function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMasterProps) {
+function IngredientMaster({
+  token,
+  onClose,
+  showSnackbar,
+  subRecipes = NO_SUB_RECIPES,
+  ref,
+}: IngredientMasterProps) {
   const [query, setQuery] = useState('');
   /** The name of the entry whose sheet is open, or null. */
   const [editingName, setEditingName] = useState<string | null>(null);
@@ -390,6 +406,7 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
           key={editingName}
           name={editingName}
           entry={editingEntry}
+          subRecipe={subRecipes.has(editingName)}
           saving={saving}
           error={saveError}
           onSave={(update) => void saveEntry(update)}
@@ -406,6 +423,7 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
         <NewIngredientSheet
           key="new-ingredient"
           initialName=""
+          subRecipeUnits={subRecipes}
           saving={saving}
           error={createError}
           onSave={(name, bu, reorderPoint, entries, precision, stop, variants) =>

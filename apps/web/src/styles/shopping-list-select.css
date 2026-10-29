@@ -119,17 +119,27 @@
   line-height: var(--leading-md);
 }
 
-/* The size the plan entry states, next to the title: muted and one step
-   smaller, so it reads as a property of the dish, not as a second name. The
-   auto start margin takes every free pixel of the row, so the size sits
+/* The size the plan entry states, next to the title: muted, italic and one
+   step smaller, so it reads as a property of the dish, not as a second name.
+   The auto start margin takes every free pixel of the row, so the size sits
    right-aligned whether it shares the line with the title or wraps below it
-   (the same trick the pantry step's purchase uses). */
+   (the same trick the pantry step's purchase uses), at least one en space from
+   the title. */
 .shopping-select-size {
   min-width: 0;
   margin-inline-start: auto;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
+  font-style: italic;
+}
+
+/* The unrecognized entry's "Unbekannt" badge sits at the row's right edge, in
+   its own badge column like the ingredient tags — never pushed into the last
+   line of a multi-line title. */
+.shopping-select-open > .recipe-badge {
+  flex: none;
+  margin-inline-start: auto;
 }
 
 /* ---- Forward action ------------------------------------------------------ */

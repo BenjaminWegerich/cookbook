@@ -5,8 +5,8 @@
  * It is one small muted readout, not a caption and not a form field: the size
  * input above it already carries the caption, and the recipe is already named
  * by the sheet. One amount per line, no bullet and no comma; an arrangement
- * note keeps its brackets and is styled with them by `.arrangement-note`
- * (editor.css).
+ * note drops its brackets and follows one en space in `.arrangement-note`
+ * (editor.css), like every other list and readout.
  */
 
 .reference-readout {

@@ -738,7 +738,7 @@ function ThemeColorField({
       <div className="theme-color-head">
         <span className="field-label">
           {label}
-          <span className="optional-mark">(optional)</span>
+          <span className="optional-mark">optional</span>
         </span>
         {overridden && (
           <button type="button" className="text-button" onClick={() => onChange(undefined)}>
@@ -1002,7 +1002,7 @@ function ThemeEditor({
     <>
       <div className="field">
         <span className="field-label">
-          Schriftart<span className="optional-mark">(optional)</span>
+          Schriftart<span className="optional-mark">optional</span>
         </span>
         <div className="theme-font-chips" role="group" aria-label="Schriftart">
           <button
@@ -1185,6 +1185,19 @@ function RecipeEditor({
   /** Synchronous mirror of masterEditSaving, for the Back/Escape guard. */
   const masterEditSavingRef = useRef(false);
   const [masterEditError, setMasterEditError] = useState<string | null>(null);
+  /**
+   * The recipe whose successful save is waiting behind the automatically
+   * opened master-data sheet. Set only when that save created the ingredient
+   * row (a Zutaten-Rezept's first save); closing the sheet — saving or
+   * cancelling — resumes the normal post-save exit exactly once.
+   */
+  const pendingSavedRecipeRef = useRef<Recipe | null>(null);
+  /**
+   * The same recipe's title as state, so the render that mounts the sheet can
+   * tell that the title is an ingredient recipe before the refreshed list
+   * contains it (a ref must not be read during render).
+   */
+  const [pendingSavedTitle, setPendingSavedTitle] = useState<string | null>(null);
   /**
    * Bumped after the master-data write or its undo. The registry is
    * module-level state, so this is what makes the quantity sheet read it again.
@@ -1411,6 +1424,31 @@ function RecipeEditor({
     [collection],
   );
 
+  /**
+   * True when a name is the title of an ingredient recipe (a sub-recipe). The
+   * pending saved recipe counts too: a Zutaten-Rezept saved just now is not in
+   * `ingredientRecipes` until the list is refreshed by onSaved, yet its
+   * auto-opened master sheet must already hide the shopping fields.
+   */
+  const isSubRecipe = (name: string): boolean =>
+    ingredientRecipes.some((recipe) => recipe.title === name) || pendingSavedTitle === name;
+
+  /**
+   * The same titles with their base-unit family, keyed by title. The create
+   * sheet uses this to lock the base unit (and hide the shopping fields) when
+   * the name it is given belongs to a Zutaten-Rezept.
+   */
+  const subRecipeUnits = useMemo(
+    () =>
+      new Map(
+        ingredientRecipes.map((recipe): [string, 'g' | 'ml'] => [
+          recipe.title,
+          recipe.yieldUnit === 'ml' || recipe.yieldUnit === 'l' ? 'ml' : 'g',
+        ]),
+      ),
+    [ingredientRecipes],
+  );
+
   /** Reference names currently flagged on the master list (§4). */
   const referenceNames = useMemo(() => {
     const names = new Set(draft?.reference ?? []);
@@ -1573,14 +1611,29 @@ function RecipeEditor({
 
   /**
    * Validates, then saves (create / update / §6 rename) and returns to the
-   * list. Photo changes are part of the save: they are applied after the
-   * recipe text is written, and the export is then regenerated once more so it
-   * embeds the new photo instead of the previous one. A failed save leaves the
-   * photo change queued for a retry.
+   * list. A Zutaten-Rezept's first save is the exception: its auto-created
+   * ingredient row opens in the „Zutat bearbeiten“ sheet, and closing that
+   * sheet finishes the exit. Photo changes are part of the save: they are
+   * applied after the recipe text is written, and the export is then
+   * regenerated once more so it embeds the new photo instead of the previous
+   * one. A failed save leaves the photo change queued for a retry.
    */
   const handleSave = async (): Promise<void> => {
     if (draft === null || saving) return;
     const savedRecipe = normalizeRecipe(draft);
+    // A Zutaten-Rezept whose master row does not exist yet gets one created by
+    // the save below. Remember that before the write: after it, the registry
+    // always holds the row. A rename carries an existing row to the new title
+    // instead of creating one, so it does not count. The sheet opens only for a
+    // first registration; an existing row stays reachable through „Stammdaten
+    // bearbeiten“.
+    const previousMasterTitle = original?.title ?? target?.title ?? null;
+    const hadMasterRow =
+      previousMasterTitle !== null && mappingsFor(previousMasterTitle) !== undefined;
+    const opensMasterSheet =
+      savedRecipe.type === 'ingredient_recipe' &&
+      mappingsFor(savedRecipe.title) === undefined &&
+      !hadMasterRow;
     // The name checks need the parsed collection (sub-recipe titles). It loads
     // in parallel with the form; a save started before it finished waits here,
     // so a valid sub-recipe name is never rejected just because its file was
@@ -1629,6 +1682,18 @@ function RecipeEditor({
         }
       }
       setPhotoChange(null);
+      if (opensMasterSheet) {
+        // The recipe write is done; the master-data sheet is the last step of
+        // this save. Keep the editor mounted (and no longer in its saving
+        // state) so the sheet can sit on top of it; closing the sheet then
+        // continues the normal exit through onSaved.
+        setSaving(false);
+        pendingSavedRecipeRef.current = savedRecipe;
+        setPendingSavedTitle(savedRecipe.title);
+        setMasterEditError(null);
+        setMasterEditName(savedRecipe.title);
+        return;
+      }
       onSaved(savedRecipe);
     } catch (err) {
       setSaving(false);
@@ -1918,12 +1983,26 @@ function RecipeEditor({
     setMasterEditName(name);
   };
 
+  /**
+   * Continues the normal post-save exit once the automatically opened
+   * master-data sheet closes. A regular „Stammdaten bearbeiten“ edit has no
+   * pending recipe, so this is a no-op.
+   */
+  const finishPendingSave = useCallback((): void => {
+    const saved = pendingSavedRecipeRef.current;
+    if (saved === null) return;
+    pendingSavedRecipeRef.current = null;
+    setPendingSavedTitle(null);
+    onSaved(saved);
+  }, [onSaved]);
+
   /** Closes the master-data sheet without saving; a running write keeps it open. */
   const handleMasterEditClose = useCallback((): void => {
     if (masterEditSavingRef.current) return;
     setMasterEditName(null);
     setMasterEditError(null);
-  }, []);
+    finishPendingSave();
+  }, [finishPendingSave]);
 
   /**
    * Persists the master-data sheet's values through the same path the „Zutaten“
@@ -1948,6 +2027,9 @@ function RecipeEditor({
         input,
       );
       setMasterEditName(null);
+      // The recipe save that opened this sheet is finished only now: its exit
+      // waits for the user to save or cancel the master data.
+      finishPendingSave();
     } catch (err) {
       setMasterEditError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -2298,7 +2380,7 @@ function RecipeEditor({
             aria-invalid={photoError !== null}
           >
             <span className="field-label">
-              Bild<span className="optional-mark">(optional)</span>
+              Bild<span className="optional-mark">optional</span>
             </span>
             <div className="photo-row">
               {photoUrl !== null ? (
@@ -2376,7 +2458,7 @@ function RecipeEditor({
 
           <label className="field">
             <span className="field-label">
-              Beschreibung<span className="optional-mark">(optional)</span>
+              Beschreibung<span className="optional-mark">optional</span>
             </span>
             <AutoGrowTextarea
               ref={descriptionFieldRef}
@@ -2537,7 +2619,7 @@ function RecipeEditor({
             aria-invalid={fieldIssue('total_time').length > 0}
           >
             <span className="field-label">
-              Gesamtzeit<span className="optional-mark">(optional)</span>
+              Gesamtzeit<span className="optional-mark">optional</span>
             </span>
             <span className="field-hint">nur wenn sie größer als die Arbeitszeit ist</span>
             <TimeChips
@@ -2648,7 +2730,6 @@ function RecipeEditor({
                           >
                             <span className="ingredient-line">
                               <ArrangementLine
-                                noteForm="bracketed"
                                 display={safeRenderAQSDisplay(
                                   ingredient.name,
                                   ingredient.quantity,
@@ -2658,28 +2739,32 @@ function RecipeEditor({
                                     : {},
                                 )}
                               />
-                              {isNewName && (
-                                <span className="ingredient-tag tag-new">
-                                  <NewReleasesIcon className="tag-icon" optical={20} />
-                                  <span>Neu</span>
+                              {(isNewName || jumpTarget !== undefined) && (
+                                <span className="ingredient-tags">
+                                  {isNewName && (
+                                    <span className="ingredient-tag tag-new">
+                                      <NewReleasesIcon className="tag-icon" optical={20} />
+                                      <span>Neu</span>
+                                    </span>
+                                  )}
+                                  {jumpTarget !== undefined && (
+                                    <button
+                                      type="button"
+                                      className="ingredient-tag tag-recipe"
+                                      onClick={(event) => {
+                                        // The row is one big button that opens the
+                                        // ingredient sheet — the badge must
+                                        // navigate without also triggering it.
+                                        event.stopPropagation();
+                                        requestJump(jumpTarget);
+                                      }}
+                                      title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
+                                    >
+                                      <LinkIcon className="tag-icon" optical={20} />
+                                      <span>Rezept</span>
+                                    </button>
+                                  )}
                                 </span>
-                              )}
-                              {jumpTarget !== undefined && (
-                                <button
-                                  type="button"
-                                  className="ingredient-tag tag-recipe"
-                                  onClick={(event) => {
-                                    // The row is one big button that opens the
-                                    // ingredient sheet — the badge must
-                                    // navigate without also triggering it.
-                                    event.stopPropagation();
-                                    requestJump(jumpTarget);
-                                  }}
-                                  title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
-                                >
-                                  <LinkIcon className="tag-icon" optical={20} />
-                                  <span>Rezept</span>
-                                </button>
                               )}
                             </span>
                             {/* A hint only where it says something the row
@@ -2863,7 +2948,6 @@ function RecipeEditor({
                     <li key={ingredient.name} className="ingredient-row">
                       <span className="ingredient-line">
                         <ArrangementLine
-                          noteForm="bracketed"
                           display={
                             masterDisplays[index] ??
                             safeRenderAQSDisplay(
@@ -2873,44 +2957,48 @@ function RecipeEditor({
                             )
                           }
                         />
-                        {isNewName && (
-                          <span className="ingredient-tag tag-new">
-                            <NewReleasesIcon className="tag-icon" optical={20} />
-                            <span>Neu</span>
-                          </span>
-                        )}
-                        {jumpTarget !== undefined && (
-                          <button
-                            type="button"
-                            className="ingredient-tag tag-recipe"
-                            onClick={(event) => {
-                              // Keep the badge a self-contained navigation
-                              // control (no row handler here, but unchanged
-                              // behaviour if one is ever added).
-                              event.stopPropagation();
-                              requestJump(jumpTarget);
-                            }}
-                            title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
-                          >
-                            <LinkIcon className="tag-icon" optical={20} />
-                            <span>Rezept</span>
-                          </button>
-                        )}
-                        {isReference && (
-                          <span className="ingredient-tag tag-reference">
-                            <StarIcon className="tag-icon" optical={20} />
-                            <span>Referenz</span>
-                            {/* The × mirrors the star toggle: it drops the
-                                reference role (star unfills, badge vanishes). */}
-                            <button
-                              type="button"
-                              className="tag-remove"
-                              onClick={() => toggleReference(ingredient.name)}
-                              aria-label={`„${ingredient.name}“ als Referenz-Menge entfernen`}
-                              title="Referenz-Menge entfernen"
-                            >
-                              <CloseIcon className="tag-remove-icon" optical={20} />
-                            </button>
+                        {(isNewName || jumpTarget !== undefined || isReference) && (
+                          <span className="ingredient-tags">
+                            {isNewName && (
+                              <span className="ingredient-tag tag-new">
+                                <NewReleasesIcon className="tag-icon" optical={20} />
+                                <span>Neu</span>
+                              </span>
+                            )}
+                            {jumpTarget !== undefined && (
+                              <button
+                                type="button"
+                                className="ingredient-tag tag-recipe"
+                                onClick={(event) => {
+                                  // Keep the badge a self-contained navigation
+                                  // control (no row handler here, but unchanged
+                                  // behaviour if one is ever added).
+                                  event.stopPropagation();
+                                  requestJump(jumpTarget);
+                                }}
+                                title={`Zutaten-Rezept „${ingredient.name}“ öffnen`}
+                              >
+                                <LinkIcon className="tag-icon" optical={20} />
+                                <span>Rezept</span>
+                              </button>
+                            )}
+                            {isReference && (
+                              <span className="ingredient-tag tag-reference">
+                                <StarIcon className="tag-icon" optical={20} />
+                                <span>Referenz</span>
+                                {/* The × mirrors the star toggle: it drops the
+                                    reference role (star unfills, badge vanishes). */}
+                                <button
+                                  type="button"
+                                  className="tag-remove"
+                                  onClick={() => toggleReference(ingredient.name)}
+                                  aria-label={`„${ingredient.name}“ als Referenz-Menge entfernen`}
+                                  title="Referenz-Menge entfernen"
+                                >
+                                  <CloseIcon className="tag-remove-icon" optical={20} />
+                                </button>
+                              </span>
+                            )}
                           </span>
                         )}
                       </span>
@@ -2990,6 +3078,10 @@ function RecipeEditor({
             onConfirm={handleSheetConfirm}
             onClose={handleCloseSheet}
             onEditIngredient={handleEditIngredient}
+            onOpenRecipe={(title) => {
+              const target = subRecipeTarget(title);
+              if (target !== undefined) requestJump(target);
+            }}
             shortcutEnabled={masterEditName === null}
             onCreateNewIngredient={(name, quantity) => {
               if (sheet === null) return;
@@ -3006,6 +3098,8 @@ function RecipeEditor({
       {createSheet !== null && (
         <NewIngredientSheet
           initialName={createSheet.name}
+          subRecipe={isSubRecipe(createSheet.name)}
+          subRecipeUnits={subRecipeUnits}
           saving={createSaving}
           error={createError}
           onSave={(name, bu, reorderPoint, entries, precision, stop, variants) =>
@@ -3021,6 +3115,7 @@ function RecipeEditor({
             key={masterEditName}
             name={masterEditName}
             entry={masterEditEntry}
+            subRecipe={isSubRecipe(masterEditName)}
             saving={masterEditSaving}
             error={masterEditError}
             onSave={(update) => void handleMasterEditSave(update)}
