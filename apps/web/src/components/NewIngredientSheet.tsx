@@ -33,7 +33,7 @@ interface NewIngredientSheetProps {
   error: string | null;
   /** Called with the master data to create; `reorderPoint` is the value as
    *  entered (stored without optimization) and `stop` is the chosen shopping
-   *  stop, or null while the route holds no stops at all. */
+   *  stop, or null when the user left the optional „Einkauf“ field empty. */
   onSave: (
     name: string,
     bu: string,

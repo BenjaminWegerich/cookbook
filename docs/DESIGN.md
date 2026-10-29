@@ -1181,6 +1181,12 @@ already exists as a shopping item, the Einkauf and Synonyme sections are pre-fil
 there updates that item instead of creating a second row. A duplicate ingredient name is
 reported under the name field as soon as the field is left. *decided with the user*
 
+**The ingredient's „Einkauf" is optional.** An ingredient may stay unbought; while a store is
+picked, the store chips carry a dashed „× Entfernen" chip that clears the stop and — because a
+synonym only lives on an item row — its synonyms. The save deletes the row and „Rückgängig"
+restores both. Picking a store requires its section; the item form keeps the stop required,
+because its row is the route. *decided with the user*
+
 **The recipe row offers the master data.** In the recipe editor's quantity sheet, a selected
 master ingredient shows an outlined „Stammdaten bearbeiten" action under the name field (the
 same slot as „Neue Zutat anlegen" for an unknown name). It opens the shared sheet over the

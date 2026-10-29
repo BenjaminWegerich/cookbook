@@ -1803,18 +1803,19 @@ function RecipeEditor({
    * the saved name and the quantity the user had typed, where they confirm
    * the actual recipe addition (decided with the user).
    *
-   * The shopping data is written first: the assignment file's name set is a
-   * superset of the ingredient list by design (docs/storage_format.md §10), so a
-   * row without an ingredient is valid master data and a retry overwrites it,
-   * while an ingredient without its row would be exactly the state the create
-   * sheet's „Einkauf“ field exists to prevent. A failed assignment write
-   * therefore stops the flow before anything is created (the error names the
-   * cause, and the name is still free for a retry). When the name already exists
-   * as a shopping item, its row is updated with the form's stop and synonyms
-   * instead of creating a second route.
+   * The shopping data is written first: the item table's name set is a superset
+   * of the ingredient list by design (docs/storage_format.md §10), so a row
+   * without an ingredient is valid master data and a retry overwrites it, while
+   * the „Einkauf“ field is optional — an ingredient may be created without a row
+   * and is then simply never bought. A failed shopping write therefore stops the
+   * flow before anything is created (the error names the cause, and the name is
+   * still free for a retry). When the name already exists as a shopping item, its
+   * row is updated with the form's stop and synonyms instead of creating a
+   * second route.
    *
-   * `stop` is null while the shopping route holds no stops at all — decided with
-   * the user: the ingredient is then created without a shopping stop.
+   * `stop` is null when the user left the field empty or while the shopping route
+   * holds no stops at all — decided with the user: the ingredient is then created
+   * without a shopping stop.
    *
    * The folder is resolved and listed once and handed to the ingredient write;
    * the shopping write resolves its own snapshot because it may create the

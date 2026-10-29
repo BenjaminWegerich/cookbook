@@ -113,9 +113,17 @@ function reasonOf(err: unknown): string {
 }
 
 /**
- * Writes one shopping change and returns the previous state for the undo. A
- * missing item row is created; the caller has already validated that `stop` is
- * not null in that case.
+ * Writes one shopping change and returns the previous state for the undo.
+ *
+ * Three cases, keyed by what the form says and what the registry holds:
+ * - the item row exists and the form names a stop → update the row;
+ * - the item row exists and the form names no stop → delete the row (an
+ *   ingredient without a row is simply not bought, docs/storage_format.md §10);
+ *   the previous state is returned so „Rückgängig“ can put the row and its
+ *   synonyms back. The form clears the synonyms together with the stop, so
+ *   `variants` is empty here;
+ * - no row exists → create one when the form names a stop, otherwise nothing
+ *   is bought and there is nothing to write.
  */
 export async function writeShoppingChange(
   token: string,
@@ -126,7 +134,11 @@ export async function writeShoppingChange(
 ): Promise<{ previous: ShoppingItemState | null; created: boolean }> {
   if (itemKey !== undefined) {
     if (stop === null) {
-      throw new Error('Einkaufsartikel: Der Einkaufsort darf nicht leer sein.');
+      if (variants.length > 0) {
+        throw new Error('Ohne Einkaufsort lassen sich keine Synonyme speichern.');
+      }
+      const { previous } = await deleteShoppingItem(token, itemKey);
+      return { previous, created: false };
     }
     const { previous } = await saveShoppingItem(token, itemKey, stop, variants);
     return { previous, created: false };

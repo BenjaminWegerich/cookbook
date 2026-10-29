@@ -22,6 +22,15 @@
  * Synonyme values are handed to the parent, which writes them to the item row —
  * creating an ingredient never silently forks a second route for the same name.
  *
+ * The ingredient's „Einkauf“ field is **optional**: an ingredient without an
+ * item row is simply never bought (docs/storage_format.md §10). The item form
+ * still requires it — that row *is* the route. Once a store is picked, a section
+ * is required, because the pair is the key and a section belongs to exactly one
+ * store. The „× Entfernen“ chip beside the store chips clears the pick; it also
+ * clears the synonyms, because a synonym can only live on an item row, and the
+ * save then deletes the row — its notice's „Rückgängig“ restores stop and
+ * synonyms.
+ *
  * A duplicate name is reported **under the name field** as soon as the field is
  * left, not at the bottom of the sheet: the field is where the user can fix it.
  *
@@ -269,15 +278,13 @@ function MasterDataSheet({
     store !== null && sections.includes(section) ? { store, section } : null;
 
   /**
-   * Whether this form needs a stop. An item always does (its row is the route);
-   * a new ingredient does while the route has stops at all (the established
-   * create rule). An existing ingredient without an item row is allowed to stay
-   * unbought — unless the user adds synonyms, which only an item row can carry.
+   * Whether this form needs a stop. An item always does (its row is the route).
+   * An ingredient is optional: it may stay unbought, and clearing an existing
+   * row is a sanctioned change (the write deletes the row). Synonyms are the one
+   * exception — they exist only on an item row, so the stop is required while
+   * the form carries any.
    */
-  const stopRequired =
-    !ingredientMode || (!creating && initialItem !== null) || variants.length > 0
-      ? true
-      : creating && stores.length > 0;
+  const stopRequired = !ingredientMode || variants.length > 0;
 
   /** The message the „Einkauf“ field would report for the current state. */
   const stopError = ((): string | null => {
@@ -359,6 +366,21 @@ function MasterDataSheet({
   /** Adopts a section option into the search field (same tap-to-apply). */
   const adoptSection = (next: string): void => {
     setSectionQuery(next);
+    markShoppingEdited();
+  };
+
+  /**
+   * Drops the whole shopping stop — the „× Entfernen“ chip's action. A section
+   * needs its store, so it goes with it. The synonyms go too: a variant only
+   * exists on an item row, and this form is now describing an ingredient that is
+   * not bought. The save deletes the row, and its notice restores stop and
+   * synonyms with one „Rückgängig“.
+   */
+  const removeStop = (): void => {
+    setStore(null);
+    setSectionQuery('');
+    setVariants([]);
+    setVariantError(null);
     markShoppingEdited();
   };
 
@@ -770,6 +792,10 @@ function MasterDataSheet({
         >
           <span className="field-label" id="shopping-stop-label">
             Einkauf
+            {/* The item row is the route, so only the ingredient form may leave
+                the field empty — and only while it carries no synonyms, which
+                cannot live without a row (see the file header). */}
+            {ingredientMode && !stopRequired && <span className="optional-mark">optional</span>}
           </span>
 
           {stores.length === 0 ? (
@@ -794,6 +820,23 @@ function MasterDataSheet({
                     {candidate}
                   </button>
                 ))}
+                {/* The way back to "not bought": the chip row has no empty
+                    slot, so the ingredient form needs its own clear action
+                    (the same dashed clear chip as the optional fields in the
+                    quantity sheet). The item form omits it — its row is the
+                    route and a missing store would be a dead end. */}
+                {ingredientMode && store !== null && (
+                  <button
+                    type="button"
+                    className="chip chip-clear"
+                    onClick={removeStop}
+                    title="Einkauf entfernen"
+                    disabled={busy !== null}
+                  >
+                    <CloseIcon className="chip-icon" optical={20} />
+                    <span>Entfernen</span>
+                  </button>
+                )}
               </div>
 
               {/* The section field follows the store: without a store there is

@@ -117,11 +117,13 @@
   **superset of the ingredient list**, so items that are not recipe ingredients at all
   („Klopapier“, „Seife“, „Blumen“) have their place there too, while `zutaten.csv` keeps the
   ingredient master data without a route. The create sheet („Neue Zutat anlegen“) asks for the
-  stop in an „Einkauf“ field while it collects the other master-data fields — the store as
-  chips, the section as a searchable list of that store's sections — and writes the item row
-  before the ingredient row: a row without an ingredient is valid (the name set is a superset),
-  an ingredient without its row is not (it is then simply never bought). The „Einkaufsartikel“
-  screen (`apps/web/src/components/ShoppingPlaces.tsx`) creates and edits item rows and their
+  stop in an optional „Einkauf“ field while it collects the other master-data fields — the
+  store as chips, the section as a searchable list of that store's sections — and writes the
+  item row before the ingredient row when a stop is given: a row without an ingredient is valid
+  (the name set is a superset), and an ingredient without its row is valid too (it is then
+  simply never bought). Picking a store requires its section; the „Einkaufsartikel“ form keeps
+  the stop required. The „Einkaufsartikel“ screen
+  (`apps/web/src/components/ShoppingPlaces.tsx`) creates and edits item rows and their
   synonym lists directly through the same shared sheet; a duplicate item name is rejected
   case-folded.
 - **Master-data writes read before they write.** Every append, edit, rename and sort

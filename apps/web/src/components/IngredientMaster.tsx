@@ -251,10 +251,10 @@ function IngredientMaster({ token, onClose, showSnackbar, ref }: IngredientMaste
   /**
    * Creates a new ingredient and, when the form names a shopping item, writes
    * the route/synonyms to that item. The shopping write runs first: a row
-   * without an ingredient is valid master data and a retry overwrites it, while
-   * an ingredient without its row is the state the create form's „Einkauf“
-   * field exists to prevent. If the ingredient write then fails, the shopping
-   * change is rolled back.
+   * without an ingredient is valid master data and a retry overwrites it, and
+   * the „Einkauf“ field is optional, so an ingredient may be created without any
+   * row (it is then simply never bought, docs/storage_format.md §10). If the
+   * ingredient write then fails, the shopping change is rolled back.
    */
   const createEntry = async (
     name: string,
