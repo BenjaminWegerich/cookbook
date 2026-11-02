@@ -532,32 +532,16 @@ function IngredientSheet({
           </div>
         )}
 
-        <div className="field">
-          <span className="field-label">Menge</span>
-          <QuantityInput
-            value={quantity}
-            onChange={(next) => {
-              // Any author-set amount (typed, chipped or stepped) is kept when
-              // a suggestion is adopted afterwards.
-              setQuantity(next);
-              setQuantityTouched(true);
-            }}
-            family={family}
-            // Adaptive chips: the arrangement the optimizer will show for a
-            // target, recentered on the current amount. A valid name supplies
-            // the compatible units; a sub-recipe or a free amount stays metric.
-            ingredient={validName ? trimmedName : undefined}
-            precision={effectivePrecision}
-          />
-        </div>
-
-        {/* Quantity-level precision: the optional pin of the quantity's
-            baseline. No active chip means the quantity follows the baseline
-            live (the passive caption names it); an active chip stores that
-            level, so it keeps its value when the baseline changes later. The
-            dashed clear chip (the „Gesamtzeit“ idiom) drops the pin. The field
-            is offered for every quantity — a master ingredient, a sub-recipe, a
-            unitless mention, and the still-empty form (neutral medium). */}
+        {/* Precision first, then the amount: the chips choose the display
+            precision, the quantity field below shows the amount in that
+            precision. Quantity-level precision is the optional
+            pin of the quantity's baseline. No active chip means the quantity
+            follows the baseline live (the passive caption names it); an active
+            chip stores that level, so it keeps its value when the baseline
+            changes later. The dashed clear chip (the „Gesamtzeit“ idiom) drops
+            the pin. The field is offered for every quantity — a master
+            ingredient, a sub-recipe, a unitless mention, and the still-empty
+            form (neutral medium). */}
         <div className="field">
           <div className="field-head">
             <span className="field-label">
@@ -582,6 +566,25 @@ function IngredientSheet({
               ingredientDefault !== undefined ? 'der Zutat-Standard' : 'der Standard'
             }.`}
           </p>
+        </div>
+
+        <div className="field">
+          <span className="field-label">Menge</span>
+          <QuantityInput
+            value={quantity}
+            onChange={(next) => {
+              // Any author-set amount (typed, chipped or stepped) is kept when
+              // a suggestion is adopted afterwards.
+              setQuantity(next);
+              setQuantityTouched(true);
+            }}
+            family={family}
+            // Adaptive chips: the arrangement the optimizer will show for a
+            // target, recentered on the current amount. A valid name supplies
+            // the compatible units; a sub-recipe or a free amount stays metric.
+            ingredient={validName ? trimmedName : undefined}
+            precision={effectivePrecision}
+          />
         </div>
 
         <div className="field">
