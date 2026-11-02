@@ -10,6 +10,7 @@ import {
   CheckCircleIcon,
   CloseIcon,
   ListPlusIcon,
+  PencilIcon,
   RoomServiceIcon,
   SearchIcon,
   SortIcon,
@@ -34,24 +35,27 @@ const MEALPLAN_CAPTION_ID = 'recipe-section-mealplan';
 const COLLECTION_CAPTION_ID = 'recipe-section-collection';
 
 /**
- * Orders the cards of "Restliche Sammlung": finished dishes first, ingredient
- * recipes after (decided with the user), each group staying in the title order
- * `listRecipes` established. The partition is stable and keeps the two groups
- * together without an extra heading; a recipe whose type could not be read
- * (`type === null`) stays with the dishes instead of disappearing among the
- * bases (see `StoredRecipe.type`).
+ * Orders the cards of "Restliche Sammlung": saved drafts first, then finished
+ * dishes, then ingredient recipes (decided with the user), each group staying
+ * in the title order `listRecipes`/`listDrafts` established. The partition is
+ * stable and keeps the groups together without an extra heading; a recipe whose
+ * type could not be read (`type === null`) stays with the dishes instead of
+ * disappearing among the bases (see `StoredRecipe.type`).
  */
-function dishesBeforeIngredientRecipes(recipes: readonly StoredRecipe[]): StoredRecipe[] {
+function orderCollection(recipes: readonly StoredRecipe[]): StoredRecipe[] {
+  const drafts: StoredRecipe[] = [];
   const dishes: StoredRecipe[] = [];
   const ingredientRecipes: StoredRecipe[] = [];
   for (const recipe of recipes) {
-    if (recipe.type === 'ingredient_recipe') {
+    if (recipe.status === 'draft') {
+      drafts.push(recipe);
+    } else if (recipe.type === 'ingredient_recipe') {
       ingredientRecipes.push(recipe);
     } else {
       dishes.push(recipe);
     }
   }
-  return [...dishes, ...ingredientRecipes];
+  return [...drafts, ...dishes, ...ingredientRecipes];
 }
 
 interface RecipeListProps {
@@ -159,18 +163,22 @@ interface RecipeListProps {
  *   out — the overview behind the card shows them). Tapping either card opens
  *   the overview: the recognized one with its stated size and "Umplanen", the
  *   unrecognized one as the destination for replacing or dropping the entry.
- * - **Restliche Sammlung** shows the recipes that are *not* on the meal plan.
- *   The planned ones are already in the section above, so repeating them here
- *   would put the same card on one screen twice; the plan section is where a
- *   planned dish is read, changed and cooked from. With Keep off every recipe is
- *   "restlich", which is exactly what the section then shows. Within the
- *   section the finished dishes come first and the ingredient recipes follow,
- *   each group alphabetically (decided with the user): a dish is what the user
- *   cooks, a base is what they use in one.
+ * - **Restliche Sammlung** shows the recipes that are *not* on the meal plan,
+ *   plus every saved draft. The planned ones are already in the section above,
+ *   so repeating them here would put the same card on one screen twice; the plan
+ *   section is where a planned dish is read, changed and cooked from. With Keep
+ *   off every recipe is "restlich", which is exactly what the section then
+ *   shows. Within the section the saved drafts come first, then the finished
+ *   dishes, then the ingredient recipes, each group alphabetically (decided with
+ *   the user): a draft is unfinished work to resume, a dish is what the user
+ *   cooks, a base is what they use in one. A draft card carries its „Entwurf“
+ *   badge directly below the title and the same whole-card tap target as a
+ *   recipe; it is never planned and never cookable.
  *
  * Each caption carries its counter ("Essensplan 5 Einträge, davon 2 unbekannt",
  * "Restliche Sammlung 8 Rezepte", "Einkaufsliste 4 Einträge, davon 1
- * unbekannt"). The captions copy the editor's field-caption typography
+ * unbekannt"); with drafts the collection's counter adds „, davon 2 Entwürfe“.
+ * The captions copy the editor's field-caption typography
  * (.field-label: small, semibold, muted, all caps), with the counter itself set
  * like the editor's quiet "optional" marker (normal case, italic) but
  * right-aligned, at least one en space after the caption word. The two card
@@ -258,17 +266,22 @@ function RecipeList({
 
   /**
    * The recipes of "Restliche Sammlung": the collection without the titles the
-   * meal plan already shows. Kept separate from the search filter below so the
-   * section's counter always counts the section and never the search result.
+   * meal plan already shows. A draft is never planned, so it always stays here
+   * — even when its (still provisional) title happens to equal a planned
+   * recipe's title. Kept separate from the search filter below so the section's
+   * counter always counts the section and never the search result.
    */
   const remainingRecipes = useMemo(
-    () => recipes.filter((recipe) => !plannedRecipeTitles.has(recipe.title)),
+    () =>
+      recipes.filter(
+        (recipe) => recipe.status === 'draft' || !plannedRecipeTitles.has(recipe.title),
+      ),
     [recipes, plannedRecipeTitles],
   );
 
   const visibleRecipes = useMemo(
     () =>
-      dishesBeforeIngredientRecipes(
+      orderCollection(
         needle === ''
           ? remainingRecipes
           : remainingRecipes.filter((recipe) => recipe.title.toLowerCase().includes(needle)),
@@ -320,9 +333,17 @@ function RecipeList({
           mealPlanCards.length === 1 ? 'Eintrag' : 'Einträge'
         }, davon ${mealPlanCards.filter((card) => card.recipe === null).length} unbekannt`;
 
-  /** The counter of the "Restliche Sammlung" caption: `x Rezepte`. */
+  /** The counter of "Restliche Sammlung": `x Rezepte`, plus the draft count. */
   const collectionCounter = collectionCountable
-    ? `${remainingRecipes.length} ${remainingRecipes.length === 1 ? 'Rezept' : 'Rezepte'}`
+    ? (() => {
+        const draftCount = remainingRecipes.filter((recipe) => recipe.status === 'draft').length;
+        const recipeCount = `${remainingRecipes.length} ${
+          remainingRecipes.length === 1 ? 'Rezept' : 'Rezepte'
+        }`;
+        return draftCount === 0
+          ? recipeCount
+          : `${recipeCount}, davon ${draftCount} ${draftCount === 1 ? 'Entwurf' : 'Entwürfe'}`;
+      })()
     : null;
 
   /**
@@ -492,6 +513,14 @@ function RecipeList({
               </span>
               <span className="recipe-card-title">
                 <span className="recipe-card-title-text">{recipe.title}</span>
+                {recipe.status === 'draft' && (
+                  <span className="recipe-card-badge">
+                    <span className="recipe-badge recipe-badge-draft">
+                      <PencilIcon className="recipe-badge-icon" optical={20} />
+                      <span>Entwurf</span>
+                    </span>
+                  </span>
+                )}
               </span>
             </button>
           </li>

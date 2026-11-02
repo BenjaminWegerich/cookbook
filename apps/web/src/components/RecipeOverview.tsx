@@ -2,9 +2,9 @@
  * Recipe overview sheet (home screen → tap a card).
  *
  * Tapping a card opens this bottom sheet over the list. With the Keep
- * integration there are three card types (decided with the user); they share
- * the same sheet, hero and close behaviour and differ only in their details
- * block and their action row:
+ * integration and saved drafts there are four card types (decided with the
+ * user); they share the same sheet, hero and close behaviour and differ only in
+ * their details block and their action row:
  *
  * 1. **Known recipe, not on the meal plan** — the unchanged base case: photo,
  *    title, description, times, and one action row with "Kochen"
@@ -23,7 +23,14 @@
  *    The hero carries no "Eingeplant" badge: the "Geplant" value and the
  *    "Umplanen" action already state that the dish is on the plan, and the home
  *    screen shows a planned recipe only in its "Essensplan" section.
- * 3. **Unrecognized meal-plan entry** — no recipe behind it, so it carries **no
+ * 3. **Saved draft** — a saved, unfinished recipe (docs/storage_format.md §11).
+ *    It shows the „Entwurf“ badge directly under the title, its description and
+ *    times when present, and one action row with „Manuell bearbeiten“ (primary)
+ *    and „Mehr“; the menu carries „Mit KI bearbeiten“. It has no cooking,
+ *    planning, sharing or deletion: a draft is not cookable or planable, and
+ *    deletion stays in the editor's danger zone. The AI-edit flow may complete
+ *    missing mandatory fields.
+ * 4. **Unrecognized meal-plan entry** — no recipe behind it, so it carries **no
  *    hero image at all** (decided with the user; the list card's danger symbol
  *    is enough, and this sheet is about the entry's text and its actions). Its
  *    body shows the title without the export link, the stated size and a
@@ -53,11 +60,12 @@
  *    just-created recipe now shows up in the recognized style. "Kochen" and
  *    the "Mehr" menu do not exist here: there is nothing to cook or edit yet.
  *
- * The three variants are modelled as one `RecipeOverviewTarget` union: a
- * recognized card carries its recipe plus the meal-plan context, an
- * unrecognized entry carries its text and the parts the parser recognized
- * (title, note, stated size, link). App builds the target, because
- * only App holds the recipe list, the Drive token and the resolved meal plan.
+ * The four variants are modelled as one `RecipeOverviewTarget` union: a
+ * recognized card carries its recipe plus the meal-plan context, a draft
+ * carries its saved card, an unrecognized entry carries its text and the parts
+ * the parser recognized (title, note, stated size, link). App builds the
+ * target, because only App holds the recipe list, the Drive token and the
+ * resolved meal plan.
  *
  * Further decisions that hold for every variant:
  * - modal bottom sheet over the list (not a full-screen view);
@@ -131,7 +139,9 @@ import {
   type Recipe,
 } from '@cookbook/core';
 
+import { readDraft } from '../drive/draftStorage';
 import { readRecipe, recipeExportUrl, type StoredRecipe } from '../drive/recipeStorage';
+import type { EditorDraft } from './recipeDrafts';
 import { useEscapeTrigger } from '../hooks/useLeaveGuard';
 import type { SnackbarMessage } from '../hooks/useSnackbar';
 import {
@@ -191,6 +201,11 @@ export type RecipeOverviewTarget =
       onMealPlan: boolean;
       /** The size the meal-plan entry states, when it states one. */
       planned: PlannedAmount | null;
+    }
+  | {
+      kind: 'draft';
+      /** The saved draft as the list carries it (display title included). */
+      recipe: StoredRecipe;
     }
   | {
       kind: 'unknown';
@@ -390,6 +405,8 @@ function RecipeOverview({
 }: RecipeOverviewProps) {
   /** The full recipe; null while it is being read from Drive (recipe target). */
   const [details, setDetails] = useState<Recipe | null>(null);
+  /** The draft payload of a saved draft; null until read (draft target). */
+  const [draftDetails, setDraftDetails] = useState<EditorDraft | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   /** Feedback line for the placeholder actions (null = nothing tapped yet). */
   const [notice, setNotice] = useState<string | null>(null);
@@ -430,8 +447,12 @@ function RecipeOverview({
     maxWidth: number | undefined;
   } | null>(null);
 
-  /** The recognized recipe, or null for an unrecognized entry. */
+  /** The recognized recipe, or null for a draft / an unrecognized entry. */
   const recipe = target.kind === 'recipe' ? target.recipe : null;
+  /** The saved draft card, or null for a canonical recipe / unknown entry. */
+  const draftRecipe = target.kind === 'draft' ? target.recipe : null;
+  /** The list entry the two edit actions open (recipe or draft). */
+  const editableRecipe = target.kind === 'unknown' ? null : target.recipe;
   /**
    * Whether this browser has a system share sheet at all. Read per render (the
    * capability does not change while the page lives) and turned into the
@@ -439,8 +460,11 @@ function RecipeOverview({
    * whole answer. See ../share/shareRecipe and the menu below.
    */
   const shareSheet = hasShareSheet();
-  /** File to read for the details; null for an unrecognized entry (no read). */
-  const fileId = recipe?.fileId ?? null;
+  /**
+   * File to read for the details; null for an unrecognized entry (no read) and
+   * for a draft (its own payload is read instead).
+   */
+  const fileId = recipe?.fileId ?? draftRecipe?.fileId ?? null;
   /**
    * The plan state the sheet renders: the live derivation when App has one, the
    * snapshot the target was opened with otherwise (see the prop's doc). Both
@@ -455,25 +479,29 @@ function RecipeOverview({
   const planned: PlannedAmount | null =
     target.kind === 'recipe' ? (livePlan !== null ? livePlan.planned : target.planned) : null;
 
-  // Read the recipe file for the details the list entry does not carry. The
-  // sheet unmounts when it closes, so every open starts from the initial null
-  // state; state is only set in the promise callbacks, never synchronously
-  // (same rule as App's startup load). An unrecognized entry has no file, so
-  // the effect does nothing for it.
+  // Read the recipe file (or the draft payload) for the details the list entry
+  // does not carry. The sheet unmounts when it closes, so every open starts from
+  // the initial null state; state is only set in the promise callbacks, never
+  // synchronously (same rule as App's startup load). An unrecognized entry has
+  // no file, so the effect does nothing for it.
   useEffect(() => {
     if (fileId === null) return;
     let cancelled = false;
-    void readRecipe(token, fileId)
-      .then((loaded) => {
-        if (!cancelled) setDetails(loaded);
-      })
-      .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
-      });
+    const request =
+      target.kind === 'draft'
+        ? readDraft(token, fileId).then((record) => {
+            if (!cancelled) setDraftDetails(record.draft);
+          })
+        : readRecipe(token, fileId).then((loaded) => {
+            if (!cancelled) setDetails(loaded);
+          });
+    void request.catch((err) => {
+      if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
+    });
     return () => {
       cancelled = true;
     };
-  }, [token, fileId]);
+  }, [token, fileId, target.kind]);
 
   // Escape closes the topmost layer of the sheet through the shared exit
   // trigger (useLeaveGuard), the same one the editor, the AI screen and the
@@ -756,13 +784,13 @@ function RecipeOverview({
   /** "Manuell bearbeiten": closes the menu and hands over to the editor. */
   const openManualEdit = (): void => {
     setOpenMenu(null);
-    if (recipe !== null) onEdit(recipe);
+    if (editableRecipe !== null) onEdit(editableRecipe);
   };
 
   /** "Mit KI bearbeiten": closes the menu and opens the AI-edit screen. */
   const openAiEdit = (): void => {
     setOpenMenu(null);
-    if (recipe !== null) onAiEdit(recipe);
+    if (editableRecipe !== null) onAiEdit(editableRecipe);
   };
 
   /**
@@ -778,7 +806,12 @@ function RecipeOverview({
     onRemoveFromMealPlan();
   };
 
-  const title = target.kind === 'unknown' ? target.title : (details?.title ?? target.recipe.title);
+  const title =
+    target.kind === 'unknown'
+      ? target.title
+      : target.kind === 'draft'
+        ? target.recipe.title
+        : (details?.title ?? target.recipe.title);
   /**
    * The unrecognized entry's trailing free-text note in its written parentheses
    * ("(klassisch)"), or null. It is shown as a line of its own under the title
@@ -786,14 +819,16 @@ function RecipeOverview({
    * name, so the title stays clean.
    */
   const note = target.kind === 'unknown' ? target.note : null;
-  const description = details?.description;
+  const description = target.kind === 'draft' ? draftDetails?.description : details?.description;
   // Times use the core display helper, so number and unit are joined with the
   // narrow no-break space like everywhere else (docs/CODING_CONVENTIONS.md).
+  const prepTimeSource = target.kind === 'draft' ? draftDetails?.prep_time : details?.prep_time;
+  const totalTimeSource = target.kind === 'draft' ? draftDetails?.total_time : details?.total_time;
   const prepTime =
-    details !== null && details.prep_time !== '' ? displayTimeText(details.prep_time) : null;
+    prepTimeSource !== undefined && prepTimeSource !== '' ? displayTimeText(prepTimeSource) : null;
   const totalTime =
-    details?.total_time !== undefined && details.total_time !== ''
-      ? displayTimeText(details.total_time)
+    totalTimeSource !== undefined && totalTimeSource !== ''
+      ? displayTimeText(totalTimeSource)
       : null;
   /**
    * The size this dish is cooked at, as display text, or null.
@@ -802,13 +837,15 @@ function RecipeOverview({
    * otherwise — while the dish is on the plan — the recipe's written size (core's
    * `writtenPlannedAmount`), because that is what a size-less entry's link opens.
    * An unrecognized entry shows the size it states and nothing else: there is no
-   * recipe file to fall back to, and no "Umplanen" action either. A recipe that
-   * is not on the plan shows no "Geplant" value at all — nothing is planned.
+   * recipe file to fall back to, and no "Umplanen" action either. A draft is
+   * never on the plan and shows no "Geplant" value.
    */
   const plannedShown: PlannedAmount | null =
     target.kind === 'unknown'
       ? target.planned
-      : (planned ?? (onMealPlan && details !== null ? writtenPlannedAmount(details) : null));
+      : target.kind === 'recipe'
+        ? (planned ?? (onMealPlan && details !== null ? writtenPlannedAmount(details) : null))
+        : null;
   const plannedText = plannedShown !== null ? formatPlannedAmount(plannedShown) : null;
   /**
    * The unrecognized entry's link, and the domain the "Link" value shows for it,
@@ -823,8 +860,9 @@ function RecipeOverview({
    * Whether the caption/value row has anything to show. An unrecognized entry
    * always has its "Unbekannt" badge in that row (decided with the user: the
    * sheet names the state itself instead of leaving it to its differing
-   * actions), so the row exists even for a bare "Kürbissuppe" line; a
-   * recognized recipe's row exists when it has a plan size or a time.
+   * actions), so the row exists even for a bare "Kürbissuppe" line; a recipe or
+   * draft shows the row when it has a plan size or a time. The draft badge sits
+   * under the title instead, not in this row.
    */
   const hasMeta =
     target.kind === 'unknown' || prepTime !== null || totalTime !== null || plannedText !== null;
@@ -856,37 +894,46 @@ function RecipeOverview({
         aria-modal="true"
         aria-labelledby="overview-title"
       >
-        {/* Hero: only a recognized recipe with a photo has one. An unrecognized
-            entry deliberately shows none (decided with the user) — the list
-            card's danger "unbekannt" symbol already marks it, and its own badge
-            sits in the caption/value row below instead of on an image; its body
-            then starts at the sheet's top padding. A recognized recipe without
-            a photo also shows none (decided with the user): its body starts at
-            the sheet's top padding too, and the list card already carried the
-            room-service placeholder, so the sheet does not repeat it. A
-            recognized recipe's hero carries no badge: that it is on the plan is
-            already stated by its "Geplant" value and its "Umplanen" action, and
-            the home screen only ever shows a planned recipe in the "Essensplan"
-            section ("Restliche Sammlung" leaves the planned ones out). */}
-        {target.kind === 'recipe' && target.recipe.image !== undefined && (
+        {/* Hero: only a recognized recipe or a saved draft with a photo has
+            one. An unrecognized entry deliberately shows none (decided with the
+            user) — the list card's danger "unbekannt" symbol already marks it,
+            and its own badge sits in the caption/value row below instead of on
+            an image; its body then starts at the sheet's top padding. A recipe
+            or draft without a photo also shows none (decided with the user): its
+            body starts at the sheet's top padding too. A recognized recipe's
+            hero carries no badge: that it is on the plan is already stated by
+            its "Geplant" value and its "Umplanen" action. */}
+        {target.kind !== 'unknown' && target.recipe.image !== undefined && (
           <div className="overview-hero">
             <RecipeThumb recipe={target.recipe} token={token} />
           </div>
         )}
 
         <div className="overview-body">
-          <h2 className="overview-title" id="overview-title">
-            {title}
-          </h2>
+          {target.kind === 'draft' ? (
+            <div className="overview-title-block">
+              <h2 className="overview-title" id="overview-title">
+                {title}
+              </h2>
+              <span className="recipe-badge recipe-badge-draft">
+                <PencilIcon className="recipe-badge-icon" optical={20} />
+                <span>Entwurf</span>
+              </span>
+            </div>
+          ) : (
+            <h2 className="overview-title" id="overview-title">
+              {title}
+            </h2>
+          )}
 
           {/* The unrecognized entry's free-text note, in its written
               parentheses and in the description's typography (decided with the
               user): it is a remark about the dish, so it reads under the title,
-              not inside it. Exactly one of the two lines exists — a recipe has
-              a description, an unrecognized entry has a note. */}
+              not inside it. Exactly one of the two lines exists — a recipe or
+              draft has a description, an unrecognized entry has a note. */}
           {note !== null && <p className="overview-description">{note}</p>}
 
-          {target.kind === 'recipe' && description !== undefined && description !== '' && (
+          {target.kind !== 'unknown' && description !== undefined && description !== '' && (
             <p className="overview-description">{description}</p>
           )}
 
@@ -959,12 +1006,14 @@ function RecipeOverview({
             </dl>
           )}
 
-          {target.kind === 'recipe' && details === null && loadError === null && (
-            <p className="overview-loading" role="status">
-              Details werden geladen …
-            </p>
-          )}
-          {target.kind === 'recipe' && loadError !== null && (
+          {(target.kind === 'recipe' || target.kind === 'draft') &&
+            (target.kind === 'draft' ? draftDetails === null : details === null) &&
+            loadError === null && (
+              <p className="overview-loading" role="status">
+                Details werden geladen …
+              </p>
+            )}
+          {target.kind !== 'unknown' && loadError !== null && (
             <p className="overview-error" role="alert">
               {loadError}
             </p>
@@ -1027,6 +1076,44 @@ function RecipeOverview({
                 <CheckBoxIcon optical={20} />
                 <span>Abhaken</span>
               </button>
+            </>
+          ) : target.kind === 'draft' ? (
+            <>
+              {/* A draft's primary action is the manual editor; the AI edit sits
+                  behind "Mehr" exactly like a regular recipe's edit actions. The
+                  sheet offers no cooking, planning, sharing or deletion: the
+                  draft is not cookable or planable, and deletion stays in the
+                  editor's danger zone. */}
+              <button type="button" className="overview-action is-primary" onClick={openManualEdit}>
+                <PencilIcon optical={20} />
+                <span>Manuell bearbeiten</span>
+              </button>
+              <div className="overview-more" ref={menuWrapRef}>
+                <button
+                  type="button"
+                  className={openMenu === 'more' ? 'overview-action is-open' : 'overview-action'}
+                  aria-haspopup="menu"
+                  aria-expanded={openMenu === 'more'}
+                  onClick={() => toggleMenu('more')}
+                >
+                  <MoreVertIcon optical={20} />
+                  <span>Mehr</span>
+                </button>
+
+                {openMenu === 'more' && menuStyle !== undefined && (
+                  <div
+                    className="overview-menu"
+                    role="menu"
+                    aria-label="Weitere Aktionen"
+                    style={menuStyle}
+                  >
+                    <button type="button" role="menuitem" onClick={openAiEdit}>
+                      <SparkleIcon optical={20} />
+                      <span>Mit KI bearbeiten</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <>

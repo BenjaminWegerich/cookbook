@@ -47,6 +47,7 @@ import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons'
 import { TIKTOK_EXTRACTOR_URL } from './config';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { listCookbookFolder } from './drive/cookbookFolder';
+import { listDrafts } from './drive/draftStorage';
 import { loadIngredientMasterData } from './drive/ingredientMasterData';
 import {
   appendShoppingItems,
@@ -293,13 +294,20 @@ function App() {
    *  the login button); shows a status line on the login panel meanwhile. */
   const [connecting, setConnecting] = useState(false);
   const [recipes, setRecipes] = useState<StoredRecipe[] | null>(null);
+  /**
+   * Saved, unfinished drafts (`Entwürfe/`). Kept separate from `recipes` so
+   * every existing collection consumer (meal plan, shopping, sub-recipes,
+   * master data) keeps seeing canonical recipes only; the home screen merges
+   * both arrays for display.
+   */
+  const [drafts, setDrafts] = useState<StoredRecipe[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Non-fatal warning when the Drive master data could not be loaded; the
    *  built-in seed keeps the app functional (see ingredientMasterData.ts). */
   const [masterDataWarning, setMasterDataWarning] = useState<string | null>(null);
   /**
    * Collection files that still lie directly in the Cookbook root instead of in
-   * one of the four subfolders. The app cannot read them there, so the list is
+   * one of the five subfolders. The app cannot read them there, so the list is
    * shown as a warning after startup (see cookbookFolder.ts).
    */
   const [strayFiles, setStrayFiles] = useState<readonly string[]>([]);
@@ -740,10 +748,15 @@ function App() {
     [scrollMemory],
   );
 
-  /** Refreshes the recipe list from the Google Drive recipe folder. */
+  /** Refreshes the recipe list and the saved drafts from Google Drive. */
   const refreshRecipes = useCallback(async (activeToken: string): Promise<void> => {
     try {
-      setRecipes(await listRecipes(activeToken));
+      const [recipeList, draftList] = await Promise.all([
+        listRecipes(activeToken),
+        listDrafts(activeToken),
+      ]);
+      setRecipes(recipeList);
+      setDrafts(draftList);
       setError(null);
     } catch (err) {
       // A 401 is handled by the re-auth hook (below); showing the raw Drive
@@ -761,10 +774,11 @@ function App() {
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    void listRecipes(token)
-      .then((result) => {
+    void Promise.all([listRecipes(token), listDrafts(token)])
+      .then(([recipeList, draftList]) => {
         if (cancelled) return;
-        setRecipes(result);
+        setRecipes(recipeList);
+        setDrafts(draftList);
         setError(null);
       })
       .catch((err) => {
@@ -1124,6 +1138,7 @@ function App() {
     tokenRef.current = null;
     setToken(null);
     setRecipes(null);
+    setDrafts(null);
     setError(null);
     setMasterDataWarning(null);
     setStrayFiles([]);
@@ -1335,6 +1350,14 @@ function App() {
    */
   const openCollectionOverview = useCallback(
     (recipe: StoredRecipe): void => {
+      // A draft has its own overview state: no plan value, no cooking, and
+      // "Manuell bearbeiten" / "Mit KI bearbeiten" as its actions. It is not in
+      // the meal-plan resolution, so no plan lookups apply.
+      if (recipe.status === 'draft') {
+        setOverviewTarget({ kind: 'draft', recipe });
+        setNav('overview');
+        return;
+      }
       const resolution = mealPlanResolution;
       setOverviewTarget({
         kind: 'recipe',
@@ -1769,12 +1792,15 @@ function App() {
         const texts = (keep.state?.mealplan.items ?? []).map((item) => item.text);
         entries = mealPlanEntriesForTitle(texts, activeOverviewTarget.recipe.title);
         name = activeOverviewTarget.recipe.title;
-      } else {
+      } else if (activeOverviewTarget.kind === 'unknown') {
         // The unrecognized entry's complete text is the exact Keep line; its
         // display text (the line without the export URL) is what the sheet shows
         // as the title and what the notice names.
         entries = [activeOverviewTarget.text];
         name = activeOverviewTarget.displayText;
+      } else {
+        // A draft has no plan entry and the sheet offers no "Abhaken".
+        return;
       }
       try {
         await checkMealPlan(entries);
@@ -2284,6 +2310,16 @@ function App() {
    */
   const plannedRecipeTitles = mealPlanResolution?.plannedRecipeTitles ?? NO_PLANNED_TITLES;
 
+  /**
+   * The home screen's collection: canonical recipes plus saved drafts. `null`
+   * until both loads finished, so the list never flashes without its drafts.
+   * Every other consumer keeps using `recipes` (canonical only).
+   */
+  const collection = useMemo(
+    () => (recipes === null || drafts === null ? null : [...recipes, ...drafts]),
+    [recipes, drafts],
+  );
+
   return (
     <>
       {/* The AI screen (create or edit) stays mounted while its own draft is
@@ -2524,11 +2560,11 @@ function App() {
             <p className="error-message" role="alert">
               {error}
             </p>
-          ) : recipes === null ? (
+          ) : collection === null ? (
             <p className="loading-message" role="status">
               Rezepte werden geladen …
             </p>
-          ) : recipes.length === 0 ? (
+          ) : collection.length === 0 ? (
             <>
               <section className="empty-state">
                 <p>Noch keine Rezepte im Cookbook-Ordner.</p>
@@ -2544,7 +2580,7 @@ function App() {
           ) : (
             <>
               <RecipeList
-                recipes={recipes}
+                recipes={collection}
                 token={token}
                 onOpenRecipe={openCollectionOverview}
                 onOpenPlanCard={openMealPlanOverview}

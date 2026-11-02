@@ -57,12 +57,31 @@
   background: var(--color-bg);
 }
 
-/* The action row itself: „Zurück" left, the primary action right. */
+/* The action row itself: „Zurück" left, the save actions right. */
 .editor-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+/* The right-hand group: the quiet draft save next to the primary save. It wraps
+   only as a last resort on a very narrow viewport; both actions keep their own
+   hit area. */
+.editor-save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* „Entwurf speichern" is a quiet text button with the action height: it is an
+   action, not navigation, so it never falls below --control-height. */
+.draft-save-button {
+  min-height: var(--control-height);
+  padding-inline: var(--space-3);
+  color: var(--color-ochre);
 }
 
 /* ---- Lost Drive session -------------------------------------------------- */

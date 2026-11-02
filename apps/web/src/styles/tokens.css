@@ -24,6 +24,7 @@
   --color-accent: #ad5632; /* primary clay/terracotta */
   --color-olive: #63723f; /* secondary "herb" accent */
   --color-danger: #a63b2c; /* delete / errors */
+  --color-ochre: #96632b; /* unfinished saved draft (badge, quiet save) */
   --color-on-accent: #fffcf6; /* text on accent surfaces */
 
   /* ---- State ------------------------------------------------------------ */

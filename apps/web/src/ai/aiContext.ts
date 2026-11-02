@@ -204,8 +204,35 @@ export function buildSpecificationsText(spec: RecipeSpecifications): string {
  *
  * The file is embedded fenced so its front matter and headings cannot be read
  * as instructions of the context block around it.
+ *
+ * `unfinishedDraft` starts the task from an unfinished draft summary instead of
+ * a canonical file: the draft may miss mandatory fields, so the task explicitly
+ * allows — and asks for — completing them. The AI still returns one complete,
+ * canonical recipe, which the session validates like every edit reply.
  */
-export function buildEditTaskText(originalText: string): string {
+export interface EditTaskOptions {
+  /** The original is a draft: preserve what exists and fill what is missing. */
+  unfinishedDraft?: boolean;
+}
+
+export function buildEditTaskText(originalText: string, options: EditTaskOptions = {}): string {
+  if (options.unfinishedDraft === true) {
+    return (
+      '# Auftrag\n\n' +
+      'Überarbeite den folgenden unfertigen Rezeptentwurf. Er ist absichtlich unvollständig — ' +
+      'Pflichtfelder können fehlen. Übernimm alle vorhandenen Angaben und ergänze nur, was für ' +
+      'eine vollständige, gültige Rezeptdatei nötig ist. Der Nutzer beschreibt die gewünschten ' +
+      'Änderungen; alles, was er nicht nennt, bleibt inhaltlich unverändert.\n' +
+      '- Erhalte vorhandene Titel, Typ, Zeiten, `description`, `reference` und `theme`, soweit sie da sind.\n' +
+      '- Ergänze fehlende Pflichtfelder sinnvoll: Titel, `servings` bzw. `yield`/`yield_unit`, ' +
+      'Arbeitszeit, mindestens einen Schritt mit Text und gültige Zutatenzeilen.\n' +
+      '- Setze Änderungen vollständig um: Portionsänderung skaliert alle Mengen und `servings`; ' +
+      'entfernte Zutat verschwindet aus Zeilen und Inline-Erwähnungen; Einheitenkorrektur hält ' +
+      'die Mengenregeln ein.\n' +
+      '- Liefere die vollständige, gültige Rezeptdatei im kanonischen Format zurück.\n\n' +
+      `\`\`\`text\n${originalText.trimEnd()}\n\`\`\``
+    );
+  }
   return (
     '# Auftrag\n\n' +
     'Überarbeite das folgende Rezept — es ist die verbindliche Ausgangsfassung. Der Nutzer ' +

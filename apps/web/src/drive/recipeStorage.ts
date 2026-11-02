@@ -70,7 +70,11 @@ export interface RecipeImage {
 /** A recipe in the collection: its Drive file plus optional photo. */
 export interface StoredRecipe {
   fileId: string;
-  /** Recipe title — equals the file name without the `.md` extension (§2). */
+  /**
+   * The display title: for a canonical recipe it equals the file name without
+   * the `.md` extension (§2). For a saved draft it is the payload's title, or
+   * „Unbenannt“ when the draft has none; the draft's file name is an internal id.
+   */
   title: string;
   /**
    * The recipe's declared type (§3), read from its file while listing. Null
@@ -79,6 +83,12 @@ export interface StoredRecipe {
    * file never vanishes among the ingredient recipes.
    */
   type: RecipeType | null;
+  /**
+   * 'draft' for a saved, unfinished recipe in the `Entwürfe` area; absent for a
+   * canonical recipe. A draft is listed and opened like a recipe but is never
+   * cooked, planned, shopped for or linked as a sub-recipe.
+   */
+  status?: 'draft';
   /**
    * For an ingredient recipe: the base-unit family its `yield_unit` resolves
    * to ("g" or "ml"), read while listing. This is the unit its ingredient

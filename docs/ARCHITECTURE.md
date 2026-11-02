@@ -40,7 +40,12 @@
   minutes before Google's reported expiry. Independently of the session, the editor writes a
   debounced, text-only copy of the working draft to localStorage (one slot, 30 days,
   `components/recipeDraftRecovery.ts`); opening the same recipe offers it back through
-  `components/DraftRecoverySheet.tsx`, and saving or discarding clears it.
+  `components/DraftRecoverySheet.tsx`, and saving or discarding clears it. Independently of
+  that safety copy, the editor can save a draft deliberately: „Entwurf speichern“ writes the
+  working state to the `Entwürfe` subfolder as a saved, unfinished recipe, even when
+  mandatory fields are empty or normal validation would block the save. Drafts are marked
+  in the list and overview and are excluded from cooking, meal planning, shopping,
+  sub-recipe links and exports until a normal save promotes them (see “Draft storage”).
 
 ### Core logic module (framework-free TypeScript)
 
@@ -104,6 +109,18 @@
   collection.
 - Single source of truth, read by the web app, the HTML export, and (later) the backend
   module and the Gemini for Home preparation.
+- **Draft storage.** A saved, unfinished recipe lives in the `Entwürfe` subfolder as one
+  app-owned JSON file per draft (`apps/web/src/drive/draftStorage.ts`), not as a canonical
+  recipe. The payload is the editor's working draft plus a version and timestamp; it may
+  contain states `Rezepte/` deliberately rejects (no title, no servings, a row-only step,
+  a duplicate title). A draft's optional photo lives in `Bilder/<draft-id>.jpg` / `.png`.
+  `listDrafts` merges drafts into the home screen, where they lead „Restliche Sammlung“
+  with the „Entwurf“ badge. The editor reads a draft through `readDraft`; „Speichern“
+  validates it, creates the canonical recipe (including master-data registration and the
+  export), renames the photo and deletes the draft. Drafts are excluded from meal-plan
+  recognition, scaling, shopping, sub-recipe links and the §7.2 collection validation.
+  Deleting a draft removes its JSON file and its photo. The format is specified in
+  [storage_format.md](storage_format.md) §11.
 - Ingredient master data lives in two CSV files in the `Stammdaten` subfolder — `zutaten.csv`
   (ingredient list: name + base unit + reorder point + the optional Singular/Plural display
   forms) and `zutaten-umrechnungen.csv` (AU mappings, each with the per-ingredient

@@ -23,6 +23,11 @@
  *   sub-recipe discards its own draft, the parent below keeps its own;
  * - quantities are stored in the family unit g/ml; the display switches to
  *   kg/l at 1000 (chips carry base quantity AND base unit, no steppers);
+ * - a new recipe or an already-saved draft offers the quiet „Entwurf speichern"
+ *   next to „Speichern". It writes the working state to `Entwürfe/` without any
+ *   validation, so empty mandatory fields and warnings cannot block it; a
+ *   finished recipe shows only „Speichern" and cannot be demoted by accident.
+ *   A normal save of a draft validates it and promotes it to a canonical recipe;
  * - sections: Kopfdaten (Titel, Details, Typ, Portionen/Ergiebigkeit,
  *   Zeiten, Bild), one card per step (there is no „Zubereitung" card or heading:
  *   the card rung never nests, §4.4), Zutaten, Design.
@@ -93,6 +98,13 @@ import {
   writeRecipeExportSafely,
   type StoredRecipe,
 } from '../drive/recipeStorage';
+import {
+  createDraft,
+  deleteDraft,
+  promoteDraft,
+  readDraft,
+  updateDraft as updateSavedDraft,
+} from '../drive/draftStorage';
 import { isDriveAuthError } from '../drive/driveClient';
 import { listCookbookFolder } from '../drive/cookbookFolder';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
@@ -191,6 +203,10 @@ function baselineDraftFor(target: StoredRecipe | null, initialDraft?: Recipe): E
   if (target === null) {
     return initialDraft !== undefined ? toDraft(initialDraft) : newRecipeDraft();
   }
+  // A draft has its own JSON payload, not a canonical file. There is no
+  // synchronous cache for it, so the load effect reads it and the form shows its
+  // loading state for the first moment.
+  if (target.status === 'draft') return null;
   const cached = peekRecipeContent(target.fileId);
   if (cached === undefined) return null;
   try {
@@ -1196,6 +1212,8 @@ function RecipeEditor({
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** True while the in-flight save is the quiet „Entwurf speichern" (labels). */
+  const [savingDraft, setSavingDraft] = useState(false);
   /**
    * The destructive action the confirmation sheet is asking about, if any:
    * deleting the recipe, removing the photo or removing one step. §6.4: an
@@ -1218,6 +1236,12 @@ function RecipeEditor({
   const [photoChange, setPhotoChange] = useState<PhotoChange | null>(null);
   /** Drive file id of a newly created recipe (so a retry updates instead of duplicating). */
   const createdFileRef = useRef<string | null>(null);
+  /**
+   * Drive file id of a saved draft created by a failed „Entwurf speichern" in
+   * this editor. A retry updates that draft instead of creating a second one;
+   * a later normal save deletes it after the canonical recipe exists.
+   */
+  const createdDraftFileRef = useRef<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<SheetState | null>(null);
@@ -1321,7 +1345,9 @@ function RecipeEditor({
       try {
         const baseline =
           target !== null
-            ? toDraft(await readRecipe(token, target.fileId))
+            ? target.status === 'draft'
+              ? (await readDraft(token, target.fileId)).draft
+              : toDraft(await readRecipe(token, target.fileId))
             : initialDraft !== undefined
               ? toDraft(initialDraft)
               : newRecipeDraft();
@@ -1421,18 +1447,21 @@ function RecipeEditor({
   );
 
   /**
-   * The draft text would change the saved file (unsaved text changes). Compared
-   * on the normalized forms: defaulted fields that do not reach the file (e.g.
-   * the yield defaults written when toggling the type) are not "dirty". This is
-   * what the local recovery copy can capture; the exit guard below uses `dirty`,
-   * which also counts a queued photo change.
+   * The draft text would change the saved file (unsaved text changes). A
+   * canonical recipe is compared on the normalized form: defaulted fields that
+   * do not reach the file (e.g. the yield defaults written when toggling the
+   * type) are not "dirty". A saved draft is compared raw: its whole working
+   * state is persisted, including an empty step the normalization would drop.
+   * This is what the local recovery copy can capture; the exit guard below uses
+   * `dirty`, which also counts a queued photo change.
    */
   const textDirty = useMemo(
     () =>
       draft !== null &&
       original !== null &&
-      JSON.stringify(normalizeRecipe(draft)) !== JSON.stringify(normalizeRecipe(original)),
-    [draft, original],
+      JSON.stringify(target?.status === 'draft' ? draft : normalizeRecipe(draft)) !==
+        JSON.stringify(target?.status === 'draft' ? original : normalizeRecipe(original)),
+    [draft, original, target?.status],
   );
 
   /** Any unsaved work, text or photo. */
@@ -1458,6 +1487,7 @@ function RecipeEditor({
         ? {
             targetFileId: target?.fileId ?? null,
             createdFileId: createdFileRef.current,
+            createdDraftFileId: createdDraftFileRef.current,
             draft,
             savedAt: Date.now(),
           }
@@ -1523,7 +1553,11 @@ function RecipeEditor({
    * (see the render below).
    */
   const guard = useLeaveGuard({
-    workSignature: `${draft === null ? '' : JSON.stringify(normalizeRecipe(draft))}\u0000${photoChange === null ? '' : photoChange.kind}`,
+    workSignature: `${
+      draft === null
+        ? ''
+        : JSON.stringify(target?.status === 'draft' ? draft : normalizeRecipe(draft))
+    }\u0000${photoChange === null ? '' : photoChange.kind}`,
     needsConfirm: dirty,
   });
 
@@ -1823,6 +1857,7 @@ function RecipeEditor({
     // keyboard shortcut or a stale click must not start a doomed Drive write.
     if (draft === null || saving || sessionLost || token === '') return;
     const savedRecipe = normalizeRecipe(draft);
+    const draftTarget = target?.status === 'draft';
     // A Zutaten-Rezept whose master row does not exist yet gets one created by
     // the save below. Remember that before the write: after it, the registry
     // always holds the row. A rename carries an existing row to the new title
@@ -1851,8 +1886,24 @@ function RecipeEditor({
     }
     setIssues([]);
     setSaving(true);
+    setSavingDraft(false);
     try {
-      if (target !== null) {
+      if (target !== null && draftTarget) {
+        // A saved draft becomes a canonical recipe: validate (done above),
+        // apply the queued photo to the draft first, then promote. The draft
+        // file is deleted after the recipe exists; a leftover draft is reported
+        // instead of silently claiming success.
+        if (photoChange !== null) {
+          await applyPhotoChange(photoChange, target.fileId);
+        }
+        const promotion = await promoteDraft(token, target.fileId, savedRecipe);
+        if (!promotion.draftDeleted) {
+          showSnackbar({
+            tone: 'error',
+            text: `Das Rezept wurde gespeichert, aber der Entwurf „${target.title}“ konnte nicht gelöscht werden. Bitte lösche ihn im Editor.`,
+          });
+        }
+      } else if (target !== null) {
         await saveRecipe(
           token,
           target.fileId,
@@ -1882,6 +1933,22 @@ function RecipeEditor({
           // Same as above: re-bake the export with the freshly uploaded photo.
           await writeRecipeExportSafely(token, savedRecipe);
         }
+        // A draft file created by an earlier failed „Entwurf speichern" in this
+        // same editor is now superseded by the canonical recipe.
+        if (createdDraftFileRef.current !== null) {
+          const draftFileId = createdDraftFileRef.current;
+          createdDraftFileRef.current = null;
+          try {
+            await deleteDraft(token, draftFileId);
+          } catch (error) {
+            showSnackbar({
+              tone: 'error',
+              text: `Das Rezept wurde gespeichert, aber ein früherer Entwurf konnte nicht gelöscht werden: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            });
+          }
+        }
       }
       setPhotoChange(null);
       // Every write of this save succeeded: the work is no longer at risk, even
@@ -1893,6 +1960,7 @@ function RecipeEditor({
         // state) so the sheet can sit on top of it; closing the sheet then
         // continues the normal exit through onSaved.
         setSaving(false);
+        setSavingDraft(false);
         pendingSavedRecipeRef.current = savedRecipe;
         setPendingSavedTitle(savedRecipe.title);
         setMasterEditError(null);
@@ -1902,6 +1970,7 @@ function RecipeEditor({
       onSaved(savedRecipe);
     } catch (err) {
       setSaving(false);
+      setSavingDraft(false);
       // A 401 is not a validation problem: when the session is really gone the
       // header switches to the reconnect and the banner explains it. When a
       // proactive refresh replaced the token just as this write started, the
@@ -1925,12 +1994,86 @@ function RecipeEditor({
     }
   };
 
-  /** Deletes the recipe (file + photo + export) after the two-step confirm. */
+  /**
+   * Saves the working state as a saved, unfinished draft (docs/storage_format.md
+   * §11). Deliberately runs no validation: an empty title, missing servings, a
+   * row-only step or an unknown ingredient must all be storable. The draft is
+   * written to `Entwürfe/`; a queued photo follows it. A successful save exits
+   * to the list and clears the local recovery copy, because the work is now
+   * safe on Drive.
+   */
+  const handleSaveDraft = async (): Promise<void> => {
+    if (draft === null || saving || sessionLost || token === '') return;
+    // The quiet save exists only for a new recipe or an already-saved draft.
+    // A finished recipe shows no button; this guard keeps a stale click harmless.
+    if (target !== null && target.status !== 'draft') return;
+    setIssues([]);
+    setSaving(true);
+    setSavingDraft(true);
+    try {
+      let fileId = target?.status === 'draft' ? target.fileId : createdDraftFileRef.current;
+      if (fileId === null) {
+        const created = await createDraft(token, draft);
+        fileId = created.id;
+        createdDraftFileRef.current = fileId;
+      } else {
+        await updateSavedDraft(token, fileId, draft);
+      }
+      if (photoChange !== null) {
+        await applyPhotoChange(photoChange, fileId);
+      }
+      // A canonical file created by an earlier failed normal save is now
+      // superseded by this draft: keep the working state in one place instead
+      // of leaving a half-saved recipe and a draft side by side.
+      if (target === null && createdFileRef.current !== null) {
+        const canonicalFileId = createdFileRef.current;
+        createdFileRef.current = null;
+        try {
+          await deleteRecipe(token, canonicalFileId);
+        } catch (error) {
+          showSnackbar({
+            tone: 'error',
+            text: `Der Entwurf wurde gespeichert, aber das zuvor angelegte Rezept konnte nicht entfernt werden: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          });
+        }
+      }
+      setPhotoChange(null);
+      forgetRecoveryCopy();
+      showSnackbar({ text: 'Als Entwurf gespeichert.' });
+      onSaved(null);
+    } catch (err) {
+      setSaving(false);
+      setSavingDraft(false);
+      if (isDriveAuthError(err)) {
+        setIssues([
+          {
+            path: 'global',
+            message: 'Der Entwurf konnte nicht gespeichert werden. Bitte versuche es erneut.',
+          },
+        ]);
+        return;
+      }
+      setIssues([
+        {
+          path: 'global',
+          message: err instanceof Error ? err.message : String(err),
+        },
+      ]);
+    }
+  };
+
+  /** Deletes the recipe (file + photo + export) or the saved draft. */
   const handleDelete = async (): Promise<void> => {
     if (target === null || saving || sessionLost || token === '') return;
     setSaving(true);
     try {
-      await deleteRecipe(token, target.fileId);
+      if (target.status === 'draft') {
+        await deleteDraft(token, target.fileId);
+      } else {
+        await deleteRecipe(token, target.fileId);
+      }
       forgetRecoveryCopy();
       onSaved(null);
     } catch (err) {
@@ -2431,7 +2574,9 @@ function RecipeEditor({
   const confirmLabel = guard.armed
     ? 'Verwerfen'
     : pendingConfirm?.kind === 'delete'
-      ? 'Rezept löschen'
+      ? target?.status === 'draft'
+        ? 'Entwurf löschen'
+        : 'Rezept löschen'
       : 'Entfernen';
 
   /** The sheet's confirmed answer: it leaves for real, or runs the pending action. */
@@ -2455,8 +2600,12 @@ function RecipeEditor({
   const restoreRecovery = (): void => {
     if (recovery === null) return;
     // A new recipe that was already created by a failed save must be updated,
-    // not created a second time (Drive allows duplicate names).
+    // not created a second time (Drive allows duplicate names). The same holds
+    // for a saved draft created by a failed „Entwurf speichern".
     if (recovery.createdFileId !== null) createdFileRef.current = recovery.createdFileId;
+    if (recovery.createdDraftFileId !== null) {
+      createdDraftFileRef.current = recovery.createdDraftFileId;
+    }
     setDraft(recovery.draft);
     setRecovery(null);
   };
@@ -2629,17 +2778,25 @@ function RecipeEditor({
   /** The entry behind the open master-data sheet, or undefined if the registry changed. */
   const masterEditEntry = masterEditName === null ? undefined : mappingsFor(masterEditName);
 
+  /**
+   * A new recipe and an already-saved draft can be parked as a draft. A
+   * finished recipe only shows the normal save: it must not be demoted to an
+   * unfinished state by accident.
+   */
+  const canSaveDraft = target === null || target.status === 'draft';
+
   return (
     <main className="app app-narrow">
       <section className="editor" aria-label="Rezept-Editor">
         <div className="editor-header">
-          {/* One action row: „Zurück" · the primary action. Normally that is
-              „Speichern" and its label never changes; a lost Drive session is
-              the one exception — the editor stays mounted with its draft (the
-              whole point), and the primary action becomes the re-login the
-              header can offer without leaving the form. The discard question
-              stays a sheet over the screen (LeaveConfirmSheet, §6.2) — a layer,
-              not a line in this header. */}
+          {/* One action row: „Zurück" left, the save actions right. „Speichern"
+              is the primary action and keeps its label; a new recipe or a draft
+              additionally offers the quiet „Entwurf speichern", which writes the
+              working state without validation. A lost Drive session is the one
+              exception — the editor stays mounted with its draft (the whole
+              point), and the right side becomes the re-login. The discard
+              question stays a sheet over the screen (LeaveConfirmSheet, §6.2) —
+              a layer, not a line in this header. */}
           <div className="editor-actions">
             <button
               type="button"
@@ -2659,15 +2816,28 @@ function RecipeEditor({
                 {reconnecting ? 'Anmeldung läuft …' : 'Erneut anmelden'}
               </button>
             ) : (
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => void handleSave()}
-                disabled={saving}
-                aria-busy={saving}
-              >
-                {saving ? 'Speichert …' : 'Speichern'}
-              </button>
+              <div className="editor-save-actions">
+                {canSaveDraft && (
+                  <button
+                    type="button"
+                    className="text-button draft-save-button"
+                    onClick={() => void handleSaveDraft()}
+                    disabled={saving}
+                    aria-busy={savingDraft}
+                  >
+                    {savingDraft ? 'Speichert …' : 'Entwurf speichern'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void handleSave()}
+                  disabled={saving}
+                  aria-busy={saving && !savingDraft}
+                >
+                  {saving && !savingDraft ? 'Speichert …' : 'Speichern'}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -3365,7 +3535,10 @@ function RecipeEditor({
 
         {/* Danger zone (edit mode only) */}
         {target !== null && (
-          <section className="editor-card danger-zone" aria-label="Rezept löschen">
+          <section
+            className="editor-card danger-zone"
+            aria-label={target.status === 'draft' ? 'Entwurf löschen' : 'Rezept löschen'}
+          >
             <button
               type="button"
               className="danger-button"
@@ -3373,7 +3546,7 @@ function RecipeEditor({
               disabled={saving || sessionLost}
             >
               <TrashIcon className="button-icon" optical={20} />
-              <span>Rezept löschen</span>
+              <span>{target.status === 'draft' ? 'Entwurf löschen' : 'Rezept löschen'}</span>
             </button>
           </section>
         )}

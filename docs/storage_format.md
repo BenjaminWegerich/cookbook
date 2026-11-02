@@ -30,15 +30,18 @@
 
 ## 2. File Layout and Naming
 
-- The collection is a folder (in the chosen cloud storage) with four subfolders:
+- The collection is a folder (in the chosen cloud storage) with five subfolders:
   - `Rezepte/` — one `.md` file per recipe;
+  - `Entwürfe/` — one JSON file per saved, unfinished draft (§11);
   - `Exporte/` — the generated `<title>.html` cooking views (§8);
-  - `Bilder/` — the recipe photos;
+  - `Bilder/` — the recipe photos (and a draft's photo, named by the draft id);
   - `Stammdaten/` — the CSV master data and `rezept-richtlinien.md` (§9, §10).
 
   Nothing lives directly in the collection folder: the app reads and writes one
   level below it. A file left in the collection root is not picked up (the app
-  reports it instead of silently ignoring it).
+  reports it instead of silently ignoring it). The five areas are separate on
+  purpose: `Rezepte/` only ever contains canonical recipes, while a draft may
+  hold states the canonical format rejects (§11).
 - **File name = title**, e.g. `Rezepte/Shredded Tofu Wraps.md`.
   - Title characters that are invalid in file names (`/`, `\`, `:` etc.) are
     disallowed in titles; the schema validation enforces this.
@@ -488,7 +491,53 @@ Deliberately not in this data: how a Keep line is matched to an item name (that 
 work, docs/shopping_item_identity.md §2), where unassigned items are placed, and Keep's sort
 ids.
 
-## 11. Relationship to Other Documents
+## 11. Drafts (`Entwürfe/`)
+
+A saved, unfinished recipe is a **draft**, not a canonical recipe. It lives in the
+`Entwürfe` subfolder as one JSON file per draft, named by an app-generated id
+(`draft-<id>.json`). The canonical `Rezepte/` folder never contains a draft, and a draft is
+not a recipe for cooking, scaling, meal planning, shopping or exporting.
+
+Why this is a separate format: the editor's working draft may not satisfy §3 or §5 at all —
+no title, no servings/yield, a step with counted rows but no prose, a duplicate title, or an
+unknown ingredient. Those are exactly the states a draft must preserve, and the canonical
+format deliberately rejects them. The draft payload therefore keeps the editor's working
+fields losslessly:
+
+```json
+{
+  "version": 1,
+  "savedAt": 1762112345678,
+  "draft": {
+    "title": "",
+    "type": "finished_dish",
+    "prep_time": "",
+    "steps": [{ "ingredients": [], "text": "" }]
+  }
+}
+```
+
+- `version` is the payload shape version; an incompatible change bumps it, and an unknown
+  version is not read.
+- `savedAt` is the client's epoch milliseconds at the last write.
+- `draft` holds the editor fields: `title`, `type`, `description?`, `prep_time`,
+  `total_time?`, `servings?` or `yield?` + `yield_unit?`, `reference?`, `theme?`, and
+  `steps` (each with `ingredients` and `text`). Every field is optional except `type` and
+  `steps`; a draft may be empty. The derived `ingredients` list is never stored.
+- A draft's optional photo is `Bilder/<draft-id>.jpg` / `.png`, where `<draft-id>` is the
+  draft file's basename without `.json`. The id, not the title, names the file, so an empty
+  or duplicate title is allowed and no filename-safety rule applies yet.
+- A draft becomes a recipe only on a normal save: the editor validates the draft against
+  §7, writes the canonical file to `Rezepte/`, renames the photo to the recipe title,
+  generates the export and deletes the draft. If validation fails, the draft stays a draft
+  and the editor reports the issues. The normal save of a draft therefore uses the canonical
+  checks, not the draft payload.
+- Drafts are outside the collection for §7.2 validation, sub-recipe links, meal-plan
+  recognition, shopping and ingredient-master registration. The app lists them in the
+  collection and marks them with the „Entwurf“ badge (docs/DESIGN.md §5.7).
+- Deleting a draft deletes its JSON file and its photo sibling.
+
+## 12. Relationship to Other Documents
 
 - [recipe_structure.md](recipe_structure.md) — logical model this encoding implements.
 - [quantity_scaling.md](quantity_scaling.md) — how the stored target `V0` is scaled and

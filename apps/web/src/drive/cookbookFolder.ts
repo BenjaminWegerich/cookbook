@@ -6,11 +6,12 @@
  *
  *     Cookbook/
  *       Rezepte/      one `<Titel>.md` per recipe
+ *       Entwürfe/     one `draft-<id>.json` per saved, unfinished draft
  *       Exporte/      the generated `<Titel>.html` cooking views
- *       Bilder/       the recipe photos (`<Titel>.jpg` / `.png`)
+ *       Bilder/       the recipe photos (`<Titel>.jpg` / `.png`; drafts by id)
  *       Stammdaten/   the CSV master data and `rezept-richtlinien.md`
  *
- * The app addresses files through these four subfolders, one level below the
+ * The app addresses files through these five subfolders, one level below the
  * container. A file that still lies directly in the Cookbook root is therefore
  * invisible to every read path — which is why a listing reports such leftovers
  * as {@link CookbookFolder.strayFiles}, so the UI can ask the user to move them
@@ -46,18 +47,20 @@ const COOKBOOK_FOLDER_NAME = 'Cookbook';
 const FOLDER_ID_KEY = 'cookbook.recipeFolderId';
 
 /**
- * The four subfolders of the Cookbook folder, keyed by the role the code uses
+ * The five subfolders of the Cookbook folder, keyed by the role the code uses
  * and named as the user sees them in Drive (German, capitalized like every
- * other noun in the UI).
+ * other noun in the UI). `drafts` holds saved, unfinished drafts as app-owned
+ * JSON files; `recipes` only ever contains canonical recipes.
  */
 export const COOKBOOK_SUBFOLDERS = {
   recipes: 'Rezepte',
+  drafts: 'Entwürfe',
   exports: 'Exporte',
   images: 'Bilder',
   data: 'Stammdaten',
 } as const;
 
-/** Which of the four subfolders a file belongs to. */
+/** Which of the five subfolders a file belongs to. */
 export type CookbookArea = keyof typeof COOKBOOK_SUBFOLDERS;
 
 /**
@@ -65,7 +68,7 @@ export type CookbookArea = keyof typeof COOKBOOK_SUBFOLDERS;
  * the Cookbook root is a leftover from the flat layout and worth a warning; an
  * unrelated file (a PDF, a note the user dropped there) is left alone.
  */
-const COLLECTION_FILE_PATTERN = /\.(?:md|html|csv|jpe?g|png)$/i;
+const COLLECTION_FILE_PATTERN = /\.(?:md|json|html|csv|jpe?g|png)$/i;
 
 /**
  * Returns the id of the Cookbook folder, creating it on first use.
@@ -96,7 +99,7 @@ export interface CookbookSubfolder {
 }
 
 /**
- * One resolved Cookbook collection: the container id, its four subfolders with
+ * One resolved Cookbook collection: the container id, its five subfolders with
  * their files, and any collection file still lying in the root.
  *
  * A save that has to write two master-data sets (the new-ingredient flow writes
@@ -112,12 +115,13 @@ export interface CookbookSubfolder {
 export interface CookbookFolder {
   readonly id: string;
   readonly recipes: CookbookSubfolder;
+  readonly drafts: CookbookSubfolder;
   readonly exports: CookbookSubfolder;
   readonly images: CookbookSubfolder;
   readonly data: CookbookSubfolder;
   /**
-   * Names of collection files (`*.md`, `*.html`, `*.csv`, `*.jpg`, `*.png`)
-   * that still lie directly in the Cookbook root, i.e. outside the four
+   * Names of collection files (`*.md`, `*.json`, `*.html`, `*.csv`, `*.jpg`,
+   * `*.png`) that still lie directly in the Cookbook root, i.e. outside the five
    * subfolders. The app does not read them; the list exists so the UI can tell
    * the user to move them (see App.tsx).
    */
@@ -168,23 +172,24 @@ function strayFileNames(children: readonly DriveFile[]): string[] {
  * In-flight listing, shared by concurrent callers. The app starts several
  * independent loads at once (recipe list, both master-data pairs), and each of
  * them needs the same folder snapshot; without this they would list the
- * container and all subfolders four times over. The promise is dropped as soon
+ * container and all subfolders five times over. The promise is dropped as soon
  * as it settles, so a later call always sees fresh metadata.
  */
 let pendingListing: Promise<CookbookFolder> | null = null;
 let pendingListingToken: string | null = null;
 
-/** Resolves the container and lists all four subfolders in one snapshot. */
+/** Resolves the container and lists all five subfolders in one snapshot. */
 async function loadCookbookFolder(token: string): Promise<CookbookFolder> {
   const id = await ensureRecipeFolder(token);
   const children = await listFilesInFolder(token, id);
-  const [recipes, exports, images, data] = await Promise.all([
+  const [recipes, drafts, exports, images, data] = await Promise.all([
     listArea(token, children, 'recipes'),
+    listArea(token, children, 'drafts'),
     listArea(token, children, 'exports'),
     listArea(token, children, 'images'),
     listArea(token, children, 'data'),
   ]);
-  return { id, recipes, exports, images, data, strayFiles: strayFileNames(children) };
+  return { id, recipes, drafts, exports, images, data, strayFiles: strayFileNames(children) };
 }
 
 /**

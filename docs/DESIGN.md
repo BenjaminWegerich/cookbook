@@ -86,6 +86,7 @@ components reference tokens, never a raw value.
 | `--color-accent` | `#ad5632` | clay: primary action, active state, selection |
 | `--color-olive` | `#63723f` | herb: secondary accent — selected and secondary states, media grounds, success tone |
 | `--color-danger` | `#a63b2c` | destructive actions and errors |
+| `--color-ochre` | `#96632b` | the unfinished state: the draft badge and its save action |
 | `--color-on-accent` | `#fffcf6` | text on accent surfaces |
 | `--placeholder-0` … `--placeholder-3` | `#ad5632`, `#63723f`, `#b8813a`, `#8a6d4f` | deterministic placeholder grounds (§5.8), each with a `-fg` partner for its symbol |
 
@@ -96,6 +97,8 @@ components reference tokens, never a raw value.
   reserved for links and text buttons.
 - Olive is the second accent, used widely for selected and secondary states; it is not
   reserved for success.
+- Ochre is the one unfinished-state colour. It is used only for a saved draft's badge and
+  its secondary save action; a recipe that is not a draft never carries it.
 - Colour never carries a meaning alone: success is olive **plus** the check symbol, an error
   is danger plus its symbol or an explicit sentence.
 - Every accent surface takes `--color-on-accent` as its text colour.
@@ -619,14 +622,17 @@ A typeface joins the shortlist only when it meets every requirement:
 | Primary | accent fill, `--color-on-accent` label | the one forward action of a screen or sheet („Speichern") |
 | Danger | danger fill, `--color-on-accent` label | a destructive action („Rezept löschen", „Entfernen") |
 | Outlined | surface fill, hairline border, ink label | secondary actions in a row („Einplanen", „Mehr", photo „Auswählen" / „Ersetzen") *decided with the user* |
-| Text | no fill, no border, muted label | navigation („Zurück") and quiet answers („Abbrechen", „Rückgängig") |
+| Text | no fill, no border, muted label (the draft save is ochre) | navigation („Zurück"), quiet answers („Abbrechen", „Rückgängig") and the editor's secondary save („Entwurf speichern") |
 | Add | surface fill, olive border, olive label | a creation action inside a card or list („Schritt hinzufügen", „Zutatenzeile hinzufügen", „Neue Zutat anlegen") |
 
 **Geometry.** Action buttons: `--radius-md`, padding `--space-3` / `--space-4`, label
 `--text-md` weight 600, `--space-2` gap to an 18px symbol (`--icon-md`). The 10px inline
 step is shared by every action variant; it keeps the recipe overview's three actions on one
 phone line, and the cooking view's step bar already uses it. Text buttons:
-`--radius-sm`, padding `--space-2`, label `--text-sm`. An Add button takes the outlined
+`--radius-sm`, padding `--space-2`, label `--text-sm`. The editor's „Entwurf speichern"
+is a text button that keeps the action button's `--control-height`, so the quiet second save
+never shrinks below thumb reach. It is the one text button in ochre, because its colour is
+the unfinished state (§4.1). An Add button takes the outlined
 button's geometry. An icon-only button keeps the geometry of its variant, carries an
 `aria-label`, and — where it is a −/+ stepper — keeps a circular box of `--control-height`.
 *decided with the user*
@@ -782,6 +788,10 @@ field; a hint never repeats the caption.
 
 - A save attempt runs every check, shows the banner and moves focus and scroll to the first
   problem; the primary button stays enabled so it can explain itself (§5.1).
+- A normal save of a draft runs the same checks. The editor's quiet „Entwurf speichern"
+  deliberately runs none of them: it is the way to keep a recipe whose mandatory fields are
+  still empty or whose warnings make a normal save impossible. It saves the working state as
+  a draft and leaves the recipe unfinished.
 - A form whose only problem is one field reports it at that field alone; the banner is for a
   form with several problems, or for one that belongs to no field. *decided with the user*
 - Every message is German, names the problem and says what to do; it never only says that
@@ -810,6 +820,10 @@ so media and title read as one column inside one frame.
 18px/10px rung: `--radius-lg` (18px) on the card, `--space-4` (10px) padding, and the media
 tile takes `--radius-md` (10px).
 
+**A saved draft marks itself under its title.** The „Entwurf" badge sits directly below the
+card title, left-aligned, at `--space-2`; it never overlays the media area. The title and the
+badge read as one title block, and the whole card stays one tap target.
+
 **A list is rows inside one card, not a card per row.** Rows share the container's surface and
 are separated by a hairline divider (the first row carries none). A row's text column is
 `minmax(0, 1fr)` with `overflow-wrap: anywhere`, so a long unbreakable word wraps instead of
@@ -820,6 +834,12 @@ the field-caption typography (`--text-sm`, weight 600, muted, ALL CAPS by CSS), 
 action may sit beside it in the same row, and `--space-7` separates two sections. The
 section's counter is right-aligned in the caption row, at least one En space after the caption,
 and carries no parentheses (`Essensplan 5 Einträge, davon 2 unbekannt`).
+
+**Drafts lead „Restliche Sammlung".** A saved draft is a card of the collection, marked with
+its „Entwurf" badge under the title; drafts come first, then the finished dishes, then the
+ingredient recipes. The section's counter names them (`8 Rezepte, davon 2 Entwürfe`). A draft
+is never planned and never cookable, so it stays in this section and never appears in
+„Essensplan".
 
 **A collection-level action that is used only rarely sits below the last card.** It is one
 outlined button, left-aligned with the card grid, `--space-7` above it; it is not a caption
@@ -840,9 +860,11 @@ such action. *decided with the user*
   list keeps its bracketed wording.
 - Trailing badges (`Neu`, `Rezept`, `Referenz`, `Unbekannt`) sit in a right-aligned column of
   their own at the row's end, at least one En space from the text before them; a multi-line
-  text never pushes a badge into its last line. A badge inside a content-sized chip gives way
-  to its symbol — the recipe suggestion chip shows only the muted link symbol. The quantity
-  sheet's preview repeats the `Rezept` badge as a button that opens the named recipe.
+  text never pushes a badge into its last line. The draft badge is the exception: it belongs
+  to the title block and sits directly below the title, not in a trailing column. A badge
+  inside a content-sized chip gives way to its symbol — the recipe suggestion chip shows only
+  the muted link symbol. The quantity sheet's preview repeats the `Rezept` badge as a button
+  that opens the named recipe.
 - A row whose value changed under the user marks itself and keeps the mark until it is
   confirmed: a tinted surface, a `--space-1` accent line along its leading edge and one muted
   line naming the consequence (`.pantry-row--attention`, `.pantry-attention-note`). The mark is
@@ -887,7 +909,7 @@ background or on the surface colour, never on a translucent fill.
 
 | Shape | Structure | Used by |
 | --- | --- | --- |
-| bar | one row: one button on each side, no title | the editor |
+| bar | one row: one button on each side, no title; the right side may carry the quiet draft save next to the primary | the editor |
 | stack | „Zurück" on its own line, the title below it (`--space-6` apart) | the AI screen, the shopping steps, the pantry step |
 
 **Sheets** open with a head block — the title plus one optional explanatory line. A browsing
@@ -968,6 +990,7 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 | „Rezept" | link | accent | the ingredient has a recipe of its own; the badge itself opens it |
 | „Referenz" | outline star | olive | mirrors the star toggle; its × clears the role |
 | „Unbekannt" | room service | danger | a meal-plan line the app cannot recognise |
+| „Entwurf" | pencil | ochre | a saved, unfinished recipe; it is not cookable, planable or shareable |
 
 **Rules**
 
@@ -981,6 +1004,8 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 - A badge's label is a short noun or a state word, never a sentence.
 - A state that persists is a badge; a state that just happened is a notice (§5.9).
 - A badge's wording matches the action that caused it and the action that undoes it.
+- The „Entwurf" badge belongs to the title block: it sits directly below the title in the
+  list card and in the recipe overview, never over the media and never in the meta row.
 
 *Applies to: cooking view.*
 
@@ -1346,6 +1371,11 @@ is "not now": the copy stays for the next open. One copy at a time — the visib
 one offered back — and it is text-only; a queued photo change is not part of it. *decided with the
 user*
 
+**A saved draft is not the local recovery copy.** „Entwurf speichern" writes the working
+state to Drive as a saved, unfinished recipe; the local copy remains the separate safety net
+for a lost session. A successful draft save clears the local copy, exactly like a normal
+save.
+
 ### 6.3 Loading, empty and error states
 
 **Explanatory text only where the empty state needs explaining.** A missing list, field or
@@ -1594,6 +1624,11 @@ The cooking view (`.html`) has its own inventory, written below.
 | „Zutat bearbeiten" / „Einkaufsartikel verwalten" | `EditIngredientSheet` / `EditShoppingItemSheet` (shared `MasterDataSheet`) | change | „Abbrechen" |
 | „Änderungen verwerfen?" | `LeaveConfirmSheet` (over the editor and the AI screen) | change | „Abbrechen", scrim, Escape, Back |
 | Snackbar | `Snackbar` (app root) | transient, never a layer | none |
+
+**The recipe overview has a draft state.** A saved draft uses the same sheet, with the
+„Entwurf" badge under its title, „Manuell bearbeiten" as the primary action and „Mit KI
+bearbeiten" behind „Mehr". „Kochen", „Einplanen", „Teilen" and delete do not exist there:
+the draft is not cookable or planable, and deleting it stays in the editor's danger zone.
 
 The cooking view has its own inventory: one page, three states — **Intro** (scaling, meta,
 photo), **Zutaten** (the check list), **Zubereitung** (the steps + step bar). A sub-recipe is

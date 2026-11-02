@@ -86,6 +86,7 @@ import type { RecipeSpecifications } from '../ai/aiContext';
 import { createAiCreateSession } from '../ai/createRecipeDraft';
 import type { AiCreateSession } from '../ai/createRecipeDraft';
 import { createAiClient } from '../ai/client';
+import { draftToEditText, readDraft } from '../drive/draftStorage';
 import {
   forgetStoredAiApiKey,
   getAiApiKey,
@@ -255,9 +256,10 @@ interface AiCreateSheetProps {
    */
   mode?: 'create' | 'edit';
   /**
-   * The recipe to revise — required in `'edit'` mode, ignored otherwise. Its
-   * canonical text is transferred to the AI in full, so the user only describes
-   * the desired changes.
+   * The recipe to revise — required in `'edit'` mode, ignored otherwise. A
+   * canonical recipe's text is transferred to the AI in full; a saved draft is
+   * transferred as a tolerant summary and the AI may complete its missing
+   * mandatory fields. The user only describes the desired changes.
    */
   editTarget?: StoredRecipe;
   /**
@@ -356,12 +358,19 @@ async function prepareSession(
   }
   const context = await loadContext(token, stored);
   if (editTarget !== undefined) {
-    const originalText = serializeRecipe(await readRecipe(token, editTarget.fileId));
+    // A canonical recipe is transferred as its own file; a saved draft is
+    // transferred as a tolerant text summary, because it may not parse as a
+    // recipe at all. The draft task explicitly asks the AI to complete missing
+    // mandatory fields, and the session still validates the reply as canonical.
+    const unfinishedDraft = editTarget.status === 'draft';
+    const originalText = unfinishedDraft
+      ? draftToEditText((await readDraft(token, editTarget.fileId)).draft)
+      : serializeRecipe(await readRecipe(token, editTarget.fileId));
     return createAiCreateSession({
       client: createAiClient({ provider: 'gemini', apiKey }),
       guidelinesText: context.guidelinesText,
       collectionText: context.collectionText,
-      editTaskText: buildEditTaskText(originalText),
+      editTaskText: buildEditTaskText(originalText, { unfinishedDraft }),
       task: 'edit',
       knownIngredientNames: new Set(Object.keys(allIngredientMappings())),
       ingredientRecipeTitles: context.ingredientRecipeTitles,

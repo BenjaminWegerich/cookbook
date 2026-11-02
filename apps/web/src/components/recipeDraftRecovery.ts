@@ -26,6 +26,7 @@
  */
 
 import type { EditorDraft } from './recipeDrafts';
+import { isEditorDraft } from './recipeDrafts';
 
 /** localStorage key of the single recovery slot. */
 const STORAGE_KEY = 'cookbook.editorDraft.v1';
@@ -51,6 +52,12 @@ export interface RecoverableDraft {
    * the next save update that file instead of creating a duplicate.
    */
   createdFileId: string | null;
+  /**
+   * A saved-draft file already created by a failed "Entwurf speichern". Restoring
+   * it makes the next draft save update that draft instead of creating a second
+   * one. Null for every record written before drafts were stored in Drive.
+   */
+  createdDraftFileId: string | null;
   /** The in-memory editor draft at the moment of the write. */
   draft: EditorDraft;
   /** Epoch milliseconds of the last write. */
@@ -59,18 +66,6 @@ export interface RecoverableDraft {
 
 /** A record ready to be written; the version is added by {@link writeRecoverableDraft}. */
 export type RecoverableDraftInput = Omit<RecoverableDraft, 'version'>;
-
-/** True when a parsed value has the fields the editor needs to render it. */
-function isEditorDraft(value: unknown): value is EditorDraft {
-  if (typeof value !== 'object' || value === null) return false;
-  const draft = value as Partial<EditorDraft>;
-  return (
-    typeof draft.title === 'string' &&
-    (draft.type === 'finished_dish' || draft.type === 'ingredient_recipe') &&
-    typeof draft.prep_time === 'string' &&
-    Array.isArray(draft.steps)
-  );
-}
 
 /** Parses one stored record, returning null for anything unusable. */
 function parseRecord(raw: string): RecoverableDraft | null {
@@ -96,7 +91,21 @@ function parseRecord(raw: string): RecoverableDraft | null {
       : typeof record.createdFileId === 'string'
         ? record.createdFileId
         : undefined;
-  if (targetFileId === undefined || createdFileId === undefined) return null;
+  // Optional for backward compatibility: records written before saved drafts
+  // existed have no such field and a missing value means "no draft file".
+  const createdDraftFileId =
+    record.createdDraftFileId === undefined || record.createdDraftFileId === null
+      ? null
+      : typeof record.createdDraftFileId === 'string'
+        ? record.createdDraftFileId
+        : undefined;
+  if (
+    targetFileId === undefined ||
+    createdFileId === undefined ||
+    createdDraftFileId === undefined
+  ) {
+    return null;
+  }
   if (typeof record.savedAt !== 'number' || !Number.isFinite(record.savedAt)) return null;
   if (!isEditorDraft(record.draft)) return null;
 
@@ -104,6 +113,7 @@ function parseRecord(raw: string): RecoverableDraft | null {
     version: RECORD_VERSION,
     targetFileId,
     createdFileId,
+    createdDraftFileId,
     draft: record.draft,
     savedAt: record.savedAt,
   };

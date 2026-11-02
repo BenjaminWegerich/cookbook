@@ -395,9 +395,9 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* The card's title area below the media area: the title text only, since the
-   badge now lies on the media above. Plain block layout is enough — the clamped
-   text below is its own block child.
+/* The card's title area below the media area: the clamped title text and, for a
+   saved draft, its badge below it. Plain block layout is enough — the clamped
+   text and the badge are its own block children.
    With the card's mat in place, the title resets its inline padding (0), so the
    text starts on exactly the same left edge as the photo above it — one mat,
    one text column. Its top padding keeps the same --space-4 (10 px) gap to the
@@ -462,6 +462,18 @@
    the collection, so nothing here can be scaled or cooked from. */
 .recipe-badge-unknown {
   background: var(--color-danger);
+}
+
+/* "Entwurf": a saved, unfinished recipe. It belongs to the title block, not to
+   the media and not to a trailing badge column (decided with the user): the
+   wrapper sits under the title text at the title block's 6 px step. */
+.recipe-card-badge {
+  display: block;
+  margin-block-start: var(--space-2);
+}
+
+.recipe-badge-draft {
+  background: var(--color-ochre);
 }
 
 /* Wrapper that groups a card's media area (the photo / placeholder / symbol) as one

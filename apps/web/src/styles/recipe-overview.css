@@ -68,6 +68,27 @@
   margin-block-end: 0;
 }
 
+/* A draft's title block: the title and its „Entwurf" badge sit 6 px apart, and
+   the block keeps the title's own 6 px extra step to the body. The badge is part
+   of the title, not of the caption/value row. */
+.overview-title-block {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.overview-title-block .overview-title {
+  margin: 0;
+}
+
+/* A draft without description or times ends its body at the title block; the
+   action row then keeps the sheet's own 14 px gap plus its 4 px, exactly like a
+   lone recipe title. */
+.overview-title-block:last-child {
+  margin-block-end: 0;
+}
+
 /* Arbeitszeit / Gesamtzeit / Geplant as one compact caption/value row. */
 .overview-meta {
   display: flex;
