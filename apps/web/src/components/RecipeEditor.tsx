@@ -93,6 +93,7 @@ import {
   writeRecipeExportSafely,
   type StoredRecipe,
 } from '../drive/recipeStorage';
+import { isDriveAuthError } from '../drive/driveClient';
 import { listCookbookFolder } from '../drive/cookbookFolder';
 import { appendIngredientMasterData } from '../drive/ingredientMasterData';
 import { createShoppingItem, saveShoppingItem } from '../drive/shoppingRouteMasterData';
@@ -101,6 +102,7 @@ import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useL
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 import type { SnackbarMessage } from '../hooks/useSnackbar';
 import AutoGrowTextarea from './AutoGrowTextarea';
+import DraftRecoverySheet from './DraftRecoverySheet';
 import EditIngredientSheet from './EditIngredientSheet';
 import IngredientSheet, {
   type IngredientRecipeOption,
@@ -130,6 +132,14 @@ import {
   UploadIcon,
 } from './icons';
 import { newRecipeDraft, type EditorDraft } from './recipeDrafts';
+import {
+  clearRecoverableDraft,
+  readRecoverableDraft,
+  recoverableDraftMatchesTarget,
+  writeRecoverableDraft,
+  type RecoverableDraft,
+  type RecoverableDraftInput,
+} from './recipeDraftRecovery';
 
 /** Strips the derived master list from a loaded recipe (it lives in rows). */
 function toDraft(recipe: Recipe): EditorDraft {
@@ -144,6 +154,27 @@ function withIngredients(draft: EditorDraft): Recipe {
     ...draft,
     ingredients: deriveIngredients(draft.steps, draft.reference ?? []),
   };
+}
+
+/**
+ * The banner that explains a lost Drive session while the editor stays mounted.
+ *
+ * Every branch of the editor's early returns renders it (a load error, the
+ * loading state and the loaded form), so a 401 never leaves a screen without
+ * the explanation and without the way back: the header next to it carries the
+ * "Erneut anmelden" action. The actual login lives in App; this component only
+ * states the situation.
+ */
+function SessionRecoveryBanner({ error }: { error: string | null }) {
+  return (
+    <div className="session-banner" role="alert">
+      <p>
+        Sitzung abgelaufen. Deine Änderungen bleiben erhalten — melde dich erneut an, um zu
+        speichern.
+      </p>
+      {error !== null && <p className="field-error">{error}</p>}
+    </div>
+  );
 }
 
 /**
@@ -256,6 +287,18 @@ export interface RecipeEditorHandle {
 interface RecipeEditorProps {
   /** Drive access token. */
   token: string;
+  /**
+   * True after a Drive 401 dropped the session. The editor deliberately stays
+   * mounted with its working draft; its header's primary action becomes the
+   * reconnect button instead of Speichern.
+   */
+  sessionLost?: boolean;
+  /** True while the reconnect login runs (the header labels the wait). */
+  reconnecting?: boolean;
+  /** The last reconnect error (German), or null. */
+  authError?: string | null;
+  /** Starts the interactive login from the header (must be a user gesture). */
+  onReconnect?: () => void;
   /** The recipe to edit (from the list); null creates a new recipe. */
   target: StoredRecipe | null;
   /**
@@ -306,6 +349,14 @@ type PhotoChange = { kind: 'set'; blob: Blob; extension: 'jpg' | 'png' } | { kin
 
 /** JPEG re-encode quality (canvas default) for cropped photos. */
 const JPEG_QUALITY = 0.92;
+
+/**
+ * How long a change waits before the editor writes its local recovery copy
+ * (see recipeDraftRecovery.ts). Long enough to batch a burst of typing, short
+ * enough that a reload or a dead phone loses at most this window; pagehide and
+ * visibilitychange flush it immediately (see the effects in the component).
+ */
+const DRAFT_AUTOSAVE_DELAY_MS = 800;
 
 /**
  * Decodes a blob URL into an image. EXIF orientation is applied during
@@ -1087,6 +1138,10 @@ function ThemeEditor({
  */
 function RecipeEditor({
   token,
+  sessionLost = false,
+  reconnecting = false,
+  authError = null,
+  onReconnect,
   target,
   initialDraft,
   recipes,
@@ -1121,6 +1176,13 @@ function RecipeEditor({
   const [draft, setDraft] = useState<EditorDraft | null>(initialEditorDraft);
   /** The recipe as loaded from Drive — rollback target and dirty check. */
   const [original, setOriginal] = useState<EditorDraft | null>(initialBaseline);
+  /**
+   * The local recovery copy offered back when this editor opens the recipe that
+   * was being edited when the work was lost (see recipeDraftRecovery.ts). It is
+   * only set after the baseline loaded, so "Wiederherstellen" can never race
+   * the load effect. Null = no question on screen.
+   */
+  const [recovery, setRecovery] = useState<RecoverableDraft | null>(null);
   /** Every other recipe of the collection (parse errors skipped). */
   const [collection, setCollection] = useState<Recipe[]>([]);
   /**
@@ -1215,6 +1277,29 @@ function RecipeEditor({
    * still loading (the state update alone would not reach the save closure).
    */
   const collectionPromiseRef = useRef<Promise<Recipe[]> | null>(null);
+  /**
+   * The target key this level's baseline was loaded for. A fresh Drive token
+   * (re-login or proactive refresh) must not re-run the load and replace the
+   * working draft with the stored file — the draft is the whole reason the
+   * editor stays mounted. Set only after a successful load, so a failed open is
+   * retried once a new token arrives.
+   */
+  const loadedTargetKeyRef = useRef<string | null>(null);
+  /**
+   * True once this level's work is safely written or deliberately discarded.
+   * Stops the autosave from writing a recovery copy during the exit (the
+   * master-data sheet can keep the editor mounted after the recipe write).
+   */
+  const saveCompletedRef = useRef(false);
+  /**
+   * The record the pagehide/visibility flush would write, or null when this
+   * level has nothing to recover (hidden, clean or already finished). A ref
+   * because the flush listener is registered once and must see the newest draft
+   * without re-registering on every keystroke. The effects below also re-run
+   * when `saving` changes, so a file id created by a failed save enters the
+   * record even if the user does not type again.
+   */
+  const latestRecoveryRef = useRef<RecoverableDraftInput | null>(null);
 
   // Load the target recipe (or the empty/AI draft). The content cache makes
   // this a no-op read for a recipe that was read before (e.g. by the overview
@@ -1223,6 +1308,14 @@ function RecipeEditor({
   // the working draft while the loaded file becomes the baseline it is compared
   // against (dirty check, save rollback).
   useEffect(() => {
+    // A lost session must not turn the one load into a 401 loop; the reconnect
+    // button restores the token and this effect runs again.
+    if (token === '') return;
+    const targetKey = target?.fileId ?? 'new';
+    // Load once per target. A fresh token — from the in-place re-login or the
+    // proactive refresh — must not reload the stored baseline over the working
+    // draft: that draft is exactly what keeping the editor mounted protects.
+    if (loadedTargetKeyRef.current === targetKey) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -1236,8 +1329,26 @@ function RecipeEditor({
         setOriginal(baseline);
         setDraft(initialDraft !== undefined ? toDraft(initialDraft) : baseline);
         setLoadError(null);
+        loadedTargetKeyRef.current = targetKey;
+        // Offer the local recovery copy back, but only for the recipe this
+        // editor is opening (the single slot, decided with the user) and never
+        // over a deliberate AI draft. The question appears after the baseline
+        // is in place, so "Wiederherstellen" cannot race the load.
+        if (initialDraft === undefined) {
+          const stored = readRecoverableDraft();
+          if (stored !== null && recoverableDraftMatchesTarget(stored, target?.fileId ?? null)) {
+            setRecovery(stored);
+          }
+        }
       } catch (err) {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
+        if (cancelled) return;
+        setLoadError(
+          isDriveAuthError(err)
+            ? 'Die Sitzung ist abgelaufen — melde dich erneut an.'
+            : err instanceof Error
+              ? err.message
+              : String(err),
+        );
       }
     })();
     return () => {
@@ -1251,13 +1362,18 @@ function RecipeEditor({
   // content cache makes repeat opens free and de-duplicates a read that
   // another screen already started.
   useEffect(() => {
+    // No session: keep the collection this level already resolved and wait for
+    // the reconnect; the effect runs again with the new token.
+    if (token === '') return;
     let cancelled = false;
     const entries = recipes.filter((entry) => entry.fileId !== target?.fileId);
     const load = Promise.all(
       entries.map(async (entry): Promise<Recipe | null> => {
         try {
           return await readRecipe(token, entry.fileId);
-        } catch {
+        } catch (err) {
+          // A 401 is the session banner's business, not a broken recipe.
+          if (isDriveAuthError(err)) return null;
           // A broken file is the user's pre-existing problem, not this
           // editor's — skip it (it also never appears in the link picker).
           console.warn(`Rezept "${entry.title}" konnte nicht gelesen werden — wird übersprungen.`);
@@ -1280,6 +1396,7 @@ function RecipeEditor({
   // photo already downloaded by the list card or the overview sheet does not
   // get fetched again. Object URLs are revoked on unmount (effect below).
   useEffect(() => {
+    if (token === '') return; // lost session: the reconnect re-runs this effect
     const imageFileId = target?.image?.fileId;
     if (imageFileId === undefined) return;
     let cancelled = false;
@@ -1304,18 +1421,84 @@ function RecipeEditor({
   );
 
   /**
-   * The draft would change the saved file (unsaved changes). Compared on the
-   * normalized forms: defaulted fields that do not reach the file (e.g. the
-   * yield defaults written when toggling the type) are not "dirty".
+   * The draft text would change the saved file (unsaved text changes). Compared
+   * on the normalized forms: defaulted fields that do not reach the file (e.g.
+   * the yield defaults written when toggling the type) are not "dirty". This is
+   * what the local recovery copy can capture; the exit guard below uses `dirty`,
+   * which also counts a queued photo change.
    */
-  const dirty = useMemo(
+  const textDirty = useMemo(
     () =>
-      (draft !== null &&
-        original !== null &&
-        JSON.stringify(normalizeRecipe(draft)) !== JSON.stringify(normalizeRecipe(original))) ||
-      photoChange !== null,
-    [draft, original, photoChange],
+      draft !== null &&
+      original !== null &&
+      JSON.stringify(normalizeRecipe(draft)) !== JSON.stringify(normalizeRecipe(original)),
+    [draft, original],
   );
+
+  /** Any unsaved work, text or photo. */
+  const dirty = textDirty || photoChange !== null;
+
+  // ---- Local draft recovery ------------------------------------------------
+  //
+  // Why the editor keeps a copy at all: the session is memory-only, so a reload,
+  // a closed tab or a dead phone drops the working draft before the user can
+  // save it. The token-loss path no longer unmounts the editor (see the session
+  // banner), but the other exits still need this. The copy is text-only; a
+  // queued photo change (a Blob) is not serializable into the slot and survives
+  // only while the component stays mounted.
+
+  /**
+   * Keeps the ref used by the pagehide/visibility flush in sync with the newest
+   * state. The listener itself is registered once (next effect), so it must not
+   * depend on the draft object identity.
+   */
+  useEffect(() => {
+    latestRecoveryRef.current =
+      visible && textDirty && draft !== null && !saveCompletedRef.current
+        ? {
+            targetFileId: target?.fileId ?? null,
+            createdFileId: createdFileRef.current,
+            draft,
+            savedAt: Date.now(),
+          }
+        : null;
+  }, [visible, textDirty, draft, target?.fileId, saving]);
+
+  /**
+   * Debounced write: a burst of typing produces one record, not one per
+   * keystroke. Only the visible level writes — a parent hidden under a sub-recipe
+   * must not overwrite the child's slot; it writes again as soon as it is back.
+   */
+  useEffect(() => {
+    if (latestRecoveryRef.current === null) return;
+    const timer = window.setTimeout(() => {
+      const record = latestRecoveryRef.current;
+      if (record !== null) writeRecoverableDraft({ ...record, savedAt: Date.now() });
+    }, DRAFT_AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [visible, textDirty, draft, target?.fileId, saving]);
+
+  /**
+   * The browser's last reliable moments before a reload, a tab close or a
+   * backgrounded tab: write at once instead of waiting out the debounce. Both
+   * events are used because iOS Safari does not always deliver `pagehide` for a
+   * tab that is killed while backgrounded.
+   */
+  useEffect(() => {
+    const flush = (): void => {
+      const record = latestRecoveryRef.current;
+      if (record !== null) writeRecoverableDraft({ ...record, savedAt: Date.now() });
+    };
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
 
   // Any change cancels the "Schritt entfernen?" confirmation: an armed confirm
   // must never outlive the state it refers to — reordering or removing steps
@@ -1345,14 +1528,32 @@ function RecipeEditor({
   });
 
   /**
+   * Marks this level's work as safely finished and removes its local recovery
+   * copy. Called on a successful save/delete and on a confirmed discard. The
+   * ref is cleared before the storage call, so a pagehide in the moment between
+   * the two cannot write the copy back.
+   */
+  const forgetRecoveryCopy = useCallback((): void => {
+    saveCompletedRef.current = true;
+    latestRecoveryRef.current = null;
+    clearRecoverableDraft(target?.fileId ?? null);
+  }, [target?.fileId]);
+
+  /**
    * Leaves the editor for good (list, or back to the AI conversation when the
    * draft came from there). Every exit trigger ends here, so the guard state is
    * cleared exactly once, no matter which trigger confirmed.
    */
   const executeLeave = useCallback((): void => {
     guard.reset();
+    // Leaving for good clears the local recovery copy only when this level is
+    // actually discarding text work. A clean level may still sit in front of a
+    // recovery copy the user chose not to restore ("not now" on the recovery
+    // sheet); leaving must not silently delete that copy. A photo-only change is
+    // not represented in the copy either, so it also leaves the record alone.
+    if (textDirty) forgetRecoveryCopy();
     onClose();
-  }, [guard, onClose]);
+  }, [guard, onClose, forgetRecoveryCopy, textDirty]);
 
   // Gesamtzeit must be larger than Vorbereitungszeit: a total time that is not
   // larger is dropped the moment the prep time changes. The check is a
@@ -1618,7 +1819,9 @@ function RecipeEditor({
    * one. A failed save leaves the photo change queued for a retry.
    */
   const handleSave = async (): Promise<void> => {
-    if (draft === null || saving) return;
+    // A lost session has no save button (the header offers the reconnect); a
+    // keyboard shortcut or a stale click must not start a doomed Drive write.
+    if (draft === null || saving || sessionLost || token === '') return;
     const savedRecipe = normalizeRecipe(draft);
     // A Zutaten-Rezept whose master row does not exist yet gets one created by
     // the save below. Remember that before the write: after it, the registry
@@ -1681,6 +1884,9 @@ function RecipeEditor({
         }
       }
       setPhotoChange(null);
+      // Every write of this save succeeded: the work is no longer at risk, even
+      // if the master-data sheet below keeps the editor mounted for a moment.
+      forgetRecoveryCopy();
       if (opensMasterSheet) {
         // The recipe write is done; the master-data sheet is the last step of
         // this save. Keep the editor mounted (and no longer in its saving
@@ -1696,6 +1902,20 @@ function RecipeEditor({
       onSaved(savedRecipe);
     } catch (err) {
       setSaving(false);
+      // A 401 is not a validation problem: when the session is really gone the
+      // header switches to the reconnect and the banner explains it. When a
+      // proactive refresh replaced the token just as this write started, the
+      // app is still connected and a simple retry is enough — say so instead of
+      // painting the raw Drive error or failing silently.
+      if (isDriveAuthError(err)) {
+        setIssues([
+          {
+            path: 'global',
+            message: 'Speichern war nicht möglich. Bitte versuche es erneut.',
+          },
+        ]);
+        return;
+      }
       setIssues([
         {
           path: 'global',
@@ -1707,13 +1927,20 @@ function RecipeEditor({
 
   /** Deletes the recipe (file + photo + export) after the two-step confirm. */
   const handleDelete = async (): Promise<void> => {
-    if (target === null || saving) return;
+    if (target === null || saving || sessionLost || token === '') return;
     setSaving(true);
     try {
       await deleteRecipe(token, target.fileId);
+      forgetRecoveryCopy();
       onSaved(null);
     } catch (err) {
       setSaving(false);
+      if (isDriveAuthError(err)) {
+        setIssues([
+          { path: 'global', message: 'Löschen war nicht möglich. Bitte versuche es erneut.' },
+        ]);
+        return;
+      }
       setIssues([{ path: 'global', message: err instanceof Error ? err.message : String(err) }]);
     }
   };
@@ -2044,6 +2271,13 @@ function RecipeEditor({
    */
   const requestLeave = useCallback(
     (reason: LeaveReason): boolean => {
+      if (recovery !== null) {
+        // The recovery question is the topmost layer. Closing it is "not now"
+        // — the record stays on disk for the next open; only its own
+        // „Verwerfen" deletes it (§6.2: closing a sheet is not answering it).
+        setRecovery(null);
+        return true;
+      }
       if (pendingConfirm !== null) {
         // The confirmation sheet is the topmost layer: the same trigger closes
         // it, and closing it is „Abbrechen" (§6.2) — never the action.
@@ -2073,6 +2307,7 @@ function RecipeEditor({
       return guard.request(reason, executeLeave);
     },
     [
+      recovery,
       pendingConfirm,
       saving,
       masterEditName,
@@ -2093,12 +2328,20 @@ function RecipeEditor({
   useEscapeTrigger(() => void requestLeave('escape'), visible);
 
   // Ctrl+S is the keyboard equivalent of the „Speichern" button. It belongs to
-  // this editor only while it is the visible topmost layer AND no sheet is open
-  // on top of it — the sheet that is open registers its own shortcut instead,
-  // so exactly one save action reacts (see useSaveShortcut).
+  // this editor only while it is the visible topmost layer AND no sheet or
+  // recovery question is open on top of it — the sheet that is open registers
+  // its own shortcut instead, so exactly one save action reacts (see
+  // useSaveShortcut). A lost session has no save button to mirror: the header
+  // offers "Erneut anmelden" instead.
   useSaveShortcut(
     () => void handleSave(),
-    visible && sheet === null && createSheet === null && masterEditName === null,
+    visible &&
+      sheet === null &&
+      createSheet === null &&
+      masterEditName === null &&
+      recovery === null &&
+      !sessionLost &&
+      token !== '',
   );
 
   /** Toggles the reference role of a master-list row (§4; both recipe types). */
@@ -2204,6 +2447,27 @@ function RecipeEditor({
     else if (pending?.kind === 'step') removeStep(pending.stepIndex);
   };
 
+  /**
+   * The recovery sheet's primary answer: make the stored copy the working
+   * draft. The stored baseline stays the comparison target, so the restored
+   * work is immediately "unsaved" and the next autosave keeps it protected.
+   */
+  const restoreRecovery = (): void => {
+    if (recovery === null) return;
+    // A new recipe that was already created by a failed save must be updated,
+    // not created a second time (Drive allows duplicate names).
+    if (recovery.createdFileId !== null) createdFileRef.current = recovery.createdFileId;
+    setDraft(recovery.draft);
+    setRecovery(null);
+  };
+
+  /** The recovery sheet's destructive answer: delete the local copy for good. */
+  const discardRecovery = (): void => {
+    if (recovery === null) return;
+    clearRecoverableDraft(target?.fileId ?? null);
+    setRecovery(null);
+  };
+
   // ---- Render -------------------------------------------------------------
 
   if (loadError !== null) {
@@ -2211,14 +2475,28 @@ function RecipeEditor({
       <main className="app app-narrow">
         <section className="editor" aria-label="Rezept-Editor">
           <div className="editor-header">
-            <button
-              type="button"
-              className="text-button back-button"
-              onClick={() => void requestLeave('button')}
-            >
-              {backLabel}
-            </button>
+            <div className="editor-actions">
+              <button
+                type="button"
+                className="text-button back-button"
+                onClick={() => void requestLeave('button')}
+              >
+                {backLabel}
+              </button>
+              {sessionLost && (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={onReconnect}
+                  disabled={reconnecting}
+                  aria-busy={reconnecting}
+                >
+                  {reconnecting ? 'Anmeldung läuft …' : 'Erneut anmelden'}
+                </button>
+              )}
+            </div>
           </div>
+          {sessionLost && <SessionRecoveryBanner error={authError} />}
           <p className="error-message" role="alert">
             {loadError}
           </p>
@@ -2230,9 +2508,36 @@ function RecipeEditor({
   if (draft === null) {
     return (
       <main className="app app-narrow">
-        <p className="loading-message" role="status">
-          Rezept wird geladen …
-        </p>
+        <section className="editor" aria-label="Rezept-Editor">
+          {sessionLost && (
+            <>
+              <div className="editor-header">
+                <div className="editor-actions">
+                  <button
+                    type="button"
+                    className="text-button back-button"
+                    onClick={() => void requestLeave('button')}
+                  >
+                    {backLabel}
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={onReconnect}
+                    disabled={reconnecting}
+                    aria-busy={reconnecting}
+                  >
+                    {reconnecting ? 'Anmeldung läuft …' : 'Erneut anmelden'}
+                  </button>
+                </div>
+              </div>
+              <SessionRecoveryBanner error={authError} />
+            </>
+          )}
+          <p className="loading-message" role="status">
+            Rezept wird geladen …
+          </p>
+        </section>
       </main>
     );
   }
@@ -2328,10 +2633,13 @@ function RecipeEditor({
     <main className="app app-narrow">
       <section className="editor" aria-label="Rezept-Editor">
         <div className="editor-header">
-          {/* One row: „Zurück" · „Speichern". Neither label ever changes:
-              „Zurück" is navigation, and the discard question is a sheet over
-              the screen (LeaveConfirmSheet, docs/DESIGN.md §6.2) — a layer, not
-              a line in this header. */}
+          {/* One action row: „Zurück" · the primary action. Normally that is
+              „Speichern" and its label never changes; a lost Drive session is
+              the one exception — the editor stays mounted with its draft (the
+              whole point), and the primary action becomes the re-login the
+              header can offer without leaving the form. The discard question
+              stays a sheet over the screen (LeaveConfirmSheet, §6.2) — a layer,
+              not a line in this header. */}
           <div className="editor-actions">
             <button
               type="button"
@@ -2340,17 +2648,31 @@ function RecipeEditor({
             >
               {backLabel}
             </button>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => void handleSave()}
-              disabled={saving}
-              aria-busy={saving}
-            >
-              {saving ? 'Speichert …' : 'Speichern'}
-            </button>
+            {sessionLost ? (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={onReconnect}
+                disabled={reconnecting}
+                aria-busy={reconnecting}
+              >
+                {reconnecting ? 'Anmeldung läuft …' : 'Erneut anmelden'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => void handleSave()}
+                disabled={saving}
+                aria-busy={saving}
+              >
+                {saving ? 'Speichert …' : 'Speichern'}
+              </button>
+            )}
           </div>
         </div>
+
+        {sessionLost && <SessionRecoveryBanner error={authError} />}
 
         {(hasValidationIssues || globalIssues.length > 0) && (
           <div className="validation-banner" id="editor-banner" role="alert">
@@ -3048,7 +3370,7 @@ function RecipeEditor({
               type="button"
               className="danger-button"
               onClick={() => setPendingConfirm({ kind: 'delete' })}
-              disabled={saving}
+              disabled={saving || sessionLost}
             >
               <TrashIcon className="button-icon" optical={20} />
               <span>Rezept löschen</span>
@@ -3132,6 +3454,17 @@ function RecipeEditor({
             guard.reset();
           }}
           onConfirm={runConfirm}
+        />
+      )}
+      {/* The local recovery question (see recipeDraftRecovery.ts and
+          DraftRecoverySheet.tsx). It is only set after the baseline loaded and
+          is the topmost layer until answered or dismissed. */}
+      {recovery !== null && visible && (
+        <DraftRecoverySheet
+          recovery={recovery}
+          onRestore={restoreRecovery}
+          onDiscard={discardRecovery}
+          onCancel={() => setRecovery(null)}
         />
       )}
     </main>

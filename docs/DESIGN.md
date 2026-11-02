@@ -1327,6 +1327,15 @@ remain separate controls; the scrim is what guarantees that only the sheet's ans
 cannot reach the guard, so the browser's `beforeunload` dialog is registered only while work would
 be lost, and only until the app's own answer is given.
 
+**A lost Drive session is a state, not an exit.** A Drive 401 keeps the editor mounted with its
+draft: the header's primary action becomes „Erneut anmelden" and a banner names the situation, so
+the user can log in without answering the discard question. A locally kept draft is offered back by
+its own sheet (`DraftRecoverySheet`) when its recipe is opened again — „Verwerfen" (danger, at the
+left end) deletes the copy, „Wiederherstellen" (primary) puts it into the editor. Closing that sheet
+is "not now": the copy stays for the next open. One copy at a time — the visible editor level is the
+one offered back — and it is text-only; a queued photo change is not part of it. *decided with the
+user*
+
 ### 6.3 Loading, empty and error states
 
 **Explanatory text only where the empty state needs explaining.** A missing list, field or

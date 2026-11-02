@@ -22,6 +22,7 @@ import {
   requestAccessToken,
   revokeAccessToken,
 } from './auth/googleAuth';
+import { useDriveTokenRefresh } from './auth/useDriveTokenRefresh';
 import AiCreateSheet, {
   type AiCreateSheetHandle,
   type AiHandoff,
@@ -273,6 +274,21 @@ const GIS_POLL_INTERVAL_MS = 200;
  */
 function App() {
   const [token, setToken] = useState<string | null>(() => getAccessToken());
+  /**
+   * Synchronous mirror of `token` for the Drive 401 handler: the handler
+   * compares the rejected token with the current one and ignores a late answer
+   * for a credential that a re-login or a proactive refresh already replaced.
+   * The set sites below update it in the same tick; the effect further down is
+   * the safety net for any future path.
+   */
+  const tokenRef = useRef<string | null>(token);
+  /**
+   * True after a Drive 401 dropped the session while the app was in use. Unlike
+   * `token === null` on a cold start, this says "you were connected and lost
+   * it": the list's login panel and the editor's in-place reconnect bar read
+   * it, and the next successful login clears it.
+   */
+  const [sessionLost, setSessionLost] = useState(false);
   /** True while a token request is running (the silent one on page load or
    *  the login button); shows a status line on the login panel meanwhile. */
   const [connecting, setConnecting] = useState(false);
@@ -1051,7 +1067,14 @@ function App() {
     setConnecting(true);
     let aborted = false;
     try {
-      setToken(await requestAccessToken(options));
+      const next = await requestAccessToken(options);
+      // Mirror first, then render: a late 401 from a request issued with the
+      // old token must already see the new credential here.
+      tokenRef.current = next;
+      setToken(next);
+      // A successful login — cold start or the editor's reconnect button — is
+      // the end of the "session lost" state.
+      setSessionLost(false);
     } catch (err) {
       // A superseded silent attempt (user clicked during page-load login)
       // is aborted without a user-visible error — the fresh gesture attempt
@@ -1065,35 +1088,54 @@ function App() {
     }
   }, []);
 
+  // Safety net for the synchronous mirror (see the declaration at the top):
+  // the set sites update it in the same tick, this keeps it honest if another
+  // path ever sets the token.
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
   /**
    * Reaction to a Drive 401 (registered on the Drive client just below): the
    * cached access token is stale — Google rejects it while Google Identity
-   * Services keeps handing the same dead token back. Drop it for good and start
-   * one fresh login. Revoking at Google is the step that matters: it invalidates
-   * the cached token and forces the next token request to ask for consent again
-   * instead of returning the cached one. The fresh request is a silent one (no
-   * UI, no gesture) and the revoked grant can no longer satisfy it, so it ends
-   * without an error message and the login panel appears, where a single click
-   * on "Mit Google verbinden" completes the login.
+   * Services keeps handing the same dead token back. Drop it for good and let
+   * the user reconnect.
+   *
+   * Two rules matter here:
+   * 1. A late 401 for a token that is no longer current is ignored. A re-login
+   *    or a proactive refresh may have replaced the token between the request
+   *    and its answer; revoking the *new* credential would log the user out for
+   *    no reason. The Drive client passes the rejected token along for this.
+   * 2. The editor is not closed. It stays mounted with its draft, and its
+   *    header turns into an "Erneut anmelden" button. Revoking at Google is
+   *    what invalidates the cached token and forces the next request to ask for
+   *    consent again; a silent retry cannot succeed after it, so the visible
+   *    button is the only path back and it supplies the user gesture Google
+   *    requires.
    */
-  const recoverFromAuthError = useCallback(async (): Promise<void> => {
+  const recoverFromAuthError = useCallback(async (failedToken: string): Promise<void> => {
+    if (failedToken !== tokenRef.current) return; // stale answer, see rule 1
     if (authRecoveryRef.current) return; // already recovering / already ran
     authRecoveryRef.current = true;
-    await revokeAccessToken();
+    setSessionLost(true);
+    // Drop the token in React and in the mirror before revoking: the reconnect
+    // button is usable at once, and a click that arrives while Google confirms
+    // the revocation cannot be paired with a token that is about to be cleared.
+    tokenRef.current = null;
     setToken(null);
     setRecipes(null);
     setError(null);
     setMasterDataWarning(null);
     setStrayFiles([]);
-    await handleConnect({ silent: true });
-  }, [handleConnect]);
+    await revokeAccessToken();
+  }, []);
 
   // Register the Drive client's 401 hook for the lifetime of the app. Every
   // Drive call funnels through that client, so this covers the startup loads,
   // list refreshes and the editor alike.
   useEffect(() => {
-    setDriveUnauthorizedHandler(() => {
-      void recoverFromAuthError();
+    setDriveUnauthorizedHandler((failedToken) => {
+      void recoverFromAuthError(failedToken);
     });
     return () => setDriveUnauthorizedHandler(null);
   }, [recoverFromAuthError]);
@@ -1110,7 +1152,10 @@ function App() {
    * usable.
    */
   useEffect(() => {
-    if (token) {
+    // After a lost session the grant was revoked; a silent attempt is known to
+    // fail and would only flash Google's popup. The login panel and the
+    // editor's reconnect button are the two explicit ways back.
+    if (token || sessionLost) {
       return;
     }
     const deadline = Date.now() + GIS_LOAD_TIMEOUT_MS;
@@ -1124,7 +1169,23 @@ function App() {
       }
     }, GIS_POLL_INTERVAL_MS);
     return () => window.clearInterval(interval);
-  }, [token, handleConnect]);
+  }, [token, handleConnect, sessionLost]);
+
+  /**
+   * Applies the token a proactive refresh obtained (./auth/useDriveTokenRefresh).
+   * This is not a login: no status line, no auth-generation reset, no
+   * "session lost" transition. The editor's own load effect loads once per
+   * target, so the fresh credential never replaces the working draft; the
+   * Drive-backed list/master-data effects simply re-run against it.
+   */
+  const handleTokenRefreshed = useCallback((fresh: string): void => {
+    tokenRef.current = fresh;
+    setToken(fresh);
+  }, []);
+
+  // Renew the Drive token before a long editor session runs into a 401. Enabled
+  // only while a screen with unsaved work is open; the list does not need it.
+  useDriveTokenRefresh(token, editorOpen || aiOpen, handleTokenRefreshed);
 
   // Resolve the meal plan into cards as soon as both halves are there: the
   // recipe list (for the title match) and the Keep state. Only entries that
@@ -2362,6 +2423,10 @@ function App() {
               }}
               visible={editorSubRecipes.length === 0}
               token={token ?? ''}
+              sessionLost={sessionLost}
+              reconnecting={connecting}
+              authError={error}
+              onReconnect={() => void handleConnect()}
               target={editorTarget}
               initialDraft={editorDraft ?? undefined}
               recipes={recipes ?? []}
@@ -2393,6 +2458,10 @@ function App() {
                 }}
                 visible={index === editorSubRecipes.length - 1}
                 token={token ?? ''}
+                sessionLost={sessionLost}
+                reconnecting={connecting}
+                authError={error}
+                onReconnect={() => void handleConnect()}
                 target={recipe}
                 recipes={recipes ?? []}
                 onClose={closeEditor}
@@ -2424,15 +2493,21 @@ function App() {
             <section className="login-panel" aria-label="Anmeldung">
               {/* The page's only heading while nobody is signed in: the screen
                   header with the h1 is gone (the signed-in list screen opens
-                  straight with the search field and its two section headings). */}
-              <h1>Dein digitales Kochbuch</h1>
-              <p>Verbinde dein Google-Konto, um deine Rezepte in Google Drive zu verwalten.</p>
+                  straight with the search field and its two section headings).
+                  After a Drive 401 the same panel names the actual situation:
+                  the session existed and was lost, rather than a first visit. */}
+              <h1>{sessionLost ? 'Sitzung abgelaufen' : 'Dein digitales Kochbuch'}</h1>
+              <p>
+                {sessionLost
+                  ? 'Melde dich erneut an, um weiterzumachen. Deine Rezepte liegen in Google Drive, und ein ungespeicherter Entwurf bleibt auf diesem Gerät erhalten.'
+                  : 'Verbinde dein Google-Konto, um deine Rezepte in Google Drive zu verwalten.'}
+              </p>
               <p className="login-note">
                 Deine Rezepte liegen als Markdown-Dateien in einem „Cookbook“-Ordner in deinem
                 Google Drive.
               </p>
               <button type="button" className="primary-button" onClick={() => void handleConnect()}>
-                Mit Google verbinden
+                {sessionLost ? 'Erneut anmelden' : 'Mit Google verbinden'}
               </button>
               {connecting && (
                 <p className="login-status" role="status">

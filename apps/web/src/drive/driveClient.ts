@@ -49,14 +49,17 @@ export function isDriveAuthError(error: unknown): error is DriveAuthError {
 
 /**
  * Re-authentication hook. The app registers a handler here; on every detected
- * 401 the client calls it once (fire-and-forget) so the app can revoke the
- * stale token and start a fresh login. Keeping the reaction behind a callback
- * keeps this module free of React/App dependencies. `null` = not registered.
+ * 401 the client calls it once (fire-and-forget) with the token that was
+ * rejected. Passing the token lets the app ignore a late 401 from a request
+ * that started before a re-login or a proactive refresh replaced the credential:
+ * reacting to that stale answer would revoke the *new* token. Keeping the
+ * reaction behind a callback keeps this module free of React/App dependencies.
+ * `null` = not registered.
  */
-let onUnauthorized: (() => void) | null = null;
+let onUnauthorized: ((failedToken: string) => void) | null = null;
 
 /** Registers (or, with `null`, clears) the re-authentication handler. */
-export function setDriveUnauthorizedHandler(handler: (() => void) | null): void {
+export function setDriveUnauthorizedHandler(handler: ((failedToken: string) => void) | null): void {
   onUnauthorized = handler;
 }
 
@@ -66,13 +69,14 @@ export function setDriveUnauthorizedHandler(handler: (() => void) | null): void 
  * Error otherwise. Never returns — typed `Promise<never>` so call sites read as
  * a guard.
  */
-async function failDriveResponse(response: Response): Promise<never> {
+async function failDriveResponse(response: Response, token: string): Promise<never> {
   const detail = await response.text().catch(() => '');
   const message = `Drive API ${response.status}: ${detail || 'unbekannter Fehler'}`;
   if (response.status === 401) {
-    // Notify first: the app's handler clears the token and re-logs in, so the
-    // error below is only a fallback for callers that still see it.
-    onUnauthorized?.();
+    // Notify first: the app's handler compares the rejected token with the
+    // current one and drops the session, so the error below is only a fallback
+    // for callers that still see it.
+    onUnauthorized?.(token);
     throw new DriveAuthError(message);
   }
   throw new Error(message);
@@ -89,7 +93,7 @@ async function driveRequest<T>(token: string, path: string, init: RequestInit = 
   });
 
   if (!response.ok) {
-    await failDriveResponse(response);
+    await failDriveResponse(response, token);
   }
   return (await response.json()) as T;
 }
@@ -169,7 +173,7 @@ export async function getFileContent(token: string, fileId: string): Promise<str
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
-    await failDriveResponse(response);
+    await failDriveResponse(response, token);
   }
   return response.text();
 }
@@ -236,7 +240,7 @@ async function uploadFile(
     body,
   });
   if (!response.ok) {
-    await failDriveResponse(response);
+    await failDriveResponse(response, token);
   }
   return (await response.json()) as DriveFile;
 }
@@ -284,6 +288,6 @@ export async function deleteFile(token: string, fileId: string): Promise<void> {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
-    await failDriveResponse(response);
+    await failDriveResponse(response, token);
   }
 }

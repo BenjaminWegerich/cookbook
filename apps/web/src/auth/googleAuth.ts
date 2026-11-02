@@ -74,6 +74,12 @@ interface TokenSource {
   request(options?: TokenRequestOptions): Promise<string>;
   /** The current token without triggering any UI, or null when there is none. */
   peek(): string | null;
+  /**
+   * Epoch milliseconds when the current token stops being valid, or null when
+   * no token is held or Google's response carried no lifetime. Read by the
+   * proactive refresh (./useDriveTokenRefresh), never by the request path.
+   */
+  expiry(): number | null;
   /** Drops the in-memory token — never touches the grant Google remembers. */
   clear(): void;
 }
@@ -251,6 +257,13 @@ function createTokenSource(scope: string, label: string): TokenSource {
   /** Current token of this scope (memory only, null when never granted). */
   let token: string | null = null;
 
+  /**
+   * Epoch ms when `token` stops being valid, as reported by Google
+   * (`expires_in`). Null until a response carried a lifetime — and reset with
+   * the token, so a cleared session never reports a stale deadline.
+   */
+  let expiresAt: number | null = null;
+
   /** Lazily created token client; survives across login attempts. */
   let tokenClient: google.accounts.oauth2.TokenClient | null = null;
 
@@ -316,6 +329,13 @@ function createTokenSource(scope: string, label: string): TokenSource {
     // Narrowed by the guard above: definitely present here.
     const grantedToken: string = response.access_token;
     token = grantedToken;
+    // Google's token responses normally carry `expires_in` (about an hour).
+    // Keep the deadline only when it is a usable number; a missing value simply
+    // disables the proactive refresh, never the token itself.
+    expiresAt =
+      typeof response.expires_in === 'number' && response.expires_in > 0
+        ? Date.now() + response.expires_in * 1000
+        : null;
     attempt?.resolve(grantedToken);
   }
 
@@ -471,8 +491,10 @@ function createTokenSource(scope: string, label: string): TokenSource {
   return {
     request,
     peek: (): string | null => token,
+    expiry: (): number | null => expiresAt,
     clear: (): void => {
       token = null;
+      expiresAt = null;
     },
   };
 }
@@ -486,6 +508,15 @@ const identityTokens = createTokenSource(IDENTITY_SCOPE, 'Keep (identity)');
 /** Current Drive access token without triggering any UI, or null when logged out. */
 export function getAccessToken(): string | null {
   return driveTokens.peek();
+}
+
+/**
+ * Epoch ms when the current Drive token stops being valid, or null when no
+ * lifetime is known. The editor's proactive refresh reads this to renew the
+ * token before a long editing session would otherwise hit a 401.
+ */
+export function getAccessTokenExpiry(): number | null {
+  return driveTokens.expiry();
 }
 
 /** Obtains a Drive access token — the login button and the silent cold start. */

@@ -33,6 +33,14 @@
   regenerates HTML exports in place.
 - Entry point for the shopping-list transfer, recipe sharing and the Android share target
   (TikTok → Cookbook).
+- **Unsaved work survives a lost session.** A Drive 401 no longer unmounts the editor:
+  App keeps the screen mounted, replaces „Speichern“ with „Erneut anmelden“, and ignores
+  late 401s for a token that a re-login or a proactive refresh already replaced. While the
+  editor or AI screen is open, `auth/useDriveTokenRefresh.ts` renews the Drive token five
+  minutes before Google's reported expiry. Independently of the session, the editor writes a
+  debounced, text-only copy of the working draft to localStorage (one slot, 30 days,
+  `components/recipeDraftRecovery.ts`); opening the same recipe offers it back through
+  `components/DraftRecoverySheet.tsx`, and saving or discarding clears it.
 
 ### Core logic module (framework-free TypeScript)
 
