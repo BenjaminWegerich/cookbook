@@ -2113,19 +2113,56 @@ function RecipeEditor({
 
   /**
    * Moves one counted ingredient row of a step by one position (`offset` −1 up,
-   * +1 down). The row order is the order of use (recipe_structure.md
-   * "Ingredients List"), and the derived master list follows it: an ingredient
-   * moves only where this step holds its first use, and duplicates keep the
-   * position of that first use. Out-of-range moves are no-ops — the two end
-   * buttons are disabled, this guards the keyboard path too.
+   * +1 down). Inside a step the row swaps with its neighbour. At a step's ends
+   * it crosses into the neighbouring step instead: the first row joins the end
+   * of the previous step, the last row the start of the next one. Only the
+   * first row of the first step (up) and the last row of the last step (down)
+   * have nowhere to go; those two buttons are disabled and this guard keeps the
+   * keyboard path a no-op as well.
+   *
+   * The row order is the order of use (recipe_structure.md "Ingredients
+   * List"), and the derived master list follows it: an ingredient moves only
+   * where its first use sits, and duplicates keep the position of that first
+   * use.
    */
   const moveStepRow = (stepIndex: number, rowIndex: number, offset: -1 | 1): void => {
-    updateStep(stepIndex, (current) => {
-      const target = rowIndex + offset;
-      if (target < 0 || target >= current.ingredients.length) return current;
-      const ingredients = [...current.ingredients];
-      [ingredients[rowIndex], ingredients[target]] = [ingredients[target]!, ingredients[rowIndex]!];
-      return { ...current, ingredients };
+    updateDraft((current) => {
+      const step = current.steps[stepIndex];
+      const ingredient = step?.ingredients[rowIndex];
+      if (step === undefined || ingredient === undefined) return current;
+
+      // Inside the step: swap with the neighbouring row.
+      const targetRow = rowIndex + offset;
+      if (targetRow >= 0 && targetRow < step.ingredients.length) {
+        const steps = [...current.steps];
+        const ingredients = [...step.ingredients];
+        [ingredients[rowIndex], ingredients[targetRow]] = [
+          ingredients[targetRow]!,
+          ingredients[rowIndex]!,
+        ];
+        steps[stepIndex] = { ...step, ingredients };
+        return { ...current, steps };
+      }
+
+      // At one end of the step: cross into the neighbouring step. A row moving
+      // up is appended to the previous step, a row moving down is prepended to
+      // the next one — the position next to the boundary it just crossed.
+      const neighbourIndex = stepIndex + offset;
+      const neighbour = current.steps[neighbourIndex];
+      if (neighbour === undefined) return current;
+      const steps = [...current.steps];
+      steps[stepIndex] = {
+        ...step,
+        ingredients: step.ingredients.filter((_, index) => index !== rowIndex),
+      };
+      steps[neighbourIndex] = {
+        ...neighbour,
+        ingredients:
+          offset === -1
+            ? [...neighbour.ingredients, ingredient]
+            : [ingredient, ...neighbour.ingredients],
+      };
+      return { ...current, steps };
     });
   };
 
@@ -3274,14 +3311,17 @@ function RecipeEditor({
                                   the toggle nor the "REFERENZ" badge appears
                                   on a step row. */}
                             {/* Row order = order of use. Same compact ↑ ↓ pair
-                                as the step head; at the ends of the list the
-                                direction has nowhere to go, and the row's
-                                position is the visible cause of the disabled
-                                look (DESIGN §5.1). */}
+                                as the step head. Only the two true ends are
+                                disabled — the first row of the first step and
+                                the last row of the last step. Otherwise an
+                                arrow at a step's end carries the row into the
+                                neighbouring step, so the position stays the
+                                visible cause of the disabled look (DESIGN
+                                §5.1). */}
                             <button
                               type="button"
                               className="icon-button"
-                              disabled={rowIndex === 0}
+                              disabled={stepIndex === 0 && rowIndex === 0}
                               onClick={() => moveStepRow(stepIndex, rowIndex, -1)}
                               aria-label={`${ingredient.name} nach oben`}
                             >
@@ -3290,7 +3330,10 @@ function RecipeEditor({
                             <button
                               type="button"
                               className="icon-button"
-                              disabled={rowIndex === step.ingredients.length - 1}
+                              disabled={
+                                stepIndex === draft.steps.length - 1 &&
+                                rowIndex === step.ingredients.length - 1
+                              }
                               onClick={() => moveStepRow(stepIndex, rowIndex, 1)}
                               aria-label={`${ingredient.name} nach unten`}
                             >
