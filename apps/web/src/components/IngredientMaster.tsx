@@ -40,6 +40,7 @@ import {
   masterIngredientNames,
   mappingsFor,
   shoppingVariantsFor,
+  type IngredientMapping,
   type ShoppingStop,
 } from '@cookbook/core';
 
@@ -276,7 +277,7 @@ function IngredientMaster({
     name: string,
     bu: string,
     reorderPoint: number,
-    entries: ReadonlyArray<{ au: string; factor: number }>,
+    entries: ReadonlyArray<IngredientMapping>,
     precision: IngredientMasterEntryInput['precision'],
     stop: ShoppingStop | null,
     variants: readonly string[],

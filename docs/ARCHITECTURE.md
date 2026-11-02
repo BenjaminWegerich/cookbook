@@ -59,10 +59,11 @@
   weights; `servingSizes.ts` holds the allowed serving counts.
 - Additional-unit display logic (see
   [additional_quantity_specifications.md](additional_quantity_specifications.md)):
-  `docs/additional_units.csv` (arrangement, scheme, exactness, shopping flag,
-  display forms), `docs/ingredients.csv` (base unit, mandatory precision, reorder
-  point, display forms) and `docs/ingredient_unit_mappings.csv` (factor only; no
-  priority) are compiled into `packages/core/src/additionalUnitsData.ts` via
+  `docs/additional_units.csv` (arrangement, scheme, exactness, display forms),
+  `docs/ingredients.csv` (base unit, mandatory precision, reorder point, display
+  forms) and `docs/ingredient_unit_mappings.csv` (factor and per-ingredient
+  shopping flag; no priority) are compiled into
+  `packages/core/src/additionalUnitsData.ts` via
   `npm run generate:additional` (`scripts/generate-additional-data.mjs`).
 - The legacy AQ bridge (`packages/core/src/aqLadder.ts`) still backs the
   nearest-AQ display helpers in `additionalUnits.ts`; the recipe and shopping
@@ -105,15 +106,17 @@
   module and the Gemini for Home preparation.
 - Ingredient master data lives in two CSV files in the `Stammdaten` subfolder — `zutaten.csv`
   (ingredient list: name + base unit + reorder point + the optional Singular/Plural display
-  forms) and `zutaten-umrechnungen.csv` (AU mappings), in the canonical formats of
+  forms) and `zutaten-umrechnungen.csv` (AU mappings, each with the per-ingredient
+  shopping flag), in the canonical formats of
   docs/ingredients.csv + docs/ingredient_unit_mappings.csv: the app loads both into the core
   ingredient registry at startup, and they are authoritative once they exist — the repo CSVs
   are the built-in seed used on first run. New ingredients are created from the recipe
   editor's quantity sheet or the „Zutaten“ screen („Neue Zutat anlegen“), through the shared
-  `MasterDataSheet`: it collects name, base unit, display forms, reorder point, AU mappings,
-  precision and the shopping stop/synonyms, appends to both ingredient files and
-  creates/updates the item row. The split keeps ingredient-level fields (name, base unit,
-  reorder point, display forms) in one row per ingredient, separate from the AU mappings.
+  `MasterDataSheet`: it collects name, base unit, display forms, reorder point, AU mappings
+  (including the purchase unit), precision and the shopping stop/synonyms, appends to both
+  ingredient files and creates/updates the item row. The split keeps ingredient-level fields
+  (name, base unit, reorder point, display forms) in one row per ingredient, separate from
+  the AU mappings.
 - Where an item is bought is a separate master-data set in the same `Stammdaten` subfolder —
   `einkaufsweg.csv` (the route: store + section per row, in walking order),
   `einkaufs-artikel.csv` (the item table: item → store + section — the identity of everything

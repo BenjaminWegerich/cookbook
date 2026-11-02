@@ -46,15 +46,15 @@
  * derived from the rounded additional quantity
  * (docs/additional_quantity_specifications.md §6.3).
  *
- * The `Shopping Unit` column of docs/additional_units.csv is validated here and
- * compiled into the `shoppingUnit` flag of each unit: `yes` when ingredients are
- * bought in this unit (a Becher of yogurt), `no` when the unit is only a recipe
- * measure (TL, EL). The cell is mandatory — every unit states the flag, so a new
- * unit can never silently default into or out of the shopping list. Because a
- * unit's identity is its name (mappings reference it by name), the rare unit
- * that is a shopping unit for some ingredients and not for others is modelled as
- * two units with **distinct names** (docs/additional_quantity_specifications.md
- * §3.1), never as two rows with the same name.
+ * The `Shopping Unit` column of docs/ingredient_unit_mappings.csv is validated
+ * here and compiled into the `shoppingUnit` flag of the mapping: `yes` when the
+ * ingredient is bought in this unit (the Becher of a yogurt), `no` when the same
+ * unit is only a recipe measure for it (the clove of garlic, the leaf of basil).
+ * The flag therefore belongs to the ingredient–unit pair, not to the unit: the
+ * same `Stück (ZE zuerst)` can be the purchase unit of a carrot and a recipe
+ * measure for garlic. The cell is mandatory — every mapping states the flag, so
+ * a new row can never silently default into or out of the shopping list
+ * (docs/additional_quantity_specifications.md §3.1).
  *
  * The number-scheme columns live directly in docs/AQs.csv, the single source of
  * the AQ values and their memberships. A unit references a scheme by name; the
@@ -62,8 +62,8 @@
  * 1/0/empty, or when a scheme allows a count above 30.
  *
  * A unit identity is its name, and the app allows **one shopping unit per
- * ingredient** (decided with the user). The mapping generator therefore fails
- * when an ingredient maps to two units both flagged `Shopping Unit = yes`.
+ * ingredient** (decided with the user): the mapping generator fails when an
+ * ingredient marks two of its mappings `Shopping Unit = yes`.
  *
  * Usage:
  *   npm run generate:additional   (from packages/core)
@@ -77,8 +77,8 @@
  * decimals tolerated), header row, CRLF tolerated, one optional trailing empty
  * cell per row (spreadsheet exports). Scheme cells: `1` = allowed, `0` or
  * empty = not allowed. The `Unit Exact` cell is `yes` or `no`, empty = `yes`.
- * The `Shopping Unit` cell is `yes` or `no` and must not be empty. The
- * ingredient `Precision` cell is mandatory and one of the five levels.
+ * The `Shopping Unit` cell of a mapping is `yes` or `no` and must not be empty.
+ * The ingredient `Precision` cell is mandatory and one of the five levels.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -100,8 +100,7 @@ const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/additi
 const ARRANGEMENT_TOKENS = new Set(['<AQ>', '<AU>', '<IN>', '<INF>', '<BQ>', '<BU>', '<NNBSP>']);
 
 /** Exact header of the additional-units table (docs/additional_units.csv). */
-const UNITS_HEADER =
-  'Additional Unit;Singular;Plural;Arrangement;Number Scheme;Unit Exact;Shopping Unit';
+const UNITS_HEADER = 'Additional Unit;Singular;Plural;Arrangement;Number Scheme;Unit Exact';
 
 /** Exact header of the ingredient list (docs/ingredients.csv). */
 const INGREDIENTS_HEADER = 'Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point';
@@ -133,13 +132,13 @@ function parseUnitExact(cell, unitName) {
 }
 
 /**
- * Parses the `Shopping Unit` cell of the additional-units table: `yes` when
- * ingredients are bought in this unit (a Becher of yogurt), `no` when the unit
- * is only a recipe measure (TL, EL). The cell is mandatory — an empty cell is a
- * master-data error, so a new unit cannot silently default into or out of the
+ * Parses the `Shopping Unit` cell of one mapping: `yes` when this ingredient is
+ * bought in this unit (a Becher of yogurt), `no` when the unit is only a recipe
+ * measure for it (a clove of garlic). The cell is mandatory — an empty cell is a
+ * master-data error, so a new mapping cannot silently default into or out of the
  * shopping list (docs/additional_quantity_specifications.md §3.1).
  */
-function parseShoppingUnit(cell, unitName) {
+function parseShoppingUnit(cell, ingredient, au) {
   const value = (cell ?? '').trim().toLowerCase();
   if (value === 'yes') {
     return true;
@@ -148,7 +147,7 @@ function parseShoppingUnit(cell, unitName) {
     return false;
   }
   throw new Error(
-    `${UNITS_CSV}: invalid Shopping Unit value '${cell}' for unit '${unitName}' ` +
+    `${MAPPINGS_CSV}: invalid Shopping Unit value '${cell}' for '${ingredient}' → '${au}' ` +
       `(use yes or no; the cell is mandatory)`,
   );
 }
@@ -340,8 +339,7 @@ function buildUnits(schemeNames) {
     throw new Error(`${UNITS_CSV}: unexpected header ${JSON.stringify(header)}`);
   }
   const units = rows.map((row, index) => {
-    const [name, singularCell, pluralCell, arrangement, numberScheme, exactCell, shoppingCell] =
-      row;
+    const [name, singularCell, pluralCell, arrangement, numberScheme, exactCell] = row;
     if (name === '') {
       throw new Error(`${UNITS_CSV}: empty unit name in row ${index + 2}`);
     }
@@ -378,16 +376,14 @@ function buildUnits(schemeNames) {
       // empty cell means the default `yes` — an exact unit is one whose
       // definition fixes the base amount (a 400 g Becher, a 200 g Block).
       exact: parseUnitExact(exactCell, name),
-      // "Shopping Unit" (§3.1): mandatory yes/no — `yes` when ingredients are
-      // bought in this unit, `no` when it is only a recipe measure.
-      shoppingUnit: parseShoppingUnit(shoppingCell, name),
     };
   });
   // Unit names stay unique on purpose: mappings and the runtime registry
   // reference a unit by name, so two rows with the same name would be
-  // indistinguishable. A unit that must be both a shopping and a non-shopping
-  // unit for different ingredients is therefore split into two units with
-  // distinct names (docs/additional_quantity_specifications.md §3.1).
+  // indistinguishable. Variants of one meaning (a divisible vs. an indivisible
+  // pack) need distinct names; the shopping flag does not motivate a variant
+  // anymore, because it belongs to the mapping
+  // (docs/additional_quantity_specifications.md §3.1).
   if (new Set(units.map((unit) => unit.name)).size !== units.length) {
     throw new Error(
       `${UNITS_CSV}: duplicate unit name — a unit's identity is its name; ` +
@@ -440,18 +436,21 @@ function buildIngredientList() {
  * without mappings (e.g. Cashews) is simply absent here.
  *
  * There is no per-ingredient priority anymore: the optimizer scores every
- * compatible unit. The shopping list still needs exactly one unit to buy in, so
- * an ingredient may map to at most one unit flagged `Shopping Unit = yes`.
+ * compatible unit. The shopping list still needs one unit to buy in, so at most
+ * one mapping per ingredient may carry `Shopping Unit = yes`. The flag belongs
+ * to the mapping because the same unit can be a purchase unit for one ingredient
+ * and a recipe measure for another (docs/additional_quantity_specifications.md
+ * §3.1).
  */
 function buildMappings(units, ingredientNames) {
   const unitByName = new Map(units.map((unit) => [unit.name, unit]));
   const { header, rows } = parseCsv(MAPPINGS_CSV);
-  if (header.join(';') !== 'Ingredient;Additional Unit;Conversion Factor') {
+  if (header.join(';') !== 'Ingredient;Additional Unit;Conversion Factor;Shopping Unit') {
     throw new Error(`${MAPPINGS_CSV}: unexpected header ${JSON.stringify(header)}`);
   }
   const byIngredient = new Map();
   for (const row of rows) {
-    const [ingredient, au, factorCell] = row;
+    const [ingredient, au, factorCell, shoppingCell] = row;
     if (ingredient === '') {
       throw new Error(`${MAPPINGS_CSV}: empty ingredient in line: ${row.join(';')}`);
     }
@@ -477,14 +476,20 @@ function buildMappings(units, ingredientNames) {
     if (list.some((mapping) => mapping.au === au)) {
       throw new Error(`${MAPPINGS_CSV}: duplicate mapping for '${ingredient}' → '${au}'`);
     }
-    list.push({ au, factor });
+    list.push({
+      au,
+      factor,
+      // "Shopping Unit" (§3.1): mandatory yes/no per mapping — whether this
+      // ingredient is bought in this unit.
+      shoppingUnit: parseShoppingUnit(shoppingCell, ingredient, au),
+    });
     byIngredient.set(ingredient, list);
   }
   for (const [ingredient, list] of byIngredient) {
-    const shoppingUnits = list.filter((mapping) => unitByName.get(mapping.au).shoppingUnit);
+    const shoppingUnits = list.filter((mapping) => mapping.shoppingUnit);
     if (shoppingUnits.length > 1) {
       throw new Error(
-        `${MAPPINGS_CSV}: '${ingredient}' maps to more than one shopping unit ` +
+        `${MAPPINGS_CSV}: '${ingredient}' marks more than one shopping unit ` +
           `(${shoppingUnits.map((mapping) => mapping.au).join(', ')}); the app allows exactly one`,
       );
     }
@@ -513,7 +518,7 @@ function render(units, schemes, ingredientList, mappings) {
   lines.push('');
   lines.push("import type { PrecisionLevel } from './precision.js';");
   lines.push('');
-  lines.push('/** One additional unit: display arrangement, number scheme and unit flags. */');
+  lines.push('/** One additional unit: display arrangement, number scheme and exactness. */');
   lines.push('export interface AdditionalUnit {');
   lines.push(
     '  /** Canonical unit name: the identity the mappings reference and the runtime registry keys units by; without `singular`/`plural` it is also the form the display line shows. */',
@@ -537,18 +542,20 @@ function render(units, schemes, ingredientList, mappings) {
     '  /** True when the unit fixes the base amount (a 400 g Becher, a 200 g Block): the shown base quantity is then derived from the rounded AQ (docs/additional_quantity_specifications.md §6.3). */',
   );
   lines.push('  readonly exact: boolean;');
-  lines.push(
-    '  /** True when ingredients are bought in this unit (a Becher of yogurt); false for a pure recipe measure (TL, EL). Drives the shopping list (docs/additional_quantity_specifications.md §3.1). */',
-  );
-  lines.push('  readonly shoppingUnit: boolean;');
   lines.push('}');
   lines.push('');
-  lines.push('/** One ingredient–additional-unit mapping (conversion factor only). */');
+  lines.push(
+    '/** One ingredient–additional-unit mapping: the factor and the per-ingredient shopping flag. */',
+  );
   lines.push('export interface IngredientMapping {');
   lines.push('  /** Referenced additional unit name (see ADDITIONAL_UNITS). */');
   lines.push('  readonly au: string;');
   lines.push('  /** Amount of base unit per one additional unit. */');
   lines.push('  readonly factor: number;');
+  lines.push(
+    '  /** True when this ingredient is bought in this unit (the Becher of a yogurt); false when the same unit is only a recipe measure for it (the clove of garlic). At most one mapping per ingredient sets it. Drives the shopping list (docs/additional_quantity_specifications.md §3.1). */',
+  );
+  lines.push('  readonly shoppingUnit: boolean;');
   lines.push('}');
   lines.push('');
   lines.push(
@@ -592,8 +599,7 @@ function render(units, schemes, ingredientList, mappings) {
         : '';
     lines.push(
       `  { name: ${JSON.stringify(unit.name)}, ${forms}arrangement: ${JSON.stringify(unit.arrangement)}, ` +
-        `numberScheme: ${JSON.stringify(unit.numberScheme)}, exact: ${unit.exact}, ` +
-        `shoppingUnit: ${unit.shoppingUnit} },`,
+        `numberScheme: ${JSON.stringify(unit.numberScheme)}, exact: ${unit.exact} },`,
     );
   }
   lines.push('];');
@@ -622,7 +628,10 @@ function render(units, schemes, ingredientList, mappings) {
     }
     lines.push('    entries: [');
     for (const mapping of entries) {
-      lines.push(`      { au: ${JSON.stringify(mapping.au)}, factor: ${mapping.factor} },`);
+      lines.push(
+        `      { au: ${JSON.stringify(mapping.au)}, factor: ${mapping.factor}, ` +
+          `shoppingUnit: ${mapping.shoppingUnit} },`,
+      );
     }
     lines.push('    ],');
     lines.push('  },');

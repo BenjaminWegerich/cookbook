@@ -159,7 +159,7 @@ not where it is used.
       `einkaufs-synonyme.csv` (`Variant;Item` — „Möhren“ → „Karotten“); `zutaten.csv`
       keeps the ingredient master data without a route. Matching moved to read time:
       normalize, undo the app's own line shape — its unit vocabulary derived from
-      the additional units flagged `Shopping Unit` plus the formatter's base-unit
+      the mappings that flag a unit as a shopping unit plus the formatter's base-unit
       tokens, never a hand-kept copy — then require the name field to be *exactly*
       an item name (or a variant, compared case-folded), so „Muffins mit Blaubeeren“
       stays unresolved instead of sorting as „Blaubeeren“. A line with no hit is

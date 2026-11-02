@@ -38,7 +38,7 @@ const lemon = mappingsFor('Zitronensaft')!;
 const integerPack: OptimizableEntry = {
   bu: 'g',
   precision: 'medium',
-  entries: [{ au: 'Packung (unteilbar)', factor: 125 }],
+  entries: [{ au: 'Packung (unteilbar)', factor: 125, shoppingUnit: false }],
 };
 
 /** The ranking score of one suggestion, mirroring round 5. */
@@ -165,9 +165,7 @@ describe('suggestQuantities', () => {
   });
 
   it('offers no chip when the cap excludes every candidate', () => {
-    expect(
-      suggestQuantities(437, joghurt, 'g', { allowedValues: [1, 2, 3] }),
-    ).toEqual([]);
+    expect(suggestQuantities(437, joghurt, 'g', { allowedValues: [1, 2, 3] })).toEqual([]);
   });
 
   it('returns nothing for a value the field cannot hold', () => {

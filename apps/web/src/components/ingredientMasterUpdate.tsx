@@ -68,7 +68,12 @@ export function isIngredientUnchanged(
   if (entry.entries.length !== update.entries.length) return false;
   return entry.entries.every((mapping, index) => {
     const next = update.entries[index];
-    return next !== undefined && mapping.au === next.au && mapping.factor === next.factor;
+    return (
+      next !== undefined &&
+      mapping.au === next.au &&
+      mapping.factor === next.factor &&
+      mapping.shoppingUnit === next.shoppingUnit
+    );
   });
 }
 

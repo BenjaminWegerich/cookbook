@@ -169,6 +169,7 @@
    Without the exclusion this higher-specificity rule would win the cascade
    and make the slot's hidden width probe disagree with the rendered value. */
 .field input[type='text']:not(.quantity-input),
+.field select,
 .field textarea {
   width: 100%;
   padding: var(--space-3) var(--space-4);
@@ -188,6 +189,24 @@
 .field input[type='text']:disabled {
   color: var(--color-ink-muted);
   cursor: not-allowed;
+}
+
+/* The „Einkaufs-Einheit“ select under the mappings grid (IngredientMappingsField):
+   a native select with the text-field look. Its option list stays native — the
+   browser owns that popup, exactly like the check-list checkbox. */
+.field select {
+  min-height: 42px;
+}
+
+.field select:disabled {
+  color: var(--color-ink-muted);
+  cursor: not-allowed;
+}
+
+/* The select is a sub-field of the mappings group, so its caption needs less
+   air above it than a top-level field's. */
+.shopping-unit-field {
+  margin-top: var(--space-1);
 }
 
 /* Auto-growing text fields (see AutoGrowTextarea): the manual grip is gone

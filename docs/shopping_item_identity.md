@@ -76,13 +76,14 @@ sort run, with the single exception of a confirmed suggestion (§4).
      whole number of a shopping unit, `3 Becher Mehl (450 g)`. Undoing them means
      dropping the leading quantity together with the one unit token that follows
      it — and, as part of that same shape, the trailing parenthetical. The unit
-     vocabulary is **derived from the additional units flagged `Shopping Unit`**
-     in `docs/additional_units.csv` — in every display form, because a count above
-     one writes the plural („2 Packungen Mehl“, see
+     vocabulary is **derived from the mappings that flag a unit as their
+     shopping unit** in `docs/ingredient_unit_mappings.csv` — in every display form,
+     because a count above one writes the plural („2 Packungen Mehl“, see
      additional_quantity_specifications.md §3.2) — plus the base units the app
      writes (g/ml and their display steps kg/l) — never a hand-kept copy of it, so
      adding a unit to the master data cannot silently stop the app's own lines from
-     resolving.
+     resolving. A unit that is only ever a recipe measure (the clove of garlic,
+     EL/TL) is not in the vocabulary.
    - **Fall back to the plain text.** A line whose shape the app did not write
      (`Klopapier`, `Wandfarbe weiß`) is its own name field; nothing is stripped.
 

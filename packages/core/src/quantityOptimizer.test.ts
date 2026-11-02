@@ -18,28 +18,28 @@ const bare: OptimizableEntry = { bu: 'g', precision: 'medium', entries: [] };
 const mehl: OptimizableEntry = {
   bu: 'g',
   precision: 'medium',
-  entries: [{ au: 'Packung (unteilbar)', factor: 1000 }],
+  entries: [{ au: 'Packung (unteilbar)', factor: 1000, shoppingUnit: false }],
 };
 
 /** Mehl with a divisible pack, for the exact-branch tests. */
 const teilbar: OptimizableEntry = {
   bu: 'g',
   precision: 'medium',
-  entries: [{ au: 'Packung (teilbar)', factor: 1000 }],
+  entries: [{ au: 'Packung (teilbar)', factor: 1000, shoppingUnit: false }],
 };
 
 /** Joghurt: a 500 g Becher (exact, halves/integers scheme). */
 const joghurt: OptimizableEntry = {
   bu: 'g',
   precision: 'medium',
-  entries: [{ au: 'Becher', factor: 500 }],
+  entries: [{ au: 'Becher', factor: 500, shoppingUnit: false }],
 };
 
 /** An exact unit with a fractional factor (7.5 g per piece). */
 const fractionalPiece: OptimizableEntry = {
   bu: 'g',
   precision: 'medium',
-  entries: [{ au: 'Stück (BE zuerst, exakt)', factor: 7.5 }],
+  entries: [{ au: 'Stück (BE zuerst, exakt)', factor: 7.5, shoppingUnit: false }],
 };
 
 /** Backpulver: a 15 g Päckchen (exact) plus a 3 g TL (halves up to 10). */
@@ -47,14 +47,14 @@ const backpulver: OptimizableEntry = {
   bu: 'g',
   precision: 'medium',
   entries: [
-    { au: 'Päckchen', factor: 15 },
-    { au: 'Teelöffel', factor: 3 },
+    { au: 'Päckchen', factor: 15, shoppingUnit: false },
+    { au: 'Teelöffel', factor: 3, shoppingUnit: false },
   ],
 };
 
 /** A factor list built from one unit name and factor. */
 function entry(unit: string, factor: number): OptimizableEntry {
-  return { bu: 'g', precision: 'medium', entries: [{ au: unit, factor }] };
+  return { bu: 'g', precision: 'medium', entries: [{ au: unit, factor, shoppingUnit: false }] };
 }
 
 describe('optimizeQuantity', () => {
@@ -109,7 +109,7 @@ describe('optimizeQuantity', () => {
     const exactFractional: OptimizableEntry = {
       bu: 'g',
       precision: 'medium',
-      entries: [{ au: 'Stück (BE zuerst, exakt)', factor: 7.5 }],
+      entries: [{ au: 'Stück (BE zuerst, exakt)', factor: 7.5, shoppingUnit: false }],
     };
     expect(optimizeQuantity(7.5, exactFractional, 'g').bq).toBe(7.5);
     expect(optimizeQuantity(11.25, exactFractional, 'g').bq).toBe(11);
@@ -147,8 +147,8 @@ describe('optimizeQuantity', () => {
       bu: 'g',
       precision: 'medium',
       entries: [
-        { au: 'Becher', factor: 100 },
-        { au: 'Teelöffel', factor: 3 },
+        { au: 'Becher', factor: 100, shoppingUnit: false },
+        { au: 'Teelöffel', factor: 3, shoppingUnit: false },
       ],
     };
     const result = optimizeQuantity(8, joghurtBecher, 'g');

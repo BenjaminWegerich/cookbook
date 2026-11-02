@@ -12,10 +12,11 @@
  * 1. **Derive the name field** (`shoppingNameField`): Unicode NFC, case-folded
  *    for comparison only, whitespace collapsed, and the decoration of the app's
  *    own line shapes undone — a trailing parenthetical and a leading quantity
- *    together with one unit token. The unit vocabulary is derived (Shopping-Unit
- *    flagged additional units + `BASE_UNIT_TOKENS`, never a hand-kept copy), and
- *    the undoing is all-or-nothing: a line the app did not write keeps its text
- *    ("1 Bund Petersilie" stays unresolved rather than losing its "1").
+ *    together with one unit token. The unit vocabulary is derived (the units
+ *    that some mapping flags as a shopping unit + `BASE_UNIT_TOKENS`, never a
+ *    hand-kept copy), and the undoing is all-or-nothing: a line the app did not
+ *    write keeps its text ("1 Bund Petersilie" stays unresolved rather than
+ *    losing its "1").
  * 2. **Match the whole name field** (`matchShoppingItem`): the field must be
  *    *exactly* an item name — not merely contain it or start with it — so
  *    "Muffins mit Blaubeeren" never resolves to the item "Blaubeeren". Names are
@@ -33,7 +34,8 @@
  * matching and the order.
  */
 
-import { ADDITIONAL_UNITS } from './additionalUnitsData.js';
+import { allIngredientMappings } from './ingredientRegistry.js';
+import { ADDITIONAL_UNITS, type AdditionalUnit } from './additionalUnitsData.js';
 import { BASE_UNIT_TOKENS, auDisplayForms } from './additionalUnits.js';
 import {
   allShoppingItems,
@@ -77,18 +79,37 @@ function escapeRegExp(literal: string): string {
 }
 
 /**
- * The unit tokens a shopping line may carry: the additional units flagged
- * `Shopping Unit` (a Becher, a Packung, a Stück) in every display form — the
- * canonical name plus the singular and plural forms, because the app writes
- * „2 Packungen Mehl“ — plus the base-unit tokens the app writes
- * (`BASE_UNIT_TOKENS`). Derived from the master data and the formatter, so a
- * change there reaches the line vocabulary automatically.
+ * Additional units by canonical name, for turning a mapping's unit name back
+ * into its display forms.
+ */
+const AU_BY_NAME = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit]));
+
+/**
+ * The unit tokens a shopping line may carry: the additional units that at least
+ * one ingredient–unit mapping flags as its **shopping unit** (a Becher, a
+ * Packung, a Stück) in every display form — the canonical name plus the singular
+ * and plural forms, because the app writes „2 Packungen Mehl“ — plus the
+ * base-unit tokens the app writes (`BASE_UNIT_TOKENS`). Derived from the runtime
+ * master data and the formatter, so the flag moving on a mapping (or a new unit
+ * becoming a purchase unit) reaches the line vocabulary automatically. A unit
+ * that is only ever a recipe measure is not in the vocabulary: the app never
+ * writes it onto a shopping line.
  */
 function shoppingLineUnits(): readonly string[] {
-  const units = ADDITIONAL_UNITS.filter((unit) => unit.shoppingUnit).flatMap(auDisplayForms);
+  const units = new Map<string, AdditionalUnit>();
+  for (const entry of Object.values(allIngredientMappings())) {
+    for (const mapping of entry.entries) {
+      if (!mapping.shoppingUnit) continue;
+      const unit = AU_BY_NAME.get(mapping.au);
+      if (unit !== undefined) {
+        units.set(unit.name, unit);
+      }
+    }
+  }
+  const tokens = [...units.values()].flatMap(auDisplayForms);
   // Longest first: "kg" must be tried before... its own prefix does not exist,
   // but "Stück" and a hypothetical "St" would otherwise depend on table order.
-  return [...units, ...BASE_UNIT_TOKENS].sort((a, b) => b.length - a.length);
+  return [...tokens, ...BASE_UNIT_TOKENS].sort((a, b) => b.length - a.length);
 }
 
 /**
@@ -96,11 +117,17 @@ function shoppingLineUnits(): readonly string[] {
  * half of the app's own line decoration. The token must be followed by a space
  * or the end of the line, so a name that merely starts with a unit token
  * ("Becherhälse") is not touched.
+ *
+ * Built per call because the vocabulary follows the runtime master data: a
+ * mapping's shopping flag can change when the user's Drive files load, and a
+ * module-load regex would keep the seed's vocabulary.
  */
-const DECORATION = new RegExp(
-  `^${QUANTITY_SOURCE}(${shoppingLineUnits().map(escapeRegExp).join('|')})(?=\\s|$)`,
-  'u',
-);
+function decorationPattern(): RegExp {
+  return new RegExp(
+    `^${QUANTITY_SOURCE}(${shoppingLineUnits().map(escapeRegExp).join('|')})(?=\\s|$)`,
+    'u',
+  );
+}
 
 /** A trailing parenthetical, the second half of the app's own line decoration. */
 const TRAILING_PARENTHETICAL = /\s*\([^()]*\)\s*$/u;
@@ -116,16 +143,17 @@ const TRAILING_PARENTHETICAL = /\s*\([^()]*\)\s*$/u;
  *   - "850 g Butter"             → "Butter"    (base shape)
  *   - "1,15 kg Mehl"             → "Mehl"      (the kg display step)
  *   - "Klopapier"                → "Klopapier" (hand-written: nothing to undo)
- *   - "1 Bund Petersilie"        → "1 Bund Petersilie" ("Bund" is no unit of
- *     the app, so the "1" is not decoration either — the line stays unresolved
- *     and is answered by a suggestion, which is the deliberate strictness)
+ *   - "1 Bund Petersilie"        → "1 Bund Petersilie" (no ingredient is
+ *     bought in "Bund" in the current master data, so the app never writes it
+ *     and the "1" is not decoration either — the line stays unresolved and is
+ *     answered by a suggestion, which is the deliberate strictness)
  *
  * The returned text keeps the spelling the user wrote (only whitespace and
  * Unicode normalization are applied); `shoppingNameKey` folds it for comparison.
  */
 export function shoppingNameField(text: string): string {
   const normalized = text.normalize('NFC').replace(/\s+/gu, ' ').trim();
-  const match = DECORATION.exec(normalized);
+  const match = decorationPattern().exec(normalized);
   if (match === null) {
     return normalized;
   }

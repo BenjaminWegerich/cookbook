@@ -37,7 +37,7 @@
 | Base unit (BU) | The unit of the BQS: g / ml (kg / l are display forms from 1000). | g |
 | Additional quantity specification (AQS) | The displayed household/package part. | "1 Becher" |
 | Additional quantity (AQ) | The numeric count of the AQS; an allowed AQ value. | 1 |
-| Additional unit (AU) | The unit the AQS is expressed in; defines arrangement, scheme, display forms, exactness and shopping flag. | Becher |
+| Additional unit (AU) | The unit the AQS is expressed in; defines arrangement, scheme, display forms and exactness. | Becher |
 
 The abbreviations (BQS, BQ, BU, AQS, AQ, AU) are conversational shorthand; the
 full English terms are canonical. Concrete identifiers belong to the
@@ -58,12 +58,12 @@ The display logic is driven by four repository tables, compiled into
    - **Singular** / **Plural** display forms (both empty for an invariant unit),
    - **Arrangement** (display template, §4),
    - **Number Scheme** (a column in `AQs.csv`, §5),
-   - **Unit Exact** (`yes` / `no`, default `yes`, §6.3),
-   - **Shopping Unit** (`yes` / `no`, mandatory, §3.1).
+   - **Unit Exact** (`yes` / `no`, default `yes`, §6.3).
 4. **[ingredient_unit_mappings.csv](ingredient_unit_mappings.csv)** — one row per
-   ingredient–unit pair: `Ingredient;Additional Unit;Conversion Factor`
-   (base-unit amount per one unit). There is **no priority column** anymore; the
-   optimizer scores every compatible unit.
+   ingredient–unit pair: `Ingredient;Additional Unit;Conversion Factor;Shopping Unit`
+   (base-unit amount per one unit, and whether this ingredient is bought in it).
+   There is **no priority column** anymore; the optimizer scores every compatible
+   unit. The shopping flag is part of the mapping (§3.1).
 
 The ingredient list ([ingredients.csv](ingredients.csv) /
 `zutaten.csv`) supplies the fixed base unit, the display forms, the optional
@@ -72,20 +72,27 @@ mandatory ingredient-level precision and the reorder point. An ingredient withou
 
 ### 3.1 Shopping unit
 
-- The **Shopping Unit** flag states whether ingredients are bought in this unit:
-  `yes` for a purchase unit (Becher, Packung), `no` for a pure recipe measure
-  (TL, EL).
-- The flag is a property of the **unit**, not of the mapping. It does not affect
-  display selection; it only tells the shopping list which unit to buy in.
-- **Exactly one shopping unit per ingredient.** The app allows at most one
-  mapping whose unit is flagged `Shopping Unit = yes`; the generator and the
-  runtime CSV parser reject a second one. The shopping list therefore has one
-  unambiguous purchase unit. An ingredient with no shopping unit is bought in
-  its family unit.
-- Because the flag belongs to the unit, two meanings need two units with
-  distinct names (e.g. a shopping `Becher` and a non-shopping variant if one is
-  ever needed). The seed does not need such a variant: every ingredient with
-  multiple mappings has at most one shopping mapping.
+- The **Shopping Unit** flag states whether **this ingredient** is bought in this
+  unit: `yes` for its purchase unit (the Becher of the yogurt), `no` for a pure
+  recipe measure (the clove of garlic, the leaf of basil).
+- The flag is a property of the **ingredient–unit mapping**, not of the unit. The
+  same unit can therefore be a purchase unit for one ingredient and a recipe
+  measure for another: `Stück (ZE zuerst)` is how a carrot is bought and only
+  counts cloves for garlic; `Blatt` measures basil leaves but is the purchase
+  unit of gelatine sheets. Two meanings no longer need two units with distinct
+  names.
+- The flag does not affect display selection; it only tells the shopping list
+  which unit to buy in.
+- **At most one shopping unit per ingredient.** The app allows at most one
+  mapping flagged `Shopping Unit = yes`; the generator and the runtime CSV
+  parser reject a second one. The shopping list therefore has one unambiguous
+  purchase unit. An ingredient with no flagged mapping is bought in its family
+  unit.
+- The cell is mandatory in the current format. Files written before the flag
+  moved onto the mapping (the flagless header, and the older header with a
+  trailing `Priority` column) still parse: their rows inherit the retired
+  unit-level flag, so an existing Drive file keeps behaving as it did. The next
+  write stores the per-mapping flags and the current header.
 
 ### 3.2 Singular and plural forms
 
@@ -215,13 +222,14 @@ display selection. The ingredient master-data forms („Neue Zutat anlegen“,
 stock-state exception — snapping it to a whole package — is gone (decided with
 the user), so an exact unit never changes what is stored.
 
-## 7. No priority; one shopping unit
+## 7. No priority; one shopping unit per ingredient
 
 - Per-ingredient priorities are gone. The optimizer is the only selection rule;
   a higher-priority unit is not tried first.
-- The shopping list still needs one purchase unit, so the master data allows at
-  most one mapping to a `Shopping Unit = yes` unit. This is the only remaining
-  “preference” between units.
+- The shopping list still needs one purchase unit, so at most one mapping per
+  ingredient may be flagged `Shopping Unit = yes`. This is the only remaining
+  “preference” between units, and it is a property of the ingredient–unit pair
+  (§3.1), not of the unit.
 - The shopping list uses the purchase unit and rounds *up* to whole packages; it
   does not use the optimizer's display AQ. The shopping code is migrated to the
   new quantity model (see [quantity_scaling.md](quantity_scaling.md) §9): exact

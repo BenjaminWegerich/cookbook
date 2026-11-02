@@ -187,9 +187,10 @@ const DISPLAY_STEP: Readonly<Record<string, string>> = { g: 'kg', ml: 'l' };
  *
  * This is half of the unit vocabulary a shopping line's decoration is undone
  * with (docs/shopping_item_identity.md §2); the other half is the additional
- * units flagged `Shopping Unit`. Both halves are derived, never a hand-kept
- * copy of the whole vocabulary, so adding a unit to the master data cannot
- * silently stop the app's own lines from resolving.
+ * units that some ingredient–unit mapping flags as its shopping unit. Both
+ * halves are derived, never a hand-kept copy of the whole vocabulary, so adding
+ * a unit to the master data cannot silently stop the app's own lines from
+ * resolving.
  */
 export const BASE_UNIT_TOKENS: readonly string[] = [
   ...Object.keys(DISPLAY_STEP),
@@ -828,13 +829,16 @@ export function renderQuantityText(ingredient: string, bq: number, bu: string): 
  * (docs/additional_quantity_specifications.md §3.1) — the unit the shopping
  * list names its amount in.
  *
- * The flag lives on the *unit*, not on the mapping, so the entry's mappings are
- * searched in their priority order (1 = most preferred) and the first one whose
- * unit is a shopping unit wins; a unit that is only a recipe measure (TL, EL)
- * is skipped. `bu` is the family unit the quantity is expressed in: a mapping's
- * factor is expressed in the ingredient's fixed base unit, so a quantity of
- * another family (g for an ml ingredient) has no applicable shopping unit and
- * the caller falls back to the base form (§4).
+ * The flag belongs to the *mapping*, not to the unit: „Stück (ZE zuerst)“ is the
+ * purchase unit of a carrot but a recipe measure for a clove of garlic. The
+ * entry's mappings are searched in their file order and the one flagged
+ * `shoppingUnit` wins; a unit that is only a recipe measure for this ingredient
+ * (TL, EL, a clove) is skipped. At most one mapping may carry the flag (the
+ * master-data parser and generator enforce it), so the search order is
+ * immaterial in valid data. `bu` is the family unit the quantity is expressed
+ * in: a mapping's factor is expressed in the ingredient's fixed base unit, so a
+ * quantity of another family (g for an ml ingredient) has no applicable
+ * shopping unit and the caller falls back to the base form (§4).
  *
  * @param entry the ingredient's master-data entry, or undefined when the name
  *   is not registered (no shopping unit then — the base form)
@@ -850,7 +854,7 @@ export function shoppingUnitFor(
   for (const mapping of entry.entries) {
     const au = AU_BY_NAME.get(mapping.au);
     // Unreachable with generator-validated data (see selectAQForEntry).
-    if (au !== undefined && au.shoppingUnit) {
+    if (au !== undefined && mapping.shoppingUnit) {
       return { au, factor: mapping.factor };
     }
   }

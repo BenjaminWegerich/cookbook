@@ -48,8 +48,8 @@ Four tables drive the optimizer:
 |---|---|
 | [BQs.csv](BQs.csv) | Allowed base quantities and their clumsiness penalties. |
 | [AQs.csv](AQs.csv) | Allowed additional quantities, penalties, and the number-scheme columns. |
-| [additional_units.csv](additional_units.csv) | Unit identity, display forms, arrangement, number scheme, exactness, shopping flag. |
-| [ingredient_unit_mappings.csv](ingredient_unit_mappings.csv) | Ingredient → compatible additional unit and its conversion factor. |
+| [additional_units.csv](additional_units.csv) | Unit identity, display forms, arrangement, number scheme, exactness. |
+| [ingredient_unit_mappings.csv](ingredient_unit_mappings.csv) | Ingredient → compatible additional unit, its conversion factor and whether the ingredient is bought in that unit. |
 
 `docs/ingredients.csv` holds the ingredient list (base unit, mandatory precision,
 reorder point, display forms). `docs/additional_units.csv` and the ingredient
@@ -57,9 +57,11 @@ mappings are compiled into `packages/core/src/additionalUnitsData.ts`;
 `BQs.csv` and `AQs.csv` are compiled into `packages/core/src/quantityData.ts`.
 
 There is **no per-ingredient priority** anymore. The optimizer scores every
-compatible unit. The shopping list needs exactly one unit to buy in, so an
-ingredient may map to at most one unit flagged `Shopping Unit = yes`; the master
-data validator enforces that.
+compatible unit. The shopping list needs one unit to buy in, so at most one
+mapping per ingredient may carry `Shopping Unit = yes`; the master-data validator
+enforces that. The flag belongs to the mapping, so the same unit can be a purchase
+unit for one ingredient and a recipe measure for another
+([additional_quantity_specifications.md](additional_quantity_specifications.md) §3.1).
 
 ## 3. Allowed base quantities (BQ)
 

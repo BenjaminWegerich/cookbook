@@ -322,9 +322,9 @@ prep_time: 15 min
 ## 9. Ingredient Master Data Files
 
 The collection's ingredient master data (name → display forms → base unit → reorder point →
-additional units with factors) lives in two CSV files inside the `Stammdaten` subfolder of the
-collection folder, in the same canonical formats as the repo seeds (`docs/ingredients.csv` +
-`docs/ingredient_unit_mappings.csv`):
+additional units with factors and the per-mapping shopping flag) lives in two CSV files inside
+the `Stammdaten` subfolder of the collection folder, in the same canonical formats as the repo
+seeds (`docs/ingredients.csv` + `docs/ingredient_unit_mappings.csv`):
 
     zutaten.csv                  (ingredient list)
     Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point
@@ -332,14 +332,16 @@ collection folder, in the same canonical formats as the repo seeds (`docs/ingred
     Cashews;Cashew;Cashews;g;medium;0
 
     zutaten-umrechnungen.csv     (AU mappings; an ingredient without additional
-    Ingredient;Additional Unit;Conversion Factor   units has no rows here)
-    Joghurt;Becher;500
+    Ingredient;Additional Unit;Conversion Factor;Shopping Unit   units has no rows here)
+    Joghurt;Becher;500;yes
 
 The ingredient list is the authoritative source of ingredient names, their fixed base
 unit, their mandatory precision, their reorder point and their display forms — one row per
 ingredient, so further ingredient-level fields can be added as columns later. Where an
-item is bought is deliberately not such a column: it is the separate shopping-route pair
-of §10, whose name set also covers items that are not ingredients at all.
+item is bought on the route is deliberately not such a column: it is the separate
+shopping-route pair of §10, whose name set also covers items that are not ingredients at
+all. The unit an ingredient is *bought in* is the `Shopping Unit` flag on its mappings row
+(see below), not a route.
 
 The `Precision` cell is **mandatory**: one of `very low`, `low`, `medium`, `high`,
 `very high`. It is the ingredient level of the display preference
@@ -383,20 +385,26 @@ with the user; see additional_quantity_specifications.md §6.3). „∞“ in th
 The mappings file is a pure overlay; an ingredient without additional units (e.g.
 Cashews) exists only in the list and always renders in the base form (see
 additional_quantity_specifications.md §4). There is no per-ingredient priority anymore:
-the optimizer scores every compatible unit. The app allows **at most one shopping unit
-per ingredient**; a second mapping whose unit is flagged `Shopping Unit = yes` is
-rejected with a German error.
+the optimizer scores every compatible unit. The `Shopping Unit` cell is **mandatory**
+(`yes` / `no`) and belongs to the mapping: it says whether *this* ingredient is bought in
+*that* unit. The same unit can therefore be a purchase unit for one ingredient and a
+recipe measure for another (the `Stück` of a carrot vs. the clove of garlic); at most one
+mapping per ingredient may say `yes`, and a second one is rejected with a German error.
+A file under an older header — the flagless `Ingredient;Additional Unit;Conversion
+Factor` or the older header with a trailing `Priority` column — still parses: its rows
+inherit the retired unit-level flag, so an existing file keeps its behaviour until the
+next write, which stores the per-mapping flags and the current header.
 
 The allowed **base and additional quantities** and their number schemes are
 repo-global master data ([BQs.csv](BQs.csv), [AQs.csv](AQs.csv)), not user Drive
 data: they describe the app's display tables, not an ingredient.
 
 The additional **units** themselves — display arrangement, number scheme, the
-`Unit Exact` flag (see additional_quantity_specifications.md §6.3), the `Shopping Unit`
-flag (see additional_quantity_specifications.md §3.1) and the `Singular`/`Plural` display
-forms (see additional_quantity_specifications.md §3.2) — are not part of the
-user's Drive files: they are built-in definitions compiled from `docs/additional_units.csv`
-into the core package. Only the ingredient list and the mappings are user data.
+`Unit Exact` flag (see additional_quantity_specifications.md §6.3) and the
+`Singular`/`Plural` display forms (see additional_quantity_specifications.md §3.2) —
+are not part of the user's Drive files: they are built-in definitions compiled from
+`docs/additional_units.csv` into the core package. Only the ingredient list and the
+mappings are user data; the mappings carry the shopping flag.
 
 The files are created on the first user addition („Neue Zutat anlegen“ in the recipe
 editor or on the „Zutaten“ screen), seeded with the built-in repo data, and are the

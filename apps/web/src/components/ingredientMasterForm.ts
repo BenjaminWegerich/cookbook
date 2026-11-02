@@ -20,16 +20,20 @@ export interface MappingRow {
   factorRaw: string;
 }
 
-/** The raw factor inputs of a form, keyed by additional-unit name. */
+/** The raw factor inputs of a form plus the selected shopping unit. */
 export interface MappingFormState {
   /** Factor inputs keyed by additional-unit name; empty string = row skipped. */
   factors: Record<string, string>;
+  /** The selected shopping unit's AU name, or null (bought in the base unit). */
+  shoppingUnit: string | null;
 }
 
 /** One filled, valid mapping row handed to the persistence layer. */
 export interface MappingEntry {
   au: string;
   factor: number;
+  /** True for the one mapping whose unit the ingredient is bought in. */
+  shoppingUnit: boolean;
 }
 
 /**
@@ -50,10 +54,16 @@ export function parseFactor(raw: string): number {
  */
 export function mappingFormFromEntry(entry: Pick<IngredientEntry, 'entries'>): MappingFormState {
   const factors: Record<string, string> = {};
+  let shoppingUnit: string | null = null;
   for (const mapping of entry.entries) {
     factors[mapping.au] = formatDecimal(mapping.factor);
+    // The master data allows one shopping unit per ingredient (the CSV parser
+    // and the generator enforce it), so the first flagged mapping is the pick.
+    if (mapping.shoppingUnit) {
+      shoppingUnit = mapping.au;
+    }
   }
-  return { factors };
+  return { factors, shoppingUnit };
 }
 
 /**
@@ -73,12 +83,21 @@ export function buildMappingRows(factors: Record<string, string>): MappingRow[] 
 
 /**
  * The rows that carry a mapping. A row whose factor is empty is not a mapping
- * and is left out; the caller validates the rows before saving.
+ * and is left out; the caller validates the rows before saving. `shoppingUnit`
+ * is the AU name the form marks as the purchase unit (or null): exactly the row
+ * with that name gets the flag, so the form can never write two of them.
  */
-export function mappingEntriesFromRows(rows: readonly MappingRow[]): MappingEntry[] {
+export function mappingEntriesFromRows(
+  rows: readonly MappingRow[],
+  shoppingUnit: string | null,
+): MappingEntry[] {
   return rows
     .filter((row) => row.factorRaw !== '')
-    .map((row) => ({ au: row.au, factor: parseFactor(row.factorRaw) }));
+    .map((row) => ({
+      au: row.au,
+      factor: parseFactor(row.factorRaw),
+      shoppingUnit: row.au === shoppingUnit,
+    }));
 }
 
 /**
@@ -86,23 +105,27 @@ export function mappingEntriesFromRows(rows: readonly MappingRow[]): MappingEntr
  * when the rows are ready to save. The messages mirror the Drive parser
  * (core ingredientCsv.ts), so a form mistake reads like a file mistake would.
  *
- * The app allows at most **one shopping unit per ingredient** (decided with
- * the user): the shopping list needs one unambiguous unit to buy in.
+ * The shopping unit is a per-mapping flag (docs/additional_quantity_specifications.md
+ * §3.1), chosen through a single select: the form can only ever mark one row.
+ * The one check that remains is that the selected unit still has a factor — the
+ * select only offers filled rows, but clearing a factor while its row is
+ * selected must not silently drop the purchase unit.
  */
-export function validateMappingRows(rows: readonly MappingRow[]): string | null {
-  let shoppingUnit: string | null = null;
+export function validateMappingRows(
+  rows: readonly MappingRow[],
+  shoppingUnit: string | null,
+): string | null {
   for (const row of rows) {
     if (row.factorRaw === '') continue;
     const factor = parseFactor(row.factorRaw);
     if (!Number.isFinite(factor) || factor <= 0) {
       return `Der Faktor für „${row.au}“ muss eine positive Zahl sein.`;
     }
-    const unit = ADDITIONAL_UNITS.find((candidate) => candidate.name === row.au);
-    if (unit?.shoppingUnit === true) {
-      if (shoppingUnit !== null) {
-        return `„${shoppingUnit}“ und „${row.au}“ sind beide Einkaufs-Einheiten — pro Zutat ist genau eine erlaubt.`;
-      }
-      shoppingUnit = row.au;
+  }
+  if (shoppingUnit !== null) {
+    const selected = rows.find((row) => row.au === shoppingUnit);
+    if (selected === undefined || selected.factorRaw === '') {
+      return `Die Einkaufs-Einheit „${shoppingUnit}“ braucht einen Mengen-Faktor.`;
     }
   }
   return null;

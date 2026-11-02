@@ -75,7 +75,8 @@ export function isExportRelevantChange(
     return true;
   }
   // Mapping order can decide the optimizer's tie-break, so it is part of the
-  // comparison rather than an unordered set.
+  // comparison rather than an unordered set. The per-mapping shopping flag is
+  // deliberately excluded: it drives the shopping list, never a cooking view.
   return before.entries.some((mapping, index) => {
     const next = after.entries[index];
     return next === undefined || mapping.au !== next.au || mapping.factor !== next.factor;

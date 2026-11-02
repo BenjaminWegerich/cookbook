@@ -14,15 +14,12 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { type PrecisionLevel, type ShoppingStop } from '@cookbook/core';
+import { type IngredientMapping, type PrecisionLevel, type ShoppingStop } from '@cookbook/core';
 
 import MasterDataSheet from './MasterDataSheet';
 
 /** One filled mapping row handed to the parent for persistence. */
-export interface NewIngredientEntry {
-  au: string;
-  factor: number;
-}
+export type NewIngredientEntry = IngredientMapping;
 
 interface NewIngredientSheetProps {
   /** The typed name from the ingredient sheet (prefilled, editable). */
@@ -38,7 +35,7 @@ interface NewIngredientSheetProps {
     name: string,
     bu: string,
     reorderPoint: number,
-    entries: NewIngredientEntry[],
+    entries: readonly NewIngredientEntry[],
     precision: PrecisionLevel,
     stop: ShoppingStop | null,
     variants: readonly string[],
@@ -86,7 +83,7 @@ function NewIngredientSheet({
           result.name,
           result.bu,
           result.reorderPoint,
-          result.entries.map((entry) => ({ au: entry.au, factor: entry.factor })),
+          result.entries,
           result.precision,
           result.stop,
           result.variants,

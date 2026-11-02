@@ -18,7 +18,9 @@ afterEach(() => {
 
 describe('ingredient registry', () => {
   it('starts with the built-in seed', () => {
-    expect(masterIngredientNames()).toEqual(Object.keys(INGREDIENT_MAPPINGS).sort((a, b) => a.localeCompare(b, 'de')));
+    expect(masterIngredientNames()).toEqual(
+      Object.keys(INGREDIENT_MAPPINGS).sort((a, b) => a.localeCompare(b, 'de')),
+    );
     expect(mappingsFor('Joghurt')).toEqual(INGREDIENT_MAPPINGS.Joghurt);
     expect(mappingsFor('Unbekannt')).toBeUndefined();
   });
@@ -30,20 +32,29 @@ describe('ingredient registry', () => {
         precision: 'medium',
         reorderPoint: 0,
         entries: [
-          { au: 'Becher', factor: 200 },
-          { au: 'EL', factor: 12 },
+          { au: 'Becher', factor: 200, shoppingUnit: false },
+          { au: 'EL', factor: 12, shoppingUnit: false },
         ],
       },
     });
     expect(masterIngredientNames()).toEqual(['Käse']);
-    expect(mappingsFor('Käse')?.entries[0]).toEqual({ au: 'Becher', factor: 200 });
+    expect(mappingsFor('Käse')?.entries[0]).toEqual({
+      au: 'Becher',
+      factor: 200,
+      shoppingUnit: false,
+    });
     // The built-in names are gone — the Drive file is authoritative.
     expect(mappingsFor('Joghurt')).toBeUndefined();
   });
 
   it('serves selectAQ/renderAQS for a registered ingredient', () => {
     setIngredientMappings({
-      Käse: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200 }] },
+      Käse: {
+        bu: 'g',
+        precision: 'medium',
+        reorderPoint: 0,
+        entries: [{ au: 'Becher', factor: 200, shoppingUnit: false }],
+      },
     });
     const selected = selectAQ('Käse', 400, 'g');
     expect(selected).not.toBeNull();
@@ -66,7 +77,12 @@ describe('ingredient registry', () => {
 
   it('renders the base form when no scheme passes for a registered ingredient', () => {
     setIngredientMappings({
-      Pfeffer: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [{ au: 'TL', factor: 3 }] },
+      Pfeffer: {
+        bu: 'g',
+        precision: 'medium',
+        reorderPoint: 0,
+        entries: [{ au: 'TL', factor: 3, shoppingUnit: false }],
+      },
     });
     // 500 g ÷ 3 g per TL ≈ 167 → far above the halves_and_integers_up_to_10
     // scheme → no AQS passes, the base form is shown.
@@ -75,7 +91,12 @@ describe('ingredient registry', () => {
 
   it('resetIngredientMappings restores the seed', () => {
     setIngredientMappings({
-      Käse: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [{ au: 'Becher', factor: 200 }] },
+      Käse: {
+        bu: 'g',
+        precision: 'medium',
+        reorderPoint: 0,
+        entries: [{ au: 'Becher', factor: 200, shoppingUnit: false }],
+      },
     });
     resetIngredientMappings();
     expect(allIngredientMappings()).toEqual(INGREDIENT_MAPPINGS);

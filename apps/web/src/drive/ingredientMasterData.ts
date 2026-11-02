@@ -10,9 +10,10 @@
  *   `Precision` cell is the mandatory ingredient-level value;
  * - `zutaten-umrechnungen.csv` — the AU mappings: one row per
  *   ingredient–additional-unit mapping (`Ingredient;Additional Unit;
- *   Conversion Factor`); an ingredient without additional units simply has no
- *   rows here. Per-ingredient priorities are gone; at most one mapping may
- *   reference a unit flagged as a shopping unit.
+ *   Conversion Factor;Shopping Unit`); an ingredient without additional units
+ *   simply has no rows here. Per-ingredient priorities are gone; the shopping
+ *   flag is per mapping (at most one `yes` per ingredient), so the same unit can
+ *   be a purchase unit for one ingredient and a recipe measure for another.
  *
  * The formats mirror the repo seeds (docs/ingredients.csv +
  * docs/ingredient_unit_mappings.csv, see ingredientCsv.ts). At startup the app
@@ -38,6 +39,7 @@ import {
   setIngredientMappings,
   splitIngredientMasterData,
   type IngredientEntry,
+  type IngredientMapping,
   type IngredientMappings,
   type PrecisionLevel,
 } from '@cookbook/core';
@@ -203,6 +205,21 @@ async function writeMasterDataFiles(
 }
 
 /**
+ * Rejects a mapping set that marks more than one purchase unit. The CSV parser
+ * and the generator enforce the same rule; this guard exists so the write path
+ * reports the ingredient name before any serialization.
+ */
+function assertAtMostOneShoppingUnit(name: string, entries: readonly IngredientMapping[]): void {
+  const shoppingUnits = entries.filter((entry) => entry.shoppingUnit);
+  if (shoppingUnits.length > 1) {
+    throw new Error(
+      `Zutaten-Stammdaten: „${name}“ hat mehr als eine Einkaufs-Einheit ` +
+        `(${shoppingUnits.map((entry) => entry.au).join(', ')}); erlaubt ist genau eine.`,
+    );
+  }
+}
+
+/**
  * Appends a new ingredient to the master data and writes it to Drive.
  *
  * When the files do not exist yet they are created with the current built-in
@@ -228,7 +245,7 @@ export async function appendIngredientMasterData(
   name: string,
   bu: string,
   reorderPoint: number,
-  entries: ReadonlyArray<{ au: string; factor: number }>,
+  entries: ReadonlyArray<IngredientMapping>,
   precision: PrecisionLevel,
   folder?: CookbookFolder,
 ): Promise<void> {
@@ -248,6 +265,7 @@ export async function appendIngredientMasterData(
   if (!isPrecisionLevel(precision)) {
     throw new Error('Zutaten-Stammdaten: Die Genauigkeit muss eine der fünf Stufen sein.');
   }
+  assertAtMostOneShoppingUnit(name, entries);
   const extended: IngredientMappings = {
     ...current,
     [name]: {
@@ -256,7 +274,7 @@ export async function appendIngredientMasterData(
       // an exact unit's amount when one applies), or Infinity.
       reorderPoint,
       precision,
-      entries: entries.map((entry) => ({ au: entry.au, factor: entry.factor })),
+      entries,
     },
   };
   // The pair lives in `Stammdaten`; the folder is created when the pair is
@@ -281,8 +299,8 @@ export interface IngredientMasterEntryInput {
   plural: string | null;
   /** Base-unit quantity on stock after a shopping trip: 0, a positive value, or Infinity. */
   reorderPoint: number;
-  /** The AU mappings (no per-ingredient priority anymore). */
-  entries: ReadonlyArray<{ au: string; factor: number }>;
+  /** The AU mappings, each with its per-ingredient shopping flag. */
+  entries: ReadonlyArray<IngredientMapping>;
   /** Mandatory ingredient-level precision. */
   precision: PrecisionLevel;
 }
@@ -342,13 +360,14 @@ export async function updateIngredientMasterData(
   if (Number.isNaN(update.reorderPoint) || update.reorderPoint < 0) {
     throw new Error('Zutaten-Stammdaten: Der Vorrat muss eine Zahl ≥ 0 oder unendlich sein.');
   }
-  // Factors must be positive; the one-shopping-unit rule is checked by the
-  // CSV parser when the pair is serialized (before anything reaches Drive).
+  // Factors must be positive; the one-shopping-unit rule is re-checked here so
+  // a caller bug fails with the ingredient's name before serialization.
   for (const entry of update.entries) {
     if (!Number.isFinite(entry.factor) || entry.factor <= 0) {
       throw new Error(`Zutaten-Stammdaten: ungültiger Faktor für „${name}“ → „${entry.au}“.`);
     }
   }
+  assertAtMostOneShoppingUnit(name, update.entries);
   if (!isPrecisionLevel(update.precision)) {
     throw new Error('Zutaten-Stammdaten: Die Genauigkeit muss eine der fünf Stufen sein.');
   }

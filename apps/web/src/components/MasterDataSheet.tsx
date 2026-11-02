@@ -57,6 +57,7 @@ import {
   shoppingVariantsFor,
   validateShoppingVariant,
   type IngredientEntry,
+  type IngredientMapping,
   type PrecisionLevel,
   type ShoppingStop,
   type ShoppingSynonyms,
@@ -87,7 +88,7 @@ export interface IngredientSheetResult {
   readonly singular: string | null;
   readonly plural: string | null;
   readonly reorderPoint: number;
-  readonly entries: ReadonlyArray<{ au: string; factor: number }>;
+  readonly entries: readonly IngredientMapping[];
   readonly precision: PrecisionLevel;
   /** The chosen shopping stop, or null when the ingredient is not bought. */
   readonly stop: ShoppingStop | null;
@@ -219,6 +220,14 @@ function MasterDataSheet({
   const [factors, setFactors] = useState<Record<string, string>>(() =>
     entry === undefined ? {} : mappingFormFromEntry(entry).factors,
   );
+  /**
+   * The AU name marked as the ingredient's purchase unit, or null (bought in the
+   * base unit). The flag is per mapping, so this is a single unit name rather
+   * than a grid of checkboxes; the mapping helpers turn it into the flags.
+   */
+  const [shoppingUnit, setShoppingUnit] = useState<string | null>(() =>
+    entry === undefined ? null : mappingFormFromEntry(entry).shoppingUnit,
+  );
   const [precision, setPrecision] = useState<PrecisionLevel>(entry?.precision ?? 'medium');
   /** The chosen store — level 1 of the shopping route; null = nothing picked. */
   const [store, setStore] = useState<string | null>(initialItem?.stop.store ?? null);
@@ -270,15 +279,21 @@ function MasterDataSheet({
    * choice (which is disabled while it applies).
    */
   const bu = subRecipeUnit ?? buChoice;
+  /**
+   * The purchase unit the form saves. A sub-recipe is never bought, so its
+   * mappings carry no shopping flag even when the row had one before — the flag
+   * is per mapping, and saving the row re-states all of them.
+   */
+  const shoppingUnitChoice = shoppingHidden ? null : shoppingUnit;
 
   const rows = buildMappingRows(factors);
   const displayError = validateDisplayForms(singular, plural);
-  const mappingError = validateMappingRows(rows);
+  const mappingError = validateMappingRows(rows, shoppingUnitChoice);
   const showDisplayError = attempted && displayError !== null;
   const showMappingError = attempted && mappingError !== null;
 
   /** The rows that would actually be saved (a finite positive factor). */
-  const entries = mappingEntriesFromRows(rows).filter(
+  const entries = mappingEntriesFromRows(rows, shoppingUnitChoice).filter(
     (entry_) => Number.isFinite(entry_.factor) && entry_.factor > 0,
   );
 
@@ -769,8 +784,20 @@ function MasterDataSheet({
               <IngredientMappingsField
                 bu={bu}
                 factors={factors}
+                shoppingUnit={shoppingUnitChoice}
+                showShoppingUnit={!shoppingHidden}
                 onFactorChange={(au, value) => {
                   setFactors((current) => ({ ...current, [au]: value }));
+                  // A cleared factor removes the mapping, so it cannot stay the
+                  // purchase unit. Clearing the select here keeps the visible
+                  // state and the saved state in step.
+                  if (value.trim() === '' && shoppingUnit === au) {
+                    setShoppingUnit(null);
+                  }
+                  markEdited();
+                }}
+                onShoppingUnitChange={(au) => {
+                  setShoppingUnit(au);
                   markEdited();
                 }}
               />

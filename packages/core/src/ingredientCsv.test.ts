@@ -25,26 +25,32 @@ const LIST: IngredientList = {
   Joghurt: { bu: 'g', precision: 'medium', reorderPoint: 0 },
   Zucker: { bu: 'g', precision: 'high', reorderPoint: 1000 },
   Milch: { bu: 'ml', precision: 'very low', reorderPoint: 0 },
-  Cashews: { bu: 'g', precision: 'low', reorderPoint: Infinity, singular: 'Cashew', plural: 'Cashews' },
+  Cashews: {
+    bu: 'g',
+    precision: 'low',
+    reorderPoint: Infinity,
+    singular: 'Cashew',
+    plural: 'Cashews',
+  },
 };
 
 /** The canonical AU mappings (docs format, dot decimals) as a fixture. */
 const MAPPINGS_TEXT = [
-  'Ingredient;Additional Unit;Conversion Factor',
-  'Joghurt;Becher;500',
-  'Joghurt;Esslöffel;23.71373706',
-  'Zucker;Esslöffel;13.33521432',
-  'Zucker;Teelöffel;4.216965034',
+  'Ingredient;Additional Unit;Conversion Factor;Shopping Unit',
+  'Joghurt;Becher;500;yes',
+  'Joghurt;Esslöffel;23.71373706;no',
+  'Zucker;Esslöffel;13.33521432;no',
+  'Zucker;Teelöffel;4.216965034;no',
 ].join('\n');
 
 const MAPPINGS: IngredientMappingsByIngredient = {
   Joghurt: [
-    { au: 'Becher', factor: 500 },
-    { au: 'Esslöffel', factor: 23.71373706 },
+    { au: 'Becher', factor: 500, shoppingUnit: true },
+    { au: 'Esslöffel', factor: 23.71373706, shoppingUnit: false },
   ],
   Zucker: [
-    { au: 'Esslöffel', factor: 13.33521432 },
-    { au: 'Teelöffel', factor: 4.216965034 },
+    { au: 'Esslöffel', factor: 13.33521432, shoppingUnit: false },
+    { au: 'Teelöffel', factor: 4.216965034, shoppingUnit: false },
   ],
 };
 
@@ -55,8 +61,8 @@ const MERGED: IngredientMappings = {
     precision: 'medium',
     reorderPoint: 0,
     entries: [
-      { au: 'Becher', factor: 500 },
-      { au: 'Esslöffel', factor: 23.71373706 },
+      { au: 'Becher', factor: 500, shoppingUnit: true },
+      { au: 'Esslöffel', factor: 23.71373706, shoppingUnit: false },
     ],
   },
   Zucker: {
@@ -64,12 +70,19 @@ const MERGED: IngredientMappings = {
     precision: 'high',
     reorderPoint: 1000,
     entries: [
-      { au: 'Esslöffel', factor: 13.33521432 },
-      { au: 'Teelöffel', factor: 4.216965034 },
+      { au: 'Esslöffel', factor: 13.33521432, shoppingUnit: false },
+      { au: 'Teelöffel', factor: 4.216965034, shoppingUnit: false },
     ],
   },
   Milch: { bu: 'ml', precision: 'very low', reorderPoint: 0, entries: [] },
-  Cashews: { bu: 'g', precision: 'low', reorderPoint: Infinity, singular: 'Cashew', plural: 'Cashews', entries: [] },
+  Cashews: {
+    bu: 'g',
+    precision: 'low',
+    reorderPoint: Infinity,
+    singular: 'Cashew',
+    plural: 'Cashews',
+    entries: [],
+  },
 };
 
 describe('parseIngredientListCsv', () => {
@@ -108,10 +121,9 @@ describe('parseIngredientListCsv', () => {
   });
 
   it('rejects older headers without the mandatory Precision column', () => {
-    const legacy = [
-      'Ingredient;Singular;Plural;Base Unit;Reorder Point',
-      'Joghurt;;;g;0',
-    ].join('\n');
+    const legacy = ['Ingredient;Singular;Plural;Base Unit;Reorder Point', 'Joghurt;;;g;0'].join(
+      '\n',
+    );
     expect(() => parseIngredientListCsv(legacy)).toThrow(/Kopfzeile/);
   });
 
@@ -162,23 +174,64 @@ describe('parseIngredientListCsv', () => {
     expect(() => parseIngredientListCsv(LIST_TEXT.replace(';g;low;inf', ';kg;low;inf'))).toThrow(
       /unbekannte Basis-Einheit "kg"/,
     );
-    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nJoghurt;;;ml;medium;0`)).toThrow(/doppelte Zutat/);
+    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nJoghurt;;;ml;medium;0`)).toThrow(
+      /doppelte Zutat/,
+    );
   });
 });
 
 describe('parseIngredientMappingsCsv', () => {
-  it('parses the canonical format (no priority column)', () => {
+  it('parses the canonical format with the per-mapping shopping flag', () => {
     expect(parseIngredientMappingsCsv(MAPPINGS_TEXT)).toEqual(MAPPINGS);
   });
 
   it('tolerates CRLF and one trailing empty cell per row', () => {
-    const sloppy = MAPPINGS_TEXT.replaceAll(/([0-9])\n/g, '$1;\n').replaceAll('\n', '\r\n');
+    const sloppy = MAPPINGS_TEXT.replaceAll(/([a-z])\n/g, '$1;\n').replaceAll('\n', '\r\n');
     expect(parseIngredientMappingsCsv(sloppy)).toEqual(MAPPINGS);
   });
 
   it('normalizes German comma decimals to dots', () => {
-    const text = MAPPINGS_TEXT.replace('500\n', '500,0\n');
+    const text = MAPPINGS_TEXT.replace('500;', '500,0;');
     expect(parseIngredientMappingsCsv(text).Joghurt?.[0]?.factor).toBe(500);
+  });
+
+  it('keeps the same unit a purchase unit for one ingredient and a measure for another', () => {
+    // The requirement behind the per-mapping flag: „Stück“ is how carrots are
+    // bought, but a clove of garlic is only a recipe measure.
+    const text = [
+      'Ingredient;Additional Unit;Conversion Factor;Shopping Unit',
+      'Karotten;Stück (ZE zuerst);62.1;yes',
+      'frischer Knoblauch;Stück (ZE zuerst);4;no',
+    ].join('\n');
+    expect(parseIngredientMappingsCsv(text)).toEqual({
+      Karotten: [{ au: 'Stück (ZE zuerst)', factor: 62.1, shoppingUnit: true }],
+      'frischer Knoblauch': [{ au: 'Stück (ZE zuerst)', factor: 4, shoppingUnit: false }],
+    });
+  });
+
+  it('throws on an empty or invalid shopping flag', () => {
+    expect(() =>
+      parseIngredientMappingsCsv(
+        MAPPINGS_TEXT.replace('Joghurt;Becher;500;yes', 'Joghurt;Becher;500;'),
+      ),
+    ).toThrow(/ungültiger Einkaufs-Wert/);
+    expect(() =>
+      parseIngredientMappingsCsv(
+        MAPPINGS_TEXT.replace('Joghurt;Becher;500;yes', 'Joghurt;Becher;500;vielleicht'),
+      ),
+    ).toThrow(/ungültiger Einkaufs-Wert/);
+  });
+
+  it('parses a legacy flagless file with the retired unit-level flag', () => {
+    const legacy = [
+      'Ingredient;Additional Unit;Conversion Factor',
+      'Joghurt;Becher;500',
+      'Zucker;Esslöffel;13.33521432',
+    ].join('\n');
+    expect(parseIngredientMappingsCsv(legacy)).toEqual({
+      Joghurt: [{ au: 'Becher', factor: 500, shoppingUnit: true }],
+      Zucker: [{ au: 'Esslöffel', factor: 13.33521432, shoppingUnit: false }],
+    });
   });
 
   it('parses a legacy file with the obsolete Priority column and ignores it', () => {
@@ -188,15 +241,15 @@ describe('parseIngredientMappingsCsv', () => {
       'Zucker;Esslöffel;13.33521432;2',
     ].join('\n');
     expect(parseIngredientMappingsCsv(legacy)).toEqual({
-      Joghurt: [{ au: 'Becher', factor: 500 }],
-      Zucker: [{ au: 'Esslöffel', factor: 13.33521432 }],
+      Joghurt: [{ au: 'Becher', factor: 500, shoppingUnit: true }],
+      Zucker: [{ au: 'Esslöffel', factor: 13.33521432, shoppingUnit: false }],
     });
   });
 
   it('throws on a row with too many columns', () => {
-    expect(() =>
-      parseIngredientMappingsCsv(`${MAPPINGS_TEXT}\nZucker;Esslöffel;12;1`),
-    ).toThrow(/unerwartete Spaltenzahl/);
+    expect(() => parseIngredientMappingsCsv(`${MAPPINGS_TEXT}\nZucker;Esslöffel;12;no;1`)).toThrow(
+      /unerwartete Spaltenzahl/,
+    );
   });
 
   it('throws on an empty file or an unexpected header', () => {
@@ -212,7 +265,9 @@ describe('parseIngredientMappingsCsv', () => {
 
   it('throws on a non-positive factor', () => {
     expect(() =>
-      parseIngredientMappingsCsv(MAPPINGS_TEXT.replace('Zucker;Teelöffel;4.216965034', 'Zucker;Teelöffel;0')),
+      parseIngredientMappingsCsv(
+        MAPPINGS_TEXT.replace('Zucker;Teelöffel;4.216965034', 'Zucker;Teelöffel;0'),
+      ),
     ).toThrow(/ungültiger Umrechnungsfaktor/);
   });
 
@@ -224,11 +279,11 @@ describe('parseIngredientMappingsCsv', () => {
     ).toThrow(/doppelte Umrechnung/);
   });
 
-  it('throws when an ingredient maps to two shopping units', () => {
+  it('throws when an ingredient marks two shopping units', () => {
     const text = [
-      'Ingredient;Additional Unit;Conversion Factor',
-      'Mehl;Packung (unteilbar);1000',
-      'Mehl;Becher;500',
+      'Ingredient;Additional Unit;Conversion Factor;Shopping Unit',
+      'Mehl;Packung (unteilbar);1000;yes',
+      'Mehl;Becher;500;yes',
     ].join('\n');
     expect(() => parseIngredientMappingsCsv(text)).toThrow(/mehr als eine Einkaufs-Einheit/);
   });
@@ -245,21 +300,21 @@ describe('comma-separated spreadsheet exports', () => {
 
   it('keeps a quoted German decimal comma inside its cell', () => {
     const comma = [
-      'Ingredient,Additional Unit,Conversion Factor',
-      'Joghurt,Becher,"1,5"',
+      'Ingredient,Additional Unit,Conversion Factor,Shopping Unit',
+      'Joghurt,Becher,"1,5",yes',
     ].join('\n');
     expect(parseIngredientMappingsCsv(comma)).toEqual({
-      Joghurt: [{ au: 'Becher', factor: 1.5 }],
+      Joghurt: [{ au: 'Becher', factor: 1.5, shoppingUnit: true }],
     });
   });
 
   it('reads quoted header cells and a trailing empty cell like a spreadsheet writes them', () => {
     const comma = [
-      '"Ingredient","Additional Unit","Conversion Factor",',
-      'Joghurt,Becher,500,',
+      '"Ingredient","Additional Unit","Conversion Factor","Shopping Unit",',
+      'Joghurt,Becher,500,yes,',
     ].join('\n');
     expect(parseIngredientMappingsCsv(comma)).toEqual({
-      Joghurt: [{ au: 'Becher', factor: 500 }],
+      Joghurt: [{ au: 'Becher', factor: 500, shoppingUnit: true }],
     });
   });
 
@@ -294,7 +349,10 @@ describe('mergeIngredientMasterData', () => {
   });
 
   it('throws when a mapping references an ingredient that is not in the list', () => {
-    const withOrphan = { ...MAPPINGS, Käse: [{ au: 'Esslöffel', factor: 12 }] };
+    const withOrphan = {
+      ...MAPPINGS,
+      Käse: [{ au: 'Esslöffel', factor: 12, shoppingUnit: false }],
+    };
     expect(() => mergeIngredientMasterData(LIST, withOrphan)).toThrow(/nicht in der Zutaten-Liste/);
   });
 });
@@ -317,7 +375,10 @@ describe('serializeIngredientListCsv and serializeIngredientMappingsCsv', () => 
     expect(serializeIngredientListCsv(LIST)).toContain('Cashews;Cashew;Cashews;g;low;inf');
     expect(() =>
       parseIngredientListCsv(
-        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;low;inf', 'Cashews;Cashew;Cashews;g;low;Infinity'),
+        LIST_TEXT.replace(
+          'Cashews;Cashew;Cashews;g;low;inf',
+          'Cashews;Cashew;Cashews;g;low;Infinity',
+        ),
       ),
     ).toThrow(/ungültiger Meldebestand/);
   });

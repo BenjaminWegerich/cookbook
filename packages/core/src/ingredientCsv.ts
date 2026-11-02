@@ -24,11 +24,15 @@
  *   fields (e.g. a category) can be added as further columns later without
  *   touching the mapping file. Older headers are rejected: every ingredient
  *   must state its precision;
- * - the **AU mappings** (`Ingredient;Additional Unit;Conversion Factor;Priority`,
+ * - the **AU mappings** (`Ingredient;Additional Unit;Conversion Factor;Shopping Unit`,
  *   one row per ingredient–additional-unit mapping): a pure overlay on the
  *   list — an ingredient without additional units simply has no rows here.
  *   The exactness of a unit is NOT part of this file — it is a property of the
- *   unit itself (docs/additional_units.csv, `Unit Exact`).
+ *   unit itself (docs/additional_units.csv, `Unit Exact`). The `Shopping Unit`
+ *   flag *is* part of this file: whether the ingredient is bought in that unit
+ *   belongs to the ingredient–unit pair, so the same unit can be a purchase unit
+ *   for one ingredient and a recipe measure for another
+ *   (docs/additional_quantity_specifications.md §3.1).
  *
  * Common format rules (both files; the row protocol itself lives in csv.ts):
  * - one header row; CRLF and one optional trailing empty cell per row
@@ -42,6 +46,12 @@
  * - validation mirrors the build-time generator (generate-additional-data.mjs):
  *   known additional units, bu ∈ {g, ml}, factor > 0, positive integer
  *   no duplicate unit per ingredient, and at most one shopping unit per ingredient.
+ *
+ * Older mapping headers still parse: the flagless header and the older header
+ * with a trailing `Priority` column are upgraded on the next write. Their rows
+ * have no per-mapping flag, so the parser falls back to the retired unit-level
+ * flag that governed those files (LEGACY_SHOPPING_UNITS) — the behaviour of an
+ * existing Drive file does not change under the user's feet.
  *
  * The Drive files are authoritative once they exist: parse errors throw (the
  * caller decides how to surface them), and serialize never silently drops
@@ -97,14 +107,49 @@ export type IngredientMappingsByIngredient = Readonly<Record<string, readonly In
 const LIST_HEADER = 'Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point';
 
 /** Exact header of the AU mappings CSV. */
-const MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor';
+const MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor;Shopping Unit';
+
+/**
+ * Header of the AU mappings before the shopping flag moved onto the mapping.
+ * Such files still parse (the flag is derived from LEGACY_SHOPPING_UNITS) and
+ * are upgraded on the next write.
+ */
+const LEGACY_MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor';
 
 /**
  * Header of the AU mappings before the priority column was dropped. Such files
- * still parse (the priority cells are ignored) and are upgraded on the next
- * write.
+ * still parse (the priority cells are ignored, the shopping flag is derived from
+ * LEGACY_SHOPPING_UNITS) and are upgraded on the next write.
  */
-const LEGACY_MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor;Priority';
+const LEGACY_PRIORITY_MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor;Priority';
+
+/**
+ * The retired unit-level shopping flags, frozen for parsing files written
+ * before the flag moved onto the mapping. A legacy row carries no flag of its
+ * own, so its purchase unit is the one the old unit table named. This set is
+ * never written or consulted for the current format; it only keeps existing
+ * Drive files behaving as they did (docs/storage_format.md §9).
+ */
+const LEGACY_SHOPPING_UNITS = new Set([
+  'Dose',
+  'Dose (Abtropfgewicht)',
+  'Dose (Gesamtgewicht)',
+  'Packung (teilbar)',
+  'Packung (halbierbar)',
+  'Packung (unteilbar)',
+  'Stück (ZE zuerst)',
+  'Topf',
+  'Stück (BE zuerst)',
+  'Stück (BE zuerst, exakt)',
+  'Bund',
+  'Tube',
+  'Päckchen',
+  'Würfel',
+  'Blatt',
+  'Flasche',
+  'Becher',
+  'Glas',
+]);
 
 /**
  * The known additional unit names (from docs/additional_units.csv, e.g. Becher,
@@ -113,8 +158,6 @@ const LEGACY_MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor;Pri
  * docs/additional_units.csv (`Unit Exact`), not in this mappings file.
  */
 const UNIT_NAMES = new Set(ADDITIONAL_UNITS.map((unit) => unit.name));
-/** Unit definitions by name, for the one-shopping-unit validation. */
-const UNIT_BY_NAME = new Map(ADDITIONAL_UNITS.map((unit) => [unit.name, unit]));
 
 /** Allowed base units: the g/ml family (kg/l exist only in display). */
 const BASE_UNITS = new Set(['g', 'ml']);
@@ -255,21 +298,50 @@ export function serializeIngredientListCsv(list: IngredientList): string {
 }
 
 /**
- * Parses the AU mappings CSV (`Ingredient;Additional Unit;Conversion Factor`)
- * into name → mappings. A legacy header with a trailing `Priority` column also
- * parses; the priority cells are ignored because the optimizer scores every
- * compatible unit and the shopping unit is unique per ingredient.
+ * Parses one `Shopping Unit` cell of the current mapping format: `yes` when the
+ * ingredient is bought in that unit, `no` when the unit is only a recipe measure
+ * for it. The cell is mandatory — an empty cell must not silently default into
+ * or out of the shopping list.
+ */
+function parseShoppingFlagCell(cell: string | undefined, ingredient: string, au: string): boolean {
+  const value = (cell ?? '').trim().toLowerCase();
+  if (value === 'yes') {
+    return true;
+  }
+  if (value === 'no') {
+    return false;
+  }
+  throw new Error(
+    `Zutaten-Umrechnungen: ungültiger Einkaufs-Wert "${cell ?? ''}" für "${ingredient}" → "${au}" ` +
+      `(erlaubt: yes oder no — die Zelle ist Pflicht).`,
+  );
+}
+
+/**
+ * Parses the AU mappings CSV
+ * (`Ingredient;Additional Unit;Conversion Factor;Shopping Unit`) into name →
+ * mappings. Two legacy headers also parse: the flagless header and the older
+ * header with a trailing `Priority` column. Their rows carry no per-mapping
+ * shopping flag, so the flag is derived from the retired unit-level flags
+ * (LEGACY_SHOPPING_UNITS) — the behaviour of an existing file is preserved. The
+ * priority cells are ignored because the optimizer scores every compatible unit.
  *
- * Throws on malformed input (unknown unit, invalid factor, duplicate unit) and
- * on an ingredient mapping to more than one shopping unit (the app allows
- * exactly one). The returned record preserves the file order per ingredient.
+ * Throws on malformed input (unknown unit, invalid factor, duplicate unit, an
+ * invalid flag cell) and on an ingredient marking more than one shopping unit
+ * (the app allows one). The returned record preserves the file order per
+ * ingredient.
  */
 export function parseIngredientMappingsCsv(text: string): IngredientMappingsByIngredient {
-  const { header, rows } = parseCsvRows(text, [MAPPINGS_HEADER, LEGACY_MAPPINGS_HEADER]);
-  const hasPriority = header.join(';') === LEGACY_MAPPINGS_HEADER;
+  const { header, rows } = parseCsvRows(text, [
+    MAPPINGS_HEADER,
+    LEGACY_MAPPINGS_HEADER,
+    LEGACY_PRIORITY_MAPPINGS_HEADER,
+  ]);
+  const headerText = header.join(';');
+  const hasShoppingFlag = headerText === MAPPINGS_HEADER;
   const byIngredient = new Map<string, IngredientMapping[]>();
   for (const row of rows) {
-    const [ingredient, au, factorCell] = row;
+    const [ingredient, au, factorCell, flagCell] = row;
     if (ingredient === undefined || ingredient === '') {
       throw new Error(`Zutaten-Umrechnungen: leere Zutat in Zeile "${row.join(';')}".`);
     }
@@ -285,19 +357,23 @@ export function parseIngredientMappingsCsv(text: string): IngredientMappingsByIn
         `Zutaten-Umrechnungen: ungültiger Umrechnungsfaktor "${factorCell}" für "${ingredient}" → "${au}".`,
       );
     }
-    // A legacy priority cell is deliberately not validated: it is obsolete and
-    // dropping the column is the migration. The row's other cells still parse.
-    void hasPriority;
+    // A current file states the per-mapping flag. A legacy file has none, so
+    // its row inherits the retired unit-level flag; a legacy priority cell is
+    // deliberately not validated (it is obsolete, and dropping the column is
+    // the migration).
+    const shoppingUnit = hasShoppingFlag
+      ? parseShoppingFlagCell(flagCell, ingredient, au)
+      : LEGACY_SHOPPING_UNITS.has(au);
     const list = byIngredient.get(ingredient) ?? [];
     if (list.some((mapping) => mapping.au === au)) {
       throw new Error(`Zutaten-Umrechnungen: doppelte Umrechnung für "${ingredient}" → "${au}".`);
     }
-    list.push({ au, factor });
+    list.push({ au, factor, shoppingUnit });
     byIngredient.set(ingredient, list);
   }
   const result: Record<string, readonly IngredientMapping[]> = {};
   for (const [ingredient, list] of byIngredient) {
-    const shoppingUnits = list.filter((mapping) => UNIT_BY_NAME.get(mapping.au)?.shoppingUnit);
+    const shoppingUnits = list.filter((mapping) => mapping.shoppingUnit);
     if (shoppingUnits.length > 1) {
       throw new Error(
         `Zutaten-Umrechnungen: "${ingredient}" hat mehr als eine Einkaufs-Einheit ` +
@@ -313,13 +389,15 @@ export function parseIngredientMappingsCsv(text: string): IngredientMappingsByIn
  * Serializes the AU mappings to canonical CSV text (header + rows, dot
  * decimals, LF line endings). Row order follows the record's key order and
  * each ingredient's list order, so a parsed file round-trips byte-stable
- * apart from comma→dot normalization.
+ * apart from comma→dot normalization and the legacy-header upgrade.
  */
 export function serializeIngredientMappingsCsv(mappings: IngredientMappingsByIngredient): string {
   const lines = [MAPPINGS_HEADER];
   for (const [ingredient, list] of Object.entries(mappings)) {
     for (const mapping of list) {
-      lines.push(`${ingredient};${mapping.au};${mapping.factor}`);
+      lines.push(
+        `${ingredient};${mapping.au};${mapping.factor};${mapping.shoppingUnit ? 'yes' : 'no'}`,
+      );
     }
   }
   return `${lines.join('\n')}\n`;

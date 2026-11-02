@@ -56,22 +56,34 @@ describe('generated master data', () => {
       'Esslöffel',
       'Teelöffel',
     ]);
-    expect(entry?.entries[0]).toEqual({ au: 'Becher', factor: 500 });
+    expect(entry?.entries[0]).toEqual({ au: 'Becher', factor: 500, shoppingUnit: true });
+    expect(entry?.entries[1]?.shoppingUnit).toBe(false);
   });
 
   it('maps Mehl to exactly one shopping unit (Packung unteilbar)', () => {
     const entry = allIngredientMappings().Mehl;
-    expect(entry?.entries).toEqual([{ au: 'Packung (unteilbar)', factor: 1000 }]);
+    expect(entry?.entries).toEqual([
+      { au: 'Packung (unteilbar)', factor: 1000, shoppingUnit: true },
+    ]);
   });
 
   it('allows at most one shopping unit per ingredient', () => {
     for (const [name, entry] of Object.entries(allIngredientMappings())) {
-      const shopping = entry.entries.filter((mapping) => {
-        const unit = ADDITIONAL_UNITS.find((candidate) => candidate.name === mapping.au);
-        return unit?.shoppingUnit === true;
-      });
+      const shopping = entry.entries.filter((mapping) => mapping.shoppingUnit);
       expect(shopping.length, name).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('lets the same unit be a purchase unit for one ingredient and not for another', () => {
+    // „Stück“ is how a carrot is bought; a clove of garlic is not a purchase.
+    const carrots = allIngredientMappings().Karotten;
+    const garlic = allIngredientMappings()['frischer Knoblauch'];
+    expect(
+      carrots?.entries.find((mapping) => mapping.au === 'Stück (ZE zuerst)')?.shoppingUnit,
+    ).toBe(true);
+    expect(
+      garlic?.entries.find((mapping) => mapping.au === 'Stück (ZE zuerst)')?.shoppingUnit,
+    ).toBe(false);
   });
 });
 

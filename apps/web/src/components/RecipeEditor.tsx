@@ -2117,7 +2117,7 @@ function RecipeEditor({
     name: string,
     bu: string,
     reorderPoint: number,
-    entries: NewIngredientEntry[],
+    entries: readonly NewIngredientEntry[],
     precision: PrecisionLevel,
     stop: ShoppingStop | null,
     variants: readonly string[],
