@@ -12,10 +12,10 @@ spike that proved the approach is in [`spike/keep-feasibility/`](../../spike/kee
 
 **Status: deployed and verified.** The service runs on Cloud Run in `europe-west3`
 (scale-to-zero), `GET /health` answers, and the read path returns both real Keep lists end to
-end. All three write actions are implemented — the plan write (`POST /keep/mealplan`), ticking
-a dish off (`POST /keep/mealplan/check`) and adding the planned ingredients to the shopping
-list (`POST /keep/shopping`); the aisle sort still answers `501 not_implemented` until the
-ingredient-category step exists. The meal-plan line links the cooking view through a short
+end. All four write actions are implemented — the plan write (`POST /keep/mealplan`), ticking
+a dish off (`POST /keep/mealplan/check`), adding the planned ingredients to the shopping list
+(`POST /keep/shopping`) and sorting that list by aisle (`POST /keep/shopping/sort`). The
+meal-plan line links the cooking view through a short
 TinyURL when the deployment has a `TINYURL_API_TOKEN` (`POST /shorten`); without one the long
 export URL is written, so the shortener is optional. Deployment, the credential alert and the €1
 spend guardrail are all in place — see
@@ -31,7 +31,7 @@ spend guardrail are all in place — see
 | `POST` | `/keep/mealplan/check` | Tick meal-plan lines off / back on ("Abhaken"). | works |
 | `POST` | `/shorten`             | Shorten one export URL for a meal-plan line.         | works with a token, else `503` |
 | `POST` | `/keep/shopping`       | Add a recipe's scaled ingredients to "Einkaufsliste". | works |
-| `POST` | `/keep/shopping/sort`  | Reorder the shopping list by category/aisle.          | `501` until the category and write-action steps |
+| `POST` | `/keep/shopping/sort`  | Reorder the shopping list by category/aisle.          | works |
 
 Everything under `/keep/` and `/shorten` requires `Authorization: Bearer <token>`: the caller's
 Google sign-in for the identity scopes (`openid email`). The service has Google confirm it and
@@ -164,7 +164,7 @@ branch on a stable code and switch Keep features off cleanly (N5):
 | `keep_unreachable` | 502 | Network error, or the private API answered non-JSON (blocked host). | Retry; if permanent, move the service. |
 | `keep_list_missing` | 502 | A configured note is not visible to the throwaway account. | Check the note is still shared and its title. |
 | `keep_api_error` | 502 | Any other `gkeepapi` failure. | See the server log line. |
-| `not_implemented` | 501 | Documented action, not built yet. | The aisle sort. |
+| `not_implemented` | 501 | Reserved for a documented action that is not built yet. | No current route returns it. |
 | `bad_request` | 400 | Malformed body, a write body without a usable entry text, or a `/shorten` target that is not an `https://` URL. | Check the JSON body. |
 | `shortening_disabled` | 503 | No `TINYURL_API_TOKEN` is configured. | The app writes the long export URL; nothing to fix unless short links are wanted. |
 | `shorten_failed` | 502 | TinyURL refused, timed out, or answered unusably. | The app writes the long export URL; the diagnosis is in the server log line. |
