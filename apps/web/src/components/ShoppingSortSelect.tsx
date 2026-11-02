@@ -7,21 +7,42 @@
  * data cannot give it: a decision for every line that resolved to no item
  * (docs/shopping_item_identity.md §2/§4). It reads the current shopping list,
  * classifies each line against the item table (core's `matchShoppingItem`), and
- * lists the unchecked lines that name no item. Per such line the user either:
+ * lists **only the unchecked lines that name no item**. Per such line the user
+ * either:
  *
- * - confirms one of the **similar item names** offered above the „Einkauf“ field
- *   (core's `shoppingItemSuggestions`) — the line then sorts as that item for
- *   this run, and App writes a **synonym** row, so the same variant is never
+ * - types (or confirms one of the offered **similar item names**) an existing
+ *   item into the editable „Artikel“ field — the line then sorts as that item
+ *   for this run, and App writes a **synonym** row, so the same variant is never
  *   asked again;
- * - **assigns a stop** in the same store-chips + section-search field the
- *   new-ingredient sheet uses — App then writes a new item row under the name in
- *   the editable „Artikel“ field; or
+ * - **assigns a stop** with the „Markt“ store chips + „Bereich“ search field —
+ *   App then writes a new item row under the name in „Artikel“ and, when that
+ *   name was changed, the line's own name as a **synonym** of it; or
  * - **ignores** the line, which the sort places at the top of the list.
  *
- * The two first ways are mutually exclusive: confirming a candidate clears any
- * store/section choice and vice versa, so exactly one of them decides; tapping
- * the active candidate again takes the decision back. A line that resolved is
- * never shown here — the page does not display the silent resolution.
+ * **A decided line folds to one quiet summary line.** The folded line says what
+ * was decided, so the page reads as a checklist of decisions once the work is
+ * done:
+ *
+ * - „<line>: Synonym für <item>“ — the „Artikel“ text names an existing item, so
+ *   the line becomes a synonym of it („Markt“ and „Bereich“ are not needed and
+ *   are hidden while the text names an item);
+ * - „<line>: Synonym für <item> – <store> > <section>“ — the „Artikel“ name was
+ *   changed and the stop is set: the route is saved on the new item name, and
+ *   the line's own name is saved as a synonym of it;
+ * - „<line>: <store> > <section>“ — the „Artikel“ name is unchanged and the stop
+ *   is set, so the line becomes that item;
+ * - „<line>: ignoriert (oben einsortiert)“ — the line is ignored.
+ *
+ * The folded line is muted and one text step smaller, and tapping it unfolds the
+ * row again so a decision can still be changed. Folding happens when the user
+ * leaves the row after the exact name (never under the cursor while typing),
+ * when a suggestion or a section is chosen, or on „Ignorieren“.
+ *
+ * A known item hides the stop fields, because the item's route already exists;
+ * the picker is only offered while the text names no item. Changing the name
+ * before setting the stop writes both rows — the item with the route, and the
+ * line's own name field as its synonym, so the next run recognizes the same
+ * line.
  *
  * On commit the page hands the decisions over to App, which persists them,
  * derives the target order (core's `shoppingSortOrder`), and lets the gateway
@@ -31,30 +52,43 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FocusEvent, ReactNode } from 'react';
 
 import {
   matchShoppingItem,
   shoppingItemSuggestions,
   shoppingNameField,
+  shoppingNameKey,
   shoppingSections,
   shoppingStores,
   type ShoppingStop,
 } from '@cookbook/core';
 
 import type { KeepItem } from '../keep/keepClient';
+import { VisibilityOffIcon } from './icons';
 
 /**
  * How one unresolved line was decided:
- * - `item` — a new (or corrected) item row under `name` at `stop`;
+ * - `item` — a new (or corrected) item row under `name` at `stop`; when the
+ *   line's own name differs from `name`, the line name is also stored as a
+ *   synonym of that item;
  * - `synonym` — `variant` (the line's name field) means the existing `item`,
- *   which resolves the line without touching the item table (the only write the
- *   sort flow performs besides the new rows, docs/shopping_item_identity.md §4);
+ *   which resolves the line without touching the item table
+ *   (docs/shopping_item_identity.md §4);
  * - `ignore` — placed at the top of the list.
  */
 export type SortResolution =
-  | { readonly kind: 'item'; readonly name: string; readonly stop: ShoppingStop }
+  | {
+      readonly kind: 'item';
+      readonly name: string;
+      readonly stop: ShoppingStop;
+      /**
+       * The line's own name field, saved as a synonym of `name` when the
+       * „Artikel“ name was changed (null/absent when the two names are equal).
+       */
+      readonly variant?: string;
+    }
   | { readonly kind: 'synonym'; readonly variant: string; readonly item: string }
   | 'ignore';
 
@@ -77,14 +111,12 @@ interface UnresolvedEntry {
   text: string;
   /** The line's name field — the initial „Artikel“ text and a synonym's variant. */
   nameField: string;
-  /** Similar item names offered as candidates (empty when nothing is similar). */
-  suggestions: readonly string[];
 }
 
 /**
  * The unchecked lines that name no item, deduplicated by text (two identical
  * lines are the same item and get one decision). A line that already resolved is
- * not listed: it is sorted silently.
+ * not listed: it is sorted silently (docs/shopping_item_identity.md §6).
  */
 function unresolvedEntries(items: readonly KeepItem[]): UnresolvedEntry[] {
   const seen = new Set<string>();
@@ -94,11 +126,7 @@ function unresolvedEntries(items: readonly KeepItem[]): UnresolvedEntry[] {
     const text = item.text.trim();
     if (text === '' || seen.has(text) || matchShoppingItem(text) !== null) continue;
     seen.add(text);
-    entries.push({
-      text,
-      nameField: shoppingNameField(text),
-      suggestions: shoppingItemSuggestions(text),
-    });
+    entries.push({ text, nameField: shoppingNameField(text) });
   }
   return entries;
 }
@@ -123,18 +151,42 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
   const unresolved = useMemo(() => unresolvedEntries(items), [items]);
   /** The „Artikel“ text by line (the name field until the user edits it). */
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(() => new Map());
-  /** The confirmed similar item by line, if any. */
-  const [candidates, setCandidates] = useState<ReadonlyMap<string, string>>(() => new Map());
   /** Ignored lines by text (placed at the top of the list). */
   const [ignored, setIgnored] = useState<ReadonlySet<string>>(() => new Set<string>());
-  /** Chosen store by text (level 1 of the „Einkauf“ field). */
+  /** Chosen store by text (level 1 of the „Markt“ field). */
   const [stores, setStores] = useState<ReadonlyMap<string, string>>(() => new Map());
-  /** Section search text by text (level 2 of the „Einkauf“ field). */
+  /** Section search text by text (level 2 of the „Markt“ field). */
   const [sections, setSections] = useState<ReadonlyMap<string, string>>(() => new Map());
+  /** Lines the user has folded to their one-line summary (a decided line). */
+  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set<string>());
   /** True while the sort runs — the button is unavailable then. */
   const [busy, setBusy] = useState(false);
   /** Reason the sort failed, shown next to the button (null = no failure). */
   const [error, setError] = useState<string | null>(null);
+  /**
+   * True between a pointer press and its release. A fold during that window is
+   * deferred (see `foldOnLeave`): collapsing a row on mousedown would shorten
+   * the page under the finger and could eat the click of the button being
+   * pressed.
+   */
+  const pointerPressed = useRef(false);
+  /** Lines whose fold waits for the current pointer press to end. */
+  const pendingFolds = useRef<Set<string>>(new Set());
+
+  // A press that ends anywhere (including outside the page) must not leave the
+  // flag armed: a later keyboard blur would then wait for a click that never
+  // comes. The page's own pointer handlers set the flag on pointerdown.
+  useEffect(() => {
+    const release = (): void => {
+      pointerPressed.current = false;
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  }, []);
 
   const storesOfRoute = shoppingStores();
 
@@ -143,7 +195,105 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
     return drafts.get(entry.text) ?? entry.nameField;
   }
 
-  /** Drops the picked stop of one line (used when a candidate takes over). */
+  /**
+   * The existing item the „Artikel“ text names, or null while the text names
+   * none. Uses the same whole-name resolution as the read-time pipeline, so a
+   * line that becomes a synonym is recognized exactly as a Keep line would be.
+   */
+  function knownItemOf(entry: UnresolvedEntry): string | null {
+    return matchShoppingItem(draftOf(entry));
+  }
+
+  /** The complete stop of one line, or null while the picker is incomplete. */
+  function stopOf(entry: UnresolvedEntry): ShoppingStop | null {
+    const store = stores.get(entry.text);
+    return chosenStop(
+      store,
+      store === undefined ? [] : shoppingSections(store),
+      sections.get(entry.text) ?? '',
+    );
+  }
+
+  /**
+   * The variant a stop decision writes next to its item row: the line's own
+   * name field, but only when the edited „Artikel“ name is a different name.
+   * The route belongs to the item name; the line name becomes a synonym of it so
+   * the next run recognizes the line. A synonym equal to the item name is
+   * rejected by the master-data rules (case-folded, docs/shopping_item_identity.md
+   * §5), so an unchanged name — or a case-only edit — writes no synonym and the
+   * route alone names the item.
+   */
+  function synonymVariantOf(entry: UnresolvedEntry, itemName: string): string | null {
+    // A decorated line can derive an empty name field ("2 Becher"): there is no
+    // variant to store, and an empty synonym would fail the table's rules.
+    if (entry.nameField.trim() === '') return null;
+    return shoppingNameKey(itemName) === shoppingNameKey(entry.nameField) ? null : entry.nameField;
+  }
+
+  /** True when the line has one of the three decisions, so it can fold. */
+  function isDecided(entry: UnresolvedEntry): boolean {
+    if (ignored.has(entry.text) || knownItemOf(entry) !== null) return true;
+    // A new item row needs a name; the derived one is prefilled, but the user
+    // can clear the field, and an empty item name must not be written.
+    if (draftOf(entry).trim() === '') return false;
+    if (storesOfRoute.length === 0) return false;
+    return stopOf(entry) !== null;
+  }
+
+  /** Folds a decided line to its one-line summary. */
+  function fold(text: string): void {
+    setFolded((current) => new Set(current).add(text));
+  }
+
+  /**
+   * Folds a line that the user just left — but only once the current pointer
+   * press has produced its click. The row is much taller unfolded than folded,
+   * so collapsing it on mousedown would move the button under the finger and
+   * the browser's click would land on a different element. During a keyboard
+   * focus change there is no press to protect, so the fold is immediate.
+   */
+  function foldOnLeave(text: string): void {
+    if (pointerPressed.current) {
+      pendingFolds.current.add(text);
+      return;
+    }
+    fold(text);
+  }
+
+  /**
+   * Folds the lines whose fold waited for a pointer press. The click that ends
+   * the press runs first (this handler is on the page and runs after the
+   * button's own click), so the pressed control keeps its click.
+   */
+  function flushPendingFolds(): void {
+    if (pendingFolds.current.size === 0) return;
+    const texts = [...pendingFolds.current];
+    pendingFolds.current.clear();
+    setFolded((current) => {
+      const updated = new Set(current);
+      for (const text of texts) updated.add(text);
+      return updated;
+    });
+  }
+
+  /**
+   * A field that regains focus cancels its pending fold: the user is back in
+   * the row, so it must not collapse under the cursor.
+   */
+  function cancelPendingFold(text: string): void {
+    pendingFolds.current.delete(text);
+  }
+
+  /** Unfolds a summary line again so the user can change its decision. */
+  function unfold(text: string): void {
+    setFolded((current) => {
+      const updated = new Set(current);
+      updated.delete(text);
+      return updated;
+    });
+  }
+
+  /** Drops the picked stop of one line (used when a known item takes over). */
   function clearStop(text: string): void {
     setStores((current) => {
       const updated = new Map(current);
@@ -157,22 +307,8 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
     });
   }
 
-  /** True when every unresolved line is decided (ignored, a candidate or a stop). */
-  const complete = unresolved.every((entry) => {
-    if (ignored.has(entry.text) || candidates.has(entry.text)) return true;
-    // A new item row needs a name; the derived one is prefilled, but the user
-    // can clear the field, and an empty item name must not be written.
-    if (draftOf(entry).trim() === '') return false;
-    if (storesOfRoute.length === 0) return false;
-    const store = stores.get(entry.text);
-    return (
-      chosenStop(
-        store,
-        store === undefined ? [] : shoppingSections(store),
-        sections.get(entry.text) ?? '',
-      ) !== null
-    );
-  });
+  /** True when every unresolved line is decided (ignored, a known item or a stop). */
+  const complete = unresolved.every(isDecided);
 
   /** True while the snapshot holds at least one unchecked line to sort. */
   const hasEntries = items.some((item) => !item.checked);
@@ -182,61 +318,84 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
 
   /** Types into one line's „Artikel“ field. */
   function typeDraft(text: string, value: string): void {
+    // The user is editing this row again, so a fold that waited for a click is
+    // no longer wanted (the focus handler covers the common case; this covers a
+    // browser that reports no related focus target).
+    pendingFolds.current.delete(text);
     setDrafts((current) => new Map(current).set(text, value));
   }
 
   /**
-   * Confirms or takes back a similar item. Confirming clears the picked stop and
-   * keeping the „Artikel“ draft out of the way: the candidate decides the line.
+   * Folds a line once focus leaves its whole row — but only when the line is
+   * already decided. Folding is deliberately tied to leaving the row rather than
+   * to every keystroke: a row must never disappear under the cursor while the
+   * user is still typing. Moving focus inside the row (onto a chip, the section
+   * input or the ignore action) is not leaving it; those controls fold
+   * explicitly when they complete the decision. The Tab path is covered too:
+   * tabbing through the row's controls and out of it folds the decided line.
+   * A native blur that a removed summary button produces on unfolding is not a
+   * decision to fold again, so it is ignored.
    */
-  function toggleCandidate(text: string, candidate: string): void {
-    setCandidates((current) => {
-      const updated = new Map(current);
-      if (updated.get(text) === candidate) {
-        updated.delete(text);
-      } else {
-        updated.set(text, candidate);
-      }
-      return updated;
-    });
-    if (candidates.get(text) !== candidate) {
-      clearStop(text);
+  function blurRow(entry: UnresolvedEntry, event: FocusEvent<HTMLLIElement>): void {
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+      return;
     }
+    if (event.target instanceof Element && event.target.closest('.sort-summary') !== null) {
+      return;
+    }
+    if (isDecided(entry)) foldOnLeave(entry.text);
   }
 
-  /** Toggles "ignored" for one line. Ignoring clears any picked stop and
-   *  candidate, so re-opening the row starts clean instead of reviving a stale
-   *  half-choice. */
+  /**
+   * Confirms a similar item: its name becomes the „Artikel“ text, so the row
+   * hides the stop fields and folds to the synonym summary. The picked stop is
+   * dropped — the two ways to decide a line are mutually exclusive.
+   */
+  function chooseItem(text: string, item: string): void {
+    typeDraft(text, item);
+    clearStop(text);
+    fold(text);
+  }
+
+  /**
+   * Toggles "ignored" for one line. Ignoring clears any picked stop, so the
+   * line's one decision is the ignore; taking the ignore back leaves the row
+   * unfolded for a different decision.
+   */
   function toggleIgnored(text: string): void {
     if (ignored.has(text)) {
       setIgnored((current) => {
-        const next = new Set(current);
-        next.delete(text);
-        return next;
+        const updated = new Set(current);
+        updated.delete(text);
+        return updated;
       });
       return;
     }
     setIgnored((current) => new Set(current).add(text));
     clearStop(text);
-    setCandidates((current) => {
-      const updated = new Map(current);
-      updated.delete(text);
-      return updated;
-    });
+    fold(text);
   }
 
-  /** Picks a store (level 1); a section belongs to exactly one store, so the
-   *  previous section is cleared when the store changes (same rule as the
-   *  new-ingredient sheet). A candidate is the other way to decide the line, so
-   *  picking a store takes a candidate back. */
+  /**
+   * Picks a store (level 1). A section belongs to exactly one store, so the
+   * previous section is cleared when the store really changes (same rule as the
+   * new-ingredient sheet). Picking a store is the other way to decide the line,
+   * so it takes an ignore back; the row stays unfolded until a section is
+   * chosen.
+   */
   function chooseStore(text: string, store: string): void {
-    setStores((current) => new Map(current).set(text, store));
-    setSections((current) => {
-      const updated = new Map(current);
+    setIgnored((current) => {
+      if (!current.has(text)) return current;
+      const updated = new Set(current);
       updated.delete(text);
       return updated;
     });
-    setCandidates((current) => {
+    if (stores.get(text) === store) return;
+    // Changing the store clears the section, so a fold that was waiting for
+    // the click must not fold the now-incomplete stop.
+    pendingFolds.current.delete(text);
+    setStores((current) => new Map(current).set(text, store));
+    setSections((current) => {
       const updated = new Map(current);
       updated.delete(text);
       return updated;
@@ -245,7 +404,19 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
 
   /** Types into one line's section search field. */
   function typeSection(text: string, query: string): void {
+    // Same as `typeDraft`: the row is being edited, so it must stay open.
+    pendingFolds.current.delete(text);
     setSections((current) => new Map(current).set(text, query));
+  }
+
+  /**
+   * Picks a section from the search suggestions. The stop is complete only with
+   * a non-empty „Artikel“ name: without one there is no item to write, so the
+   * row stays unfolded (and the forward action stays unavailable).
+   */
+  function chooseSection(entry: UnresolvedEntry, section: string): void {
+    setSections((current) => new Map(current).set(entry.text, section));
+    if (draftOf(entry).trim() !== '') fold(entry.text);
   }
 
   /** Runs the sort: build the decision map and hand it to App. */
@@ -258,26 +429,26 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
         resolutions.set(entry.text, 'ignore');
         continue;
       }
-      const candidate = candidates.get(entry.text);
-      if (candidate !== undefined) {
+      const item = knownItemOf(entry);
+      if (item !== null) {
         // The variant is the line's name field, never the edited „Artikel“ text:
         // the next run must recognize the same line, and what it derives is the
         // name field.
-        resolutions.set(entry.text, {
-          kind: 'synonym',
-          variant: entry.nameField,
-          item: candidate,
-        });
+        resolutions.set(entry.text, { kind: 'synonym', variant: entry.nameField, item });
         continue;
       }
-      const store = stores.get(entry.text);
-      const stop = chosenStop(
-        store,
-        store === undefined ? [] : shoppingSections(store),
-        sections.get(entry.text) ?? '',
-      );
+      const stop = stopOf(entry);
       if (stop !== null) {
-        resolutions.set(entry.text, { kind: 'item', name: draftOf(entry).trim(), stop });
+        const name = draftOf(entry).trim();
+        const variant = synonymVariantOf(entry, name);
+        // A changed name writes both rows: the item at the route, and the line's
+        // own name as a synonym of it (so the same line is not asked again).
+        resolutions.set(entry.text, {
+          kind: 'item',
+          name,
+          stop,
+          ...(variant === null ? {} : { variant }),
+        });
       }
     }
     try {
@@ -289,25 +460,28 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
   }
 
   /**
-   * The similar-item chips of one line, directly above the „Einkauf“ field: the
-   * candidates core offers for the name field. Deliberately without a caption —
-   * the chips sit between the „Artikel“ field and „Einkauf“ and read as "or this
-   * one"; the aria-label carries the meaning for screen readers.
+   * The similar-item chips of one line: the item names core offers for the
+   * current „Artikel“ text. Choosing one writes it into the field, so the field
+   * is the single source of the decision. Deliberately without a caption — the
+   * chips sit between the „Artikel“ field and the stop fields and read as "or
+   * this one"; the aria-label carries the meaning for screen readers.
    */
   function renderCandidates(entry: UnresolvedEntry): ReactNode {
-    if (entry.suggestions.length === 0 || ignored.has(entry.text)) {
+    if (ignored.has(entry.text) || knownItemOf(entry) !== null) {
       return null;
     }
-    const chosen = candidates.get(entry.text);
+    const suggestions = shoppingItemSuggestions(draftOf(entry));
+    if (suggestions.length === 0) {
+      return null;
+    }
     return (
       <ul className="suggestions sort-candidates" aria-label="Ähnliche Artikel">
-        {entry.suggestions.map((candidate) => (
+        {suggestions.map((candidate) => (
           <li key={candidate}>
             <button
               type="button"
-              className={chosen === candidate ? 'chip chip-active' : 'chip'}
-              aria-pressed={chosen === candidate}
-              onClick={() => toggleCandidate(entry.text, candidate)}
+              className="chip"
+              onClick={() => chooseItem(entry.text, candidate)}
             >
               {candidate}
             </button>
@@ -317,7 +491,7 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
     );
   }
 
-  /** The „Artikel“ field: the name field, editable before a stop is assigned. */
+  /** The „Artikel“ field: the name field, editable until the line is decided. */
   function renderDraftField(entry: UnresolvedEntry): ReactNode {
     return (
       <div className="field">
@@ -326,34 +500,73 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
           type="text"
           value={draftOf(entry)}
           onChange={(event) => typeDraft(entry.text, event.target.value)}
+          onFocus={() => cancelPendingFold(entry.text)}
           aria-label={`Artikelname für ${entry.text}`}
         />
       </div>
     );
   }
 
-  /** The „Einkauf“ picker of one line (the new-ingredient sheet's field shape). */
+  /**
+   * The row's exception answer: a quiet text button, deliberately not a pill, so
+   * it can never be mistaken for one of the store chips. While the stop fields
+   * are shown it sits in the „Markt“ chips row; when that field is hidden (a
+   * known item, an ignored row or no route) it follows the note in the same slot.
+   */
+  function renderIgnoreAction(entry: UnresolvedEntry): ReactNode {
+    const isIgnored = ignored.has(entry.text);
+    return (
+      <button
+        type="button"
+        className="text-button sort-ignore"
+        aria-pressed={isIgnored}
+        onClick={() => toggleIgnored(entry.text)}
+      >
+        <VisibilityOffIcon className="button-icon" optical={20} />
+        {isIgnored ? 'Ignoriert' : 'Ignorieren'}
+      </button>
+    );
+  }
+
+  /**
+   * What replaces the stop fields once a line is decided without them — or the
+   * „Markt“/„Bereich“ picker while it is not. A text that names an existing
+   * item hides the stop fields entirely (the line becomes a synonym); the note
+   * names that consequence while the row is still unfolded. The ignore action
+   * keeps its place beside the store chips, so it stays reachable in every
+   * branch.
+   */
   function renderPicker(entry: UnresolvedEntry): ReactNode {
     if (ignored.has(entry.text)) {
       return (
-        <p className="sort-ignored-note" role="status">
-          Wird oben in die Liste einsortiert.
-        </p>
+        <>
+          <p className="sort-note" role="status">
+            Wird oben in die Liste einsortiert.
+          </p>
+          {renderIgnoreAction(entry)}
+        </>
       );
     }
-    const candidate = candidates.get(entry.text);
-    if (candidate !== undefined) {
+    const item = knownItemOf(entry);
+    if (item !== null) {
       return (
-        <p className="sort-ignored-note" role="status">
-          {`Wird als Synonym für „${candidate}“ gemerkt.`}
-        </p>
+        <>
+          <p className="sort-note" role="status">
+            {`Wird als Synonym für „${item}“ gemerkt.`}
+          </p>
+          {renderIgnoreAction(entry)}
+        </>
       );
     }
     if (storesOfRoute.length === 0) {
       return (
-        <p className="field-hint">
-          Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — dieser Eintrag kann nur ignoriert werden.
-        </p>
+        <>
+          <p className="field-hint">
+            Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — dieser Eintrag kann nur ignoriert
+            werden.
+          </p>
+          {renderIgnoreAction(entry)}
+        </>
       );
     }
     const store = stores.get(entry.text);
@@ -365,19 +578,23 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
           candidate.toLowerCase().includes(section.toLowerCase()),
         );
     return (
-      <>
-        <div className="store-chips" role="group" aria-label={`Markt für ${entry.text}`}>
-          {storesOfRoute.map((candidate) => (
-            <button
-              key={candidate}
-              type="button"
-              className={store === candidate ? 'chip chip-active' : 'chip'}
-              aria-pressed={store === candidate}
-              onClick={() => chooseStore(entry.text, candidate)}
-            >
-              {candidate}
-            </button>
-          ))}
+      <div className="field">
+        <span className="field-label">Markt</span>
+        <div className="sort-market-row">
+          <div className="store-chips" role="group" aria-label={`Markt für ${entry.text}`}>
+            {storesOfRoute.map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                className={store === candidate ? 'chip chip-active' : 'chip'}
+                aria-pressed={store === candidate}
+                onClick={() => chooseStore(entry.text, candidate)}
+              >
+                {candidate}
+              </button>
+            ))}
+          </div>
+          {renderIgnoreAction(entry)}
         </div>
 
         {store !== undefined && (
@@ -387,6 +604,7 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
               type="text"
               value={sections.get(entry.text) ?? ''}
               onChange={(event) => typeSection(entry.text, event.target.value)}
+              onFocus={() => cancelPendingFold(entry.text)}
               aria-label={`Bereich in ${store}`}
               placeholder="Suchen oder wählen"
             />
@@ -397,7 +615,7 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
                     <button
                       type="button"
                       className="chip"
-                      onClick={() => typeSection(entry.text, candidate)}
+                      onClick={() => chooseSection(entry, candidate)}
                     >
                       {candidate}
                     </button>
@@ -407,36 +625,81 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
             )}
           </>
         )}
-      </>
+      </div>
     );
   }
 
-  /** One unresolved line: its text, the name field, the candidates, the picker
-   *  and the ignore toggle. The „Artikel“ field is hidden while a candidate
-   *  decides the line — the candidate is the whole decision then. */
+  /**
+   * The one line a decided entry folds to (see the file header). Ignore wins
+   * over a known item and a known item over a stop, matching the order in which
+   * `handleSort` reads the decisions. A stop whose „Artikel“ name differs from
+   * the line's own name also writes the line name as a synonym; the summary
+   * names that (`Synonym für <Artikel> – <Markt> > <Bereich>`).
+   */
+  function summaryOf(entry: UnresolvedEntry): string {
+    if (ignored.has(entry.text)) {
+      return `${entry.text}: ignoriert (oben einsortiert)`;
+    }
+    const item = knownItemOf(entry);
+    if (item !== null) {
+      return `${entry.text}: Synonym für ${item}`;
+    }
+    const stop = stopOf(entry);
+    if (stop !== null) {
+      const name = draftOf(entry).trim();
+      const route = `${stop.store} > ${stop.section}`;
+      return synonymVariantOf(entry, name) === null
+        ? `${entry.text}: ${route}`
+        : `${entry.text}: Synonym für ${name} – ${route}`;
+    }
+    // A folded row always has a decision; this keeps the type honest.
+    return entry.text;
+  }
+
+  /**
+   * One unresolved line. While the entry is unfolded it carries the whole form
+   * (the name field, the similar-item chips, the stop fields and the quiet
+   * ignore action). As soon as it is decided it collapses to one muted, small
+   * line; a tap on that line unfolds it again (the pantry page's fold pattern).
+   * The line itself stays the same button across both states, so the toggle
+   * keeps the keyboard focus while it unfolds. A line that is not decided yet
+   * has no summary to show: its label is plain text and there is nothing to
+   * fold.
+   */
   function renderEntry(entry: UnresolvedEntry): ReactNode {
-    const isIgnored = ignored.has(entry.text);
-    const hasCandidate = candidates.has(entry.text);
+    const isFolded = folded.has(entry.text);
+    if (isFolded) {
+      return (
+        <li key={entry.text} className="sort-entry sort-entry--folded">
+          <button
+            type="button"
+            className="sort-summary"
+            aria-expanded={false}
+            onClick={() => unfold(entry.text)}
+          >
+            {summaryOf(entry)}
+          </button>
+        </li>
+      );
+    }
     return (
-      <li key={entry.text} className="sort-entry">
-        <p className="sort-entry-text">{entry.text}</p>
+      <li key={entry.text} className="sort-entry" onBlur={(event) => blurRow(entry, event)}>
+        {isDecided(entry) ? (
+          <button
+            type="button"
+            className="sort-entry-text sort-entry-toggle"
+            aria-expanded={true}
+            onClick={() => fold(entry.text)}
+          >
+            {entry.text}
+          </button>
+        ) : (
+          <p className="sort-entry-text">{entry.text}</p>
+        )}
 
-        {!isIgnored && !hasCandidate && renderDraftField(entry)}
+        {renderDraftField(entry)}
         {renderCandidates(entry)}
-
-        <div className="field">
-          <span className="field-label">Einkauf</span>
-          {renderPicker(entry)}
-        </div>
-
-        <button
-          type="button"
-          className={isIgnored ? 'chip chip-active sort-ignore' : 'chip sort-ignore'}
-          aria-pressed={isIgnored}
-          onClick={() => toggleIgnored(entry.text)}
-        >
-          {isIgnored ? 'Ignoriert' : 'Ignorieren'}
-        </button>
+        {renderPicker(entry)}
       </li>
     );
   }
@@ -454,7 +717,18 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
   }
 
   return (
-    <main className="app app-narrow sort-select">
+    <main
+      className="app app-narrow sort-select"
+      // Track a pointer press so a blur caused by tapping a control can defer
+      // its fold until the click has run (see `foldOnLeave`), and flush those
+      // deferred folds in the bubble phase — after a pressed button's own
+      // click handler. The matching release listener lives on `window`, so a
+      // press that ends outside the page cannot leave the flag armed.
+      onPointerDownCapture={() => {
+        pointerPressed.current = true;
+      }}
+      onClick={flushPendingFolds}
+    >
       {/* "Zurück" on its own line at the top left, the screen title below it —
           the shared stacked header (.app-header-stacked). */}
       <header className="app-header app-header-stacked">
@@ -465,7 +739,7 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
       </header>
 
       <p className="sort-intro">
-        Einträge ohne Einkaufsort werden hier einem Artikel zugeordnet — einem ähnlichen, der dann
+        Einträge ohne Einkaufsort werden hier einem Artikel zugeordnet — einem bekannten, der dann
         als Synonym gemerkt wird, oder mit Markt und Bereich als neuer Artikel. Einträge, die du
         ignorierst, kommen an den Anfang der Liste; alle anderen werden nach dem Einkaufsweg
         sortiert.

@@ -1923,7 +1923,10 @@ function App() {
    * Two kinds of decision write master data: a confirmed candidate appends a
    * **synonym** row (variant → item, docs/shopping_item_identity.md §4), a chosen
    * stop appends or corrects an **item** row under the name in the page's
-   * „Artikel“ field. Both are persisted before the reorder.
+   * „Artikel“ field. A stop whose „Artikel“ name differs from the line's own name
+   * also appends that line name as a **synonym** of the new item, so a renamed
+   * line is recognized on the next run. All rows are persisted before the
+   * reorder.
    *
    * The target order is derived from the *pre-persist* analysis plus the
    * decisions: core's `shoppingSortOrder` places the ignored lines at the top,
@@ -1957,7 +1960,8 @@ function App() {
       );
 
       // Persist the decisions that write master data (ignored lines write
-      // nothing): new item rows and confirmed synonyms.
+      // nothing): new item rows, confirmed synonyms, and the synonym a renamed
+      // stop assignment adds for the line's own name.
       const newItems: { item: string; stop: ShoppingStop }[] = [];
       const newSynonyms: { variant: string; item: string }[] = [];
       for (const resolution of resolutions.values()) {
@@ -1966,6 +1970,11 @@ function App() {
           newSynonyms.push({ variant: resolution.variant, item: resolution.item });
         } else {
           newItems.push({ item: resolution.name, stop: resolution.stop });
+          if (resolution.variant !== undefined) {
+            // The route belongs to the corrected item name; the line's own name
+            // becomes a synonym of it, so the next run resolves the line.
+            newSynonyms.push({ variant: resolution.variant, item: resolution.name });
+          }
         }
       }
       // One folder resolution + listing for both master-data writes (they touch

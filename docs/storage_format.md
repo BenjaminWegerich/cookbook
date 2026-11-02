@@ -478,9 +478,9 @@ authoritative once they exist.
 The files are created on the first shopping assignment the user enters (the „Einkauf“ field
 of „Neue Zutat anlegen“ or „Einkaufsartikel anlegen“), seeded with the built-in repo data, and
 are authoritative once they exist (the synonym file empty at first and growing with every
-confirmed suggestion). That field picks the store as chips and the section from a searchable
-list of that store's sections, so a section can never be paired with the wrong store. The
-„Einkaufsartikel anlegen“ form rejects a name that already has a row (case-folded); the
+confirmed suggestion or renamed assignment). That field picks the store as chips and the section
+from a searchable list of that store's sections, so a section can never be paired with the wrong
+store. The „Einkaufsartikel anlegen“ form rejects a name that already has a row (case-folded); the
 sort/assignment path still updates a row the user prepared in the spreadsheet — the name is
 the key, and the file holds exactly one stop per item. The
 item table was called `einkaufs-zuordnung.csv` before the item identity existed; the app reads

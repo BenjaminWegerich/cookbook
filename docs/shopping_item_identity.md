@@ -64,8 +64,12 @@ Terms, in the order the pipeline uses them:
 - **Item name** — the `Item` cell of `einkaufs-artikel.csv`.
 - **Variant** — the `Variant` cell of `einkaufs-synonyme.csv`.
 
-Resolving a line to an item happens **at read time**. No table is rewritten by a
-sort run, with the single exception of a confirmed suggestion (§4).
+Resolving a line to an item happens **at read time**. A sort run does not normalize or rewrite
+existing master-data rows and never changes a Keep line; it appends the rows its decisions
+create — an **item** row (with its route) for a line assigned a stop under a new name, a
+**synonym** row for a confirmed variant or a renamed assignment, or both for the last case (§4).
+The item write still reads before it writes, so a row prepared in the spreadsheet meanwhile is
+updated instead of duplicated (storage_format.md §10).
 
 1. **Derive the name field:** Unicode NFC, trim and collapse whitespace, then drop
    the decoration. The field keeps the spelling as typed; the *comparison* is
@@ -101,8 +105,9 @@ sort run, with the single exception of a confirmed suggestion (§4).
    exact rule; a hit resolves to the variant's item.
 4. **Nothing matched** → the line is *unknown* and is shown on the sort page.
    Similar names are offered as suggestions (§4); the user either confirms one of
-   them (which writes a synonym), assigns a stop under a new item name, or ignores
-   the line.
+   them (which writes a synonym), assigns a stop under a new (or corrected) item
+   name — which writes the item row and, when the name was edited, the line's own
+   name field as a synonym of it — or ignores the line.
 
 Matching an item takes precedence over matching a variant. A variant equal to an
 item name is rejected at load (§5), so the two rules can never disagree about the
@@ -145,6 +150,13 @@ one:
 2. appends a row to `einkaufs-synonyme.csv`, so the same variant is never asked
    again.
 
+The same synonym is written when a stop is assigned under a **changed** item
+name: the route is stored on the item name taken from „Artikel“, and the line's
+own name field is appended as a variant of that item, so the next run recognizes
+the line. An unchanged name needs no synonym — the item name alone resolves the
+line — and a case-only edit needs none either: the comparison is case-folded, and
+a variant must differ from its item name (§5).
+
 The candidate set is the **item names**, never the variants — otherwise it would
 grow with every confirmed synonym. The engine is deliberately simple (containment
 on the case-folded names, ranked: an item name the field is a prefix of, an item
@@ -152,11 +164,11 @@ name inside the field, the field inside an item name) and stayed swappable behin
 one function; an edit-distance or phonetic engine can replace it without touching
 the flow around it.
 
-A confirmed variant is matched silently from then on (step 3 of §2). The synonym
-table grows out of the user's real list instead of having to be complete up
-front. The variant cell keeps the spelling the user typed; only its comparison
-key is folded, and a variant that already exists under another spelling replaces
-that row instead of doubling it.
+A confirmed or renamed variant is matched silently from then on (step 3 of §2).
+The synonym table grows out of the user's real list instead of having to be
+complete up front. The variant cell keeps the spelling the user typed; only its
+comparison key is folded, and a variant that already exists under another spelling
+replaces that row instead of doubling it.
 
 ## 5. Validation
 
@@ -178,8 +190,10 @@ The master-data loaders fail loudly (storage_format.md §9–§10); that is kept
 - **No write-back normalization** of the item tables during a sort run: existing
   rows stay as they are.
 - **No rewriting of Keep texts.** The app never changes a line the user typed.
-- **No display of the silent resolution.** The sort page does not print
-  „Möhren → Karotten“ next to a line: a line that resolved is simply sorted, and
-  only an unresolved line is shown and asked about.
+- **No display of the silent resolution.** A line that already resolved before
+  the page opened is simply sorted and never appears on the page, not even as a
+  summary; only unresolved lines are listed. The folded summary shows the decision
+  the user has just made („Möhren: Synonym für Karotten“), never a resolution the
+  pipeline applied on its own.
 - **No automatic similarity merge.** A similar name is a candidate the user
   confirms, never a match the pipeline applies on its own (§4).

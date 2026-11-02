@@ -171,8 +171,9 @@
   (`packages/core/src/shoppingSort.ts`, [shopping_item_identity.md](shopping_item_identity.md)):
   the line's decoration is undone to a name field, that field must equal an item name (or a
   variant) exactly, and an unresolved line is offered similar item names on the sort page —
-  confirming one appends a synonym row, the only write that flow performs. No sort run rewrites
-  the master data or a Keep text.
+  confirming one appends a synonym row. Assigning a stop under a new or changed name appends
+  the item row (with its route) and, when the name was changed, the line's own name as a
+  synonym of it. No sort run normalizes the master data or changes a Keep text.
 
 ### HTML share export
 

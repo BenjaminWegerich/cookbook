@@ -120,8 +120,9 @@ screen, which return to the entry's overview). The shopping flow is built as wel
 („Liste schreiben“ selects the planned dishes, the cooking step „Vorräte auswählen — Teil 1:
 Zutaten-Rezepte“ decides how much of each linked Zutaten-Rezept is made, the stock step „Teil 2:
 Zutaten“ sets each bottom-level ingredient's Vorrat, and the difference goes to
-„Einkaufsliste“). The aisle sort is built as well („Einkaufsliste sortieren“ assigns unassigned
-items a stop or ignores them, then reorders the list).
+„Einkaufsliste“). The aisle sort is built as well („Einkaufsliste sortieren“ resolves an
+unassigned item to an existing item as a synonym, assigns it a stop, or ignores it, then
+reorders the list).
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -149,9 +150,10 @@ not where it is used.
       stock with `min(need, reorder point)`, and the difference is rounded up to whole shopping
       units and written with `POST /keep/shopping` (undo via „Rückgängig“).
 - [x] Sort the shopping list by category/aisle (built on the shopping-route master data,
-      storage_format.md §10): „Einkaufsliste sortieren“ lists the unchecked entries without an
-      Einkaufsort, each of which is assigned a store + section (like „Neue Zutat anlegen“) or
-      ignored (placed at the top); the gateway applies the derived order and verifies it.
+      storage_format.md §10): „Einkaufsliste sortieren“ lists the unchecked entries that name no
+      item, each of which is resolved to an existing item (saved as a synonym), assigned a store
+      + section (like „Neue Zutat anlegen“), or ignored (placed at the top); the gateway applies
+      the derived order and verifies it.
 - [x] Give the shopping list an item identity of its own (design in
       [shopping_item_identity.md](shopping_item_identity.md)): the assignment file
       is replaced by `einkaufs-artikel.csv` (`Item;Store;Section` — the identity of
@@ -164,9 +166,11 @@ not where it is used.
       an item name (or a variant, compared case-folded), so „Muffins mit Blaubeeren“
       stays unresolved instead of sorting as „Blaubeeren“. A line with no hit is
       offered similar item names (simple containment on the item names, no fuzzy
-      engine); confirming one appends a synonym row, and the sort page's „Artikel“
-      field is editable for the new-item path — the two kinds of decision are
-      mutually exclusive, and the page does not display the silent resolution.
+      engine); confirming one appends a synonym row. The sort page's „Artikel“
+      field is editable for the new-item path, and a stop under a changed name
+      writes the item row plus the line's own name as its synonym. The page lists
+      only unresolved lines and does not display an already-resolved line's silent
+      resolution.
       Migration reads `einkaufs-zuordnung.csv` once, writes
       `einkaufs-artikel.csv` + the empty `einkaufs-synonyme.csv`, then deletes the
       old file. Out of scope: an automatic similarity ("fuzzy") merge, and any

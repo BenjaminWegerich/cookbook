@@ -2,12 +2,14 @@
  * Shopping-list sort screen — component styles.
  *
  * The full-screen page behind "Einkaufsliste sortieren"
- * (components/ShoppingSortSelect.tsx): the unchecked shopping-list lines that
- * name no item, each with the editable „Artikel“ field, the similar-item chips
- * (the shared .suggestions row), the store-chips + section-search „Einkauf“
- * field and an "Ignorieren" toggle. All pixel values come from the design
- * ladder (docs/CODING_CONVENTIONS.md); colors and sizes reference the tokens in
- * styles/tokens.css.
+ * (components/ShoppingSortSelect.tsx): one row per unchecked shopping-list line
+ * that names no item. An unfolded row carries the editable „Artikel“ field, the
+ * similar-item chips (the shared .suggestions row), the „Markt“ store chips +
+ * „Bereich“ search field and a quiet "Ignorieren" text action beside the store
+ * chips. As soon as the line is decided it folds to one muted, small summary
+ * line; tapping that line unfolds the row again. All pixel values come from the
+ * design ladder (docs/CODING_CONVENTIONS.md); colors and sizes reference the
+ * tokens in styles/tokens.css.
  */
 
 .sort-select {
@@ -47,8 +49,8 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* One unresolved line: its text, the „Artikel“ field, the similar-item chips,
-   the picker and the toggle. */
+/* One unfolded line: its text, the „Artikel“ field, the similar-item chips,
+   the stop fields and the ignore action. */
 .sort-entry {
   display: grid;
   gap: var(--space-3);
@@ -68,18 +70,77 @@
   font-weight: 600;
 }
 
-/* The ignore toggle: a chip, right after the picker. When active it wears the
-   accent fill of any chosen chip; the label swap says which state it is in. */
-.sort-ignore {
-  justify-self: start;
+/* Once the line is decided, the label is also the fold toggle of the open row:
+   it keeps the label's look and the full row width, but drops the button box
+   and left-aligns its text. It resumes the summary line's role when the row
+   folds, so the same button keeps the keyboard focus across the toggle. */
+.sort-entry-toggle {
+  justify-self: stretch;
+  padding: 0;
+  border: none;
+  text-align: start;
 }
 
-/* Ignored: the picker is replaced by this note. */
-.sort-ignored-note {
+/* The „Markt“ store chips and the quiet ignore answer share one wrapping row:
+   the exception sits beside the store choices, not below the whole picker. The
+   gap is the established chip-row gap. */
+.sort-market-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* The ignore action is a quiet text button, never a chip: the store chips are
+   values of the stop, while this is the row's exception answer. It keeps the
+   action height for its whole line, so the target stays thumb-reach tall
+   without a visible box, and its label lines up with the field captions. */
+.sort-ignore {
+  justify-self: start;
+  min-height: var(--control-height);
+  padding-inline-start: 0;
+}
+
+/* Ignored (visible only after unfolding a folded ignore row): the label already
+   says the state; the accent colour borrows the established active colour
+   without turning the action back into a filled chip. */
+.sort-ignore[aria-pressed='true'] {
+  color: var(--color-accent);
+}
+
+/* A decided entry's note in place of the stop fields (ignored, or a known item
+   that becomes a synonym): quiet, so it explains the decision without competing
+   with it. */
+.sort-note {
   margin: 0;
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
+}
+
+/* ---- A folded (decided) row --------------------------------------------- */
+
+/* The folded row loses the form's padding: its one summary line is the whole
+   tap target, and the row reads as a compact checklist entry. */
+.sort-entry--folded {
+  padding: 0;
+}
+
+/* The summary line: the whole row is one quiet button. Its text is muted and
+   small — the entry and the decision read as one sentence — and it takes the
+   full control height, so the tap target is the complete row. */
+.sort-summary {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--control-height);
+  padding: var(--space-3) var(--space-5);
+  border-radius: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-align: start;
+  overflow-wrap: anywhere;
 }
 
 /* ---- Forward action ------------------------------------------------------ */
