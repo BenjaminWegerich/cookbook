@@ -140,7 +140,7 @@ Filter master tables to the factor-$2$ band around target $V_0$:
 When two candidates produce equivalent scores ($|S_A - S_B| \le 10^{-5}$), break ties using the following strict priority sequence:
 
 1. Higher numerical BQ value.
-2. Higher numerical AQ value (treating `None` as $-1$).
+2. **Lower** numerical AQ value — the packaging unit wins over a spoon count when both describe the amount equally well; a candidate without an AQ is treated as the largest count and therefore ranks last.
 3. Alphabetical unit name (treating `None` as `""`).
 
 ### 6.4 Master-list Quantities

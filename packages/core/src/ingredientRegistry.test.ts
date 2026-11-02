@@ -68,8 +68,8 @@ describe('ingredient registry', () => {
     setIngredientMappings({
       Pfeffer: { bu: 'g', precision: 'medium', reorderPoint: 0, entries: [{ au: 'TL', factor: 3 }] },
     });
-    // 500 g ÷ 3 g per TL ≈ 167 → rounds to a ladder value far above the
-    // integers_up_to_10 scheme → no AQS passes, the base form is shown.
+    // 500 g ÷ 3 g per TL ≈ 167 → far above the halves_and_integers_up_to_10
+    // scheme → no AQS passes, the base form is shown.
     expect(renderAQS('Pfeffer', 500, 'g')).toBe(`500${NNBSP}g Pfeffer`);
   });
 

@@ -100,6 +100,7 @@ The current schemes are:
 | Scheme | Membership |
 |---|---|
 | `integers_up_to_10` | Whole AQ values 1 … 10. |
+| `halves_and_integers_up_to_10` | Whole and half AQ values up to 10. |
 | `halves_and_integers_up_to_30` | Whole and half AQ values up to 30. |
 | `all_fractions_and_integers_up_to_30` | Every AQ value up to 30. |
 | `integers_up_to_30` | Whole AQ values up to 30 (as present in the table). |
@@ -107,6 +108,24 @@ The current schemes are:
 
 No scheme allows a count above `30`. The scheme matrix lives in `AQs.csv`, so a
 new AQ value and its memberships are one edit, not two files.
+
+### 4.1 AQ penalty
+
+The penalty is not a hand-set level. It is the sum of three independent
+components, capped at `1.0` and stored to two decimals:
+
+`R_AQ = min(1, N + M + F)`
+
+- `N` is the BQ penalty of the integer part (`floor q`, `N(0) = 0`), so an
+  awkward numeral is punished exactly as in the BQ table.
+- `M = (q - 1) / 29` for `q >= 1`, otherwise `0`: every additional count adds
+  the same amount, so counting more is always more clumsy.
+- `F` is the fraction surcharge: `0.30` halves, `0.50` quarters, `0.60` thirds,
+  `0.80` eighths, `1.00` sixths; `0` for integers.
+
+The total is capped so a large, awkward count or a large fraction reaches
+`1.0`. A clean numeral can still beat an awkward smaller one (`9` is `0.61`,
+`10` is `0.31`), exactly like `19 g` vs `20 g` in `BQs.csv`.
 
 ## 5. Precision (Genauigkeit)
 
@@ -178,9 +197,9 @@ non-exact BQ/AQ conflict are symmetric log distances. A non-exact pair is skippe
 when `|log₂(BQ/AQ)| > log₂(1.5)`. If **no** candidate exists, the renderer uses
 the plain base form with `V0` and no AQ; it never throws.
 
-Ties within `1e-5` are broken by the strict hierarchy: higher BQ, then higher AQ
-(`None = −1`), then the alphabetically first unit name (`None = ""`, German
-collation).
+Ties within `1e-5` are broken by the strict hierarchy: higher BQ, then lower AQ
+(a candidate without an AQ ranks last, as if its count were infinite), then the
+alphabetically first unit name (`None = ""`, German collation).
 
 Examples:
 
@@ -189,6 +208,9 @@ Examples:
 - The same amount with `Packung (teilbar)` (all fractions) may be
   `1/4 Packung (250 g)`.
 - `250 g` Joghurt with a `500 g` Becher may be `1/2 Becher (250 g)`.
+- `15 g` Backpulver with a `15 g` Päckchen and a `3 g` TL: both candidates are a
+  perfect hit (score `0`), so the tie-break decides and the lower AQ wins —
+  `1 Päckchen (15 g)`, not `5 TL (15 g)`.
 - `0.5 g` has no BQ below `1 g`; the nearest allowed BQ `1 g` sits on the `2×`
   band edge, so it is shown as `1 g`. A target with no BQ in `[V0/2, 2·V0]`
   (e.g. `0.1 g`) keeps its plain base form.

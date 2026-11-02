@@ -145,9 +145,10 @@ content (`(500 g)`), because the sentence's punctuation must stay visible.
   [AQs.csv](AQs.csv); no separate scheme file exists.
 - The scheme is the **first gatekeeper**: only scheme-allowed values enter the
   optimizer. It applies to exact and non-exact units.
-- Current schemes: `integers_up_to_10`, `halves_and_integers_up_to_30`,
-  `all_fractions_and_integers_up_to_30`, `integers_up_to_30`,
-  `quarters_halves_and_integers_up_to_30`. No scheme allows a count above 30.
+- Current schemes: `integers_up_to_10`, `halves_and_integers_up_to_10`,
+  `halves_and_integers_up_to_30`, `all_fractions_and_integers_up_to_30`,
+  `integers_up_to_30`, `quarters_halves_and_integers_up_to_30`. No scheme allows
+  a count above 30.
 - The scheme names are referenced by `Number Scheme` in
   [additional_units.csv](additional_units.csv); the generator fails on an
   unknown name or a scheme cell other than `1` / `0` / empty.
@@ -158,8 +159,9 @@ The detailed formula is in
 [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md) §5–§6 and
 [quantity_scaling.md](quantity_scaling.md) §6. In short, the optimizer evaluates
 metric-only BQs, exact-unit AQs (where `BQ = q·c`) and non-exact BQ/AQ pairs,
-scores each candidate and picks the best; ties use higher BQ, higher AQ, then the
-unit name. Candidate values are limited to the factor-2 band `[V0/2, 2·V0]`;
+scores each candidate and picks the best; ties use higher BQ, then lower AQ (a
+candidate without an AQ ranks last), then the unit name. Candidate values are
+limited to the factor-2 band `[V0/2, 2·V0]`;
 accuracy is the symmetric log distance `|log₂(x/V0)|`. A non-exact pair is skipped
 when its two readings differ by more than 50 % multiplicatively
 (`|log₂(BQ/AQ)| > log₂(1.5)`).
@@ -196,10 +198,14 @@ Seed data: Joghurt has a 500 g Becher (exact, halves scheme), 23.71 g EL and
 | Mehl | 250 g | `250 g Mehl` | `Packung (unteilbar)` allows integers only; ¼ is rejected |
 | Mehl | 1000 g | `1 Packung Mehl (1 kg)` | exact count 1 |
 | Joghurt | 25 g | `1 EL Joghurt (25 g)` | Becher count 0.05 is below the AQ floor; EL count ≈1 passes |
-| Joghurt | 8 g | `1 TL Joghurt (8 g)` | EL count ≈0.34 fails the integer scheme; TL count ≈1 passes |
+| Joghurt | 8 g | `1 TL Joghurt (8 g)` | EL count ≈0.34 fails the spoon scheme; TL count ≈1 passes |
+| Backpulver | 15 g | `1 Päckchen Backpulver (15 g)` | 1 Päckchen and 5 TL both hit perfectly (score 0); the tie goes to the lower AQ |
+| Backpulver | 30 g | `2 Päckchen Backpulver (30 g)` | same tie: 10 TL is the higher count, the Päckchen count is lower |
 
-The last two rows show an approximate unit: the count is a convenience; the
-shown BQ is the optimizer's selected BQ. The stored `V0` stays 25 g / 8 g.
+The last two Joghurt rows show an approximate unit: the count is a convenience;
+the shown BQ is the optimizer's selected BQ. The stored `V0` stays 25 g / 8 g.
+The Backpulver rows show the tie-break (§6): when two candidates score equally,
+the **lower** AQ wins, so the packaging unit beats the spoon count.
 
 ### 6.3 Exactness and the shopping list
 

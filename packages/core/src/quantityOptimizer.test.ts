@@ -42,6 +42,16 @@ const fractionalPiece: OptimizableEntry = {
   entries: [{ au: 'Stück (BE zuerst, exakt)', factor: 7.5 }],
 };
 
+/** Backpulver: a 15 g Päckchen (exact) plus a 3 g TL (halves up to 10). */
+const backpulver: OptimizableEntry = {
+  bu: 'g',
+  precision: 'medium',
+  entries: [
+    { au: 'Päckchen', factor: 15 },
+    { au: 'Teelöffel', factor: 3 },
+  ],
+};
+
 /** A factor list built from one unit name and factor. */
 function entry(unit: string, factor: number): OptimizableEntry {
   return { bu: 'g', precision: 'medium', entries: [{ au: unit, factor }] };
@@ -111,6 +121,40 @@ describe('optimizeQuantity', () => {
     expect(result.bq).toBe(2);
   });
 
+  it('breaks a perfect-hit tie toward the lower AQ (Päckchen, not TL)', () => {
+    // Backpulver: 15 g is exactly 1 Päckchen (15 g) and exactly 5 TL (3 g).
+    // Both candidates score 0, so the tie-break decides: the lower AQ wins and
+    // the packaging unit is shown (docs/recipe_scaling_algorithm.md §6 step 3).
+    const result = optimizeQuantity(15, backpulver, 'g');
+    expect(result.score).toBe(0);
+    expect(result.bq).toBe(15);
+    expect(result.aq?.au.name).toBe('Päckchen');
+    expect(result.aq?.notation).toBe('1');
+  });
+
+  it('breaks the same tie toward the lower AQ at a doubled target', () => {
+    // 30 g = 2 Päckchen = 10 TL; the count 2 is lower than 10, so the Päckchen
+    // still wins — the rule does not simply prefer "small" amounts.
+    const result = optimizeQuantity(30, backpulver, 'g');
+    expect(result.aq?.au.name).toBe('Päckchen');
+    expect(result.aq?.notation).toBe('2');
+  });
+
+  it('still prefers a higher count when its score is strictly better', () => {
+    // A 100 g Becher cannot describe 25 g well (count 0.25 fails the halves
+    // scheme), so the spoon count wins on score, not on the tie-break.
+    const joghurtBecher: OptimizableEntry = {
+      bu: 'g',
+      precision: 'medium',
+      entries: [
+        { au: 'Becher', factor: 100 },
+        { au: 'Teelöffel', factor: 3 },
+      ],
+    };
+    const result = optimizeQuantity(8, joghurtBecher, 'g');
+    expect(result.aq?.au.name).toBe('Teelöffel');
+  });
+
   it('accepts a 2× metric BQ at the band edge (0.5 g reads as 1 g)', () => {
     // The factor-2 band reaches 1 g; with no closer candidate the log-distance
     // penalty does not block it. This is the intended consequence of the wider
@@ -144,6 +188,21 @@ describe('optimizeQuantity', () => {
     const result = optimizeQuantity(10, entry('Esslöffel', 10), 'g');
     expect(result.branch).toBe('non-exact');
     expect(result.aq?.notation).toBe('1');
+  });
+
+  it('allows half a spoon for EL and TL (scheme now includes halves)', () => {
+    // The spoons used to stop at whole counts. Their scheme now also admits
+    // 1/2, 1+1/2, … up to 10, so a target halfway between two whole spoons can
+    // still be expressed as a spoon reading instead of falling back to metric.
+    const el = optimizeQuantity(5, entry('Esslöffel', 10), 'g');
+    expect(el.branch).toBe('non-exact');
+    expect(el.aq?.notation).toBe('1/2');
+    expect(el.bq).toBe(5);
+
+    const tl = optimizeQuantity(1.5, entry('Teelöffel', 3), 'g');
+    expect(tl.branch).toBe('non-exact');
+    expect(tl.aq?.notation).toBe('1/2');
+    expect(tl.aq?.au.name).toBe('Teelöffel');
   });
 });
 

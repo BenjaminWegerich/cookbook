@@ -84,8 +84,22 @@ describe('renderAQS (optimizer-backed)', () => {
     expect(renderAQS('Joghurt', 250, 'g')).toBe(`½${NB}Becher Joghurt (250${NB}g)`);
   });
 
+  it('renders half a spoon for the seed spoons', () => {
+    // The spoons share the halves_and_integers_up_to_10 scheme, so their counts
+    // now include ½, 1½, … 9½ up to 10 (docs/additional_units.csv).
+    expect(renderAQS('Salz', 8, 'g')).toBe(`½${NB}EL Salz (8${NB}g)`);
+    expect(renderAQS('Salz', 2.5, 'g')).toBe(`½${NB}TL Salz (3${NB}g)`);
+  });
+
   it('rejects a quarter of an unteilbar pack and shows the metric BQ', () => {
     expect(renderAQS('Mehl', 250, 'g')).toBe(`250${NB}g Mehl`);
+  });
+
+  it('prefers the packaging unit when the amount fits it exactly', () => {
+    // 15 g Backpulver is exactly 1 Päckchen and exactly 5 TL. Both candidates
+    // score 0, so the lower AQ wins and the Päckchen is shown.
+    expect(renderAQS('Backpulver', 15, 'g')).toBe(`1${NB}Päckchen Backpulver (15${NB}g)`);
+    expect(renderAQS('Backpulver', 30, 'g')).toBe(`2${NB}Päckchen Backpulver (30${NB}g)`);
   });
 
   it('renders one whole unteilbar pack', () => {

@@ -191,15 +191,25 @@ function scoreCandidate(candidate: Candidate, v0: number, weights: QuantityWeigh
 }
 
 /**
- * The tie-break hierarchy of §6.3: higher BQ, then higher AQ (None = −1), then
- * the alphabetically first unit name (None = ""). German collation keeps the
+ * The tie-break hierarchy of §6.3: higher BQ, then **lower** AQ, then the
+ * alphabetically first unit name (None = ""). German collation keeps the
  * umlauts in the natural order.
+ *
+ * Lower AQ is the deliberate rule (decided with the user): the packaging unit
+ * wins over a spoon count when both describe the amount equally well
+ * („15 g Backpulver“ reads as „1 Päckchen“, not „5 TL“). A higher count only
+ * wins when its score is strictly better.
+ *
+ * A candidate without an AQ ranks **last** among equal BQ values, whichever
+ * direction the AQ rule points: the metric-only branch must not win a tie just
+ * because it has no count to compare. That is why `None` sorts as `+∞` here —
+ * with "lower AQ wins" the old sentinel `−1` would have promoted it.
  */
 function compareCandidates(a: Candidate, b: Candidate): number {
   if (a.bq !== b.bq) return b.bq - a.bq;
-  const aqA = a.aq?.value ?? -1;
-  const aqB = b.aq?.value ?? -1;
-  if (aqA !== aqB) return aqB - aqA;
+  const aqA = a.aq?.value ?? Number.POSITIVE_INFINITY;
+  const aqB = b.aq?.value ?? Number.POSITIVE_INFINITY;
+  if (aqA !== aqB) return aqA - aqB;
   return (a.au?.name ?? '').localeCompare(b.au?.name ?? '', 'de');
 }
 
@@ -637,7 +647,10 @@ export function optimizeUnitless(v0: number, context: PrecisionContext = {}): Op
   }
   const bestScore = Math.min(...candidates.map((candidate) => candidate.score));
   const tied = candidates.filter((candidate) => candidate.score <= bestScore + TIE_EPSILON);
-  // Higher count wins on an exact score tie (the same rule as §6.3).
+  // A count has no packaging unit that could settle a tie, so it keeps its own
+  // rule: on an exact score tie the **higher** count wins (a bare count rounds
+  // up rather than down). This intentionally differs from the AU tie-break of
+  // §6.3, which prefers the lower AQ.
   tied.sort((a, b) => b.entry.value - a.entry.value);
   const winner = tied[0]!;
   return {
