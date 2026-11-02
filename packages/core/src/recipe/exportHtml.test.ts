@@ -608,35 +608,49 @@ prep_time: 15 min
     expect(html).toContain("font-family: 'Noto Serif';");
   });
 
-  it('still embeds a retired face a stored recipe carries', () => {
-    // Condensed and mono are no longer selectable, but a recipe saved before
-    // that decision must keep exporting in the face it stored.
+  it('still parses a retired face a stored recipe carries, and exports it in the fallback', () => {
+    // Condensed and mono are no longer selectable and no longer embedded; a
+    // recipe saved before that decision must keep loading, and its cooking view
+    // renders in the fallback stack instead of an embedded face.
     for (const [recipe, family] of [
       [condensed, 'Noto Sans Condensed'],
       [mono, 'Noto Sans Mono'],
     ] as const) {
       const html = generateRecipeHtml(recipe);
-      expect(html).toContain(`font-family: '${family}';`);
-      expect(html).toContain('font-weight: 400 600;');
-      // The theme face plus its matching companion, both under the theme family.
-      expect(html.match(/@font-face/g)).toHaveLength(2);
+      expect(html).toContain(`--font: '${family}', system-ui, sans-serif;`);
+      expect(html).not.toContain(`font-family: '${family}';`);
+      expect(html).not.toContain('@font-face');
     }
   });
 
-  it('embeds the matching fraction/space companion beside the theme face', () => {
+  it('embeds the drawn italic beside the upright face of the theme family', () => {
+    // DESIGN §4.2/§5.4 sets arrangement notes, the `optional` marker and the
+    // passive annotations in italic. The family must carry a real italic face,
+    // otherwise the browser synthesizes an oblique from the upright file.
     const html = generateRecipeHtml(serif);
-    // The theme face excludes U+202F and the Number Forms; its companion owns
-    // both, so the fractions keep the serif design.
-    expect(html).toContain('unicode-range: U+202F, U+2150-215E, U+2189;');
-    expect(html.match(/@font-face/g)).toHaveLength(2);
+    expect(html).toContain('font-style: italic;');
+    expect(html).toContain("font-family: 'Noto Serif';");
+    // Both @font-face rules of the italic style declare it the same way (each
+    // is followed by its `font-display` line): the latin face and its companion.
+    expect(html.match(/font-style: italic;\n  font-display/g)).toHaveLength(2);
+    expect(html.match(/font-style: normal;\n  font-display/g)).toHaveLength(2);
   });
 
-  it('embeds both faces of a display-serif theme, with a companion for the body only', () => {
+  it('embeds the matching fraction/space companion beside every face and style', () => {
+    const html = generateRecipeHtml(serif);
+    // Each face excludes U+202F and the Number Forms; its companion owns both,
+    // so the fractions keep the serif design — italic ones included.
+    expect(html.match(/unicode-range: U\+202F, U\+2150-215E, U\+2189;/g)).toHaveLength(2);
+    expect(html.match(/@font-face/g)).toHaveLength(4);
+  });
+
+  it('embeds both faces of a display-serif theme, with companions for the body only', () => {
     const html = generateRecipeHtml(display);
     expect(html).toContain("font-family: 'Noto Serif Display';");
     expect(html).toContain("font-family: 'Noto Serif';");
-    // Heading face (no fractions) + body latin face + body companion.
-    expect(html.match(/@font-face/g)).toHaveLength(3);
+    // Heading face (no fractions, no italic) + body upright and italic, each
+    // with its companion.
+    expect(html.match(/@font-face/g)).toHaveLength(5);
   });
 
   it('sets only the page headings in the heading face', () => {

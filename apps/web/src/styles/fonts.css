@@ -1,14 +1,19 @@
 /**
- * The six self-hosted Noto faces the web app declares
- * (scripts/generate-noto-faces.mjs). The same script also builds the export-only
- * fraction companions for the other theme body faces; they live beside these
- * files but are declared only in the standalone export, never in the app.
+ * The self-hosted Noto faces the web app declares
+ * (scripts/generate-noto-faces.mjs).
  *
- * The four stock faces are the latin subsets of the `@fontsource` packages, so
- * the bundle ships exactly the files the app can use — no Cyrillic, Devanagari
- * or math subsets that a German cooking app never loads. All of them are
- * variable fonts; the two weights of DESIGN §4.2 (400 and 600) come from the
- * same file.
+ * The stock faces are the latin subsets of the `@fontsource` packages, so the
+ * bundle ships exactly the files the app can use — no Cyrillic, Devanagari or
+ * math subsets that a German cooking app never loads. All of them are variable
+ * fonts; the two weights of DESIGN §4.2 (400 and 600) come from the same file.
+ *
+ * Every family the app uses declares its upright face *and* its drawn italic
+ * face. The italics of §4.2 (an arrangement's bracketed note, the `optional`
+ * marker, the passive right-hand annotations) must come from the face, never
+ * from the browser's synthesized oblique: a slant computed from the upright
+ * file distorts curves, weight and sidebearings, so the italic would read as a
+ * smeared upright instead of a designed italic. `Noto Serif Display` is the one
+ * exception — it is a heading face (§4.8) and no heading is italic.
  *
  * Noto Sans has two extra needs that the latin subset does not cover:
  *
@@ -19,9 +24,13 @@
  *    subset has no glyph for it, so the main face's `unicode-range` below
  *    deliberately excludes it and lets the companion face supply it.
  *
- * The companion is a second face of the same family with a narrow range, so
- * the browser composes the family per character.
+ * Each companion exists once per style, so a quantity inside an italic run
+ * keeps the italic design for its fraction and its number/unit gap. A companion
+ * is a second face of the same family and style with a narrow `unicode-range`,
+ * so the browser composes the family per character.
  */
+
+/* ---- Noto Sans (default family, --font-sans) ------------------------------ */
 
 @font-face {
   font-family: 'Noto Sans Variable';
@@ -37,6 +46,17 @@
 
 @font-face {
   font-family: 'Noto Sans Variable';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-sans-latin-italic.woff2') format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-202E, U+2030-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Noto Sans Variable';
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
@@ -45,12 +65,57 @@
 }
 
 @font-face {
+  font-family: 'Noto Sans Variable';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-sans-fractions-italic.woff2') format('woff2-variations');
+  unicode-range: U+202F, U+2150-215E, U+2189;
+}
+
+/* ---- Noto Serif (theme family: export previews, theme chips) -------------- */
+
+@font-face {
   font-family: 'Noto Serif Variable';
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
   src: url('../fonts/noto-serif-latin.woff2') format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-202E, U+2030-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+
+@font-face {
+  font-family: 'Noto Serif Variable';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-serif-latin-italic.woff2') format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-202E, U+2030-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Noto Serif Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-serif-fractions.woff2') format('woff2-variations');
+  unicode-range: U+202F, U+2150-215E, U+2189;
+}
+
+@font-face {
+  font-family: 'Noto Serif Variable';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/noto-serif-fractions-italic.woff2') format('woff2-variations');
+  unicode-range: U+202F, U+2150-215E, U+2189;
+}
+
+/* ---- Noto Serif Display (heading face of a display-serif theme) ----------- */
 
 @font-face {
   font-family: 'Noto Serif Display Variable';
@@ -58,20 +123,4 @@
   font-display: swap;
   font-weight: 100 900;
   src: url('../fonts/noto-serif-display-latin.woff2') format('woff2-variations');
-}
-
-@font-face {
-  font-family: 'Noto Sans Mono Variable';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 100 900;
-  src: url('../fonts/noto-sans-mono-latin.woff2') format('woff2-variations');
-}
-
-@font-face {
-  font-family: 'Noto Sans Condensed';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 100 900;
-  src: url('../fonts/noto-sans-condensed.woff2') format('woff2-variations');
 }

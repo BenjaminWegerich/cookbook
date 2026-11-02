@@ -559,11 +559,12 @@ function TimeChips({
 
 /**
  * CSS font stacks for the export's theme faces, as declared by
- * styles/fonts.css. Every current face is a bundled variable font registered
- * under its "<Name> Variable" family. The retired Noto Sans Condensed and Noto
- * Sans Mono keep their stacks so an old recipe still previews in the face it
- * exports in; the picker no longer offers them. The plain system family names
- * are deliberately absent: on Windows a broken duplicate of the installed Noto
+ * styles/fonts.css. Every face is a bundled variable font registered under its
+ * "<Name> Variable" family. A retired face an old recipe still carries (Noto
+ * Sans Condensed, Noto Sans Mono) is deliberately absent: its font is no longer
+ * bundled, so the stack falls through to the generic fallback and the preview
+ * shows what the export will show. The plain system family names are
+ * deliberately absent: on Windows a broken duplicate of the installed Noto
  * Sans resolves to its italic face, so a failed font load would turn the
  * preview cursive. Each stack therefore ends in a genre-appropriate generic
  * fallback only.
@@ -572,8 +573,6 @@ const THEME_FONT_STACKS: Readonly<Record<string, string>> = {
   'Noto Sans': "'Noto Sans Variable', system-ui, sans-serif",
   'Noto Serif': "'Noto Serif Variable', Georgia, serif",
   'Noto Serif Display': "'Noto Serif Display Variable', Georgia, serif",
-  'Noto Sans Mono': "'Noto Sans Mono Variable', ui-monospace, monospace",
-  'Noto Sans Condensed': "'Noto Sans Condensed', system-ui, sans-serif",
 };
 
 /** The CSS font stack that renders one theme typeface in the web app. */

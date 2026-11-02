@@ -76,7 +76,8 @@
   hues. Primary text is espresso ink, accents are clay/terracotta and olive.
 - **Typography:** readability first; body text is `18px` (the ladder has no `16px`). One
   self-hosted typeface, Noto Sans (variable), bundled from its `latin` subset at build time —
-  no runtime font fetch and no server.
+  upright and italic, no runtime font fetch and no server. Italic text uses the drawn italic
+  face; `font-synthesis: none` keeps the browser from slanting the upright one.
 - **Number and unit are inseparable:** user-visible text joins a number and its unit with a
   narrow no-break space (U+202F), so they never wrap apart: `300 g`, `1,5 kg`, `500 ml`.
   Durations use it between every token, so `1 h 30 min` renders as one unbreakable unit

@@ -28,6 +28,15 @@ body,
   min-height: 100svh;
 }
 
+/* Italic text uses the drawn italic faces declared in styles/fonts.css, never a
+   slant the browser computes from the upright file (docs/DESIGN.md §4.2): a
+   synthesized oblique distorts curves, weight and sidebearings. Turning
+   synthesis off makes that a hard guarantee — a family without an italic (the
+   display serif) renders upright instead of faking one. */
+html {
+  font-synthesis: none;
+}
+
 body {
   margin: 0;
   background: var(--color-bg);

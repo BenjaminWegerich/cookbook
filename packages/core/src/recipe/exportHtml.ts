@@ -212,20 +212,26 @@ const THEME_FACE_UNICODE_RANGE =
 
 /**
  * The `@font-face` rules of one family, or '' when the family has no embedded
- * face (§4.8). The face is the latin subset of the theme typeface
+ * face (§4.8). The faces are the latin subset of the theme typeface
  * (embeddedFonts.ts), inlined as a `data:` URI so the export stays
  * self-contained: no runtime font fetch and no sibling file. Every embedded
  * face is a variable font, declared once over the two weights the cooking view
  * uses (`400 600`, §4.2).
  *
- * A matching companion face follows every export body family under the same
- * name. It supplies the narrow no-break space (U+202F) every quantity uses and
- * the Number Forms fraction glyphs of §7; the family's `unicode-range` excludes
- * both, so the browser takes them from the companion. Without it the number and
- * its unit lose their gap ("300g") in browsers that fall back without a space
- * glyph, and the fractions would come from a foreign fallback font. Noto Serif
- * Display has no companion: it renders page headings only and carries no
- * quantities.
+ * A body family carries two styles: the upright face and the drawn italic face.
+ * The export sets arrangement notes, the `optional` marker and the passive
+ * annotations in italic (§4.2, §5.4); without the real face the browser would
+ * synthesize an oblique from the upright file, which distorts curves, weight and
+ * spacing.
+ *
+ * A matching companion face follows every export body family and style under
+ * the same name. It supplies the narrow no-break space (U+202F) every quantity
+ * uses and the Number Forms fraction glyphs of §7; the family's `unicode-range`
+ * excludes both, so the browser takes them from the companion. Without it the
+ * number and its unit lose their gap ("300g") in browsers that fall back
+ * without a space glyph, and the fractions would come from a foreign fallback
+ * font. Noto Serif Display has no companion: it renders page headings only and
+ * carries no quantities.
  */
 function familyFaceCss(family: string): string {
   const faces = EMBEDDED_FONTS[family];
@@ -235,7 +241,7 @@ function familyFaceCss(family: string): string {
       (face) =>
         `@font-face {\n` +
         `  font-family: '${family}';\n` +
-        `  font-style: normal;\n` +
+        `  font-style: ${face.style};\n` +
         `  font-display: swap;\n` +
         `  font-weight: ${face.weight};\n` +
         `  unicode-range: ${THEME_FACE_UNICODE_RANGE};\n` +
@@ -243,17 +249,21 @@ function familyFaceCss(family: string): string {
         `}`,
     )
     .join('\n');
-  const companion = EMBEDDED_FONT_COMPANIONS[family];
-  if (companion === undefined) return themeFaces;
-  const companionCss =
-    `@font-face {\n` +
-    `  font-family: '${family}';\n` +
-    `  font-style: normal;\n` +
-    `  font-display: swap;\n` +
-    `  font-weight: ${companion.weight};\n` +
-    `  unicode-range: ${companion.unicodeRange};\n` +
-    `  src: url(data:font/woff2;base64,${companion.base64}) format('woff2');\n` +
-    `}\n`;
+  const companions = EMBEDDED_FONT_COMPANIONS[family];
+  if (companions === undefined) return themeFaces;
+  const companionCss = companions
+    .map(
+      (companion) =>
+        `@font-face {\n` +
+        `  font-family: '${family}';\n` +
+        `  font-style: ${companion.style};\n` +
+        `  font-display: swap;\n` +
+        `  font-weight: ${companion.weight};\n` +
+        `  unicode-range: ${companion.unicodeRange};\n` +
+        `  src: url(data:font/woff2;base64,${companion.base64}) format('woff2');\n` +
+        `}`,
+    )
+    .join('\n');
   return `${themeFaces}\n${companionCss}`;
 }
 
@@ -1237,6 +1247,13 @@ const STYLES = `
   /* The cooking view is always light; it does not follow the OS dark preference
      (§4.1). */
   :root { color-scheme: light; }
+
+  /* Italic text uses the italic faces embedded above, never a slant the browser
+     computes from the upright file (§4.2): a synthesized oblique distorts
+     curves, weight and sidebearings. Turning synthesis off makes that a hard
+     guarantee — a face without an italic renders upright instead of faking
+     one. */
+  html { font-synthesis: none; }
 
   /* Ladder tokens (DESIGN §4.2–4.3). */
   :root {

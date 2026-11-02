@@ -92,9 +92,9 @@ export interface RecipeTheme {
   /**
    * Export typeface, one of the shortlist (DESIGN §4.8); default Noto Sans.
    * A retired face a stored recipe still carries (Noto Sans Condensed, Noto
-   * Sans Mono) stays valid but is no longer offered. `Noto Serif Display` sets
-   * only the main heading of each page in the display face and pairs it with
-   * Noto Serif for the rest.
+   * Sans Mono) stays valid but is no longer offered or embedded, so it exports
+   * in the fallback stack. `Noto Serif Display` sets only the main heading of
+   * each page in the display face and pairs it with Noto Serif for the rest.
    */
   font?: string;
   /** Accent colour: active state, forward actions, links, sub-recipe badge. */

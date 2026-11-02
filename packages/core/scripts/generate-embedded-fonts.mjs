@@ -3,27 +3,33 @@
  * Generates `src/recipe/embeddedFonts.ts` from the export theme faces' WOFF2
  * files (docs/DESIGN.md §4.8).
  *
- * The faces are the three selectable shortlist faces plus the retired condensed
- * width instance and mono face. Condensed is a data face and mono a dropped
- * technical voice; neither is a theme choice any more, but both stay embedded
- * so an old recipe that stored one still exports in that face.
+ * The faces are the three selectable shortlist faces — Noto Sans and Noto Serif
+ * each upright and italic, Noto Serif Display upright only — plus the fraction
+ * companions that complete the two body families. The retired condensed and
+ * mono faces are gone: they are no longer selectable and no longer embedded, so
+ * a stored recipe that still names one exports in the fallback stack.
  *
  * The source of the bytes are the committed WOFF2 files the web app serves
  * (`apps/web/src/fonts`, built by apps/web/scripts/generate-noto-faces.mjs from
- * the `@fontsource-variable` packages and the generated condensed/fraction
- * faces). Each latin face covers Basic Latin + Latin-1 (the German letters
- * ä ö ü ß Ä Ö Ü included) plus the typographic punctuation the export renders
- * („ " ' – — …) — so the inlined font stays practical in size while covering
- * everything the cooking view draws. That coverage is a superset of DESIGN
- * §4.8's requirement, which is the point of "subset to the required coverage"
- * there.
+ * the `@fontsource-variable` packages and the generated fraction companions).
+ * Each latin face covers Basic Latin + Latin-1 (the German letters ä ö ü ß Ä Ö
+ * Ü included) plus the typographic punctuation the export renders („ " ' – — …)
+ * — so the inlined font stays practical in size while covering everything the
+ * cooking view draws. That coverage is a superset of DESIGN §4.8's requirement,
+ * which is the point of "subset to the required coverage" there.
+ *
+ * The italics are the drawn faces of DESIGN §4.2/§5.4, not a synthesized
+ * oblique: the export styles arrangement notes, the `optional` marker and the
+ * passive right-hand annotations with `font-style: italic`, so the family must
+ * carry a real italic face or the browser slants the upright one.
  *
  * The latin subsets omit the Number Forms fraction glyphs, so every export body
  * face also embeds its own fraction companion (U+2150–215E, U+2189) plus the
- * narrow no-break space (U+202F). Noto Serif Display gets none: it only renders
- * page headings, which carry no quantities.
+ * narrow no-break space (U+202F) — one per style, so a quantity inside an
+ * italic run keeps the italic design. Noto Serif Display gets none: it only
+ * renders page headings, which carry no quantities.
  *
- * All five embedded faces are variable fonts covering the whole weight axis,
+ * All eight embedded faces are variable fonts covering the whole weight axis,
  * so each is embedded once and declared over the two weights the cooking view
  * uses (`400 600`, DESIGN §4.2). Their companions do the same.
  *
@@ -49,42 +55,44 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/recipe/embeddedFonts.ts');
 
 /**
- * The export theme faces in DESIGN §4.8 order, mapped to the committed latin
- * WOFF2 the web app also serves (apps/web/src/fonts). The export embeds those
- * exact files, so a themed cooking view and its editor preview render identical
- * bytes. The Noto Sans Mono and Noto Sans Condensed entries are retired: neither
- * is selectable, but they keep old recipes exportable (condensed also ships as
- * the data face).
+ * The export theme faces in DESIGN §4.8 order: family → its committed latin
+ * WOFF2 (the same file the web app serves) → the CSS style it is declared in.
+ * A family appears once per style. Noto Serif Display has no italic entry: it
+ * is a heading face and no heading is italic.
  */
 const FONTS = [
-  { family: 'Noto Sans', path: 'apps/web/src/fonts/noto-sans-latin.woff2' },
-  { family: 'Noto Serif', path: 'apps/web/src/fonts/noto-serif-latin.woff2' },
+  { family: 'Noto Sans', style: 'normal', path: 'apps/web/src/fonts/noto-sans-latin.woff2' },
+  { family: 'Noto Sans', style: 'italic', path: 'apps/web/src/fonts/noto-sans-latin-italic.woff2' },
+  { family: 'Noto Serif', style: 'normal', path: 'apps/web/src/fonts/noto-serif-latin.woff2' },
+  {
+    family: 'Noto Serif',
+    style: 'italic',
+    path: 'apps/web/src/fonts/noto-serif-latin-italic.woff2',
+  },
   {
     family: 'Noto Serif Display',
+    style: 'normal',
     path: 'apps/web/src/fonts/noto-serif-display-latin.woff2',
-  },
-  { family: 'Noto Sans Mono', path: 'apps/web/src/fonts/noto-sans-mono-latin.woff2' },
-  {
-    family: 'Noto Sans Condensed',
-    path: 'apps/web/src/fonts/noto-sans-condensed.woff2',
   },
 ];
 
 /**
  * The fraction companions of the export body faces (DESIGN §4.8, §7), keyed by
- * the theme family whose latin face they complete. Noto Serif Display is
- * absent: it renders page headings only and carries no quantities.
+ * the theme family and style whose latin face they complete. Noto Serif Display
+ * is absent: it renders page headings only and carries no quantities.
  */
 const COMPANIONS = [
-  { family: 'Noto Sans', path: 'apps/web/src/fonts/noto-sans-fractions.woff2' },
-  { family: 'Noto Serif', path: 'apps/web/src/fonts/noto-serif-fractions.woff2' },
+  { family: 'Noto Sans', style: 'normal', path: 'apps/web/src/fonts/noto-sans-fractions.woff2' },
   {
-    family: 'Noto Sans Mono',
-    path: 'apps/web/src/fonts/noto-sans-mono-fractions.woff2',
+    family: 'Noto Sans',
+    style: 'italic',
+    path: 'apps/web/src/fonts/noto-sans-fractions-italic.woff2',
   },
+  { family: 'Noto Serif', style: 'normal', path: 'apps/web/src/fonts/noto-serif-fractions.woff2' },
   {
-    family: 'Noto Sans Condensed',
-    path: 'apps/web/src/fonts/noto-sans-condensed-fractions.woff2',
+    family: 'Noto Serif',
+    style: 'italic',
+    path: 'apps/web/src/fonts/noto-serif-fractions-italic.woff2',
   },
 ];
 
@@ -102,7 +110,7 @@ function readWoff2(path) {
   let buffer;
   try {
     buffer = readFileSync(path);
-  } catch (error) {
+  } catch {
     throw new Error(`missing font file ${path} — run npm install first`);
   }
   if (buffer.length === 0) {
@@ -116,94 +124,114 @@ function readWoff2(path) {
   return buffer.toString('base64');
 }
 
-/** The face of one shortlist family: weight range plus base64 bytes. */
-function buildFaces(font) {
-  return [{ weight: '400 600', base64: readWoff2(resolve(ROOT, font.path)) }];
+/** The face of one shortlist family and style: weight range plus base64 bytes. */
+function buildFace(font) {
+  return {
+    style: font.style,
+    weight: '400 600',
+    base64: readWoff2(resolve(ROOT, font.path)),
+  };
 }
 
-/** The fraction companion of one body family: narrow range plus base64 bytes. */
+/** The fraction companion of one body family and style: narrow range plus base64 bytes. */
 function buildCompanion(companion) {
   return {
+    style: companion.style,
     weight: '400 600',
     unicodeRange: COMPANION_UNICODE_RANGE,
     base64: readWoff2(resolve(ROOT, companion.path)),
   };
 }
 
-/** Renders the TypeScript module. */
-function render(byFamily, companions) {
-  const lines = [];
-  lines.push('/**');
-  lines.push(" * AUTO-GENERATED from the theme faces' WOFF2 files by");
-  lines.push(' * scripts/generate-embedded-fonts.mjs (the @fontsource latin subsets, plus the');
-  lines.push(' * generated Condensed, fraction and narrow-space companion faces).');
-  lines.push(
-    " * Do not edit by hand — re-run 'npm run generate:fonts' (packages/core) after a font change.",
-  );
-  lines.push(' */');
-  lines.push('');
-  lines.push(
-    '/** One embedded font face: the CSS weight it covers and its subsetted WOFF2 bytes. */',
-  );
-  lines.push('export interface EmbeddedFontFace {');
-  lines.push(
-    '  /** CSS `font-weight` value: `400` / `600` for a static face, `400 600` for a variable face. */',
-  );
-  lines.push('  readonly weight: string;');
-  lines.push('  /** The subsetted WOFF2 bytes, base64-encoded (without the `data:` prefix). */');
-  lines.push('  readonly base64: string;');
-  lines.push('  /** The CSS `unicode-range` when the face covers only a few characters. */');
-  lines.push('  readonly unicodeRange?: string;');
-  lines.push('}');
-  lines.push('');
-  lines.push('/**');
-  lines.push(' * The export theme faces (DESIGN §4.8), keyed by the theme `font`');
-  lines.push(' * name — the same names theme.ts exposes in THEME_FONT_VALUES. The three');
-  lines.push(' * selectable faces come first; the retired condensed data face and mono face');
-  lines.push(' * follow so a recipe that stored one still exports in it. Each face is');
-  lines.push(' * the latin subset: Basic Latin + Latin-1 (German letters included) plus the');
-  lines.push(' * typographic punctuation the cooking view renders, so the embedded font stays');
-  lines.push(' * practical in size.');
-  lines.push(' */');
-  lines.push(
-    'export const EMBEDDED_FONTS: Readonly<Record<string, readonly EmbeddedFontFace[]>> = {',
-  );
+/**
+ * Groups faces by family, preserving the FONTS/COMPANIONS order, so each family
+ * emits one array holding its upright face first and its italic second — the
+ * order a reader scans and the order the tests assert.
+ */
+function groupByFamily(entries, build) {
+  /** @type {Map<string, object[]>} */
+  const byFamily = new Map();
+  for (const entry of entries) {
+    const faces = byFamily.get(entry.family) ?? [];
+    faces.push(build(entry));
+    byFamily.set(entry.family, faces);
+  }
+  return byFamily;
+}
+
+/** Renders one `EmbeddedFontFace` object literal. */
+function renderFace(face) {
+  const fields = [`style: ${JSON.stringify(face.style)}`, `weight: ${JSON.stringify(face.weight)}`];
+  if (face.unicodeRange !== undefined) {
+    fields.push(`unicodeRange: ${JSON.stringify(face.unicodeRange)}`);
+  }
+  fields.push(`base64: '${face.base64}'`);
+  return `    { ${fields.join(', ')} },`;
+}
+
+/** Renders a `Record<string, readonly EmbeddedFontFace[]>` literal. */
+function renderRecord(name, byFamily) {
+  const lines = [`export const ${name}: Readonly<Record<string, readonly EmbeddedFontFace[]>> = {`];
   for (const [family, faces] of byFamily) {
     lines.push(`  ${JSON.stringify(family)}: [`);
-    for (const face of faces) {
-      lines.push(`    { weight: ${JSON.stringify(face.weight)}, base64: '${face.base64}' },`);
-    }
+    for (const face of faces) lines.push(renderFace(face));
     lines.push('  ],');
   }
   lines.push('};');
-  lines.push('');
-  lines.push('/**');
-  lines.push(' * The fraction companions of the export body faces (DESIGN §4.8, §7): the');
-  lines.push(' * Number Forms fraction glyphs and the narrow no-break space (U+202F), which');
-  lines.push(' * the latin subsets omit. Each body face is declared with a `unicode-range`');
-  lines.push(' * that excludes these characters, so the browser takes them from the matching');
-  lines.push(' * companion and a quantity keeps both its fraction design and its number/unit');
-  lines.push(' * gap ("300 g", "1 ½ Becher"). Noto Serif Display has no entry: it renders page');
-  lines.push(' * headings only, and those carry no quantities.');
-  lines.push(' */');
-  lines.push('export const EMBEDDED_FONT_COMPANIONS: Readonly<');
-  lines.push('  Partial<Record<string, EmbeddedFontFace>>');
-  lines.push('> = {');
-  for (const [family, companion] of companions) {
-    lines.push(`  ${JSON.stringify(family)}: {`);
-    lines.push(`    weight: ${JSON.stringify(companion.weight)},`);
-    lines.push(`    unicodeRange: ${JSON.stringify(companion.unicodeRange)},`);
-    lines.push(`    base64: '${companion.base64}',`);
-    lines.push('  },');
-  }
-  lines.push('};');
-  lines.push('');
   return lines.join('\n');
 }
 
-const byFamily = FONTS.map((font) => [font.family, buildFaces(font)]);
-const companions = COMPANIONS.map((companion) => [companion.family, buildCompanion(companion)]);
-let output = render(byFamily, companions);
+/** Renders the TypeScript module. */
+function render(facesByFamily, companionsByFamily) {
+  return [
+    '/**',
+    " * AUTO-GENERATED from the theme faces' WOFF2 files by",
+    ' * scripts/generate-embedded-fonts.mjs (the @fontsource latin subsets, plus the',
+    ' * generated fraction and narrow-space companion faces).',
+    " * Do not edit by hand — re-run 'npm run generate:fonts' (packages/core) after a font change.",
+    ' */',
+    '',
+    '/** One embedded font face: its CSS style and weight, and its subsetted WOFF2 bytes. */',
+    'export interface EmbeddedFontFace {',
+    '  /** CSS `font-style`: the drawn upright or italic face of the family, never a synthesis. */',
+    "  readonly style: 'normal' | 'italic';",
+    '  /** CSS `font-weight` value: `400` / `600` for a static face, `400 600` for a variable face. */',
+    '  readonly weight: string;',
+    '  /** The subsetted WOFF2 bytes, base64-encoded (without the `data:` prefix). */',
+    '  readonly base64: string;',
+    '  /** The CSS `unicode-range` when the face covers only a few characters. */',
+    '  readonly unicodeRange?: string;',
+    '}',
+    '',
+    '/**',
+    ' * The export theme faces (DESIGN §4.8), keyed by the theme `font`',
+    ' * name — the same names theme.ts exposes in THEME_FONT_VALUES. Each family',
+    ' * lists its upright face and, where one exists, its drawn italic face: the',
+    ' * export sets notes, the `optional` marker and the passive annotations in',
+    ' * italic (§4.2, §5.4), and those must not be a synthesized oblique. Each face',
+    ' * is the latin subset: Basic Latin + Latin-1 (German letters included) plus',
+    ' * the typographic punctuation the cooking view renders, so the embedded font',
+    ' * stays practical in size.',
+    ' */',
+    renderRecord('EMBEDDED_FONTS', facesByFamily),
+    '',
+    '/**',
+    ' * The fraction companions of the export body faces (DESIGN §4.8, §7): the',
+    ' * Number Forms fraction glyphs and the narrow no-break space (U+202F), which',
+    ' * the latin subsets omit. Every body family embeds one per style, so a',
+    ' * quantity inside an italic note keeps the italic design. Each face is',
+    ' * declared with a `unicode-range` that excludes these characters, so the',
+    ' * browser takes them from the matching companion and a quantity keeps both its',
+    ' * fraction design and its number/unit gap ("300 g", "1 ½ Becher"). Noto Serif',
+    ' * Display has no entry: it renders page headings only, and those carry no',
+    ' * quantities.',
+    ' */',
+    renderRecord('EMBEDDED_FONT_COMPANIONS', companionsByFamily),
+    '',
+  ].join('\n');
+}
+
+let output = render(groupByFamily(FONTS, buildFace), groupByFamily(COMPANIONS, buildCompanion));
 try {
   // Format with Prettier (root devDependency, used by `npm run format`) so the
   // committed generated module is prettier-clean and regeneration is idempotent
@@ -217,7 +245,8 @@ try {
   // Prettier not installed — the raw render is still valid TypeScript.
 }
 writeFileSync(OUT_PATH, output, 'utf8');
-const faceCount = byFamily.reduce((sum, [, faces]) => sum + faces.length, 0);
+const faceCount = FONTS.length;
+const companionCount = COMPANIONS.length;
 console.log(
-  `Wrote ${byFamily.length} families (${faceCount} faces, ${companions.length} companions) to ${OUT_PATH}`,
+  `Wrote ${new Set(FONTS.map((f) => f.family)).size} families (${faceCount} faces, ${companionCount} companions) to ${OUT_PATH}`,
 );

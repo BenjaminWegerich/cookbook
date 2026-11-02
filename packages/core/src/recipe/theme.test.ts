@@ -65,39 +65,64 @@ describe('isHexColor', () => {
 });
 
 describe('EMBEDDED_FONTS', () => {
-  it('embeds every selectable and retired theme face, and only those', () => {
+  it('embeds every selectable theme face, and no retired one', () => {
     // Drift guard between theme.ts and the generated embeddedFonts.ts: a new
     // face without an embedded WOFF2 (or a stale embedded face) fails here
     // instead of silently exporting a system font. The retired condensed and
-    // mono faces stay embedded so an old recipe still exports in its stored
-    // face.
-    expect(Object.keys(EMBEDDED_FONTS).sort()).toEqual([...THEME_FONT_VALUES].sort());
+    // mono faces are no longer embedded — a recipe that still names one exports
+    // through the fallback stack.
+    expect(Object.keys(EMBEDDED_FONTS).sort()).toEqual([...THEME_FONT_SHORTLIST].sort());
     for (const [family, faces] of Object.entries(EMBEDDED_FONTS)) {
       expect(faces.length, family).toBeGreaterThan(0);
       for (const face of faces) {
         expect(face.base64.length, family).toBeGreaterThan(0);
       }
     }
-  });
-
-  it('declares every face over the two required weights as one variable rule', () => {
-    for (const family of THEME_FONT_VALUES) {
-      expect(EMBEDDED_FONTS[family]!.map((face) => face.weight)).toEqual(['400 600']);
+    for (const retired of THEME_FONT_RETIRED) {
+      expect(EMBEDDED_FONTS[retired], retired).toBeUndefined();
     }
   });
 
-  it('embeds a fraction/space companion for every export body face', () => {
+  it('declares every face over the two required weights as one variable rule', () => {
+    for (const family of THEME_FONT_SHORTLIST) {
+      for (const face of EMBEDDED_FONTS[family]!) {
+        expect(face.weight, family).toBe('400 600');
+      }
+    }
+  });
+
+  it('embeds the drawn italic beside the upright face, never a synthesis', () => {
+    // DESIGN §4.2 sets notes, the `optional` marker and the passive annotations
+    // in italic, so both body families ship a real italic face and a matching
+    // italic fraction companion. The display serif is a heading face: no
+    // heading is italic, so it carries none.
+    for (const family of ['Noto Sans', 'Noto Serif']) {
+      expect(
+        EMBEDDED_FONTS[family]!.map((face) => face.style),
+        family,
+      ).toEqual(['normal', 'italic']);
+      expect(
+        EMBEDDED_FONT_COMPANIONS[family]!.map((face) => face.style),
+        family,
+      ).toEqual(['normal', 'italic']);
+    }
+    expect(EMBEDDED_FONTS['Noto Serif Display']!.map((face) => face.style)).toEqual(['normal']);
+  });
+
+  it('embeds a fraction/space companion for every export body face and style', () => {
     // Every theme face renders body text except the display serif, which is a
-    // heading face only (resolveThemeFonts pairs it with Noto Serif). The
-    // retired condensed and mono faces embed one too, for old recipes.
-    const bodyFaces = THEME_FONT_VALUES.filter((name) => name !== 'Noto Serif Display');
+    // heading face only (resolveThemeFonts pairs it with Noto Serif).
+    const bodyFaces = THEME_FONT_SHORTLIST.filter((name) => name !== 'Noto Serif Display');
     expect(Object.keys(EMBEDDED_FONT_COMPANIONS).sort()).toEqual([...bodyFaces].sort());
     for (const family of bodyFaces) {
-      const companion = EMBEDDED_FONT_COMPANIONS[family];
-      expect(companion?.base64.length, family).toBeGreaterThan(0);
-      expect(companion?.weight, family).toBe('400 600');
-      expect(companion?.unicodeRange, family).toContain('U+202F');
-      expect(companion?.unicodeRange, family).toContain('U+2150-215E');
+      const companions = EMBEDDED_FONT_COMPANIONS[family]!;
+      expect(companions, family).toHaveLength(2);
+      for (const companion of companions) {
+        expect(companion.base64.length, family).toBeGreaterThan(0);
+        expect(companion.weight, family).toBe('400 600');
+        expect(companion.unicodeRange, family).toContain('U+202F');
+        expect(companion.unicodeRange, family).toContain('U+2150-215E');
+      }
     }
     expect(EMBEDDED_FONT_COMPANIONS['Noto Serif Display']).toBeUndefined();
   });

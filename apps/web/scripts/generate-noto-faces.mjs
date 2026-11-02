@@ -3,44 +3,44 @@
  * Builds the web app's self-hosted Noto faces into `src/fonts/`
  * (docs/DESIGN.md §4.2, §4.8).
  *
- * Four of them are copies of the `@fontsource-variable` *latin* subset files:
- * Noto Sans, Noto Serif, Noto Serif Display and Noto Sans Mono. Copying them
- * instead of importing the packages' `index.css` keeps the bundle to these
- * files — the packages ship one CSS file per group that also declares every
- * Cyrillic, Devanagari … subset, which a German cooking app never loads but
- * would still deploy. The copies are committed: the build must not fetch fonts.
+ * Two groups of files come out of here:
  *
- * The remaining faces are generated here, because no stock Google family file
- * provides them:
+ *   1. The stock latin faces, copied from the `@fontsource-variable` packages:
+ *      Noto Sans (upright + italic), Noto Serif (upright + italic) and Noto
+ *      Serif Display (upright only). Copying the files instead of importing the
+ *      packages' `index.css` keeps the bundle to these files — the packages ship
+ *      one CSS file per group that also declares every Cyrillic, Devanagari …
+ *      subset, which a German cooking app never loads but would still deploy.
+ *      The copies are committed: the build must not fetch fonts.
  *
- *   1. `noto-sans-condensed.woff2` — the theme face „Noto Sans Condensed", the
- *      width-axis instance (wdth = 75) of Noto Sans. Google Fonts exposes that
- *      width only as a variable axis, so the script pins it into a normal,
- *      single-face WOFF2 with the weight axis still live (100–900).
- *   2. The four fraction companions (`*-fractions.woff2`) — the Number Forms
- *      block (U+2150–215E, ⅐ … ⅞), the Latin-1 fraction glyphs (already in the
- *      latin subset, repeated for safety) and the narrow no-break space
- *      (U+202F). The latin subsets stop at Latin-1, so `formatAQ`'s precomposed
- *      fraction glyphs (⅓, ⅒, ⅛ …) and every number/unit separator would
- *      otherwise be drawn by the operating system's fallback font, in a
- *      different weight and size. Each export body face gets a companion built
- *      from its own full variable source, so a themed cooking view keeps the
- *      theme face's fraction design (`Noto Serif Display` is a heading face and
- *      gets none). The web app uses the Noto Sans companion as a second face of
- *      the same family with a narrow `unicode-range` (styles/fonts.css), so the
- *      browser merges it per character. Only the `wght` axis is kept; `wdth`
- *      and `CTGR` are pinned.
+ *      The italics are real drawn faces, not a browser-synthesized oblique:
+ *      DESIGN §4.2 renders arrangement notes, the `optional` marker and the
+ *      passive right-hand annotations in italic, and a slant computed from the
+ *      upright face distorts curves, weight and spacing. Noto Serif Display
+ *      ships no italic here because it is a heading face only (§4.8) and no
+ *      heading is italic.
+ *
+ *   2. The fraction companions (`*-fractions*.woff2`), which no stock subset
+ *      provides. They carry the Number Forms fraction glyphs (U+2150–215E,
+ *      ⅐ … ⅞), the Latin-1 fraction glyphs (already in the latin subset,
+ *      repeated for safety) and the narrow no-break space (U+202F) that every
+ *      number/unit pair uses. The latin subsets stop at Latin-1, so `formatAQ`'s
+ *      precomposed fraction glyphs (⅓, ⅒, ⅛ …) and every number/unit separator
+ *      would otherwise be drawn by the operating system's fallback font, in a
+ *      different weight and size. One companion exists per face and style, so
+ *      an italic run with a quantity keeps both the italic design and the
+ *      fraction design. In the web app each companion is a second face of the
+ *      same family and style with a narrow `unicode-range` (styles/fonts.css),
+ *      so the browser composes the family per character. Only the `wght` axis
+ *      is kept; `wdth` and `CTGR` are pinned.
  *
  * Sources:
- *   - the four latin faces: the installed `@fontsource-variable` packages.
- *   - the condensed face: the Noto Sans `latin` *width* file from the same
- *     package, pinned to wdth = 75.
+ *   - the latin faces: the installed `@fontsource-variable` packages.
  *   - the fraction companions: the full variable Noto fonts, because the
  *     subset packages do not contain the Number Forms block. Place them in the
  *     git-ignored `.fonts/` (like the other design fonts):
- *       .fonts/NotoSans-VF.ttf
- *       .fonts/NotoSerif-VF.ttf
- *       .fonts/NotoSansMono-VF.ttf
+ *       .fonts/NotoSans-VF.ttf      .fonts/NotoSans-Italic-VF.ttf
+ *       .fonts/NotoSerif-VF.ttf     .fonts/NotoSerif-Italic-VF.ttf
  *     from https://github.com/notofonts/noto-fonts/tree/main/unhinted/variable-ttf
  *
  * Re-run after a font change, then regenerate the export's embedded copies so
@@ -62,29 +62,30 @@ const ROOT = resolve(HERE, '../../..');
 const OUT_DIR = resolve(HERE, '../src/fonts');
 const FONTSOURCE = resolve(ROOT, 'node_modules/@fontsource-variable');
 
-/** The width instance of Noto Sans that the theme face „Noto Sans Condensed" uses. */
-const CONDENSED_WIDTH = 75;
-
-/** The four stock faces: package name → source file → committed file. */
+/**
+ * The stock faces: package → the package's latin WOFF2 → the committed file.
+ * Every entry is a variable `wght` file, so one file serves the weights 400 and
+ * 600 of DESIGN §4.2. The upright and italic files of a family are declared
+ * together in `styles/fonts.css`, which is what makes the italic real.
+ */
 const LATIN_FACES = [
   ['noto-sans', 'noto-sans-latin-wght-normal.woff2', 'noto-sans-latin.woff2'],
+  ['noto-sans', 'noto-sans-latin-wght-italic.woff2', 'noto-sans-latin-italic.woff2'],
   ['noto-serif', 'noto-serif-latin-wght-normal.woff2', 'noto-serif-latin.woff2'],
+  ['noto-serif', 'noto-serif-latin-wght-italic.woff2', 'noto-serif-latin-italic.woff2'],
   [
     'noto-serif-display',
     'noto-serif-display-latin-wght-normal.woff2',
     'noto-serif-display-latin.woff2',
   ],
-  ['noto-sans-mono', 'noto-sans-mono-latin-wght-normal.woff2', 'noto-sans-mono-latin.woff2'],
 ];
-
-/** The installed Noto Sans latin file that also carries the width axis. */
-const CONDENSED_SOURCE = resolve(FONTSOURCE, 'noto-sans/files/noto-sans-latin-wdth-normal.woff2');
 
 /** The full variable Noto fonts, the only sources that still have the Number Forms. */
 const FRACTION_SOURCES = {
   'Noto Sans': resolve(ROOT, '.fonts/NotoSans-VF.ttf'),
+  'Noto Sans Italic': resolve(ROOT, '.fonts/NotoSans-Italic-VF.ttf'),
   'Noto Serif': resolve(ROOT, '.fonts/NotoSerif-VF.ttf'),
-  'Noto Sans Mono': resolve(ROOT, '.fonts/NotoSansMono-VF.ttf'),
+  'Noto Serif Italic': resolve(ROOT, '.fonts/NotoSerif-Italic-VF.ttf'),
 };
 
 /**
@@ -99,10 +100,9 @@ const FRACTION_CHARS =
   '\u00BC\u00BD\u00BE';
 
 /**
- * The fraction companions of the export body faces (DESIGN §4.8, §7): the
- * theme family → its full variable source, committed file and pinned axes.
- * Noto Serif Display is absent because it only ever renders page headings,
- * which carry no quantities.
+ * The fraction companions, one per face and style: the theme family → its full
+ * variable source, committed file and pinned axes. Noto Serif Display is absent
+ * because it only ever renders page headings, which carry no quantities.
  */
 const FRACTION_FACES = [
   {
@@ -112,24 +112,23 @@ const FRACTION_FACES = [
     axes: { wdth: 100, CTGR: 0 },
   },
   {
+    family: 'Noto Sans',
+    source: FRACTION_SOURCES['Noto Sans Italic'],
+    target: 'noto-sans-fractions-italic.woff2',
+    axes: { wdth: 100, CTGR: 0 },
+  },
+  {
     family: 'Noto Serif',
     source: FRACTION_SOURCES['Noto Serif'],
     target: 'noto-serif-fractions.woff2',
     axes: { wdth: 100, CTGR: 0 },
   },
   {
-    family: 'Noto Sans Mono',
-    source: FRACTION_SOURCES['Noto Sans Mono'],
-    target: 'noto-sans-mono-fractions.woff2',
+    family: 'Noto Serif',
+    // The serif italic carries no CTGR axis of its own, so only wdth is pinned.
+    source: FRACTION_SOURCES['Noto Serif Italic'],
+    target: 'noto-serif-fractions-italic.woff2',
     axes: { wdth: 100 },
-  },
-  {
-    // The condensed body face is Noto Sans pinned to the same width, so its
-    // fractions come from the same source with the same pinned axis.
-    family: 'Noto Sans Condensed',
-    source: FRACTION_SOURCES['Noto Sans'],
-    target: 'noto-sans-condensed-fractions.woff2',
-    axes: { wdth: CONDENSED_WIDTH, CTGR: 0 },
   },
 ];
 
@@ -149,21 +148,10 @@ function writeFace(name, buffer) {
 
 mkdirSync(OUT_DIR, { recursive: true });
 
-// The four stock latin faces: copy the package's latin WOFF2 unchanged.
+// The stock latin faces: copy the package's latin WOFF2 unchanged.
 for (const [pkg, source, target] of LATIN_FACES) {
   writeFace(target, readFont(resolve(FONTSOURCE, pkg, 'files', source), 'run npm install first'));
 }
-
-// The condensed theme face: the latin width file, pinned to wdth 75 while the
-// weight axis stays live, so one file serves weights 400 and 600.
-writeFace(
-  'noto-sans-condensed.woff2',
-  await subsetFont(readFont(CONDENSED_SOURCE, 'run npm install first'), '', {
-    targetFormat: 'woff2',
-    keepAllGlyphs: true,
-    variationAxes: { wdth: CONDENSED_WIDTH },
-  }),
-);
 
 // The fraction companions: only the twenty characters above, with the width and
 // contrast axes pinned so each file stays a few kilobytes. The weight axis

@@ -42,12 +42,14 @@ export const THEME_FONT_SHORTLIST: readonly string[] = [
 /**
  * Faces a stored recipe may still name although the picker no longer offers
  * them. Condensed left the shortlist when condensed type was reserved for data
- * tables; Mono left it with this change. Old files keep parsing, exporting and
- * serializing unchanged, while new recipes can no longer choose either face
- * (and the editor shows no active chip for them).
+ * tables; Mono left it with this change. Old files keep parsing and serializing
+ * unchanged, so a stored recipe is never rejected (and the editor shows no
+ * active chip for them).
  *
- * The faces stay embedded (embeddedFonts.ts) so such a recipe still exports in
- * its stored face; the list is deliberately not a second "selectable" set.
+ * The faces are no longer embedded (embeddedFonts.ts). A recipe that still names
+ * one therefore exports through its family's fallback stack: it stays readable,
+ * but not in the face it stored. The list is deliberately not a second
+ * "selectable" set.
  */
 export const THEME_FONT_RETIRED: readonly string[] = ['Noto Sans Condensed', 'Noto Sans Mono'];
 
