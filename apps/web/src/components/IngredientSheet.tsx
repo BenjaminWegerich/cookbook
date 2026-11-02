@@ -33,10 +33,12 @@
  *   chosen too. Its baseline is the ingredient's master-data level, or the
  *   neutral medium level when the quantity has no ingredient entry (a
  *   sub-recipe, a unitless mention, or no name yet). No active chip means the
- *   quantity follows that baseline live (the caption names it); an active chip
- *   pins its level, which is stored as a `{precision: …}` tag even when it
- *   equals the baseline today, so it keeps its value when the baseline changes
- *   later. The dashed „Entfernen“ chip drops the pin;
+ *   quantity follows that baseline live; the chip at that level carries a quiet
+ *   „Standard“ marker, so the applied level is named where the choice is made
+ *   and stays visible while another level is pinned. An active chip pins its
+ *   level, which is stored as a `{precision: …}` tag even when it equals the
+ *   baseline today, so it keeps its value when the baseline changes later. The
+ *   dashed „Entfernen“ chip drops the pin;
  * - the live preview shows the full display form ("1 Becher Joghurt (400 g)",
  *   "1,5 l Wasser", "½") via core renderAQS/formatBQ/formatAQValue; when the
  *   name is an ingredient recipe, the preview carries the clickable „Rezept"
@@ -68,7 +70,6 @@ import ArrangementLine from './ArrangementLine';
 import PrecisionChips from './PrecisionChips';
 import QuantityInput, { type QuantityFamily } from './QuantityInput';
 import { LinkIcon, PencilIcon, PlusIcon, TrashIcon } from './icons';
-import { precisionLabel } from './precisionLabels';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /** One ingredient recipe of the collection, as the sheet needs it for the
@@ -536,35 +537,28 @@ function IngredientSheet({
             precision, the quantity field below shows the amount in that
             precision. Quantity-level precision is the optional
             pin of the quantity's baseline. No active chip means the quantity
-            follows the baseline live (the passive caption names it); an active
-            chip stores that level, so it keeps its value when the baseline
-            changes later. The dashed clear chip (the „Gesamtzeit“ idiom) drops
-            the pin. The field is offered for every quantity — a master
-            ingredient, a sub-recipe, a unitless mention, and the still-empty
-            form (neutral medium). */}
+            follows the baseline live; the chip at that level carries the
+            „Standard“ marker, so the default is named at the choice itself.
+            An active chip stores that level, so it keeps its value when the
+            baseline changes later. The dashed clear chip (the „Gesamtzeit“
+            idiom) drops the pin. The field is offered for every quantity — a
+            master ingredient, a sub-recipe, a unitless mention, and the
+            still-empty form (neutral medium). */}
         <div className="field">
-          <div className="field-head">
-            <span className="field-label">
-              Genauigkeit<span className="optional-mark">optional</span>
-            </span>
-            <span className="field-default">
-              {ingredientDefault !== undefined
-                ? `Zutat-Standard: ${precisionLabel(ingredientDefault)}`
-                : `Standard: ${precisionLabel(INTERNAL_PRECISION)}`}
-            </span>
-          </div>
+          <span className="field-label">
+            Genauigkeit<span className="optional-mark">optional</span>
+          </span>
           <PrecisionChips
             // No active chip while the quantity follows the baseline; any chip
             // tap pins its level, even one that equals the baseline today.
             value={precisionOverride}
+            defaultValue={baselinePrecision}
             onChange={setPrecisionOverride}
             onClear={() => setPrecisionOverride(undefined)}
             ariaLabel="Genauigkeit der Menge"
           />
           <p className="field-hint">
-            {`Je niedriger die Genauigkeit, desto stärker wird auf glatte Zahlen gerundet. Wird hier nichts gewählt, gilt ${
-              ingredientDefault !== undefined ? 'der Zutat-Standard' : 'der Standard'
-            }.`}
+            Je niedriger die Genauigkeit, desto stärker wird auf glatte Zahlen gerundet.
           </p>
         </div>
 

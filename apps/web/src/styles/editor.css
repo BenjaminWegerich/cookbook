@@ -123,35 +123,6 @@
   gap: var(--space-2);
 }
 
-/* A caption row that carries a passive annotation on the right — the quantity
-   sheet's ingredient default next to „Genauigkeit“. Baseline-aligned and
-   allowed to wrap: on a narrow phone the annotation moves below the caption
-   instead of squeezing it. The label's top margin is meant for the stacked
-   field layout, so it is reset inside this row (see .theme-color-head). At
-   least one en space separates the caption from the annotation. */
-.field-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2) 0.5em;
-}
-
-.field-head .field-label {
-  margin-block-start: 0;
-}
-
-/* Read-only value in a .field-head: the same quiet typography as .field-hint,
-   but never a control — it only names a value. Italic like the other quiet
-   asides (the optional marker and the section counter). */
-.field-default {
-  min-width: 0;
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
-  font-style: italic;
-  color: var(--color-ink-muted);
-}
-
 /* Form-field caption above an input/chip row. Displayed in all caps per
    docs/CODING_CONVENTIONS.md (Design Conventions); keep the markup in normal
    German case ("Titel", not "TITEL") so the source stays readable and screen
@@ -319,6 +290,25 @@
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-on-accent);
+}
+
+/* The default marker inside a precision chip: the level that applies while no
+   chip is chosen names itself in its own chip („Mittel Standard“), so the
+   default is named where the choice is made and stays visible while another
+   level is pinned (docs/DESIGN.md §5.3). Quiet like the optional-field marker:
+   one En space, italic, muted. On the accent-filled pinned chip the muted ink
+   would be unreadable, so the marker inherits the chip's on-accent text; the
+   italics keep it apart from the level's name without dropping the contrast
+   below the label's. */
+.chip-standard {
+  margin-inline-start: 0.5em; /* En space (U+2002 width) before the marker */
+  font-weight: 400;
+  font-style: italic;
+  color: var(--color-ink-muted);
+}
+
+.chip-active .chip-standard {
+  color: inherit;
 }
 
 /* Remove/clear chip for optional fields (e.g. Gesamtzeit): the "close" symbol

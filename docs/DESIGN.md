@@ -749,9 +749,13 @@ lowercase, muted, appended to the caption and separated from it by one En space
 (`margin-inline-start: 0.5em`, 7px at the caption size — a second-priority ladder step). No
 asterisks, no „Pflichtfeld".
 
-**A passive annotation on the right is italic.** The quantity sheet's `Zutat-Standard: …`
-beside „Genauigkeit" and the plan size beside a dish title are muted, italic and sit at the
-row's right edge, at least one En space from the text before them.
+**A passive annotation on the right is italic.** The plan size beside a dish title is muted,
+italic and sits at the row's right edge, at least one En space from the text before it.
+
+**The precision default is named inside its chip.** In the quantity sheet the level that applies
+without an explicit choice carries a muted, italic `Standard` inside its chip, separated by one
+En space. It stays visible while another level is pinned, so „× Entfernen" always shows which
+level the quantity returns to. *decided with the user*
 
 **Controls.** Text inputs and text areas: `--color-bg` fill, hairline border, `--radius-md`,
 `--text-md` text, padding `--space-3` / `--space-4`. A focused text field shows a solid 2px

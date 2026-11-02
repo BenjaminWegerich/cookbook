@@ -43,3 +43,4 @@ coverage/
 
 # Local scratch prototypes (standalone HTML experiments, not shipped)
 /quantity-weight-lab.html
+/precision-default-lab.html

@@ -2,9 +2,9 @@
  * German labels of the five precision levels (docs/CODING_CONVENTIONS.md: UI in
  * German).
  *
- * One source for both the precision chips and every read-only display of a
- * level (the quantity sheet's „Zutat-Standard“), so the wording cannot drift.
- * The labels follow the canonical order of PRECISION_LEVELS.
+ * One source for the precision chips' labels (and their „Standard“ marker),
+ * so the wording cannot drift. The labels follow the canonical order of
+ * PRECISION_LEVELS.
  */
 
 import { type PrecisionLevel } from '@cookbook/core';
