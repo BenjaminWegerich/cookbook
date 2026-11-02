@@ -471,7 +471,7 @@
 
 /* ---- Forward action ------------------------------------------------------ */
 
-/* "Einkaufsliste schreiben": accent, content width, right-aligned under the
+/* "Liste schreiben": accent, content width, right-aligned under the
    list — the same arrangement the previous page's forward button uses. */
 .pantry-actions {
   display: grid;

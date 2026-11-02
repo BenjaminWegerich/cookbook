@@ -250,7 +250,7 @@
 }
 
 /* The section's heading: the caption on a line of its own, and below it the
-   section's own actions as one row ("Einkaufsliste schreiben" and "sortieren" in
+   section's own actions as one row ("Liste schreiben" and "Liste sortieren" in
    the "Einkaufsliste" row; decided with the user, who wanted the buttons under
    the caption instead of beside it — beside it they had to compete with the
    heading for the same line, and the caption never got the line to itself). The

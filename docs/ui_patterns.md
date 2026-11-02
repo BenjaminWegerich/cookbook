@@ -47,7 +47,7 @@ overview, the fifth the shopping list, the sixth the copied recipe link:
 > unrecognized entry).
 
 > `X Zutaten für Y Rezepte zur Einkaufsliste hinzugefügt.`
-> with the action **Rückgängig** („Einkaufsliste schreiben“ on the pantry flow's second step
+> with the action **Rückgängig** („Liste schreiben“ on the pantry flow's second step
 > „Vorräte auswählen — Teil 2: Zutaten“).
 
 > `Link zu <Titel> kopiert.`
@@ -307,7 +307,7 @@ they name two different kinds of leaving, and a screen carries exactly one of th
   see the sub-recipe rule in [CODING_CONVENTIONS.md](CODING_CONVENTIONS.md)), and
   leaving it returns to that previous level. Its exit is „Zurück" at the top left,
   and it has **no second cancel**: its own forward action („Speichern",
-  „Einkaufsliste schreiben") stands alone at the bottom right.
+  „Liste schreiben") stands alone at the bottom right.
 - A **change** is asked *over* a screen that stays where it is — a sheet with a
   scrim over the list. Closing throws the pending input away and reveals that
   screen untouched. Its exit is „Abbrechen" in the bottom action row, directly
@@ -402,7 +402,7 @@ The editor, the AI screen and the two shopping steps all write something, and al
 four still say „Zurück". Leaving them *is* the flow's cancel — a second
 „Abbrechen" would duplicate it. Their bottom-right button is the step's next /
 commit, not a form submit with a paired abort, so it stands alone (PantrySelect's
-„Einkaufsliste schreiben" even ends the whole flow, which is why its failure is
+„Liste schreiben" even ends the whole flow, which is why its failure is
 reported next to the button instead of in a snackbar).
 
 ### 2.6 Adding a new screen

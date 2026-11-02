@@ -75,7 +75,7 @@
  * typed); the starting shape is derived from the prefill, so the page holds no
  * remembered defaults at all and a fresh visit always starts from the data.
  *
- * "Einkaufsliste schreiben" writes one line per row that currently has something
+ * "Liste schreiben" writes one line per row that currently has something
  * to buy, exactly as displayed (with the name, via core's `renderPantryLine`),
  * through App (which owns the Keep write, the closing of the flow and the
  * success notice with its undo). A failure is shown next to the button and
@@ -835,7 +835,7 @@ function PantrySelect({
             disabled={!canWrite}
             aria-busy={busy}
           >
-            {busy ? 'Wird geschrieben …' : 'Einkaufsliste schreiben'}
+            {busy ? 'Wird geschrieben …' : 'Liste schreiben'}
           </button>
           {(writeError !== null || (toBuy.length === 0 && !busy)) && (
             <p

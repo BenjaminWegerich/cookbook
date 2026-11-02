@@ -2,7 +2,7 @@
  * The home screen's entry into the ingredient master data.
  *
  * A quiet outlined action, the same geometry and weight as the shopping list's
- * „Einkaufsliste schreiben“ button: it sits below the last recipe and is used
+ * „Liste schreiben“ button: it sits below the last recipe and is used
  * only rarely, so it stays out of the captions and the FAB's create menu. The
  * shelf symbol is the app's „Vorrat“ symbol; the label names the managed data
  * in full, so the button reads on its own.

@@ -116,8 +116,8 @@ the entry off and can be undone). „Kochen“ opens the recipe's HTML export in
 at the size the plan states when the dish is planned — otherwise at the recipe's written default
 size; the „Eintrag ersetzen“ menu is built (an unrecognized entry can be replaced by an existing
 recipe 1:1 with an undo notice, or turned into a new recipe through the prefilled editor or AI
-screen, which return to the entry's overview). The shopping flow is built as well („Einkaufsliste
-schreiben“ selects the planned dishes, the cooking step „Vorräte auswählen — Teil 1:
+screen, which return to the entry's overview). The shopping flow is built as well
+(„Liste schreiben“ selects the planned dishes, the cooking step „Vorräte auswählen — Teil 1:
 Zutaten-Rezepte“ decides how much of each linked Zutaten-Rezept is made, the stock step „Teil 2:
 Zutaten“ sets each bottom-level ingredient's Vorrat, and the difference goes to
 „Einkaufsliste“). The aisle sort is built as well („Einkaufsliste sortieren“ assigns unassigned
@@ -142,7 +142,7 @@ not where it is used.
       the right view. Before it, the app linked exports through Drive, whose viewer does not run
       the export's script.
 - [x] Add the scaled ingredient list of the meal plan's recipes to the shopping list
-      ("Einkaufsliste"): the dishes are picked per checkbox („Einkaufsliste schreiben“), the
+      ("Einkaufsliste"): the dishes are picked per checkbox („Liste schreiben“), the
       linked Zutaten-Rezepte are cooked first („Vorräte auswählen — Teil 1: Zutaten-Rezepte“:
       each sub-recipe's stock prefills with `min(required, reorder point)`, the exact rest is
       cooked), then the stock step („Teil 2: Zutaten“) prefills each bottom-level ingredient's
@@ -217,7 +217,7 @@ below is building, not investigating: the frontend and the actual features.
    same recipe; the gateway changes as little as possible and verifies the result), and so is
    taking a dish off the plan ([x] — „Abhaken“ ticks the entry off in Keep via
    `POST /keep/mealplan/check` and can be undone; changing the size reuses the meal-plan write),
-   and so is the shopping list ([x] — „Einkaufsliste schreiben“ writes the chosen recipes'
+   and so is the shopping list ([x] — „Liste schreiben“ writes the chosen recipes'
    ingredients via `POST /keep/shopping`, with the pantry flow and an undo; the linked
    Zutaten-Rezepte are cooked in „Teil 1“, so „Teil 2“ buys only the bottom level).
 

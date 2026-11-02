@@ -64,7 +64,7 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
   summed exactly and only the buy amount is rounded up to whole shopping units
   (or whole grams/millilitres without one).
 - Bundled writing from the home screen's "Einkaufsliste" caption row: the button
-  "Einkaufsliste schreiben" beside that caption turns the meal plan into a selection
+  "Liste schreiben" beside that caption turns the meal plan into a selection
   view. All dishes selected there are added to the shopping list in one write, so an
   ingredient shared by several recipes is rounded to whole packs once instead of per
   recipe.

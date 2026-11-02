@@ -374,7 +374,7 @@ export function ListPlusIcon({ className, optical }: IconProps) {
 }
 
 /**
- * Sort (descending lines with arrows) — the "sortieren" action of the
+ * Sort (descending lines with arrows) — the "Liste sortieren" action of the
  * "Einkaufsliste" caption row: the shopping list is reordered by the shopping
  * route. The generic "sort" meaning, deliberately not the pantry's list-plus
  * (that one means "add to the list"), so the two adjacent buttons in the

@@ -374,7 +374,7 @@ function App() {
   const [aiScreen, setAiScreen] = useState<AiScreen | null>(null);
   /**
    * The bundled shopping-list selection is open (the full screen behind
-   * "Einkaufsliste schreiben", components/ShoppingListSelect). Unlike the other
+   * "Liste schreiben", components/ShoppingListSelect). Unlike the other
    * screens it is *not* unmounted by the layers above it: the selection is what
    * the user built up, so an overview sheet opened from a row, or the editor
    * opened from that sheet, keeps this page mounted (hidden) and returns to it
@@ -1386,7 +1386,7 @@ function App() {
   );
 
   /**
-   * Opens the bundled shopping-list selection ("Einkaufsliste schreiben"). The
+   * Opens the bundled shopping-list selection ("Liste schreiben"). The
    * flow flag is set first: `setNav` reads it to keep the page mounted under
    * every layer that follows it (see shoppingFlowRef).
    */
@@ -1819,7 +1819,7 @@ function App() {
   ]);
 
   /**
-   * Performs the pantry step's write: the sheets' "Einkaufsliste schreiben"
+   * Performs the pantry step's write: the sheets' "Liste schreiben"
    * hands over the lines of its upper part (one per ingredient that is not
    * covered, in the familiar display arrangement) and the number of dishes they
    * were computed from.
@@ -2320,7 +2320,7 @@ function App() {
         </div>
       )}
 
-      {/* The bundled shopping-list selection ("Einkaufsliste schreiben"). It is
+      {/* The bundled shopping-list selection ("Liste schreiben"). It is
           a full screen of its own, but it stays mounted (hidden) while a layer
           of its flow sits above it — the overview sheet opened from a row, the
           editor or the AI screen opened from that sheet — so the checked dishes

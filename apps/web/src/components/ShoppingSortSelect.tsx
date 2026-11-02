@@ -1,6 +1,6 @@
 /**
- * Shopping-list sort page — the full-screen page behind "sortieren" in the home
- * screen's "Einkaufsliste" caption row (App's `sort` layer). The page itself
+ * Shopping-list sort page — the full-screen page behind "Liste sortieren" in the
+ * home screen's "Einkaufsliste" caption row (App's `sort` layer). The page itself
  * still titles the task in full ("Einkaufsliste sortieren").
  *
  * The page is where the shopping list's aisle sort gets the one thing the master
@@ -485,7 +485,7 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
           disabled={!canSort}
           aria-busy={busy}
         >
-          {busy ? 'Wird sortiert …' : 'Einkaufsliste sortieren'}
+          {busy ? 'Wird sortiert …' : 'Liste sortieren'}
         </button>
         {(error !== null || !complete) && (
           <p

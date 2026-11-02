@@ -127,7 +127,7 @@ the requested state, is a `keep_api_error` instead of a reported success). The a
 changed list in the same shape as `POST /keep/mealplan`.
 
 `POST /keep/shopping` puts the ingredients of the planned dishes at the top of "Einkaufsliste" —
-the pantry sheet's "Einkaufsliste schreiben" and its "Rückgängig":
+the pantry sheet's "Liste schreiben" and its "Rückgängig":
 
 ```json
 {

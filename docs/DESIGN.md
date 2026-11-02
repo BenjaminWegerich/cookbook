@@ -1260,7 +1260,7 @@ layer — it is neither, and it has no exit. *decided with the user*
 top left, above the title (`.app-header-stacked`, §5.5). A place replaces the previous screen,
 and the app remembers it — its scroll key, its draft — so leaving returns to that previous
 level. A place has no second, cancel-shaped exit: its own forward action („Speichern",
-„Einkaufsliste schreiben") stands alone at the bottom right. *decided with the user*
+„Liste schreiben") stands alone at the bottom right. *decided with the user*
 
 **The exit names its destination where that destination is not the previous list-level screen.**
 A recipe editor opened from the AI screen returns to the still-running AI conversation, so its
@@ -1582,7 +1582,7 @@ The cooking view (`.html`) has its own inventory, written below.
 | Recipe overview | `setNav('overview')`, `RecipeOverview` | browsing layer | scrim, Escape, Back |
 | Recipe editor | `setNav('editor')`, `RecipeEditor` (base + each sub-recipe level) | place | „Zurück"; on the AI-opened base level „Zurück zum KI-Editor" |
 | AI create / edit | `setNav('ai')`, `AiCreateSheet` | place | „Zurück" |
-| „Einkaufsliste schreiben" | `setNav('shopping')`, `ShoppingListSelect` | place (flow step) | „Zurück" |
+| „Liste schreiben" | `setNav('shopping')`, `ShoppingListSelect` | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 1: Zutaten-Rezepte" | `setNav('pantrySub')`, `SubRecipeSelect` | place (flow step) | „Zurück" |
 | „Vorräte auswählen — Teil 2: Zutaten" | `setNav('pantry')`, `PantrySelect` | place (flow step) | „Zurück" (asks) |
 | „Zutaten" | `setNav('ingredients')`, `IngredientMaster` | place | „Zurück" |

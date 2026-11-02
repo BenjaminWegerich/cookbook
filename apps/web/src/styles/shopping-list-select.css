@@ -1,7 +1,7 @@
 /**
  * Bundled shopping-list selection screen — component styles.
  *
- * The full-screen page behind "Einkaufsliste schreiben" (components/ShoppingListSelect.tsx):
+ * The full-screen page behind "Liste schreiben" (components/ShoppingListSelect.tsx):
  * the meal plan as selectable rows, so every chosen dish reaches the shopping
  * list in one write. All pixel values come from the design ladder
  * (docs/CODING_CONVENTIONS.md); colors and sizes reference the tokens in
