@@ -117,6 +117,29 @@ describe('suggestQuantities', () => {
     expect(values.indexOf(200)).toBeLessThan(values.indexOf(350));
   });
 
+  it('names the Stück unit in a chip instead of the omitted ingredient form', () => {
+    // Stück (ZE zuerst) puts the count in the ingredient's count form: the full
+    // line reads "1 ½ Karotten (100 g)". A chip omits the name, so <INF> would
+    // collapse to nothing ("1 ½  (100 g)"); it reads the unit instead.
+    const carrots = suggestQuantities(100, mappingsFor('Karotten'), 'g');
+    expect(carrots.find((suggestion) => suggestion.value === 100)?.display.text).toBe(
+      `1${NNBSP}½${NNBSP}Stück (100${NNBSP}g)`,
+    );
+
+    // The same rule for the BE form, whose note holds the count.
+    const lemon = suggestQuantities(200, mappingsFor('Zitronensaft'), 'ml');
+    expect(lemon.find((suggestion) => suggestion.value === 200)?.display.text).toBe(
+      `200${NNBSP}ml (5${NNBSP}½${NNBSP}Stück)`,
+    );
+
+    // An ingredient without a Singular/Plural pair must not lose its unit
+    // either; Hokkaido-Kürbis is the seed case that reported this.
+    const pumpkin = suggestQuantities(1500, mappingsFor('Hokkaido-Kürbis'), 'g');
+    expect(pumpkin.find((suggestion) => suggestion.value === 1500)?.display.text).toBe(
+      `1${NNBSP}Stück (1,5${NNBSP}kg)`,
+    );
+  });
+
   it('uses the 50/50 penalty + log-distance ranking', () => {
     for (const value of [94, 200, 250, 300, 437, 500, 1000]) {
       const suggestions = suggestQuantities(value, joghurt, 'g');

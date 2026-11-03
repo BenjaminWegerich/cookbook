@@ -607,6 +607,12 @@ function renderSelectedAQ(
  * `renderAQS` and the reorder-point preview. The shown BQ is
  * the optimizer's BQ: for an exact unit that is `q·c`, for a non-exact or
  * metric-only candidate a value from the BQ table, and for a fallback `V0`.
+ *
+ * `nameOmitted` renders the arrangement without the ingredient name (a chip
+ * label). `<IN>` is empty then, and `<INF>` — the count form that the Stück
+ * arrangements use in place of `<AU>` — would be empty too. So the count form
+ * is replaced by the unit's own display form: the chip has no name that could
+ * carry the count, and a naked number ("1 ½ (100 g)") would hide the unit.
  */
 function renderOptimizedAQ(
   ingredient: string,
@@ -614,12 +620,16 @@ function renderOptimizedAQ(
   bu: string,
   formatAq: (aq: string) => string,
   entry?: AuSelectableEntry,
+  nameOmitted = false,
 ): ArrangementDisplay {
   const selected = result.aq!;
   const count = selected.value;
   // <INF> is the ingredient in its count form („1 Karotte“ / „2 Karotten“),
-  // falling back to the canonical name for an invariant or unknown name.
-  const ingredientFormText = ingredientForm(entry ?? mappingsFor(ingredient), count) ?? ingredient;
+  // falling back to the canonical name for an invariant or unknown name. With
+  // the name omitted (<IN> is empty) the unit's form stands in instead.
+  const ingredientFormText = nameOmitted
+    ? auDisplayName(selected.au, count)
+    : (ingredientForm(entry ?? mappingsFor(ingredient), count) ?? ingredient);
   const display = renderArrangementDisplay(selected.au.arrangement, {
     aq: formatAq(selected.notation),
     au: auDisplayName(selected.au, count),
@@ -676,7 +686,9 @@ export function renderAQSDisplay(
 /**
  * Renders the **label of a quantity suggestion chip** for one target: the
  * arrangement the optimizer selects, with the ingredient name omitted —
- * "1 Becher (500 g)" instead of "1 Becher Joghurt (500 g)".
+ * "1 Becher (500 g)" instead of "1 Becher Joghurt (500 g)". A Stück unit names
+ * itself rather than the ingredient's count form, so the chip keeps a unit:
+ * "1 ½ Stück (100 g)", "100 ml (3 Stück)".
  *
  * `result` is the optimizer's answer for the same target (`v0`), so a caller
  * that already enumerated and scored its anchors (quantitySuggestions.ts) does
@@ -697,8 +709,9 @@ export function renderOptimizedChipDisplay(
     return { text, parts: [{ kind: 'text', value: text }] };
   }
   // An empty <IN> leaves a double space before the note ("1 Becher  (500 g)").
-  // Collapse it, exactly like the create form's name-less preview.
-  return collapseDisplaySpaces(renderOptimizedAQ('', result, bu, formatAQ, entry));
+  // Collapse it, exactly like the create form's name-less preview. The last
+  // argument makes <INF> render the unit form (see renderOptimizedAQ).
+  return collapseDisplaySpaces(renderOptimizedAQ('', result, bu, formatAQ, entry, true));
 }
 
 /**
