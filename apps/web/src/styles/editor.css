@@ -847,9 +847,11 @@
    when off, the same star filled when on, in the reference colour (olive — the
    colour of the "REFERENZ" badge), so toggle and badge tell the same story.
    The box is one body-text line tall (`--space-7`, which is `--leading-md`, the
-   24 px line of the 18 px body text) so the toggle can never make a master-list
-   row taller than a step-list row — both lists must read identically. The hit
-   area still grows past the box via ::before, exactly like the reference
+   24 px line of the 18 px body text) so the toggle itself never adds height to a
+   master-list row — a row with a single badge reads exactly like a step-list row.
+   (A row grows past that line only when its badges stack, and that height comes
+   from the stack, never the toggle.) The
+   hit area still grows past the box via ::before, exactly like the reference
    badge's ×. */
 .ref-toggle {
   position: relative;
@@ -895,10 +897,10 @@
 }
 
 /* The arrangement text and the badge group on one line: the text takes the
-   free width, the badges form a right-aligned column of their own. They never
+   free width, the badges form a right-aligned group of their own. They never
    wrap below the text, so a multi-line arrangement cannot push its badges into
    the last line (the same row shape as the HTML export's check rows). At least
-   one en space separates the text from the leftmost badge. */
+   one en space separates the text from the badge group. */
 .ingredient-line {
   font-size: var(--text-md);
   line-height: var(--leading-md);
@@ -918,12 +920,20 @@
 }
 
 /* The badges ("NEU" / "REZEPT" / "REFERENZ") sit together as one right-aligned
-   column. `margin-inline-start: auto` pushes them to the row's right edge; the
-   parent's gap keeps a minimum en space even when the text runs long. */
+   group, stacked on top of each other instead of side by side (decided with the
+   user for both lists): a step row can carry two of them and a master-list row
+   all three, and the stack keeps the group narrow however many appear.
+   `margin-inline-start: auto` pushes the group to the row's right edge; the
+   parent's gap keeps a minimum en space even when the text runs long.
+   `align-items: flex-end` keeps every badge flush with that right edge, so the
+   stack reads as one straight line against the row edge, and the badges keep
+   their reading order top to bottom — "NEU" - "REZEPT" - "REFERENZ", exactly as
+   the markup lists them. */
 .ingredient-tags {
   flex: none;
   display: inline-flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: var(--space-2);
   margin-inline-start: auto;
 }
@@ -1527,13 +1537,26 @@
   font-weight: 600;
 }
 
-.theme-preview-line {
-  height: 1px;
+/* The theme divider of the export, drawn exactly as there (.divider in
+   packages/core/src/recipe/exportHtml.ts): a 42 px bar, 2 px tall, in the
+   theme's accent. The geometry lives here; the accent comes in inline, like
+   every other sample in this preview. */
+.theme-preview-divider {
+  width: var(--space-9);
+  height: 0;
+  border-bottom: 2px solid;
 }
 
 .theme-preview-body {
   font-size: var(--text-md);
   line-height: var(--leading-md);
+}
+
+/* The theme's hairline sample (`line`, §4.8), drawn the way the export uses it:
+   a full-width rule between rows, 1 px tall. Only the height lives here; the
+   colour comes in inline, like every other sample in this preview. */
+.theme-preview-hairline {
+  height: 1px;
 }
 
 /* The accent sample is a rounded box on a 10px surface, so it takes that

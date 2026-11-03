@@ -761,6 +761,12 @@ without an explicit choice carries a muted, italic `Standard` inside its chip, s
 En space. It stays visible while another level is pinned, so „× Entfernen" always shows which
 level the quantity returns to. *decided with the user*
 
+**The theme's default typeface is named the same way.** In the editor's Design section the
+default face (Noto Sans) carries the muted, italic `Standard` inside its chip, separated from
+the face name by one En space, and keeps it while another face is active. The colour fields
+carry no such marker: they are free-form values, not a choice between options.
+*decided with the user*
+
 **Controls.** Text inputs and text areas: `--color-bg` fill, hairline border, `--radius-md`,
 `--text-md` text, padding `--space-3` / `--space-4`. A focused text field shows a solid 2px
 accent outline, so the caret's position is always visible — not only for keyboard users. A

@@ -40,7 +40,9 @@
  *   same way in both lists; every tag leads with its symbol (docs/
  *   CODING_CONVENTIONS.md, "inline badges"); only the master list carries the
  *   star toggle, and it is hidden while the reference role is active (the
- *   badge's × is the way to clear it then).
+ *   badge's × is the way to clear it then). When an entry carries more than one
+ *   tag, they stack on top of each other in that same order instead of sitting
+ *   side by side (decided with the user; both lists).
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -763,7 +765,7 @@ function ThemeColorField({
   label: string;
   /** The resolved colour — always a valid #rrggbb (the default when unset). */
   value: string;
-  /** True when the token carries a non-default override ("Standard" shows). */
+  /** True when the token carries a non-default override ("Zurücksetzen" shows). */
   overridden: boolean;
   /** Passed undefined to clear the override (back to the default). */
   onChange: (hex: string | undefined) => void;
@@ -771,7 +773,7 @@ function ThemeColorField({
   // The text field holds what the user is typing, which may be a partial value
   // ("#b8") that is not a valid colour yet. It is synced back to the resolved
   // value whenever that value changes from outside (load, the picker or the
-  // "Standard" reset) and commits only on blur / Enter. The sync is a render-time
+  // "Zurücksetzen" reset) and commits only on blur / Enter. The sync is a render-time
   // state adjustment (React's documented pattern for state that a changed prop
   // invalidates), so the field never paints one frame with the stale text.
   const [text, setText] = useState(value);
@@ -807,8 +809,16 @@ function ThemeColorField({
           <span className="optional-mark">optional</span>
         </span>
         {overridden && (
-          <button type="button" className="text-button" onClick={() => onChange(undefined)}>
-            Standard
+          // The visible label is the same on all four fields ("Zurücksetzen"),
+          // so each button names its own token for screen readers. The visible
+          // word stays part of that name (WCAG "Label in Name").
+          <button
+            type="button"
+            className="text-button"
+            aria-label={`${label} zurücksetzen`}
+            onClick={() => onChange(undefined)}
+          >
+            Zurücksetzen
           </button>
         )}
       </div>
@@ -1057,7 +1067,7 @@ function ThemeEditor({
     onChange(normalizeTheme({ ...theme, ...next }));
   };
 
-  // "Standard" (the reset) shows only for a token that is genuinely overridden
+  // "Zurücksetzen" (the reset) shows only for a token that is genuinely overridden
   // — a stored value that equals its default is not an override.
   const colorIsOverridden = (key: 'accent' | 'paper' | 'ink' | 'line'): boolean => {
     const value = theme?.[key];
@@ -1071,14 +1081,22 @@ function ThemeEditor({
           Schriftart<span className="optional-mark">optional</span>
         </span>
         <div className="theme-font-chips" role="group" aria-label="Schriftart">
+          {/* The default face carries the quiet „Standard“ marker inside its
+              own chip, exactly like the precision default (§5.5): the face a
+              recipe falls back to is named where the choice is made, and the
+              marker stays visible while another face is active. The marker's
+              gap comes from CSS, so the accessible name names it explicitly
+              (otherwise "Noto SansStandard"). */}
           <button
             type="button"
             className={resolved.font === DEFAULT_THEME.font ? 'chip chip-active' : 'chip'}
             style={{ fontFamily: themeFontStack(DEFAULT_THEME.font) }}
+            aria-label={`${themeFontLabel(DEFAULT_THEME.font)} Standard`}
             onClick={() => patch({ font: undefined })}
             title="Standard-Schriftart"
           >
             {themeFontLabel(DEFAULT_THEME.font)}
+            <span className="chip-standard">Standard</span>
           </button>
           {THEME_FONT_SHORTLIST.filter((font) => font !== DEFAULT_THEME.font).map((font) => (
             <button
@@ -1132,10 +1150,18 @@ function ThemeEditor({
           <span className="theme-preview-title" style={{ fontFamily: headingStack }}>
             {title.trim() !== '' ? title.trim() : 'Rezepttitel'}
           </span>
-          <span className="theme-preview-line" style={{ backgroundColor: resolved.line }} />
+          {/* The theme divider, drawn exactly as the export draws it below a
+              screen heading (§5.5: .divider in exportHtml.ts) — a 42 px bar,
+              2 px tall, in the theme's accent. */}
+          <span className="theme-preview-divider" style={{ borderBottomColor: resolved.accent }} />
           <span className="theme-preview-body" style={{ fontFamily: bodyStack }}>
             Zutaten vorbereiten, Schritt für Schritt.
           </span>
+          {/* The "line" sample: the theme's hairline, drawn the way the export
+              uses it — a full-width 1 px rule between rows (§4.8, the token
+              covers hairlines and borders). It sits between the prose and the
+              accent sample so the preview still shows all four colour tokens. */}
+          <span className="theme-preview-hairline" style={{ backgroundColor: resolved.line }} />
           <span
             className="theme-preview-accent"
             style={{ backgroundColor: resolved.accent, color: onAccent }}
@@ -3461,10 +3487,7 @@ function RecipeEditor({
             </p>
           ))}
           {computedIngredients.length === 0 ? (
-            <p className="empty-hint">
-              Die Zutatenliste wird aus den Listen der Zubereitungsschritte zusammengestellt — füge
-              Zutatenzeilen über „Zutatenzeile hinzufügen“ in den Schritten hinzu.
-            </p>
+            <p className="empty-hint">Füge Zutatenzeilen zu den Schritten hinzu.</p>
           ) : (
             <>
               {/* The &shy; (U+00AD soft hyphen) lets "zusammengesetzt" break as
@@ -3492,6 +3515,9 @@ function RecipeEditor({
                           }
                         />
                         {(isNewName || jumpTarget !== undefined || isReference) && (
+                          /* Badges stack on top of each other (both lists, see
+                             .ingredient-tags in styles/editor.css); the master
+                             list is the one place that can show all three. */
                           <span className="ingredient-tags">
                             {isNewName && (
                               <span className="ingredient-tag tag-new">
