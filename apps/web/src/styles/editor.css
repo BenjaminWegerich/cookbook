@@ -188,7 +188,6 @@
    Without the exclusion this higher-specificity rule would win the cascade
    and make the slot's hidden width probe disagree with the rendered value. */
 .field input[type='text']:not(.quantity-input),
-.field select,
 .field textarea {
   width: 100%;
   padding: var(--space-3) var(--space-4);
@@ -210,20 +209,10 @@
   cursor: not-allowed;
 }
 
-/* The „Einkaufs-Einheit“ select under the mappings grid (IngredientMappingsField):
-   a native select with the text-field look. Its option list stays native — the
-   browser owns that popup, exactly like the check-list checkbox. */
-.field select {
-  min-height: 42px;
-}
-
-.field select:disabled {
-  color: var(--color-ink-muted);
-  cursor: not-allowed;
-}
-
-/* The select is a sub-field of the mappings group, so its caption needs less
-   air above it than a top-level field's. */
+/* The „Einkaufs-Einheit“ chips are a sub-field of the mappings group, so their
+   caption needs less air above it than a top-level field's. The row itself is
+   the shared .purchase-unit-chips row (wrapping, chip-row gap) with the same
+   .chip / .chip-active / .chip-clear look as every other chip group. */
 .shopping-unit-field {
   margin-top: var(--space-1);
 }
@@ -291,12 +280,15 @@
   gap: var(--space-4);
 }
 
-/* Store chips of the new-ingredient sheet's „Einkauf“ field: one chip per store
-   of the shopping route, wrapping like a quantity chip row. It keeps a class of
-   its own (instead of reusing .quantity-chips) because the row is a single-select
-   group of names, not a strip of amounts — the chips themselves are the shared
-   .chip / .chip-active look. */
-.store-chips {
+/* Chip rows of a single-select group of names: the store chips of the
+   new-ingredient sheet's „Einkauf“ field (one chip per store of the shopping
+   route) and the „Einkaufs-Einheit“ chips under the mappings grid (one chip per
+   mapped unit). They wrap like a quantity chip row and keep a class of their own
+   (instead of reusing .quantity-chips) because the row is a group of names, not
+   a strip of amounts — the chips themselves are the shared .chip / .chip-active
+   look. */
+.store-chips,
+.purchase-unit-chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4); /* the chip row gap — see .quantity-chips above */

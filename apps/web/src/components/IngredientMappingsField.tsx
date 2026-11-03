@@ -6,11 +6,17 @@
  * by the create sheet („Neue Zutat anlegen“) and the edit sheet („Zutat
  * bearbeiten“), so both forms show the same units in the same order with the
  * same labels. Per-ingredient priorities are gone: the optimizer scores every
- * compatible unit. The **Einkaufs-Einheit** is a per-mapping flag: the select
+ * compatible unit. The **Einkaufs-Einheit** is a per-mapping flag: a chip row
  * under the grid marks one of the ingredient's mapped units as the purchase
  * unit, or none (then the ingredient is bought in its base unit). The same unit
  * can therefore be a purchase unit for one ingredient and a recipe measure for
  * another (docs/additional_quantity_specifications.md §3.1).
+ *
+ * The chip row follows the precision chips' idiom (components/PrecisionChips):
+ * one chip per value, the selected value in accent fill, and a dashed
+ * „× Entfernen“ chip that drops the optional choice. There is deliberately no
+ * „Keine — Kauf in g/ml“ chip: the absence of a selection *is* that state, and
+ * the clear chip makes it reachable (decided with the user).
  *
  * The rows are displayed in alphabetical order (German collation), not in the
  * CSV table order of ADDITIONAL_UNITS. Display order and data order are kept
@@ -28,6 +34,8 @@
  */
 
 import { ADDITIONAL_UNITS } from '@cookbook/core';
+
+import { CloseIcon } from './icons';
 
 /**
  * The known units in alphabetical order. `localeCompare` with the German
@@ -53,13 +61,13 @@ interface IngredientMappingsFieldProps {
   onShoppingUnitChange: (au: string | null) => void;
   /**
    * False for a sub-recipe row: a cooked sub-recipe is never bought, so the
-   * select is absent and the persisted mappings carry no shopping flag.
+   * chip row is absent and the persisted mappings carry no shopping flag.
    */
   showShoppingUnit?: boolean;
 }
 
 /**
- * The factor grid and the purchase-unit select (see file header). The header
+ * The factor grid and the purchase-unit chips (see file header). The header
  * cells are decorative: every input carries a full `aria-label` that names the
  * unit and its meaning, so a screen reader never depends on the visual column
  * header.
@@ -75,7 +83,7 @@ function IngredientMappingsField({
   /**
    * The units that currently carry a factor — the only candidates for the
    * purchase unit. A factor is a mapping, so a blank row cannot be selected;
-   * the list follows the inputs while the user types.
+   * the chips follow the inputs while the user types.
    */
   const mappedUnits = UNITS_ALPHABETICALLY.filter(
     (unit) => (factors[unit.name] ?? '').trim() !== '',
@@ -125,29 +133,51 @@ function IngredientMappingsField({
       </div>
       {showShoppingUnit && (
         <div className="field shopping-unit-field">
-          <label className="field-label" htmlFor="shopping-unit-select">
+          {/* The caption is a span, not a label: it names a chip group, and a
+              <label> would point at no single control. The group repeats the
+              name as its aria-label, so the optional marker stays visual. */}
+          <span className="field-label">
             Einkaufs-Einheit<span className="optional-mark">optional</span>
-          </label>
-          <select
-            id="shopping-unit-select"
-            value={selectedIsMapped ? (shoppingUnit ?? '') : ''}
-            disabled={mappedUnits.length === 0}
-            onChange={(event) =>
-              onShoppingUnitChange(event.target.value === '' ? null : event.target.value)
-            }
-          >
-            <option value="">Keine — Kauf in {bu}</option>
-            {mappedUnits.map((unit) => (
-              <option key={unit.name} value={unit.name}>
-                {unit.name}
-              </option>
-            ))}
-          </select>
-          <p className="field-hint">
-            {mappedUnits.length === 0
-              ? 'Trage zuerst eine Zusatz-Einheit mit Menge ein, um eine Einkaufs-Einheit zu wählen.'
-              : 'Die Einheit, in der die Zutat gekauft wird. Ohne Auswahl wird sie in der Basis-Einheit gekauft.'}
-          </p>
+          </span>
+          {mappedUnits.length === 0 ? (
+            // Without a mapped unit there is nothing to choose from; the hint
+            // explains why the chip row is missing instead of leaving the
+            // section blank.
+            <p className="field-hint">
+              Trage zuerst eine Zusatz-Einheit mit Menge ein, um eine Einkaufs-Einheit zu wählen.
+            </p>
+          ) : (
+            <div className="purchase-unit-chips" role="group" aria-label="Einkaufs-Einheit">
+              {mappedUnits.map((unit) => {
+                const selected = selectedIsMapped && shoppingUnit === unit.name;
+                return (
+                  <button
+                    key={unit.name}
+                    type="button"
+                    className={selected ? 'chip chip-active' : 'chip'}
+                    aria-pressed={selected}
+                    onClick={() => onShoppingUnitChange(unit.name)}
+                  >
+                    {unit.name}
+                  </button>
+                );
+              })}
+              {/* The optional choice can only be dropped where it is actually
+                  set; the dashed clear chip is the precision chips' idiom for
+                  exactly that (docs/DESIGN.md §5.2). */}
+              {selectedIsMapped && shoppingUnit !== null && (
+                <button
+                  type="button"
+                  className="chip chip-clear"
+                  onClick={() => onShoppingUnitChange(null)}
+                  title="Einkaufs-Einheit entfernen"
+                >
+                  <CloseIcon className="chip-icon" optical={20} />
+                  <span>Entfernen</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </>

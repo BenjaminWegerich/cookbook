@@ -1234,11 +1234,13 @@ already exists as a shopping item, the Einkauf and Synonyme sections are pre-fil
 there updates that item instead of creating a second row. A duplicate ingredient name is
 reported under the name field as soon as the field is left. *decided with the user*
 
-**The purchase unit is a property of the ingredient.** Under the AU grid, one optional select
-(„Einkaufs-Einheit") lists the ingredient's mapped units plus „Keine — Kauf in g/ml". It marks
-exactly one mapping as the unit the ingredient is bought in; the flag is saved per mapping, not
-on the unit, so the same unit can buy carrots and only count garlic cloves. *decided with the
-user*
+**The purchase unit is a property of the ingredient.** Under the AU grid, a chip row
+(„Einkaufs-Einheit") offers the ingredient's mapped units; the chosen chip is the unit the
+ingredient is bought in, in accent fill. The choice is optional: there is no „Keine — Kauf in
+g/ml" chip and no hint — no active chip means the base unit, while one is chosen a dashed
+„× Entfernen" chip drops it (the precision chips' idiom, §5.2). The flag marks exactly one
+mapping; it is saved per mapping, not on the unit, so the same unit can buy carrots and only
+count garlic cloves. *decided with the user*
 
 **The ingredient's „Einkauf" is optional.** An ingredient may stay unbought; while a store is
 picked, the store chips carry a dashed „× Entfernen" chip that clears the stop and — because a
