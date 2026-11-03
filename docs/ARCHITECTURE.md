@@ -41,9 +41,10 @@
   debounced, text-only copy of the working draft to localStorage (one slot, 30 days,
   `components/recipeDraftRecovery.ts`); opening the same recipe offers it back through
   `components/DraftRecoverySheet.tsx`, and saving or discarding clears it. Independently of
-  that safety copy, the editor can save a draft deliberately: „Entwurf speichern“ writes the
-  working state to the `Entwürfe` subfolder as a saved, unfinished recipe, even when
-  mandatory fields are empty or normal validation would block the save. Drafts are marked
+  that safety copy, the editor can save a draft deliberately: „Als Entwurf speichern“ writes
+  the working state to the `Entwürfe` subfolder as a saved, unfinished recipe, even when
+  mandatory fields are empty or normal validation would block the save. The editor stays
+  open and a snackbar confirms the save. Drafts are marked
   in the list and overview and are excluded from cooking, meal planning, shopping,
   sub-recipe links and exports until a normal save promotes them (see “Draft storage”).
 
@@ -119,7 +120,11 @@
   validates it, creates the canonical recipe (including master-data registration and the
   export), renames the photo and deletes the draft. Drafts are excluded from meal-plan
   recognition, scaling, shopping, sub-recipe links and the §7.2 collection validation.
-  Deleting a draft removes its JSON file and its photo. The format is specified in
+  A canonical recipe can be demoted again through `demoteRecipeToDraft` (`draftStorage.ts`):
+  the editor's current fields become the draft, the photo follows the draft id, and the
+  canonical file plus its export are deleted; the operation rolls back on failure. An
+  ingredient recipe's master row stays untouched. Deleting a draft removes its JSON file and
+  its photo. The format is specified in
   [storage_format.md](storage_format.md) §11.
 - Ingredient master data lives in two CSV files in the `Stammdaten` subfolder — `zutaten.csv`
   (ingredient list: name + base unit + reorder point + the optional Singular/Plural display

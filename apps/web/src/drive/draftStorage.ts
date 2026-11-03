@@ -140,6 +140,17 @@ function draftBaseFromFileName(name: string): string {
     : name.replace(/\.[^.]*$/, '');
 }
 
+/**
+ * The title a canonical recipe file carries: its file name without `.md`
+ * (storage_format.md §2). Only the demotion path needs it, to find the photo
+ * sibling that has to follow the recipe into the draft area.
+ */
+function recipeTitleFromFileName(name: string): string {
+  return name.toLowerCase().endsWith('.md')
+    ? name.slice(0, -'.md'.length)
+    : name.replace(/\.[^.]*$/, '');
+}
+
 /** Finds a photo sibling for one basename in the `Bilder` listing. */
 function findPhotoIn(files: readonly DriveFile[], base: string): RecipeImage | undefined {
   for (const extension of ['jpg', 'png'] as const) {
@@ -355,6 +366,86 @@ export async function promoteDraft(
   }
 
   return { file: created, draftDeleted };
+}
+
+/**
+ * The counterpart of `promoteDraft`: turns a canonical recipe into a saved
+ * draft. The editor's current working state becomes the draft payload, the
+ * recipe's photo moves from `<Titel>.<ext>` to the draft's own id
+ * (`<draft-id>.<ext>`, §11), and the canonical file and its export are removed.
+ *
+ * The order matters: the draft file is created first, then the photo follows it,
+ * and only then is the recipe deleted. If the photo rename fails, the new draft
+ * is removed and the canonical recipe stays untouched. If the recipe delete
+ * fails before the `.md` is gone, the photo is renamed back and the new draft is
+ * removed — a failed demotion never leaves two half-units behind. Once the `.md`
+ * is deleted the operation succeeded; the export cleanup is best-effort inside
+ * `deleteRecipe` and must not undo it.
+ *
+ * The ingredient-master row of an `ingredient_recipe` is deliberately left
+ * alone: it carries the user's precision, reorder point and mappings, and the
+ * name may still be used as an ordinary ingredient by other recipes. Drafts are
+ * outside master-data registration (§11), so nothing reads the row through the
+ * draft. Demoting a recipe also does not rewrite other recipes that referenced
+ * its title as a sub-recipe: the title simply stops being an ingredient recipe,
+ * which is a valid ordinary ingredient use.
+ */
+export async function demoteRecipeToDraft(
+  token: string,
+  recipeFileId: string,
+  draft: EditorDraft,
+): Promise<DriveFile> {
+  // One snapshot gives the recipe's photo sibling (and would let a later delete
+  // reuse the same listing if it needed one). The recipe file itself supplies
+  // the title the photo is named after — the draft title may already differ if
+  // the user renamed it in the editor.
+  const folder = await listCookbookFolder(token);
+  const recipeFile = await getFile(token, recipeFileId);
+  const title = recipeTitleFromFileName(recipeFile.name);
+  const photo = findPhotoIn(folder.images.files, title);
+
+  const created = await createDraft(token, draft);
+  const draftBase = draftBaseFromFileName(created.name);
+  let photoRenamed = false;
+  try {
+    if (photo !== undefined) {
+      await renameFile(token, photo.fileId, `${draftBase}.${photo.extension}`);
+      photoRenamed = true;
+    }
+    // `deleteRecipe` removes the `.md` and its export. The photo is already the
+    // draft's, so the delete is told to leave the `Bilder` area alone — a stale
+    // listing cannot make it delete the renamed file.
+    await deleteRecipe(token, recipeFileId, { keepImage: true });
+  } catch (error) {
+    // Best-effort rollback, newest step first: the photo goes back to the recipe
+    // title, then the freshly created draft file goes away. Only the draft JSON
+    // is deleted directly (not through `deleteDraft`) because that helper would
+    // also delete the photo — which is the canonical recipe's again by now.
+    if (photoRenamed && photo !== undefined) {
+      try {
+        await renameFile(token, photo.fileId, `${title}.${photo.extension}`);
+      } catch (rollbackError) {
+        console.warn(
+          `Das Bild von "${title}" konnte nach der fehlgeschlagenen Umwandlung nicht zurückbenannt werden: ${
+            rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+          }`,
+        );
+      }
+    }
+    try {
+      await deleteFile(token, created.id);
+      invalidateDraftContent(created.id);
+    } catch (rollbackError) {
+      console.warn(
+        `Der gerade angelegte Entwurf "${created.name}" konnte nach der fehlgeschlagenen Umwandlung nicht entfernt werden: ${
+          rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+        }`,
+      );
+    }
+    throw error;
+  }
+
+  return created;
 }
 
 /**

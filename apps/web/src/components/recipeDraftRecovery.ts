@@ -53,7 +53,7 @@ export interface RecoverableDraft {
    */
   createdFileId: string | null;
   /**
-   * A saved-draft file already created by a failed "Entwurf speichern". Restoring
+   * A saved-draft file already created by a quiet draft save. Restoring
    * it makes the next draft save update that draft instead of creating a second
    * one. Null for every record written before drafts were stored in Drive.
    */

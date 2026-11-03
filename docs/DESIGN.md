@@ -620,14 +620,15 @@ A typeface joins the shortlist only when it meets every requirement:
 | Primary | accent fill, `--color-on-accent` label | the one forward action of a screen or sheet („Speichern") |
 | Danger | danger fill, `--color-on-accent` label | a destructive action („Rezept löschen", „Entfernen") |
 | Outlined | surface fill, hairline border, ink label | secondary actions in a row („Einplanen", „Mehr", photo „Auswählen" / „Ersetzen") *decided with the user* |
-| Text | no fill, no border, muted label (the draft save is ochre) | navigation („Zurück"), quiet answers („Abbrechen", „Rückgängig") and the editor's secondary save („Entwurf speichern") |
+| Text | no fill, no border, muted label (the draft save is ochre) | navigation („Zurück"), quiet answers („Abbrechen", „Rückgängig") and the editor's secondary save („Als Entwurf speichern") |
 | Add | surface fill, olive border, olive label | a creation action inside a card or list („Schritt hinzufügen", „Zutatenzeile hinzufügen", „Neue Zutat anlegen") |
 
 **Geometry.** Action buttons: `--radius-md`, padding `--space-3` / `--space-4`, label
 `--text-md` weight 600, `--space-2` gap to an 18px symbol (`--icon-md`). The 10px inline
 step is shared by every action variant; it keeps the recipe overview's three actions on one
 phone line, and the cooking view's step bar already uses it. Text buttons:
-`--radius-sm`, padding `--space-2`, label `--text-sm`. The editor's „Entwurf speichern"
+`--radius-sm`, padding `--space-2`, label `--text-sm`. The editor's quiet draft save
+(„Als Entwurf speichern")
 is a text button that keeps the action button's `--control-height`, so the quiet second save
 never shrinks below thumb reach. It is the one text button in ochre, because its colour is
 the unfinished state (§4.1). An Add button takes the outlined
@@ -792,10 +793,11 @@ field; a hint never repeats the caption.
 
 - A save attempt runs every check, shows the banner and moves focus and scroll to the first
   problem; the primary button stays enabled so it can explain itself (§5.1).
-- A normal save of a draft runs the same checks. The editor's quiet „Entwurf speichern"
+- A normal save of a draft runs the same checks. The editor's quiet „Als Entwurf speichern"
   deliberately runs none of them: it is the way to keep a recipe whose mandatory fields are
   still empty or whose warnings make a normal save impossible. It saves the working state as
-  a draft and leaves the recipe unfinished.
+  a draft, leaves the recipe unfinished and keeps the editor open; a snackbar confirms the
+  save.
 - A form whose only problem is one field reports it at that field alone; the banner is for a
   form with several problems, or for one that belongs to no field. *decided with the user*
 - Every message is German, names the problem and says what to do; it never only says that
@@ -1377,10 +1379,17 @@ is "not now": the copy stays for the next open. One copy at a time — the visib
 one offered back — and it is text-only; a queued photo change is not part of it. *decided with the
 user*
 
-**A saved draft is not the local recovery copy.** „Entwurf speichern" writes the working
+**A saved draft is not the local recovery copy.** „Als Entwurf speichern" writes the working
 state to Drive as a saved, unfinished recipe; the local copy remains the separate safety net
 for a lost session. A successful draft save clears the local copy, exactly like a normal
-save.
+save, but keeps the editor open — the snackbar is the confirmation, not a screen change.
+
+**A canonical recipe can become a draft again.** The editor's quiet „Als Entwurf
+speichern" writes the current working state as a draft, renames the photo to the draft id
+and removes the canonical file and its export. It asks first („… in einen Entwurf
+umwandeln?"), because the recipe then leaves cooking, planning and sharing; the shared
+confirmation sheet answers with „Umwandeln". After the conversion the editor stays open on
+the new draft and a snackbar confirms it.
 
 ### 6.3 Loading, empty and error states
 

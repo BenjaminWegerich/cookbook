@@ -563,14 +563,23 @@ function findPhotoIn(files: readonly DriveFile[], title: string): DriveFile | un
  * file itself must exist. The `.md` delete is the unit's success: siblings
  * are cleaned up best-effort afterwards, so a partial failure never leaves a
  * deleted recipe behind with an error that would block a retry.
+ *
+ * @param options.keepImage leave the photo sibling alone. The demotion path
+ *   (`demoteRecipeToDraft`) has already renamed it to the new draft's id and
+ *   must not lose it. It deliberately does not use the `Bilder` listing for the
+ *   photo at all, so a stale listing cannot delete the renamed file.
  */
-export async function deleteRecipe(token: string, fileId: string): Promise<void> {
+export async function deleteRecipe(
+  token: string,
+  fileId: string,
+  options?: { keepImage?: boolean },
+): Promise<void> {
   // The siblings live in their own subfolders now, so the cleanup needs the
   // snapshot rather than one folder listing.
   const folder = await listCookbookFolder(token);
   const file = await getFile(token, fileId);
   const title = titleFromFileName(file.name);
-  const photo = findPhotoIn(folder.images.files, title);
+  const photo = options?.keepImage === true ? undefined : findPhotoIn(folder.images.files, title);
   const exportFile = folder.exports.files.find(
     (entry) => entry.name === `${title}${EXPORT_EXTENSION}`,
   );

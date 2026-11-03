@@ -2322,6 +2322,15 @@ function App() {
     [token, refreshRecipes, setNav, replaceSubRecipes],
   );
 
+  /**
+   * A quiet draft save keeps the editor open. The list behind it is refreshed
+   * anyway, so closing the editor later lands on a list that already knows the
+   * new or converted draft.
+   */
+  const handleDraftSaved = useCallback((): void => {
+    if (token !== null) void refreshRecipes(token);
+  }, [token, refreshRecipes]);
+
   /** The chat applied the handoff (context re-read, request prefilled). */
   const handleHandoffConsumed = useCallback((): void => {
     setAiHandoff(null);
@@ -2504,6 +2513,7 @@ function App() {
               }
               onClose={closeEditor}
               onSaved={handleEditorSaved}
+              onDraftSaved={handleDraftSaved}
               onOpenRecipe={openSubRecipe}
               showSnackbar={showSnackbar}
             />
@@ -2529,6 +2539,7 @@ function App() {
                 recipes={recipes ?? []}
                 onClose={closeEditor}
                 onSaved={handleEditorSaved}
+                onDraftSaved={handleDraftSaved}
                 onOpenRecipe={openSubRecipe}
                 showSnackbar={showSnackbar}
               />

@@ -527,11 +527,21 @@ fields losslessly:
 - A draft's optional photo is `Bilder/<draft-id>.jpg` / `.png`, where `<draft-id>` is the
   draft file's basename without `.json`. The id, not the title, names the file, so an empty
   or duplicate title is allowed and no filename-safety rule applies yet.
+- A quiet draft save („Als Entwurf speichern“) keeps the editor open: the saved payload
+  becomes the new baseline and a snackbar confirms the write. Further edits save to the same
+  draft file.
 - A draft becomes a recipe only on a normal save: the editor validates the draft against
   §7, writes the canonical file to `Rezepte/`, renames the photo to the recipe title,
   generates the export and deletes the draft. If validation fails, the draft stays a draft
   and the editor reports the issues. The normal save of a draft therefore uses the canonical
   checks, not the draft payload.
+- A canonical recipe can be turned back into a draft from the editor („Als Entwurf
+  speichern“). The current editor fields become the draft, the photo is renamed from
+  `<Titel>.<ext>` to `<draft-id>.<ext>`, and the canonical `.md` and its export are deleted.
+  The operation asks first because the dish leaves cooking, planning and sharing; the editor
+  stays open after the conversion and a snackbar confirms it. An
+  ingredient recipe’s master-data row stays untouched: it is the user’s master data, and the
+  name may still be used as an ordinary ingredient.
 - Drafts are outside the collection for §7.2 validation, sub-recipe links, meal-plan
   recognition, shopping and ingredient-master registration. The app lists them in the
   collection and marks them with the „Entwurf“ badge (docs/DESIGN.md §5.7).
