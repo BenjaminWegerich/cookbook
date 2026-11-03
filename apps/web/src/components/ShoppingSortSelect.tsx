@@ -23,20 +23,32 @@
  * was decided, so the page reads as a checklist of decisions once the work is
  * done:
  *
- * - „<line>: Synonym für <item>“ — the „Artikel“ text names an existing item, so
- *   the line becomes a synonym of it („Markt“ and „Bereich“ are not needed and
- *   are hidden while the text names an item);
- * - „<line>: Synonym für <item> – <store> > <section>“ — the „Artikel“ name was
- *   changed and the stop is set: the route is saved on the new item name, and
- *   the line's own name is saved as a synonym of it;
- * - „<line>: <store> > <section>“ — the „Artikel“ name is unchanged and the stop
+ * - „<line>“ = <item> — the „Artikel“ text names an existing item, so the line
+ *   becomes a synonym of it („Markt“ and „Bereich“ are not needed and are hidden
+ *   while the text names an item);
+ * - „<line>“ = <item>: <store> > <section> — the „Artikel“ name was changed and
+ *   the stop is set: the route is saved on the new item name, and the line's own
+ *   name is saved as a synonym of it;
+ * - „<line>“: <store> > <section> — the „Artikel“ name is unchanged and the stop
  *   is set, so the line becomes that item;
- * - „<line>: ignoriert (oben einsortiert)“ — the line is ignored.
+ * - „<line>“: ignoriert (oben einsortiert) — the line is ignored.
+ *
+ * The original line always sits between „“ in the folded summary, so it stays
+ * distinguishable from the item name it was mapped to.
  *
  * The folded line is muted and one text step smaller, and tapping it unfolds the
  * row again so a decision can still be changed. Folding happens when the user
  * leaves the row after the exact name (never under the cursor while typing),
  * when a suggestion or a section is chosen, or on „Ignorieren“.
+ *
+ * **The decisions are unsaved until „Liste sortieren“ is pressed, so leaving
+ * asks first.** The page keeps one exit guard (useLeaveGuard, docs/DESIGN.md
+ * §6.2): the header's „Zurück“, Escape and the browser / device Back button all
+ * open the same discard question as a sheet (LeaveConfirmSheet) instead of
+ * dropping the decisions. Confirmed only by the sheet's own „Verwerfen“; closing
+ * it stays. A page nobody has decided anything on leaves without asking, and the
+ * browser's own `beforeunload` dialog covers a reload (registered by the guard
+ * while decisions exist).
  *
  * A known item hides the stop fields, because the item's route already exists;
  * the picker is only offered while the text names no item. Changing the name
@@ -52,8 +64,8 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FocusEvent, ReactNode } from 'react';
+import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import type { FocusEvent, ReactNode, Ref } from 'react';
 
 import {
   matchShoppingItem,
@@ -66,7 +78,22 @@ import {
 } from '@cookbook/core';
 
 import type { KeepItem } from '../keep/keepClient';
+import { useEscapeTrigger, useLeaveGuard } from '../hooks/useLeaveGuard';
+import LeaveConfirmSheet from './LeaveConfirmSheet';
 import { VisibilityOffIcon } from './icons';
+
+/**
+ * The browser-Back consumer of this page (see App's popstate handler). The
+ * decisions behind „Zurück“ are unsaved work, so Back arms the same discard
+ * question the header's button does instead of dropping them silently.
+ */
+export interface ShoppingSortSelectHandle {
+  /**
+   * Asks before leaving and reports whether the page handled the Back. False
+   * means the caller may leave: the page holds nothing to discard.
+   */
+  notifyBack: () => boolean;
+}
 
 /**
  * How one unresolved line was decided:
@@ -95,7 +122,10 @@ export type SortResolution =
 interface ShoppingSortSelectProps {
   /** The shopping-list items in Keep's display order (top first) — a snapshot. */
   items: readonly KeepItem[];
-  /** Leaves the page for the home screen (header "Zurück", browser Back). */
+  /**
+   * Leaves the page for the home screen — the guard's confirmed exit (the
+   * question's „Verwerfen“) or an exit with no decision to discard.
+   */
   onClose: () => void;
   /**
    * Applies the decisions: persists the new item and synonym rows, reorders the
@@ -103,6 +133,8 @@ interface ShoppingSortSelectProps {
    * is thrown and shown next to the button (the page stays open).
    */
   onSort: (resolutions: ReadonlyMap<string, SortResolution>) => Promise<void>;
+  /** See ShoppingSortSelectHandle — React 19 passes `ref` as an ordinary prop. */
+  ref?: Ref<ShoppingSortSelectHandle>;
 }
 
 /** One unresolved line the page asks the user about. */
@@ -146,7 +178,7 @@ function chosenStop(
  * The sort page (see file header). It owns nothing but the decisions: the items,
  * the master data and the writes belong to App.
  */
-function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps) {
+function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectProps) {
   /** The unresolved lines, computed once from the snapshot. */
   const unresolved = useMemo(() => unresolvedEntries(items), [items]);
   /** The „Artikel“ text by line (the name field until the user edits it). */
@@ -315,6 +347,77 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
 
   /** Whether the forward action can run. */
   const canSort = complete && hasEntries && !busy;
+
+  /**
+   * The decisions the user has really made, one canonical string each: a typed
+   * „Artikel“ name that differs from its prefill, a picked store, a typed
+   * „Bereich“ and an ignored line. Values that end up at the prefill (typing then
+   * reverting the name) or an emptied section field are not decisions — leaving
+   * would lose nothing, so they must not make the page ask.
+   *
+   * Sorted, so the order in which the maps were filled in never produces a
+   * different fingerprint for the same work.
+   */
+  const decisionList = useMemo(() => {
+    const decisions: string[] = [];
+    for (const [text, value] of drafts) {
+      if (value !== shoppingNameField(text)) decisions.push(`artikel\u0000${text}\u0000${value}`);
+    }
+    for (const [text, value] of stores) decisions.push(`markt\u0000${text}\u0000${value}`);
+    for (const [text, value] of sections) {
+      if (value.trim() !== '') decisions.push(`bereich\u0000${text}\u0000${value}`);
+    }
+    for (const text of ignored) decisions.push(`ignoriert\u0000${text}`);
+    return decisions.sort();
+  }, [drafts, stores, sections, ignored]);
+
+  /** True while leaving would throw away at least one decision. */
+  const hasUnsavedDecisions = decisionList.length > 0;
+
+  /**
+   * The guard's work fingerprint (useLeaveGuard's `workSignature`): it arms its
+   * question for exactly one work state, so any further edit changes the
+   * fingerprint and an armed question can never be spent on a state it was not
+   * asked about.
+   */
+  const decisionsSignature = decisionList.join('\n');
+
+  /**
+   * The page's one exit guard (useLeaveGuard, docs/DESIGN.md §6.2): the header's
+   * „Zurück“, Escape and the browser / device Back button all open the same
+   * discard question instead of dropping the decisions. The question renders as
+   * LeaveConfirmSheet over the page, and only its „Verwerfen“ leaves — closing it
+   * (scrim, Escape, a second Back) stays.
+   */
+  const guard = useLeaveGuard({
+    workSignature: decisionsSignature,
+    needsConfirm: hasUnsavedDecisions,
+  });
+
+  // Escape mirrors the header's „Zurück" (docs/DESIGN.md §6.2): it runs through
+  // the same guard, so it asks before the decisions are dropped. The listener is
+  // registered while the page is mounted — and the page only exists while it is
+  // the visible one.
+  useEscapeTrigger(() => {
+    guard.request('escape', onClose);
+  });
+
+  // Browser / device Back is a decision here, not a silent discard (see
+  // ShoppingSortSelectHandle): App's popstate listener asks this page first, and
+  // only a `false` lets it leave. A Back while the question is open closes it —
+  // „Abbrechen" — and keeps the entry, so a second Back never discards (§6.2).
+  useImperativeHandle(
+    ref,
+    () => ({
+      notifyBack: (): boolean => guard.request('browser-back', onClose),
+    }),
+    [guard, onClose],
+  );
+
+  /** The header's „Zurück“: it asks first while decisions would be lost. */
+  function requestLeave(): void {
+    guard.request('button', onClose);
+  }
 
   /** Types into one line's „Artikel“ field. */
   function typeDraft(text: string, value: string): void {
@@ -634,26 +737,27 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
    * over a known item and a known item over a stop, matching the order in which
    * `handleSort` reads the decisions. A stop whose „Artikel“ name differs from
    * the line's own name also writes the line name as a synonym; the summary
-   * names that (`Synonym für <Artikel> – <Markt> > <Bereich>`).
+   * names that (`„<line>“ = <Artikel>: <Markt> > <Bereich>`). The line itself is
+   * always quoted, the mapped item name never is.
    */
   function summaryOf(entry: UnresolvedEntry): string {
     if (ignored.has(entry.text)) {
-      return `${entry.text}: ignoriert (oben einsortiert)`;
+      return `„${entry.text}“: ignoriert (oben einsortiert)`;
     }
     const item = knownItemOf(entry);
     if (item !== null) {
-      return `${entry.text}: Synonym für ${item}`;
+      return `„${entry.text}“ = ${item}`;
     }
     const stop = stopOf(entry);
     if (stop !== null) {
       const name = draftOf(entry).trim();
       const route = `${stop.store} > ${stop.section}`;
       return synonymVariantOf(entry, name) === null
-        ? `${entry.text}: ${route}`
-        : `${entry.text}: Synonym für ${name} – ${route}`;
+        ? `„${entry.text}“: ${route}`
+        : `„${entry.text}“ = ${name}: ${route}`;
     }
     // A folded row always has a decision; this keeps the type honest.
-    return entry.text;
+    return `„${entry.text}“`;
   }
 
   /**
@@ -732,17 +836,16 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
       {/* "Zurück" on its own line at the top left, the screen title below it —
           the shared stacked header (.app-header-stacked). */}
       <header className="app-header app-header-stacked">
-        <button type="button" className="text-button back-button" onClick={onClose}>
+        <button type="button" className="text-button back-button" onClick={requestLeave}>
           Zurück
         </button>
         <h1>Einkaufsliste sortieren</h1>
       </header>
 
       <p className="sort-intro">
-        Einträge ohne Einkaufsort werden hier einem Artikel zugeordnet — einem bekannten, der dann
-        als Synonym gemerkt wird, oder mit Markt und Bereich als neuer Artikel. Einträge, die du
-        ignorierst, kommen an den Anfang der Liste; alle anderen werden nach dem Einkaufsweg
-        sortiert.
+        Einträge ohne bekannten Einkaufsort werden angezeigt. Entweder einen bekannten Artikel als
+        Synonym zuordnen oder einen Einkaufsort auswählen. Ignorierte Einträge werden ganz oben
+        einsortiert und beim nächsten Mal wieder abgefragt.
       </p>
 
       {renderList()}
@@ -770,6 +873,19 @@ function ShoppingSortSelect({ items, onClose, onSort }: ShoppingSortSelectProps)
           </p>
         )}
       </div>
+
+      {/* The discard question (docs/DESIGN.md §6.2): it stands only while a
+          decision would be lost, and it is the same sheet every other exit guard
+          uses. Its head carries the question, because the sheet explains nothing
+          below it; the quiet answer keeps the focus, so a stray Enter stays. */}
+      {guard.armed && (
+        <LeaveConfirmSheet
+          question="Zuordnungen verwerfen?"
+          confirmLabel="Verwerfen"
+          onCancel={guard.reset}
+          onConfirm={() => guard.confirm(onClose)}
+        />
+      )}
     </main>
   );
 }

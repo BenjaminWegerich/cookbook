@@ -40,7 +40,10 @@ import RecipeOverview, {
 } from './components/RecipeOverview';
 import ShoppingListSelect from './components/ShoppingListSelect';
 import ShoppingPlaces, { type ShoppingPlacesHandle } from './components/ShoppingPlaces';
-import ShoppingSortSelect, { type SortResolution } from './components/ShoppingSortSelect';
+import ShoppingSortSelect, {
+  type ShoppingSortSelectHandle,
+  type SortResolution,
+} from './components/ShoppingSortSelect';
 import Snackbar from './components/Snackbar';
 import SubRecipeSelect from './components/SubRecipeSelect';
 import { PencilIcon, PlusIcon, SparkleIcon, UndoIcon } from './components/icons';
@@ -477,6 +480,12 @@ function App() {
    * state changes (the same reason the pantry step snapshots its cards).
    */
   const [sortItems, setSortItems] = useState<KeepItem[]>([]);
+  /**
+   * The imperative handle of the sort page, so browser Back can arm its discard
+   * question (the page's own „Zurück“ asks the same thing): the decisions made
+   * there are unsaved until „Liste sortieren“ is pressed.
+   */
+  const sortHandleRef = useRef<ShoppingSortSelectHandle | null>(null);
   /**
    * The shopping list the sort was last applied to, or null. The Keep state's
    * shopping object *is* the marker, exactly like `shoppingWrittenFor` is for the
@@ -953,8 +962,15 @@ function App() {
         return;
       }
       if (top === 'sort') {
-        // Back out of the sort page returns to the list, which sits on the
-        // guard entry the pop just landed on: nothing to re-establish.
+        // Back out of the sort page, but not past its unsaved decisions: the page
+        // arms the same discard question its own „Zurück“ opens. A `true` means
+        // it took this Back — stay here and re-establish the entry the pop
+        // consumed. Only a page with nothing to discard lets the Back through,
+        // and then the list sits on the guard entry the pop landed on.
+        if (sortHandleRef.current?.notifyBack() === true) {
+          guardCurrentEntry();
+          return;
+        }
         navRef.current = null;
         setSortOpen(false);
         return;
@@ -2419,9 +2435,11 @@ function App() {
 
       {/* The shopping-list sort ("Einkaufsliste sortieren") — a place of its own
           over the list, like the pantry step. Nothing opens above it, so it is
-          simply mounted while it is the visible page. */}
+          simply mounted while it is the visible page. Its decisions are unsaved
+          until „Liste sortieren“, so the handle lets Back ask before they go. */}
       {sortOpen && (
         <ShoppingSortSelect
+          ref={sortHandleRef}
           items={sortItems}
           onClose={() => setNav(null)}
           onSort={sortShoppingList}

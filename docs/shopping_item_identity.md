@@ -192,8 +192,8 @@ The master-data loaders fail loudly (storage_format.md §9–§10); that is kept
 - **No rewriting of Keep texts.** The app never changes a line the user typed.
 - **No display of the silent resolution.** A line that already resolved before
   the page opened is simply sorted and never appears on the page, not even as a
-  summary; only unresolved lines are listed. The folded summary shows the decision
-  the user has just made („Möhren: Synonym für Karotten“), never a resolution the
+  summary; only unresolved lines are listed. The folded summary shows the
+  decision the user has just made („Möhren“ = Karotten), never a resolution the
   pipeline applied on its own.
 - **No automatic similarity merge.** A similar name is a candidate the user
   confirms, never a match the pipeline applies on its own (§4).
