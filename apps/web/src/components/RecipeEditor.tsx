@@ -31,6 +31,10 @@
  * - sections: Kopfdaten (Titel, Details, Typ, Portionen/Ergiebigkeit,
  *   Zeiten, Bild), one card per step (there is no „Zubereitung" card or heading:
  *   the card rung never nests, §4.4), Zutaten, Design.
+ * - the Design card can fill its whole theme from the recipe's title,
+ *   description and photo via Gemini („Mit KI generieren"): the suggestion
+ *   overwrites the current tokens at once, without an approval step, and a
+ *   snackbar reports success or the provider error unchanged.
  * - symbols follow the app-wide icon set (see components/icons.tsx): pencil =
  *   edit, upload = choose/replace photo, trash = destructive, cross = remove,
  *   star = reference quantity, arrows = reorder.
@@ -100,6 +104,15 @@ import {
   writeRecipeExportSafely,
   type StoredRecipe,
 } from '../drive/recipeStorage';
+import { createAiClient } from '../ai/client';
+import { toAiImage } from '../ai/imageAttachment';
+import { getAiApiKey } from '../ai/sessionKey';
+import {
+  buildThemeSuggestionPrompt,
+  parseThemeSuggestion,
+  THEME_SUGGESTION_SYSTEM_TEXT,
+} from '../ai/themeSuggestion';
+import type { AiImage } from '../ai/types';
 import {
   createDraft,
   deleteDraft,
@@ -141,6 +154,7 @@ import {
   LinkIcon,
   NewReleasesIcon,
   PlusIcon,
+  SparkleIcon,
   StarIcon,
   TrashIcon,
   UploadIcon,
@@ -1270,6 +1284,11 @@ function RecipeEditor({
   const createdDraftFileRef = useRef<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  /**
+   * True while the Design card's AI suggestion is in flight. Drives the
+   * button's disabled state and its „Wird generiert …" label.
+   */
+  const [generatingTheme, setGeneratingTheme] = useState(false);
   const [sheet, setSheet] = useState<SheetState | null>(null);
   /** Create-master-data sheet (opened from the ingredient sheet). */
   const [createSheet, setCreateSheet] = useState<{ name: string } | null>(null);
@@ -1316,6 +1335,30 @@ function RecipeEditor({
   const [, setMasterRevision] = useState(0);
 
   const photoUrlRef = useRef<string | null>(null);
+  /**
+   * True while this editor level is mounted. A request that outlives the
+   * screen must not report a success for work it did not apply; StrictMode
+   * double-invokes effects, so the flag is re-asserted in the setup body.
+   */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  /**
+   * The bytes behind the photo preview, kept for the AI design prompt. The
+   * object URL is display-only, so the request needs the original blob (or the
+   * queued crop) and its extension for the MIME fallback.
+   */
+  const photoSourceRef = useRef<{ blob: Blob; extension: 'jpg' | 'png' } | null>(null);
+  /**
+   * Synchronous mirror of `generatingTheme`: a second click can arrive before
+   * React re-renders the disabled button, and a ref is what stops it from
+   * starting the same request twice.
+   */
+  const themeGenerationRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   /** Kopf text fields — Enter (the phone keyboard's "next") walks this chain. */
   const titleFieldRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1447,14 +1490,20 @@ function RecipeEditor({
   // Load the photo preview (edit mode) through the shared photo cache, so a
   // photo already downloaded by the list card or the overview sheet does not
   // get fetched again. Object URLs are revoked on unmount (effect below).
+  const targetImageFileId = target?.image?.fileId;
+  const targetImageExtension = target?.image?.extension;
   useEffect(() => {
-    if (token === '') return; // lost session: the reconnect re-runs this effect
-    const imageFileId = target?.image?.fileId;
-    if (imageFileId === undefined) return;
+    // Lost session: the reconnect re-runs this effect with a fresh token.
+    if (token === '' || targetImageFileId === undefined || targetImageExtension === undefined) {
+      return;
+    }
     let cancelled = false;
     void (async () => {
-      const blob = await loadRecipePhoto(token, imageFileId);
+      const blob = await loadRecipePhoto(token, targetImageFileId);
       if (cancelled || blob === null) return;
+      // Keep the bytes for the AI design prompt alongside the display URL: the
+      // object URL cannot be read back into a request body.
+      photoSourceRef.current = { blob, extension: targetImageExtension };
       if (photoUrlRef.current !== null) URL.revokeObjectURL(photoUrlRef.current);
       const url = URL.createObjectURL(blob);
       photoUrlRef.current = url;
@@ -1463,7 +1512,7 @@ function RecipeEditor({
     return () => {
       cancelled = true;
     };
-  }, [token, target?.image?.fileId]);
+  }, [token, targetImageFileId, targetImageExtension]);
 
   useEffect(
     () => () => {
@@ -2567,13 +2616,14 @@ function RecipeEditor({
 
   // ---- Photo handlers -----------------------------------------------------
 
-  const showPhotoUrl = (blob: Blob): void => {
+  const showPhotoUrl = (blob: Blob, extension: 'jpg' | 'png'): void => {
     // A new preview invalidates an armed "Wirklich entfernen?" — it would
     // otherwise target the previous image on the next tap.
     setPendingConfirm(null);
     if (photoUrlRef.current !== null) URL.revokeObjectURL(photoUrlRef.current);
     const url = URL.createObjectURL(blob);
     photoUrlRef.current = url;
+    photoSourceRef.current = { blob, extension };
     setPhotoUrl(url);
   };
 
@@ -2592,7 +2642,7 @@ function RecipeEditor({
     setPhotoError(null);
     try {
       const cropped = await landscapeCropPhoto(file, extension);
-      showPhotoUrl(cropped);
+      showPhotoUrl(cropped, extension);
       setPhotoChange({ kind: 'set', blob: cropped, extension });
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : 'Bild konnte nicht verarbeitet werden.');
@@ -2606,8 +2656,111 @@ function RecipeEditor({
       URL.revokeObjectURL(photoUrlRef.current);
       photoUrlRef.current = null;
     }
+    photoSourceRef.current = null;
     setPhotoUrl(null);
     setPhotoChange({ kind: 'remove' });
+  };
+
+  // ---- AI design suggestion ------------------------------------------------
+
+  /**
+   * Asks Gemini for a typeface and palette that fit the current recipe and
+   * overwrites the draft's theme with the answer (decided with the user: no
+   * approval step; the snackbar reports the outcome).
+   *
+   * The prompt carries the title, the optional description and — when the
+   * editor has the photo bytes — the image itself. The image is taken from the
+   * queued crop or the stored download (the preview's object URL is
+   * display-only); a removed photo is never sent, and a failed image read is
+   * dropped rather than failing the whole suggestion.
+   *
+   * Errors are forwarded verbatim: the Gemini adapter already produces German
+   * messages (status, block reason, network), and the parser adds precise
+   * messages for an unusable answer. Nothing is written when either fails.
+   */
+  const handleGenerateTheme = async (): Promise<void> => {
+    if (draft === null || themeGenerationRef.current) return;
+    const title = draft.title.trim();
+    const description = draft.description?.trim() ?? '';
+    if (title === '' && description === '') {
+      showSnackbar({
+        tone: 'error',
+        text: 'Für den Design-Vorschlag werden Titel oder Beschreibung benötigt.',
+      });
+      return;
+    }
+
+    const apiKey = getAiApiKey();
+    if (apiKey === null) {
+      showSnackbar({
+        tone: 'error',
+        text: 'Kein Gemini-API-Schlüssel hinterlegt. Bitte hinterlege ihn über „Rezept mit KI schreiben“.',
+      });
+      return;
+    }
+
+    themeGenerationRef.current = true;
+    setGeneratingTheme(true);
+    try {
+      // The photo is optional. A queued removal wins over the stored file; a
+      // queued replacement (or an already-loaded preview) supplies the bytes
+      // directly. Only when neither exists is the stored download fetched.
+      let image: AiImage | undefined;
+      let photoSource = photoChange?.kind === 'remove' ? null : photoSourceRef.current;
+      if (photoSource === null && photoChange?.kind !== 'remove' && token !== '') {
+        const stored = target?.image;
+        if (stored !== undefined) {
+          const blob = await loadRecipePhoto(token, stored.fileId);
+          if (blob !== null) {
+            photoSource = { blob, extension: stored.extension };
+          }
+        }
+      }
+      if (photoSource !== null) {
+        try {
+          image = await toAiImage(
+            photoSource.blob,
+            photoSource.extension === 'png' ? 'image/png' : 'image/jpeg',
+          );
+        } catch {
+          // „Wenn möglich" — a photo the browser cannot encode must not block
+          // the suggestion; the title/description alone still give it context.
+          console.warn('Rezeptbild konnte nicht für die KI-Anfrage aufbereitet werden.');
+        }
+      }
+
+      // The editor was left while the photo was being prepared: no request,
+      // no false success notice for a draft that no longer exists.
+      if (!mountedRef.current) return;
+
+      const client = createAiClient({ provider: 'gemini', apiKey });
+      const reply = await client.complete([
+        { role: 'system', content: THEME_SUGGESTION_SYSTEM_TEXT },
+        {
+          role: 'user',
+          content: buildThemeSuggestionPrompt({
+            title,
+            description,
+            hasImage: image !== undefined,
+          }),
+          ...(image !== undefined ? { images: [image] } : {}),
+        },
+      ]);
+      if (!mountedRef.current) return;
+      const theme = normalizeTheme(parseThemeSuggestion(reply));
+      updateDraft((current) => ({ ...current, theme }));
+      showSnackbar({ text: 'Design mit KI generiert.' });
+    } catch (err) {
+      if (mountedRef.current) {
+        showSnackbar({
+          tone: 'error',
+          text: err instanceof Error ? err.message : String(err),
+        });
+      }
+    } finally {
+      themeGenerationRef.current = false;
+      if (mountedRef.current) setGeneratingTheme(false);
+    }
   };
 
   /**
@@ -3595,6 +3748,19 @@ function RecipeEditor({
             Aussehen der Kochansicht anpassen. Alle Felder sind optional und fallen einzeln auf den
             Standard zurück.
           </p>
+          {/* The AI suggestion overwrites the whole theme at once. It sits
+              between the explanation and the manual controls: a starting point
+              for the fields below, which stay editable afterwards. */}
+          <button
+            type="button"
+            className="outlined-button"
+            onClick={() => void handleGenerateTheme()}
+            disabled={generatingTheme}
+            aria-busy={generatingTheme}
+          >
+            <SparkleIcon className="button-icon" optical={20} />
+            <span>{generatingTheme ? 'Wird generiert …' : 'Mit KI generieren'}</span>
+          </button>
           <ThemeEditor
             title={draft.title}
             theme={draft.theme}

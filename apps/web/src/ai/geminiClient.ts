@@ -16,8 +16,10 @@
  *
  * Wire mapping: {@link AiMessage}s become the `contents` array (system
  * messages are joined into the top-level `systemInstruction`, assistant
- * messages use Gemini's `model` role). The assistant's text is the joined
- * `parts` of the first candidate. Every request carries the URL context tool
+ * messages use Gemini's `model` role). A user message's optional images become
+ * `inlineData` parts next to its text (Gemini reads them directly from the
+ * request, no separate file upload). The assistant's text is the joined `parts`
+ * of the first candidate. Every request carries the URL context tool
  * ({@link URL_CONTEXT_TOOL}), so a link pasted into the prompt is read
  * server-side instead of being guessed at.
  */
@@ -61,10 +63,33 @@ export interface GeminiClientOptions {
   model?: string;
 }
 
+/**
+ * One part of a Gemini `contents` entry: either the turn's text or one inline
+ * image. Gemini accepts a mix of both in the same `parts` array, in order.
+ */
+type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+
+/** Maps one message to Gemini parts (text first, then its images). */
+function toGeminiParts(role: 'user' | 'model', message: AiMessage): GeminiPart[] {
+  const parts: GeminiPart[] = [];
+  if (message.content !== '') {
+    parts.push({ text: message.content });
+  }
+  for (const image of message.images ?? []) {
+    parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
+  }
+  if (parts.length === 0) {
+    // A completely empty turn would make Gemini reject the request with a
+    // generic 400; the caller has a much clearer German message for this.
+    throw new Error(`Gemini: Die ${role === 'user' ? 'Anfrage' : 'Antwort'} war leer.`);
+  }
+  return parts;
+}
+
 /** Maps a chat message to Gemini's `contents`/`systemInstruction` pieces. */
 function toGeminiContents(messages: readonly AiMessage[]): {
   systemInstruction: string | undefined;
-  contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>;
+  contents: Array<{ role: 'user' | 'model'; parts: GeminiPart[] }>;
 } {
   const system = messages
     .filter((message) => message.role === 'system')
@@ -72,17 +97,18 @@ function toGeminiContents(messages: readonly AiMessage[]): {
     .join('\n\n');
   const contents = messages
     .filter((message) => message.role !== 'system')
-    .reduce<Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>>((acc, message) => {
+    .reduce<Array<{ role: 'user' | 'model'; parts: GeminiPart[] }>>((acc, message) => {
       const role = (message.role === 'assistant' ? 'model' : 'user') as 'user' | 'model';
+      const parts = toGeminiParts(role, message);
       // Coalesce adjacent turns of the same role: Gemini's generateContent
       // requires strictly alternating user/model turns and rejects
       // consecutive same-role entries with a 400 (relevant for the
       // multi-turn repair-loop histories of Phase 3).
       const last = acc[acc.length - 1];
       if (last !== undefined && last.role === role) {
-        last.parts.push({ text: message.content });
+        last.parts.push(...parts);
       } else {
-        acc.push({ role, parts: [{ text: message.content }] });
+        acc.push({ role, parts });
       }
       return acc;
     }, []);
