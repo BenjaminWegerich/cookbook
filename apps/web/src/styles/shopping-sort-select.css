@@ -5,7 +5,7 @@
  * (components/ShoppingSortSelect.tsx): one row per unchecked shopping-list line
  * that names no item. An unfolded row carries the editable „Artikel“ field, the
  * similar-item chips (the shared .suggestions row), the „Markt“ store chips +
- * „Bereich“ search field and a quiet "Ignorieren" text action beside the store
+ * „Bereich“ section chips and a quiet "Ignorieren" text action beside the store
  * chips. As soon as the line is decided it folds to one muted, small summary
  * line; tapping that line unfolds the row again. All pixel values come from the
  * design ladder (docs/CODING_CONVENTIONS.md); colors and sizes reference the

@@ -14,7 +14,7 @@
  *   item into the editable „Artikel“ field — the line then sorts as that item
  *   for this run, and App writes a **synonym** row, so the same variant is never
  *   asked again;
- * - **assigns a stop** with the „Markt“ store chips + „Bereich“ search field —
+ * - **assigns a stop** with the „Markt“ store chips + „Bereich“ section chips —
  *   App then writes a new item row under the name in „Artikel“ and, when that
  *   name was changed, the line's own name as a **synonym** of it; or
  * - **ignores** the line, which the sort places at the top of the list.
@@ -167,10 +167,9 @@ function unresolvedEntries(items: readonly KeepItem[]): UnresolvedEntry[] {
 function chosenStop(
   store: string | undefined,
   sections: readonly string[],
-  sectionQuery: string,
+  section: string | undefined,
 ): ShoppingStop | null {
-  if (store === undefined) return null;
-  const section = sectionQuery.trim();
+  if (store === undefined || section === undefined) return null;
   return sections.includes(section) ? { store, section } : null;
 }
 
@@ -187,7 +186,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
   const [ignored, setIgnored] = useState<ReadonlySet<string>>(() => new Set<string>());
   /** Chosen store by text (level 1 of the „Markt“ field). */
   const [stores, setStores] = useState<ReadonlyMap<string, string>>(() => new Map());
-  /** Section search text by text (level 2 of the „Markt“ field). */
+  /** Chosen section by text (level 2 of the „Markt“ field). */
   const [sections, setSections] = useState<ReadonlyMap<string, string>>(() => new Map());
   /** Lines the user has folded to their one-line summary (a decided line). */
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set<string>());
@@ -242,7 +241,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
     return chosenStop(
       store,
       store === undefined ? [] : shoppingSections(store),
-      sections.get(entry.text) ?? '',
+      sections.get(entry.text),
     );
   }
 
@@ -350,10 +349,10 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
 
   /**
    * The decisions the user has really made, one canonical string each: a typed
-   * „Artikel“ name that differs from its prefill, a picked store, a typed
-   * „Bereich“ and an ignored line. Values that end up at the prefill (typing then
-   * reverting the name) or an emptied section field are not decisions — leaving
-   * would lose nothing, so they must not make the page ask.
+   * „Artikel“ name that differs from its prefill, a picked store, a picked
+   * „Bereich“ chip and an ignored line. Values that end up at the prefill (typing
+   * then reverting the name) are not decisions — leaving would lose nothing, so
+   * they must not make the page ask.
    *
    * Sorted, so the order in which the maps were filled in never produces a
    * different fingerprint for the same work.
@@ -364,9 +363,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
       if (value !== shoppingNameField(text)) decisions.push(`artikel\u0000${text}\u0000${value}`);
     }
     for (const [text, value] of stores) decisions.push(`markt\u0000${text}\u0000${value}`);
-    for (const [text, value] of sections) {
-      if (value.trim() !== '') decisions.push(`bereich\u0000${text}\u0000${value}`);
-    }
+    for (const [text, value] of sections) decisions.push(`bereich\u0000${text}\u0000${value}`);
     for (const text of ignored) decisions.push(`ignoriert\u0000${text}`);
     return decisions.sort();
   }, [drafts, stores, sections, ignored]);
@@ -432,8 +429,8 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
    * Folds a line once focus leaves its whole row — but only when the line is
    * already decided. Folding is deliberately tied to leaving the row rather than
    * to every keystroke: a row must never disappear under the cursor while the
-   * user is still typing. Moving focus inside the row (onto a chip, the section
-   * input or the ignore action) is not leaving it; those controls fold
+   * user is still typing. Moving focus inside the row (onto a chip or the
+   * ignore action) is not leaving it; those controls fold
    * explicitly when they complete the decision. The Tab path is covered too:
    * tabbing through the row's controls and out of it folds the decided line.
    * A native blur that a removed summary button produces on unfolding is not a
@@ -505,19 +502,14 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
     });
   }
 
-  /** Types into one line's section search field. */
-  function typeSection(text: string, query: string): void {
-    // Same as `typeDraft`: the row is being edited, so it must stay open.
-    pendingFolds.current.delete(text);
-    setSections((current) => new Map(current).set(text, query));
-  }
-
   /**
-   * Picks a section from the search suggestions. The stop is complete only with
-   * a non-empty „Artikel“ name: without one there is no item to write, so the
-   * row stays unfolded (and the forward action stays unavailable).
+   * Picks a section chip. The stop is complete only with a non-empty „Artikel“
+   * name: without one there is no item to write, so the row stays unfolded (and
+   * the forward action stays unavailable).
    */
   function chooseSection(entry: UnresolvedEntry, section: string): void {
+    // The row is being edited, so it must stay open (same as `typeDraft`).
+    pendingFolds.current.delete(entry.text);
     setSections((current) => new Map(current).set(entry.text, section));
     if (draftOf(entry).trim() !== '') fold(entry.text);
   }
@@ -674,12 +666,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
     }
     const store = stores.get(entry.text);
     const sectionOptions = store === undefined ? [] : shoppingSections(store);
-    const section = (sections.get(entry.text) ?? '').trim();
-    const suggestions = sectionOptions.includes(section)
-      ? []
-      : sectionOptions.filter((candidate) =>
-          candidate.toLowerCase().includes(section.toLowerCase()),
-        );
+    const section = sections.get(entry.text);
     return (
       <div className="field">
         <span className="field-label">Markt</span>
@@ -703,29 +690,19 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
         {store !== undefined && (
           <>
             <p className="field-hint">Bereich</p>
-            <input
-              type="text"
-              value={sections.get(entry.text) ?? ''}
-              onChange={(event) => typeSection(entry.text, event.target.value)}
-              onFocus={() => cancelPendingFold(entry.text)}
-              aria-label={`Bereich in ${store}`}
-              placeholder="Suchen oder wählen"
-            />
-            {suggestions.length > 0 && (
-              <ul className="suggestions">
-                {suggestions.map((candidate) => (
-                  <li key={candidate}>
-                    <button
-                      type="button"
-                      className="chip"
-                      onClick={() => chooseSection(entry, candidate)}
-                    >
-                      {candidate}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="store-chips" role="group" aria-label={`Bereich in ${store}`}>
+              {sectionOptions.map((candidate) => (
+                <button
+                  key={candidate}
+                  type="button"
+                  className={section === candidate ? 'chip chip-active' : 'chip'}
+                  aria-pressed={section === candidate}
+                  onClick={() => chooseSection(entry, candidate)}
+                >
+                  {candidate}
+                </button>
+              ))}
+            </div>
           </>
         )}
       </div>

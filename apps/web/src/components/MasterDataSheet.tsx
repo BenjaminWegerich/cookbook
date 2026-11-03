@@ -231,8 +231,8 @@ function MasterDataSheet({
   const [precision, setPrecision] = useState<PrecisionLevel>(entry?.precision ?? 'medium');
   /** The chosen store — level 1 of the shopping route; null = nothing picked. */
   const [store, setStore] = useState<string | null>(initialItem?.stop.store ?? null);
-  /** The section input text — level 2 of the route. */
-  const [sectionQuery, setSectionQuery] = useState(initialItem?.stop.section ?? '');
+  /** The chosen section — level 2 of the route ('' while none is picked). */
+  const [section, setSection] = useState(initialItem?.stop.section ?? '');
   /** The complete desired synonym list of the item. */
   const [variants, setVariants] = useState<readonly string[]>(initialItem?.variants ?? []);
   /** The text of the „Synonym“ field, still waiting to be added. */
@@ -319,12 +319,11 @@ function MasterDataSheet({
 
   const stores = shoppingStores();
   const sections = store === null ? [] : shoppingSections(store);
-  const section = sectionQuery.trim();
 
   /**
    * The stop the picker currently names, or null while it is incomplete. The
-   * section must be one of this store's sections — the pair is the key, so free
-   * text is not a valid stop.
+   * section must be one of this store's sections — the pair is the key, so a
+   * stale stored section is not a valid stop.
    */
   const chosenStop: ShoppingStop | null =
     store !== null && sections.includes(section) ? { store, section } : null;
@@ -391,7 +390,7 @@ function MasterDataSheet({
   const adoptItemForName = (nextName: string): void => {
     const match = findItem(nextName);
     setStore(match?.stop.store ?? null);
-    setSectionQuery(match?.stop.section ?? '');
+    setSection(match?.stop.section ?? '');
     setVariants(match?.variants ?? []);
     setVariantError(null);
   };
@@ -412,13 +411,13 @@ function MasterDataSheet({
   /** Picks a store. A section belongs to exactly one store, so it is cleared. */
   const chooseStore = (next: string): void => {
     setStore(next);
-    setSectionQuery('');
+    setSection('');
     markShoppingEdited();
   };
 
-  /** Adopts a section option into the search field (same tap-to-apply). */
-  const adoptSection = (next: string): void => {
-    setSectionQuery(next);
+  /** Picks a section chip (level 2 of the route). */
+  const chooseSection = (next: string): void => {
+    setSection(next);
     markShoppingEdited();
   };
 
@@ -431,7 +430,7 @@ function MasterDataSheet({
    */
   const removeStop = (): void => {
     setStore(null);
-    setSectionQuery('');
+    setSection('');
     setVariants([]);
     setVariantError(null);
     markShoppingEdited();
@@ -561,13 +560,6 @@ function MasterDataSheet({
   // Ctrl+S is the keyboard equivalent of the „Speichern“ button. The sheet is
   // only ever mounted while it is the topmost layer, so the shortcut is enabled.
   useSaveShortcut(handleSave);
-
-  /** The options under the section field: all of the store's sections while
-   *  nothing is typed, the matching ones while a part is typed, none once the
-   *  text names one exactly (the pick moved into the field). */
-  const sectionSuggestions = sections.includes(section)
-    ? []
-    : sections.filter((candidate) => candidate.toLowerCase().includes(section.toLowerCase()));
 
   /**
    * Ingredients whose mappings can be copied: master-data ingredients with at
@@ -859,9 +851,9 @@ function MasterDataSheet({
 
         {/* Where the record is bought (docs/storage_format.md §10): level 1 the
             store („Markt“ in the UI, one tap on a chip), level 2 the section
-            („Bereich“ in the UI) as a search field with that store's sections
-            listed below it. The sub-captions use the quiet hint style. A
-            sub-recipe is never bought, so this whole block is absent for it. */}
+            („Bereich“ in the UI) as a chip row of that store's sections. The
+            sub-captions use the quiet hint style. A sub-recipe is never bought,
+            so this whole block is absent for it. */}
         {!shoppingHidden && (
           <>
             <div
@@ -921,48 +913,26 @@ function MasterDataSheet({
                     )}
                   </div>
 
-                  {/* The section field follows the store: without a store there is
-                  no option to offer, and a section belongs to exactly one store. */}
+                  {/* The section chips follow the store: without a store there is
+                  no option to offer, and a section belongs to exactly one
+                  store. */}
                   {store !== null && (
                     <>
                       <p className="field-hint">Bereich</p>
-                      <input
-                        type="text"
-                        value={sectionQuery}
-                        onChange={(event) => {
-                          setSectionQuery(event.target.value);
-                          markShoppingEdited();
-                        }}
-                        aria-label={`Bereich in ${store}`}
-                        placeholder="Suchen oder wählen"
-                        disabled={busy !== null}
-                      />
-                      {sectionSuggestions.length > 0 && (
-                        <ul className="suggestions">
-                          {sectionSuggestions.map((candidate) => (
-                            <li key={candidate}>
-                              <button
-                                type="button"
-                                className="chip"
-                                onClick={() => adoptSection(candidate)}
-                                disabled={busy !== null}
-                              >
-                                {candidate}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-
-                      {/* Nothing matches: the established bare em dash, suppressed
-                      while the field names a section exactly. */}
-                      {section !== '' &&
-                        !sections.includes(section) &&
-                        sectionSuggestions.length === 0 && (
-                          <p className="field-hint" role="status">
-                            —
-                          </p>
-                        )}
+                      <div className="store-chips" role="group" aria-label={`Bereich in ${store}`}>
+                        {sections.map((candidate) => (
+                          <button
+                            key={candidate}
+                            type="button"
+                            className={candidate === section ? 'chip chip-active' : 'chip'}
+                            aria-pressed={candidate === section}
+                            onClick={() => chooseSection(candidate)}
+                            disabled={busy !== null}
+                          >
+                            {candidate}
+                          </button>
+                        ))}
+                      </div>
                     </>
                   )}
                 </>
