@@ -116,7 +116,10 @@ export interface RecipePhoto {
  * - `on-accent` is `ink` when the accent is light, `paper` otherwise — the
  *   choice whose contrast against `accent` is the higher (WCAG AA);
  * - `press` is `ink` blended 12 % onto `paper`: the solid equivalent of the
- *   app's shared press wash for a control whose fill is the page colour.
+ *   app's shared press wash for a control whose fill is the page colour;
+ * - `surface` is `paper` lifted 45 % toward white: the raised sheet the
+ *   ingredient rows sit on (§5.4). The cooking view is always light, so the
+ *   lift stays a warm off-white for every theme palette.
  */
 
 /** Parses a 6-digit hex colour into its RGB channels (0–255). */
@@ -169,6 +172,10 @@ function themeCss(theme: ResolvedTheme): string {
   // own fill; in the export a control's fill is the page's paper, so the same
   // look is one solid colour computed once here.
   const press = blend(theme.ink, theme.paper, 0.12);
+  // The ingredient lists are one raised sheet on the paper page. A light mix
+  // toward white reads as a card in every light theme and keeps the hairline
+  // borders visible on a paper that is already close to white.
+  const surface = blend(theme.paper, '#ffffff', 0.55);
   const fonts = resolveThemeFonts(theme.font);
   const headingFallback = fonts.heading === fonts.body ? '' : `'${fonts.body}', `;
   return (
@@ -196,6 +203,7 @@ function themeCss(theme: ResolvedTheme): string {
     `  --muted: ${muted};\n` +
     `  --on-accent: ${onAccent};\n` +
     `  --press: ${press};\n` +
+    `  --surface: ${surface};\n` +
     `}`
   );
 }
@@ -479,6 +487,28 @@ function renderReferenceReadout(
   return `  <ul class="reference size-scoped" ${sizeKey}="${sizeValue}">\n` + `${items}  </ul>\n`;
 }
 
+/**
+ * One ingredient row, shared by the master check list and every step list
+ * (DESIGN §5.4). Both surfaces use the same row skeleton — text column, then
+ * the right-aligned badge column — so a quantity line reads identically in the
+ * Zutaten list and beside a step. The master list's checkbox is the only
+ * difference: it is the row's leading control and the label that toggles it.
+ *
+ * `text` is already-rendered, escaped display HTML (the arrangement's note is a
+ * muted, italic run); `badge` is the optional sub-recipe link. The caller owns
+ * the surrounding `<ul>`.
+ */
+function renderIngredientRow(text: string, badge: string, checkboxId?: string): string {
+  if (checkboxId === undefined) {
+    return `  <li class="ingredient-row"><span class="ingredient-text">${text}</span>${badge}</li>`;
+  }
+  return (
+    `  <li class="ingredient-row check-row">` +
+    `<input type="checkbox" id="${checkboxId}">` +
+    `<label class="ingredient-text" for="${checkboxId}">${text}</label>${badge}</li>`
+  );
+}
+
 /** One checkable master-ingredient row (checkbox, quantity, optional badge). */
 function renderCheckRow(
   recipe: Recipe,
@@ -488,11 +518,7 @@ function renderCheckRow(
   id: string,
 ): string {
   const text = arrangementHtml(masterDisplay(recipe, ingredient, factor), 'bare');
-  const badge = subRecipeBadge(links[ingredient.name]);
-  return (
-    `  <li class="check-row">` +
-    `<input type="checkbox" id="${id}"><label class="qty" for="${id}">${text}</label>${badge}</li>`
-  );
+  return renderIngredientRow(text, subRecipeBadge(links[ingredient.name]), id);
 }
 
 /**
@@ -518,12 +544,12 @@ function renderCheckList(
   const written = isWritten ? ' is-written' : '';
   const labelAttr = label !== undefined ? ` data-yield-label="${escapeHtml(label)}"` : '';
   return (
-    `<ul class="check-list size-scoped${written}" ${sizeKey}="${sizeValue}"${labelAttr}` +
+    `<ul class="ingredient-list check-list size-scoped${written}" ${sizeKey}="${sizeValue}"${labelAttr}` +
     ` role="group" aria-label="Zutaten">\n${rows}\n</ul>`
   );
 }
 
-/** One step block: its bulleted ingredient rows followed by the prose. */
+/** One step block: its ingredient rows followed by the prose. */
 function renderStep(
   step: Step,
   factor: number,
@@ -533,7 +559,7 @@ function renderStep(
   const rows =
     step.ingredients.length === 0
       ? ''
-      : `<ul class="step-rows">\n` +
+      : `<ul class="ingredient-list step-rows">\n` +
         step.ingredients
           .map((ingredient) => {
             const text = displayHtml(
@@ -542,8 +568,9 @@ function renderStep(
               ingredient.unit,
               ingredientContext(ingredient),
             );
-            const badge = subRecipeBadge(links[ingredient.name]);
-            return `  <li><span class="step-ingredient">${text}</span>${badge}</li>`;
+            // The step list uses the exact same row as the master list; it only
+            // omits the checkbox, because a step row is not checkable (§5.4).
+            return renderIngredientRow(text, subRecipeBadge(links[ingredient.name]));
           })
           .join('\n') +
         `\n</ul>\n`;
@@ -1053,11 +1080,46 @@ const NAVIGATION_SCRIPT = `
   }
 
   // The dots span the whole flow — intro, Zutaten and each step — with the
-  // current one lit (§5.11).
-  function renderDots(index) {
-    var html = '<div class="dots">';
-    for (var i = 0; i < nodes.length; i++) {
-      html += '<span class="dot' + (i === index ? ' on' : '') + '"></span>';
+  // current one lit (§5.11). They sit in the free slot between the two bar
+  // buttons. When the flow is longer than that slot can show, the outermost
+  // dots are omitted: the slot always shows a full window centred on the
+  // current node, so no dot comes near a button and the cluster never leaves
+  // empty space on one side while cutting dots on the other.
+  var DOT_SIZE = 8;
+  var DOT_GAP = 6;
+
+  function dotCapacity() {
+    var width = 0;
+    if (typeof counter.getBoundingClientRect === 'function') {
+      var rect = counter.getBoundingClientRect();
+      if (rect && rect.width > 0) { width = rect.width; }
+    }
+    // A test stub (or a hidden document) has no measurable slot; nine dots is
+    // the phone-width default, so the window logic stays exercised.
+    if (width === 0) { return 9; }
+    return Math.max(1, Math.floor((width + DOT_GAP) / (DOT_SIZE + DOT_GAP)));
+  }
+
+  function renderFlowPosition(index) {
+    var capacity = dotCapacity();
+    var first = 0;
+    var last = nodes.length;
+    if (nodes.length > capacity) {
+      // Centre the window on the current node; clamp at the flow's ends. The
+      // window always has capacity dots, so both sides stay equally close to
+      // their button and no side gets extra blank space.
+      first = Math.min(
+        Math.max(0, index - Math.floor(capacity / 2)),
+        nodes.length - capacity,
+      );
+      last = first + capacity;
+    }
+    var html =
+      '<div class="dots" role="img" aria-label="Fortschritt: ' +
+      (index + 1) + ' von ' + nodes.length + '">';
+    for (var i = first; i < last; i++) {
+      html +=
+        '<span class="dot' + (i === index ? ' on' : '') + '" data-node="' + (i + 1) + '"></span>';
     }
     counter.innerHTML = html + '</div>';
   }
@@ -1089,7 +1151,7 @@ const NAVIGATION_SCRIPT = `
     btnBack.hidden = current === 0;
     btnNext.hidden = current === nodes.length - 1;
 
-    renderDots(current);
+    renderFlowPosition(current);
 
     if (onSteps) {
       stepTitle.textContent = 'Schritt ' + stepNumber(node) + ' von ' + stepCount;
@@ -1101,6 +1163,14 @@ const NAVIGATION_SCRIPT = `
         if (active && direction) { showStep(el, direction); }
       });
     }
+  }
+
+  // The free interval depends on the viewport and on the theme face's button
+  // widths, so re-decide dots vs. count after a resize and once the embedded
+  // faces have loaded (a fallback face can be wider).
+  window.addEventListener('resize', function () { renderFlowPosition(current); });
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { renderFlowPosition(current); }).catch(function () {});
   }
 
   // One flow, one history: every node this session has visited owns exactly one
@@ -1388,15 +1458,35 @@ const STYLES = `
   .screen-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-2); }
   /* The theme's decorative divider below „Zutaten" and the step title (§5.5). */
   .divider { margin: 0 0 var(--space-5); height: 0; border-bottom: 2px solid var(--accent); width: 42px; }
-  .check-list { list-style: none; margin: 0; padding: 0; }
-  .check-row { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) 0;
-               border-top: 1px solid var(--line);
-               font-size: var(--text-lg); line-height: var(--leading-lg); }
-  .check-row:first-child { border-top: none; }
-  .check-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); cursor: pointer; flex: none; }
-  .check-row .qty { flex: 1; min-width: 0; cursor: pointer; overflow-wrap: anywhere; }
+  /* The check list is centred in the space below the header, exactly like a
+     step's rows and prose: auto margins take the free space when the list fits
+     and collapse to 0 when it is taller, so the top of a long list stays
+     reachable (§5.11). */
+  .screen.zutaten .ingredient-list { margin-top: auto; margin-bottom: auto; }
+
+  /* ---- Ingredient lists: one shared row design (§5.4) ----
+     The Zutaten check list and every step's ingredient list are the same
+     surface: one raised sheet of hairlined rows, the same text/label size and
+     the same trailing badge column. The master row adds the checkbox as its
+     leading control; that checkbox is the only difference between the two
+     lists. The raised surface is a light lift off the page (§4.8), so the
+     sheet reads as one block without a shadow. */
+  .ingredient-list { list-style: none; margin: 0; padding: 0 var(--space-5);
+                     background: var(--surface); border: 1px solid var(--line);
+                     border-radius: var(--radius-lg); }
+  .ingredient-row { display: flex; align-items: center; gap: var(--space-4);
+                    padding: var(--space-5) 0; border-top: 1px solid var(--line);
+                    font-size: var(--text-md); line-height: var(--leading-md); }
+  .ingredient-row:first-child { border-top: none; }
+  .ingredient-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .check-row .ingredient-text { cursor: pointer; }
+  .ingredient-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent);
+                                           cursor: pointer; flex: none; }
   /* A checked row goes muted; its text is NOT crossed out (decided with the user). */
-  .check-row input:checked + .qty { color: var(--muted); }
+  .ingredient-row input:checked + .ingredient-text { color: var(--muted); }
+  /* The badge is the row's trailing column: it keeps its width when the
+     ingredient wraps, and it never moves into the last line of a wrapped row. */
+  .ingredient-row .badge { flex: none; align-self: center; }
 
   /* ---- Zubereitung (steps) ---- */
   .step-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-2); }
@@ -1411,25 +1501,13 @@ const STYLES = `
   .step.slide-back, .screen.slide-back { animation: stepBack var(--motion-base) ease-out; }
   @keyframes stepFwd { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes stepBack { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
-  /* The ingredient rows and the prose read at arm's length, so both use
-     --text-lg. Rows are bulleted; a plain margin separates them from the prose. */
-  .step-rows { list-style: none; margin: 0 0 var(--space-5); padding: 0; }
-  .step-rows li { display: flex; align-items: center; padding: var(--space-2) 0;
-                  font-size: var(--text-lg); line-height: var(--leading-lg); }
-  /* The bullet is the font's own U+2022 glyph with one space on each side; the
-     glyph's side bearings stay untouched. white-space:pre keeps both spaces
-     visible — the default white-space:normal trims a space at a line-box edge,
-     which silently dropped the leading one (§5.11). */
-  .step-rows li::before { content: " • "; white-space: pre; color: var(--muted); }
-  /* The ingredient takes the free width, so its badge sits in a right-aligned
-     column of its own and a multi-line row can never push it into the last
-     line (the same shape as .check-row). */
-  .step-ingredient { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  /* The row no longer uses flex gap (the bullet's spaces are the marker spacing),
-     so the sub-recipe badge keeps at least one en space from the ingredient via
-     a margin. */
-  .step-rows li .badge { margin-left: 0.5em; }
-  .step-text { margin: 0; font-size: var(--text-lg); line-height: var(--leading-lg); overflow-wrap: anywhere; }
+  /* The step's ingredient sheet takes the same card as Zutaten; one gap
+     separates it from the prose, which keeps the arm's-length size (§5.11). */
+  .step-rows { margin: 0 0 var(--space-6); }
+  /* The prose reads at arm's length: 24 px on a 1.5 ratio (36 px leading),
+     one step looser than the heading leading, so a longer instruction keeps
+     clear line separation on a phone. */
+  .step-text { margin: 0; font-size: var(--text-lg); line-height: 1.5; overflow-wrap: anywhere; }
 
   /* ---- Sub-recipe badge (§5.7): all-caps like the web app. ---- */
   .badge { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm);
@@ -1447,19 +1525,27 @@ const STYLES = `
               padding: var(--space-3) var(--app-padding) calc(var(--space-3) + env(safe-area-inset-bottom));
               background: var(--paper); border-top: 1px solid var(--line); }
   .step-bar .btn { display: inline-flex; align-items: center; gap: var(--space-2); font: inherit; font-weight: 600;
-                   font-size: var(--text-md); min-height: 42px;
-                   padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+                   font-size: var(--text-md); min-height: 56px;
+                   padding: var(--space-3) var(--space-5); border-radius: var(--radius-md);
                    border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
   .step-bar .btn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
-  .step-bar .btn.next { margin-left: auto; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .step-bar .btn.next { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .step-bar .btn:disabled { opacity: 0.5; cursor: default; }
-  /* The dots are centred, but never wider than the free interval between the two
-     buttons — a long flow compresses instead of running over them (§5.11). */
-  .counter { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-             max-width: calc(100% - 2 * (var(--app-padding) + var(--space-7) + var(--space-10) + var(--space-4)));
-             overflow: hidden; pointer-events: none; }
-  .counter .dots { display: flex; justify-content: center; gap: var(--space-2); }
-  .counter .dot { width: var(--space-3); height: var(--space-3); border-radius: 100%; background: var(--line); }
+  /* Both button slots keep their boxes when a button is absent, so the dot slot
+     between them keeps the same width on the intro, in the steps and on the
+     last node. visibility:hidden still removes the absent button from the a11y
+     tree and from hit-testing. */
+  .step-bar .btn[hidden] { display: inline-flex !important; visibility: hidden; }
+  /* The flow position is the middle flex item, so it uses exactly the free
+     interval between the two buttons. A long flow shows a full window of dots
+     centred on the current node; the script omits the outermost nodes rather
+     than letting any dot approach a button (§5.11). */
+  .counter { flex: 1 1 0; min-width: 0; display: flex; align-items: center;
+             justify-content: center; overflow: hidden; pointer-events: none; }
+  .counter .dots { display: flex; align-items: center; justify-content: center;
+                   gap: var(--space-2); }
+  .counter .dot { flex: none; width: var(--space-3); height: var(--space-3);
+                  border-radius: 100%; background: var(--line); }
   .counter .dot.on { background: var(--accent); }
 
   [hidden] { display: none !important; }

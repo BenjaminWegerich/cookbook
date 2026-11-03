@@ -190,15 +190,17 @@ interface Page {
   screens: Record<'intro' | 'zutaten' | 'zubereitung', ElementStub>;
   /** The step title, so a test can read which step is shown. */
   stepTitle: ElementStub;
+  /** The bar's flow position (dots, or the compact fallback), as inner HTML. */
+  counter: ElementStub;
   /** The window's `popstate` listeners, so a test can deliver a browser Back. */
   popstate: ((event: unknown) => void)[];
 }
 
 /** Scrapes the generated HTML into the stub page the script runs against. */
 function buildPage(html: string, hash: string, injected?: string): Page {
-  const checkLists = [...html.matchAll(/<ul class="check-list size-scoped[^"]*"[^>]*>/g)].map(
-    (match) => stubFromTag(match[0]),
-  );
+  const checkLists = [
+    ...html.matchAll(/<ul class="[^"]*\bcheck-list size-scoped[^"]*"[^>]*>/g),
+  ].map((match) => stubFromTag(match[0]));
   const servingChips = [...html.matchAll(/<button[^>]*class="[^"]*serving-chip[^"]*"[^>]*>/g)].map(
     (match) => stubFromTag(match[0]),
   );
@@ -337,6 +339,7 @@ function buildPage(html: string, hash: string, injected?: string): Page {
     forwardButton: forwardButton ?? new ElementStub(),
     screens,
     stepTitle,
+    counter,
     popstate,
   };
 }
@@ -498,6 +501,41 @@ describe('embedded script — the bar and the browser history (§6.6)', () => {
     expect(page.screens.zubereitung.hasClass('active')).toBe(true);
     expect(page.stepTitle.textContent).toBe('Schritt 1 von 1');
     expect(page.forwardButton.hidden).toBe(true);
+  });
+});
+
+describe('embedded script — the flow position (§5.11)', () => {
+  it('keeps one dot per node while the flow fits the bar', () => {
+    const page = runPage(DISH, '');
+    expect(page.counter.innerHTML).toContain('class="dots"');
+    expect(page.counter.innerHTML.match(/<span class="dot/g) ?? []).toHaveLength(3);
+    expect(page.counter.innerHTML).not.toContain('flow-count');
+  });
+
+  it('omits the outermost dots on a long flow and keeps the current one centred', () => {
+    // Nine steps make eleven nodes. The stubbed slot measures nine dots (the
+    // phone default), so at node 7 two nodes are omitted on each side and the
+    // current dot sits exactly in the middle of the visible window.
+    const long = parseRecipe(`---
+title: Langer Ablauf
+type: finished_dish
+servings: 4
+prep_time: 5 min
+---
+## Zubereitung
+${Array.from({ length: 9 }, (_, i) => `${i + 1}. Schritt ${i + 1} ausführen.`).join('\n')}
+`);
+    const page = runPage(long, '');
+    const dotNodes = (): number[] =>
+      [...page.counter.innerHTML.matchAll(/data-node="(\d+)"/g)].map((match) => Number(match[1]));
+    expect(dotNodes()).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(page.counter.innerHTML).toContain('class="dot on" data-node="1"');
+    // intro → Zutaten → step 5 = node 7.
+    for (let i = 0; i < 6; i += 1) page.forwardButton.fire('click');
+    expect(dotNodes()).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(page.counter.innerHTML).toContain('class="dot on" data-node="7"');
+    expect(dotNodes().indexOf(7)).toBe(4);
+    expect(page.counter.innerHTML).toContain('aria-label="Fortschritt: 7 von 11"');
   });
 });
 

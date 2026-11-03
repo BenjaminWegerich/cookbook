@@ -88,7 +88,7 @@ describe('generateRecipeHtml — finished dish', () => {
     expect(html).toContain('data-servings="6"');
     expect(html).toContain('data-servings="9"');
     expect(html).toContain('data-servings="2"');
-    expect(html.match(/class="check-list size-scoped/g)).toHaveLength(18);
+    expect(html.match(/class="ingredient-list check-list size-scoped/g)).toHaveLength(18);
   });
 
   it('scales the master list and the reference readout for an option', () => {
@@ -152,9 +152,9 @@ reference:
   });
 
   it('renders each step with its own rows above the prose', () => {
-    expect(html).toContain('<ul class="step-rows">');
+    expect(html).toContain('<ul class="ingredient-list step-rows">');
     expect(html).toContain(
-      `<span class="step-ingredient">${amountHtml('Tortillas', 250, 'g')}</span>`,
+      `<span class="ingredient-text">${amountHtml('Tortillas', 250, 'g')}</span>`,
     );
     expect(html).toContain(amountHtml('Béchamelsauce', 500, 'ml'));
   });
@@ -232,7 +232,7 @@ prep_time: 15 min
   const html = generateRecipeHtml(sauce);
 
   it('bakes the allowed BQ views within ±1 decade around the written yield', () => {
-    expect(html.match(/class="check-list size-scoped/g) ?? []).toHaveLength(65);
+    expect(html.match(/class="ingredient-list check-list size-scoped/g) ?? []).toHaveLength(65);
     expect(html).toContain(`data-yield="500" data-yield-label="${formatBQ(500, 'ml')}"`);
     // The extremes of the range: 50 ml and 5 l.
     expect(html).toContain('data-yield="50"');
@@ -240,7 +240,9 @@ prep_time: 15 min
   });
 
   it('marks the written yield as the fallback view', () => {
-    expect(html).toContain('class="check-list size-scoped is-written" data-yield="500"');
+    expect(html).toContain(
+      'class="ingredient-list check-list size-scoped is-written" data-yield="500"',
+    );
   });
 
   it('scales the master list and the reference per view', () => {
@@ -406,7 +408,7 @@ prep_time: 15 min
   });
 
   it('renders rows and unscaled artifacts in the steps', () => {
-    expect(html).toContain('<ul class="step-rows">');
+    expect(html).toContain('<ul class="ingredient-list step-rows">');
     expect(html).toContain(amountHtml('Milch', 300, 'ml'));
     expect(html).toContain(amountHtml('Milch', 50, 'ml'));
   });
