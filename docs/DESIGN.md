@@ -84,11 +84,10 @@ components reference tokens, never a raw value.
 | `--color-ink-muted` | `#6e6255` | secondary text, captions, meta |
 | `--color-line` | `#e6dbc8` | hairlines, dividers, borders |
 | `--color-accent` | `#ad5632` | clay: primary action, active state, selection |
-| `--color-olive` | `#63723f` | herb: secondary accent — selected and secondary states, media grounds, success tone |
+| `--color-olive` | `#63723f` | herb: secondary accent — selected and secondary states, success tone |
 | `--color-danger` | `#a63b2c` | destructive actions and errors |
 | `--color-ochre` | `#96632b` | the unfinished state: the draft badge and its save action |
 | `--color-on-accent` | `#fffcf6` | text on accent surfaces |
-| `--placeholder-0` … `--placeholder-3` | `#ad5632`, `#63723f`, `#b8813a`, `#8a6d4f` | deterministic placeholder grounds (§5.8), each with a `-fg` partner for its symbol |
 
 **Rules**
 
@@ -102,7 +101,6 @@ components reference tokens, never a raw value.
 - Colour never carries a meaning alone: success is olive **plus** the check symbol, an error
   is danger plus its symbol or an explicit sentence.
 - Every accent surface takes `--color-on-accent` as its text colour.
-- Placeholder colours are derived from the recipe title, not chosen per render (§5.8).
 - The picker draws its own colours: the theme colour picker's saturation/value plane, its hue
   rainbow and its thumb ring are the control's own drawing, not interface colour, and they
   are the one place a raw colour, a gradient or a black/white literal may appear.
@@ -837,9 +835,10 @@ and carries no parentheses (`Essensplan 5 Einträge, davon 2 unbekannt`).
 
 **Drafts lead „Restliche Sammlung".** A saved draft is a card of the collection, marked with
 its „Entwurf" badge under the title; drafts come first, then the finished dishes, then the
-ingredient recipes. The section's counter names them (`8 Rezepte, davon 2 Entwürfe`). A draft
-is never planned and never cookable, so it stays in this section and never appears in
-„Essensplan".
+ingredient recipes. Within each group the cards are shuffled once per page load, so the order
+differs on every reload while the three groups stay apart. The section's counter names them
+(`8 Rezepte, davon 2 Entwürfe`). A draft is never planned and never cookable, so it stays in
+this section and never appears in „Essensplan".
 
 **A collection-level action that is used only rarely sits below the last card.** It is one
 outlined button, left-aligned with the card grid, `--space-7` above it; it is not a caption
@@ -851,7 +850,8 @@ such action. *decided with the user*
 - A card or row is tappable as a whole; a control inside it (a badge's ×, a checkbox) is the
   only thing that may carry its own target.
 - A card title clamps to three lines and is cut with an ellipsis; it is never pushed to a fourth
-  line or set in a smaller size to fit.
+  line or set in a smaller size to fit. Without a media area the title may use up to six lines,
+  so a text-only card can carry a longer name.
 - A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
   muted) beneath it.
 - An ingredient arrangement's parenthesized note is muted and italic. Every list, chip and
@@ -1006,6 +1006,8 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 - A badge's wording matches the action that caused it and the action that undoes it.
 - The „Entwurf" badge belongs to the title block: it sits directly below the title in the
   list card and in the recipe overview, never over the media and never in the meta row.
+- The „Unbekannt" badge belongs to the title block on its meal-plan card: it sits directly
+  below the title. In the recipe overview it leads the caption/value row instead.
 
 *Applies to: cooking view.*
 
@@ -1013,7 +1015,7 @@ A sub-recipe use (master row, step row or artifact) carries the app's „Rezept"
 symbol, `--radius-sm`, accent fill, `on-accent` label. It opens the sub-recipe's export in a
 new tab. It is the one badge in the export.
 
-### 5.8 Media: photo, thumbnail and placeholder
+### 5.8 Media: photo and thumbnail
 
 *Applies to: web app.*
 
@@ -1026,19 +1028,16 @@ format serves the card, the overview hero and the editor preview.
 photographic set (4:3, 3:2, 16:9; 120×90, 160×120, …), not from the UI ladder (§4.3): the
 ladder governs the box an image sits in, not the image itself.
 
-**Without a photo, the room-service placeholder.** The app derives a warm ground from the
-recipe's title: the title hashed onto one of four palette pairs (`--placeholder-0` …
-`--placeholder-3`, each with its `-fg` partner), carrying the serving cloche of `RoomServiceIcon`
-at `--placeholder-symbol-size` (42px), centred on the landscape area. The same title always gets
-the same colour; the choice is never random and never per render.
+**Without a photo, a card has no media area at all.** The title starts at the card's top mat
+and may use up to six lines instead of the usual three (decided with the user). There is no
+placeholder ground and no cloche tile; a missing photo never becomes an empty grey box or a
+broken image.
 
 **The overview sheet shows a media area only for a recipe with a photo.** A recognized recipe
-without a photo starts its body at the sheet's top padding, like an unrecognized entry: the card
-that opened the sheet already carried the room-service placeholder, so the sheet does not repeat
-it. The card grid keeps the placeholder for recipes without a photo.
+without a photo starts its body at the sheet's top padding, like an unrecognized entry.
 
-**An unrecognised meal-plan line gets the danger media area** with the room-service symbol
-instead of a placeholder — that card then needs no badge of its own (§5.7).
+**An unrecognised meal-plan line carries the „Unbekannt" badge under its title** (§5.7); its
+card is text-only, like any card without a photo.
 
 **Sizes.** Card media: the full card width, 4:3. Overview hero: the full sheet content width,
 4:3. Editor preview: 160 × 120px (4:3).
@@ -1048,9 +1047,8 @@ instead of a placeholder — that card then needs no badge of its own (§5.7).
 - A photo inside a card is decorative for assistive tech (`alt=""`): the title beside it
   carries the name. A photo standing alone as a field preview gets a German `alt`.
 - Photos are cropped to 4:3, never letterboxed or stretched.
-- The placeholder colour comes from the title, so it is stable across screens and reloads.
 - Nothing is drawn over the media except a badge (§5.7).
-- A missing photo is the room-service placeholder, never an empty grey box or a broken-image
+- A missing photo leaves the card text-only — never an empty grey box or a broken-image
   glyph.
 
 *Applies to: cooking view.*

@@ -502,18 +502,15 @@ export function ErrorIcon({ className, optical }: IconProps) {
 }
 
 /**
- * Serving cloche on a tray (room service) — the one "no photo, no known dish"
- * symbol of the app, used in three places that all mean the same thing (there
- * is no real recipe to picture):
- *
- * - the media area of a recipe without a photo (the former letter avatar);
- * - the media area of an unrecognized meal-plan entry;
- * - the leading symbol of the "Unbekannt" badge.
+ * Serving cloche on a tray (room service) — the one "a dish, not known yet"
+ * marker of the app, used as the leading symbol of every "Unbekannt" badge: on
+ * an unrecognized meal-plan card, in the recipe overview and in the
+ * shopping-list selection. Cards without a photo carry no media area any more,
+ * so the glyph no longer doubles as a photo placeholder.
  *
  * Decided with the user: the cloche reads as "a dish, not known yet" where the
- * former question mark read as a lookup, and it is a food symbol,
- * so it also works as the placeholder for a recipe whose photo is missing —
- * one glyph, one message across the card, the badge and the overview.
+ * former question mark read as a lookup, and it is a food symbol — one glyph,
+ * one message across the card, the badge and the overview.
  */
 export function RoomServiceIcon({ className, optical }: IconProps) {
   return <Glyph name="room_service" className={className} optical={optical} />;

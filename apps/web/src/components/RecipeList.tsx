@@ -35,12 +35,38 @@ const MEALPLAN_CAPTION_ID = 'recipe-section-mealplan';
 const COLLECTION_CAPTION_ID = 'recipe-section-collection';
 
 /**
+ * Salt drawn once per page load: this module is evaluated once per reload, so
+ * the collection keeps one order for the whole session — through search,
+ * re-renders and return visits to the list — while a reload draws a new salt
+ * and therefore a new order. It is not a security token, only variance for the
+ * shuffle below.
+ */
+const SHUFFLE_SALT = Math.random().toString(36).slice(2);
+
+/**
+ * 32-bit FNV-1a hash of the salt and a recipe id. The result is a stable
+ * pseudo-random rank: the same recipe keeps its place for as long as the page
+ * lives, a new recipe lands at a random position, and nothing has to be stored
+ * or mutated to make the shuffle survive a remount of this screen.
+ */
+function shuffleRank(fileId: string): number {
+  const input = `${SHUFFLE_SALT}:${fileId}`;
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+/**
  * Orders the cards of "Restliche Sammlung": saved drafts first, then finished
- * dishes, then ingredient recipes (decided with the user), each group staying
- * in the title order `listRecipes`/`listDrafts` established. The partition is
- * stable and keeps the groups together without an extra heading; a recipe whose
- * type could not be read (`type === null`) stays with the dishes instead of
- * disappearing among the bases (see `StoredRecipe.type`).
+ * dishes, then ingredient recipes (decided with the user), randomly shuffled
+ * within each group (decided with the user: random instead of alphabetical, a
+ * different order on every reload, but the three groups always stay apart). The
+ * partition is stable and keeps the groups together without an extra heading; a
+ * recipe whose type could not be read (`type === null`) stays with the dishes
+ * instead of disappearing among the bases (see `StoredRecipe.type`).
  */
 function orderCollection(recipes: readonly StoredRecipe[]): StoredRecipe[] {
   const drafts: StoredRecipe[] = [];
@@ -55,13 +81,21 @@ function orderCollection(recipes: readonly StoredRecipe[]): StoredRecipe[] {
       dishes.push(recipe);
     }
   }
-  return [...drafts, ...dishes, ...ingredientRecipes];
+  // The id breaks a (rare) hash collision into a total order. The ranks change
+  // from one page load to the next because the salt does.
+  const byShuffleRank = (left: StoredRecipe, right: StoredRecipe): number =>
+    shuffleRank(left.fileId) - shuffleRank(right.fileId) || left.fileId.localeCompare(right.fileId);
+  return [
+    ...drafts.sort(byShuffleRank),
+    ...dishes.sort(byShuffleRank),
+    ...ingredientRecipes.sort(byShuffleRank),
+  ];
 }
 
 interface RecipeListProps {
   /** Every recipe of the Drive collection (the "Restliche Sammlung" source). */
   recipes: StoredRecipe[];
-  /** Drive access token, forwarded to the card media areas for photo downloads. */
+  /** Drive access token, forwarded to the cards' photo areas for downloads. */
   token: string;
   /** Called when the user taps a card of the "Restliche Sammlung" section. */
   onOpenRecipe: (recipe: StoredRecipe) => void;
@@ -157,21 +191,24 @@ interface RecipeListProps {
  * - **Essensplan** shows the non-checked entries of the Google Keep meal plan,
  *   one card per entry, in Keep's order. An entry recognized as a recipe (its
  *   text is a recipe title, plus an optional fitting size suffix) renders in
- *   the known card format; every other entry renders as a card whose media area
- *   is the danger "unbekannt" symbol instead of a photo, with the entry's title
- *   as its title (the export link, a stated size and a free-text note are left
- *   out — the overview behind the card shows them). Tapping either card opens
- *   the overview: the recognized one with its stated size and "Umplanen", the
- *   unrecognized one as the destination for replacing or dropping the entry.
+ *   the known card format; every other entry renders as a text-only card with
+ *   the entry's title (the export link, a stated size and a free-text note are
+ *   left out — the overview behind the card shows them) and the danger
+ *   "Unbekannt" badge under the title. A card shows a photo only when the recipe
+ *   has one; without a photo it is text-only and its title may run to more lines
+ *   (decided with the user). Tapping either card opens the overview: the
+ *   recognized one with its stated size and "Umplanen", the unrecognized one as
+ *   the destination for replacing or dropping the entry.
  * - **Restliche Sammlung** shows the recipes that are *not* on the meal plan,
  *   plus every saved draft. The planned ones are already in the section above,
  *   so repeating them here would put the same card on one screen twice; the plan
  *   section is where a planned dish is read, changed and cooked from. With Keep
  *   off every recipe is "restlich", which is exactly what the section then
  *   shows. Within the section the saved drafts come first, then the finished
- *   dishes, then the ingredient recipes, each group alphabetically (decided with
- *   the user): a draft is unfinished work to resume, a dish is what the user
- *   cooks, a base is what they use in one. A draft card carries its „Entwurf“
+ *   dishes, then the ingredient recipes, each group in a random order that is
+ *   stable for the page but differs on every reload (decided with the user): a
+ *   draft is unfinished work to resume, a dish is what the user cooks, a base is
+ *   what they use in one. A draft card carries its „Entwurf“
  *   badge directly below the title and the same whole-card tap target as a
  *   recipe; it is never planned and never cookable.
  *
@@ -321,7 +358,7 @@ function RecipeList({
   /**
    * The counter of the "Essensplan" caption: `x Einträge, davon y unbekannt` —
    * y is how many of Keep's entries are not recognized as a recipe (the cards
-   * with the danger "unbekannt" symbol; every entry counts, even a repeated
+   * with the danger "Unbekannt" badge; every entry counts, even a repeated
    * one). Null while the
    * plan is not resolved (Keep off, connecting, still loading or failed): the
    * app must not claim a zero it cannot know.
@@ -445,13 +482,12 @@ function RecipeList({
           if (recipe !== null) {
             // Recognized: the known card format. The overview receives the whole
             // card, so it can show the entry's stated size and turn its travel
-            // action into "Umplanen".
+            // action into "Umplanen". The thumb renders only a real photo, so a
+            // recipe without one becomes a text-only card.
             return (
               <li key={card.key}>
                 <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
-                  <span className="recipe-media">
-                    <RecipeThumb recipe={recipe} token={token} />
-                  </span>
+                  <RecipeThumb recipe={recipe} token={token} />
                   <span className="recipe-card-title">
                     <span className="recipe-card-title-text">{recipe.title}</span>
                   </span>
@@ -459,25 +495,26 @@ function RecipeList({
               </li>
             );
           }
-          // Unrecognized: no recipe stands behind the entry, so the card's media
-          // area is not a photo but the danger "unbekannt" symbol — the serving
-          // cloche of RoomServiceIcon, decided with the user, who wanted it to
-          // read as "a dish, not known yet" instead of as an error — which is why
-          // the card carries no badge any more. The title is the entry
-          // without its export URL, its stated size and its free-text note —
-          // exactly the shape a known recipe's card has — and the overview
-          // behind the card shows those recognized parts (size, note, link)
-          // plus the "Unbekannt" badge.
+          // Unrecognized: no recipe stands behind the entry, so the card carries
+          // no media at all — the title alone states the entry. The danger
+          // "Unbekannt" badge sits under the title like the draft's badge
+          // (decided with the user): the serving cloche of RoomServiceIcon before
+          // the label keeps the meaning "a dish, not known yet" without claiming
+          // a photo area. The title is the entry without its export URL, its
+          // stated size and its free-text note — exactly the shape a known
+          // recipe's card has — and the overview behind the card shows those
+          // recognized parts (size, note, link).
           return (
             <li key={card.key}>
               <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
-                <span className="recipe-media">
-                  <span className="recipe-thumb recipe-thumb-unknown">
-                    <RoomServiceIcon className="recipe-thumb-icon" />
-                  </span>
-                </span>
                 <span className="recipe-card-title">
                   <span className="recipe-card-title-text">{card.title}</span>
+                  <span className="recipe-card-badge">
+                    <span className="recipe-badge recipe-badge-unknown">
+                      <RoomServiceIcon className="recipe-badge-icon" optical={20} />
+                      <span>Unbekannt</span>
+                    </span>
+                  </span>
                 </span>
               </button>
             </li>
@@ -508,9 +545,7 @@ function RecipeList({
         {visibleRecipes.map((recipe) => (
           <li key={recipe.fileId}>
             <button type="button" className="recipe-card" onClick={() => onOpenRecipe(recipe)}>
-              <span className="recipe-media">
-                <RecipeThumb recipe={recipe} token={token} />
-              </span>
+              <RecipeThumb recipe={recipe} token={token} />
               <span className="recipe-card-title">
                 <span className="recipe-card-title-text">{recipe.title}</span>
                 {recipe.status === 'draft' && (

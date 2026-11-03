@@ -31,8 +31,8 @@
  *    deletion stays in the editor's danger zone. The AI-edit flow may complete
  *    missing mandatory fields.
  * 4. **Unrecognized meal-plan entry** — no recipe behind it, so it carries **no
- *    hero image at all** (decided with the user; the list card's danger symbol
- *    is enough, and this sheet is about the entry's text and its actions). Its
+ *    hero image at all** (decided with the user; the list card's "Unbekannt"
+ *    badge is enough, and this sheet is about the entry's text and its actions). Its
  *    body shows the title without the export link, the stated size and a
  *    trailing free-text note, then the parts the parser recognized: the danger
  *    "Unbekannt" badge (RoomServiceIcon before the label) as the first item of the
@@ -896,7 +896,7 @@ function RecipeOverview({
       >
         {/* Hero: only a recognized recipe or a saved draft with a photo has
             one. An unrecognized entry deliberately shows none (decided with the
-            user) — the list card's danger "unbekannt" symbol already marks it,
+            user) — the list card's "Unbekannt" badge already marks it,
             and its own badge sits in the caption/value row below instead of on
             an image; its body then starts at the sheet's top padding. A recipe
             or draft without a photo also shows none (decided with the user): its

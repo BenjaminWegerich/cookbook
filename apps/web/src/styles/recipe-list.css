@@ -135,12 +135,13 @@
      filled and opaque" rule in docs/CODING_CONVENTIONS.md). */
   margin-inline: calc(-1 * var(--app-padding));
   /* The bottom padding is the bar's opaque step below the field: cards scrolling
-     up disappear --space-6 (18 px) under the field instead of touching its bottom
-     edge. That same step is the resting distance to the first section: the bar
-     adds no bottom margin, so the screen's content step is not doubled. Same
-     construction as the stacked header's step below its title
-     (.app-header-stacked). */
-  padding: var(--space-2) var(--app-padding) var(--space-6);
+     up disappear --space-7 (24 px) under the field instead of touching its bottom
+     edge. That same step is the resting distance to the first section, so the
+     gap above "Einkaufsliste" equals the section step (--space-7) between the
+     captions below it: the bar adds no bottom margin, so the screen's content
+     step is not doubled. Same construction as the stacked header's step below
+     its title (.app-header-stacked). */
+  padding: var(--space-2) var(--app-padding) var(--space-7);
   margin-block-end: 0;
   background: var(--color-bg);
 }
@@ -362,9 +363,9 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* Whole recipe card (photo media area on top, title below).
-   The card carries one mat (--space-4, 10 px) on all four sides, so the media
-   area sits inside the hairline border instead of bleeding into it — the
+/* Whole recipe card (photo on top where the recipe has one, title below).
+   The card carries one mat (--space-4, 10 px) on all four sides, so a photo
+   sits inside the hairline border instead of bleeding into it — the
    18 px/10 px pair of §4.4 (18 px radius, 10 px padding, 10 px image radius).
    The mat is what separates photo and border; the photo therefore needs its
    own corner radius (see `.recipe-thumb` below), because the card's rounded
@@ -375,16 +376,17 @@
   /* Same reason as the list cell above: the media area is `width: 100%` of this
      column, so the column itself must never grow past the card. */
   grid-template-columns: minmax(0, 1fr);
-  /* Cards in one row stretch to the tallest card (the one with a two-line
-     title). The media row keeps its natural (4:3) height, so all left-over
-     height lands in the title row instead of being split across both rows —
-     otherwise a one-line title would be pushed down by half a line and its
-     first line would no longer line up with the two-line neighbour's. */
+  /* Cards in one row stretch to the tallest card. A photo keeps its natural
+     (4:3) height, so all left-over height lands in the title row instead of
+     being split across both rows — otherwise a one-line title would be pushed
+     down by half a line and its first line would no longer line up with the
+     two-line neighbour's. A text-only card has no media row at all: its title
+     is the first (and only) child and starts at the card's top mat. */
   grid-template-rows: auto 1fr;
   align-content: start;
   width: 100%;
-  /* The one mat of the card: the media area and the title both start at this
-     inset (the title resets its own inline padding, see below). */
+  /* The one mat of the card: photo and title both start at this inset (the
+     title resets its own inline padding, see below). */
   padding: var(--space-4);
   overflow: hidden;
   background: var(--color-surface);
@@ -395,22 +397,29 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* The card's title area below the media area: the clamped title text and, for a
-   saved draft, its badge below it. Plain block layout is enough — the clamped
-   text and the badge are its own block children.
+/* The card's title area below the photo: the clamped title text and, for a
+   saved draft or an unrecognized meal-plan entry, its badge below it. Plain
+   block layout is enough — the clamped text and the badge are its own block
+   children.
    With the card's mat in place, the title resets its inline padding (0), so the
    text starts on exactly the same left edge as the photo above it — one mat,
    one text column. Its top padding keeps the same --space-4 (10 px) gap to the
-   photo as the card's mat, so the media-to-title step matches the mat on every
-   other side; the distance to the card's lower border comes from the card's own
-   bottom mat, so a bottom padding here would only add a second, different
-   cushion. */
+   photo as the card's mat; the distance to the card's lower border comes from
+   the card's own bottom mat, so a bottom padding here would only add a second,
+   different cushion. */
 .recipe-card-title {
   display: block;
   padding: var(--space-4) 0 0;
   font-size: var(--text-md);
   font-weight: 600;
   line-height: var(--leading-md);
+}
+
+/* A card without a photo: the title is the card's first child (the thumb
+   renders nothing), so the gap that separated it from a photo above is gone —
+   the card's own mat is the title's top distance. */
+.recipe-card-title:first-child {
+  padding-block-start: 0;
 }
 
 /* The title text: at most three lines, then an ellipsis. `min-width: 0` lets
@@ -426,13 +435,21 @@
   overflow-wrap: anywhere;
 }
 
+/* Without a photo the title is the card's only content, so it may use the room
+   the media area would have taken: up to six lines instead of three (decided
+   with the user). The clamp still guards the card against a runaway title and
+   keeps the grid's rows from growing past the viewport. */
+.recipe-card-title:first-child .recipe-card-title-text {
+  -webkit-line-clamp: 6;
+}
+
 /* Card badges: small all-caps state markers, one look for every instance (the
    editor's ingredient tags use the same recipe). A badge is plain content
    inside its card or row and never a hitbox of its own — the whole card is the
-   single tap target. An unrecognized meal-plan card carries no badge: its media
-   area *is* the danger symbol (`.recipe-thumb-unknown` below). The badge itself
-   leads the recipe overview's caption/value row and sits inline after an
-   entry's text in the shopping-list selection
+   single tap target. An unrecognized meal-plan card carries its „Unbekannt"
+   badge under the title (it has no media area of its own any more); the badge
+   itself also leads the recipe overview's caption/value row and sits inline
+   after an entry's text in the shopping-list selection
    (styles/shopping-list-select.css). */
 .recipe-badge {
   display: inline-flex;
@@ -476,24 +493,18 @@
   background: var(--color-ochre);
 }
 
-/* Wrapper that groups a card's media area (the photo / placeholder / symbol) as one
-   grid slot above the title. Plain block, so the thumb keeps filling the
-   card width exactly as it would as a direct child. */
-.recipe-media {
-  display: block;
-}
-
-/* Landscape media area of a recipe card — the photo cropped to 4:3, or the
-   room-service placeholder (a serving cloche on a deterministic warm ground)
-   when the recipe has no photo. 4:3 is the common
-   photographic ratio of DESIGN.md §5.8, not a ladder value (§4.3): the ladder
-   governs the box an image sits in, not the image itself. The media carries
-   its own radius now (decided with the user): the card's rounded corner no
-   longer clips a full-bleed tile, so the inset tile has to round itself. It
-   takes --radius-md (10 px), the card's fixed-pair image radius (§4.4: 18 px
-   radius, 10 px padding, 10 px image radius). The overview sheet's hero photo
-   uses the pair one step up — --radius-lg (18 px) inside a 32 px sheet (see
-   recipe-overview.css). */
+/* Landscape media area of a recipe card or of the overview hero — the photo
+   cropped to 4:3. The component renders this element only when a photo is
+   available (components/RecipeThumb.tsx), so a card without a photo has no
+   media area at all and is text-only; there is no placeholder ground any more.
+   4:3 is the common photographic ratio of DESIGN.md §5.8, not a ladder value
+   (§4.3): the ladder governs the box an image sits in, not the image itself.
+   The media carries its own radius now (decided with the user): the card's
+   rounded corner no longer clips a full-bleed tile, so the inset tile has to
+   round itself. It takes --radius-md (10 px), the card's fixed-pair image
+   radius (§4.4: 18 px radius, 10 px padding, 10 px image radius). The overview
+   sheet's hero photo uses the pair one step up — --radius-lg (18 px) inside a
+   32 px sheet (see recipe-overview.css). */
 .recipe-thumb {
   position: relative;
   aspect-ratio: 4 / 3;
@@ -502,29 +513,7 @@
   place-items: center;
   overflow: hidden;
   border-radius: var(--radius-md);
-  background: var(--placeholder-0); /* fallback until the inline variant applies */
-  color: var(--placeholder-0-fg);
-}
-
-/* Media area of an unrecognized meal-plan card: not a placeholder photo but the
-   "unbekannt" symbol (RoomServiceIcon's serving cloche) on the danger colour,
-   decided with the user — the cloche reads as "a dish, not known yet" where the
-   error glyph read as a failure. One element, one message, and the card needs
-   no badge of its own. */
-.recipe-thumb-unknown {
-  background: var(--color-danger);
-  color: var(--color-on-accent);
-}
-
-/* The room-service symbol on a media area, at the former letter avatar's size
-   (42 px, a ladder value), so the media area keeps its proportions whatever it
-   carries. One class for both the no-photo placeholder and the unrecognized
-   entry's danger media area. */
-.recipe-thumb-icon {
-  display: block;
-  width: var(--placeholder-symbol-size);
-  height: var(--placeholder-symbol-size);
-  color: currentColor;
+  background: var(--color-surface);
 }
 
 .recipe-thumb img {
