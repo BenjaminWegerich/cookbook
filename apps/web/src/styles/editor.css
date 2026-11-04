@@ -135,6 +135,16 @@
   font-weight: 600;
 }
 
+/* The head row of a card that carries an (i) toggle (InfoHint): the title keeps
+   the card's start edge, the toggle sits at the end at every width. The row is
+   as tall as the taller of the two, so adding the toggle never adds a line. */
+.editor-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 /* ---- Form fields -------------------------------------------------------- */
 
 .field {
@@ -156,6 +166,58 @@
   font-weight: 600;
   color: var(--color-ink-muted);
   text-transform: uppercase;
+}
+
+/* A caption row that carries the (i) toggle of InfoHint: the caption keeps the
+   start edge, the toggle sits at the end at every width. The row is as tall as
+   the toggle's 32px box; removing the caption's own 2px top air keeps the text
+   optically centred in that taller row. */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.field-label-row .field-label {
+  margin-block-start: 0;
+}
+
+/* The (i) trigger of InfoHint (docs/ui_patterns.md §3). The visible box is the
+   32px compact-icon step; the 5px ring below brings the hit area to
+   --control-height (42px), the same geometry as .icon-button. The field's 6px
+   gap is wider than the ring, so the target never reaches the control above or
+   below. The 18px glyph is the size for a symbol beside a label (§4.5). Muted
+   at rest, accent while the hint is open: colour is the only state difference
+   and the glyph stays unfilled. */
+.hint-toggle {
+  position: relative;
+  flex: none;
+  width: var(--space-8);
+  height: var(--space-8);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-ink-muted);
+}
+
+/* The hit-area ring: 32 + 2 × 5 = 42px (--control-height). */
+.hint-toggle::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+}
+
+.hint-toggle[aria-expanded='true'] {
+  color: var(--color-accent);
+}
+
+.hint-toggle-icon {
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 
 /* Uniform optional-field marker (docs/CODING_CONVENTIONS.md): appended to the

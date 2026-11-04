@@ -780,8 +780,14 @@ runs to thousands of characters — so it stops at `38dvh` and scrolls inside. G
 push the recipe settings and the send button several screens down; the no-scrollbar rule is
 about prose the user writes.
 
-**A caption may be followed by one quiet hint line** (`--text-sm`, muted) that explains the
-field; a hint never repeats the caption.
+**One quiet hint line** (`--text-sm`, muted) may explain a field; it never repeats the caption.
+A rule, warning, cause or state the user needs before acting stays visible.
+
+**An optional explanation sits behind one info toggle.** The toggle is the Material Symbols
+Rounded `info` glyph at the end of the caption row: 18px, muted, accent while open, with a 42px
+hit area. It reveals the hint between the caption and the control; a second tap hides it. The
+toggle is the only way a hint may be hidden — optional explanation is not a state (§3, principle
+6). *decided with the user*
 
 **Validation feedback comes in two places:**
 

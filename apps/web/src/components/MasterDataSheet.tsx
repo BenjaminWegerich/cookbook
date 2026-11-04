@@ -63,6 +63,7 @@ import {
   type ShoppingSynonyms,
 } from '@cookbook/core';
 
+import InfoHint from './InfoHint';
 import IngredientMappingsField from './IngredientMappingsField';
 import PrecisionChips from './PrecisionChips';
 import QuantityInput from './QuantityInput';
@@ -801,9 +802,19 @@ function MasterDataSheet({
             </div>
 
             {/* Ingredient-level precision: a display preference, not a scale.
-                The hint follows the chips, where it explains the choice. */}
-            <div className="field">
-              <span className="field-label">Genauigkeit</span>
+                The explanation sits behind the caption's (i) toggle; the chips
+                stay visible. */}
+            <InfoHint
+              className="field"
+              label="Genauigkeit"
+              hintLabel="Hinweis zur Genauigkeit"
+              hint={
+                <>
+                  Je niedriger die Genauigkeit, desto stärker wird auf glatte Zahlen gerundet. Der
+                  hier gewählte Zutat-Standard kann auf Rezept-Ebene übersteuert werden.
+                </>
+              }
+            >
               <PrecisionChips
                 value={precision}
                 onChange={(next) => {
@@ -812,19 +823,24 @@ function MasterDataSheet({
                 }}
                 ariaLabel="Genauigkeit der Zutat"
               />
-              <p className="field-hint">
-                Je niedriger die Genauigkeit, desto stärker wird auf glatte Zahlen gerundet. Der
-                hier gewählte Zutat-Standard kann auf Rezept-Ebene übersteuert werden.
-              </p>
-            </div>
+            </InfoHint>
 
             {/* The reorder point: what is on the shelf after a shopping trip.
                 The adaptive chips of a recipe quantity, with its two pinned
                 states around them: 0 ("only bought for a recipe") and ∞
                 ("always in stock"). A value typed into the field is still
                 stored exactly as entered, without snapping. */}
-            <div className="field">
-              <span className="field-label">Vorrat</span>
+            <InfoHint
+              className="field"
+              label="Vorrat"
+              hintLabel="Hinweis zum Vorrat"
+              hint={
+                <>
+                  Menge auswählen, auf die du den Vorrat beim Einkaufen mindestens ausfüllst, auch
+                  wenn kein eingeplantes Gericht die Zutat braucht.
+                </>
+              }
+            >
               <QuantityInput
                 value={reorderPoint}
                 onChange={(next) => {
@@ -841,11 +857,7 @@ function MasterDataSheet({
                 allowZero
                 allowInfinite
               />
-              <p className="field-hint">
-                Menge auswählen, auf die du den Vorrat beim Einkaufen mindestens ausfüllst, auch
-                wenn kein eingeplantes Gericht die Zutat braucht.
-              </p>
-            </div>
+            </InfoHint>
           </>
         )}
 
@@ -946,14 +958,19 @@ function MasterDataSheet({
             </div>
 
             {/* What else the item is called (docs/shopping_item_identity.md §1):
-            one chip per variant and a field that adds the next one. */}
-            <div className="field">
-              <span className="field-label">Synonyme</span>
-              <p className="field-hint">
-                Weitere Schreibweisen auf der Einkaufsliste, die auf diesen Artikel verweisen. Groß-
-                und Kleinschreibung wird ignoriert.
-              </p>
-
+            one chip per variant and a field that adds the next one. The
+            explanation sits behind the caption's (i) toggle. */}
+            <InfoHint
+              className="field"
+              label="Synonyme"
+              hintLabel="Hinweis zu den Synonymen"
+              hint={
+                <>
+                  Weitere Schreibweisen auf der Einkaufsliste, die auf diesen Artikel verweisen.
+                  Groß- und Kleinschreibung wird ignoriert.
+                </>
+              }
+            >
               {variants.length === 0 ? (
                 <p className="field-hint">Noch keine Synonyme.</p>
               ) : (
@@ -1009,7 +1026,7 @@ function MasterDataSheet({
                   {variantError}
                 </p>
               )}
-            </div>
+            </InfoHint>
           </>
         )}
 

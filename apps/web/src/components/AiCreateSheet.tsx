@@ -97,6 +97,7 @@ import type { StoredRecipe } from '../drive/recipeStorage';
 import { listRecipes, readRecipe } from '../drive/recipeStorage';
 import { loadRecipeGuidelines } from '../drive/personalRules';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
+import InfoHint from './InfoHint';
 import LeaveConfirmSheet from './LeaveConfirmSheet';
 import QuantityInput from './QuantityInput';
 import { EyeIcon } from './icons';
@@ -842,12 +843,20 @@ export default function AiCreateSheet({
       </header>
 
       {showKeyField ? (
-        <section className="editor-card ai-key-card" aria-label="API-Schlüssel">
-          <h2 className="editor-card-title">Gemini-API-Schlüssel</h2>
-          <p>
-            Füge deinen Gemini-API-Schlüssel ein. Er gilt für diese Sitzung; mit dem Häkchen
-            darunter auch nach einem Neustart der App.
-          </p>
+        <InfoHint
+          className="editor-card ai-key-card"
+          label="Gemini-API-Schlüssel"
+          hintLabel="Hinweis zum API-Schlüssel"
+          variant="card"
+          headingLevel={2}
+          ariaLabel="API-Schlüssel"
+          hint={
+            <>
+              Füge deinen Gemini-API-Schlüssel ein. Er gilt für diese Sitzung; mit dem Häkchen
+              darunter auch nach einem Neustart der App.
+            </>
+          }
+        >
           <input
             type="password"
             autoComplete="off"
@@ -888,7 +897,7 @@ export default function AiCreateSheet({
               Schlüssel verwenden
             </button>
           </div>
-        </section>
+        </InfoHint>
       ) : (
         <>
           {loadError !== null && (
@@ -1003,22 +1012,27 @@ export default function AiCreateSheet({
                     {/* Optional source text ("Quelltext"): page text the AI
                         cannot fetch itself. TikTok and Instagram block the URL
                         context tool, so their captions belong here; nearly
-                        every other recipe link belongs in the field above. */}
-                    <div className="field ai-field ai-source-field">
-                      <span className="field-label">
-                        Quelltext<span className="optional-mark">optional</span>
-                      </span>
+                        every other recipe link belongs in the field above. The
+                        limitation sits behind the caption's (i) toggle. */}
+                    <InfoHint
+                      className="field ai-field ai-source-field"
+                      label="Quelltext"
+                      hintLabel="Hinweis zum Quelltext"
+                      optional
+                      hint={
+                        <>
+                          TikTok- und Instagram-Links kann die KI nicht öffnen. Kopiere dort den
+                          Beschreibungstext und füge ihn hier ein.
+                        </>
+                      }
+                    >
                       <textarea
                         ref={sourceFieldRef}
                         value={source}
                         placeholder="Beschreibungstext einfügen …"
                         onChange={(event) => setSource(event.target.value)}
                       />
-                      <p className="field-hint">
-                        TikTok- und Instagram-Links kann die KI nicht öffnen. Kopiere dort den
-                        Beschreibungstext und füge ihn hier ein.
-                      </p>
-                    </div>
+                    </InfoHint>
 
                     {/* Rezept-Vorgaben — the manual editor's Typ and
                         Portionen/Ergiebigkeit controls plus the Merkmale

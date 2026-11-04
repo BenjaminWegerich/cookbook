@@ -67,6 +67,7 @@ import {
 } from '@cookbook/core';
 
 import ArrangementLine from './ArrangementLine';
+import InfoHint from './InfoHint';
 import PrecisionChips from './PrecisionChips';
 import QuantityInput, { type QuantityFamily } from './QuantityInput';
 import { LinkIcon, PencilIcon, PlusIcon, TrashIcon } from './icons';
@@ -544,10 +545,13 @@ function IngredientSheet({
             idiom) drops the pin. The field is offered for every quantity — a
             master ingredient, a sub-recipe, a unitless mention, and the
             still-empty form (neutral medium). */}
-        <div className="field">
-          <span className="field-label">
-            Genauigkeit<span className="optional-mark">optional</span>
-          </span>
+        <InfoHint
+          className="field"
+          label="Genauigkeit"
+          hintLabel="Hinweis zur Genauigkeit"
+          optional
+          hint="Je niedriger die Genauigkeit, desto stärker wird auf glatte Zahlen gerundet."
+        >
           <PrecisionChips
             // No active chip while the quantity follows the baseline; any chip
             // tap pins its level, even one that equals the baseline today.
@@ -557,10 +561,7 @@ function IngredientSheet({
             onClear={() => setPrecisionOverride(undefined)}
             ariaLabel="Genauigkeit der Menge"
           />
-          <p className="field-hint">
-            Je niedriger die Genauigkeit, desto stärker wird auf glatte Zahlen gerundet.
-          </p>
-        </div>
+        </InfoHint>
 
         <div className="field">
           <span className="field-label">Menge</span>

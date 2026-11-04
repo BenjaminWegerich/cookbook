@@ -135,6 +135,7 @@ import type { SnackbarMessage } from '../hooks/useSnackbar';
 import AutoGrowTextarea from './AutoGrowTextarea';
 import DraftRecoverySheet from './DraftRecoverySheet';
 import EditIngredientSheet from './EditIngredientSheet';
+import InfoHint from './InfoHint';
 import IngredientSheet, {
   type IngredientRecipeOption,
   type IngredientSheetMode,
@@ -3771,9 +3772,25 @@ function RecipeEditor({
           <span>Schritt hinzufügen</span>
         </button>
 
-        {/* Zutaten — the read-only master list (reference role only, §4) */}
-        <section className="editor-card" aria-label="Zutaten" id="editor-master-list">
-          <h3 className="editor-card-title">Zutaten</h3>
+        {/* Zutaten — the read-only master list (reference role only, §4). The
+            explanation of the derived list sits behind the heading's (i)
+            toggle; with no rows yet it would only repeat the empty state. */}
+        <InfoHint
+          className="editor-card"
+          label="Zutaten"
+          hintLabel="Hinweis zu den Zutaten"
+          variant="card"
+          id="editor-master-list"
+          ariaLabel="Zutaten"
+          hint={
+            computedIngredients.length > 0 ? (
+              <>
+                Liste aus den Zubereitungsschritten zusammen&shy;gesetzt. Mit Stern markierte
+                Referenz-Zutaten werden beim Skalieren mit angezeigt.
+              </>
+            ) : undefined
+          }
+        >
           {sectionIssues('ingredients').map((issue, index) => (
             <p className="field-error" key={`ingredients-${index}`} role="alert">
               {issue.message}
@@ -3783,12 +3800,6 @@ function RecipeEditor({
             <p className="empty-hint">Füge Zutatenzeilen zu den Schritten hinzu.</p>
           ) : (
             <>
-              {/* The &shy; (U+00AD soft hyphen) lets "zusammengesetzt" break as
-                  "zusammen-gesetzt" on narrow widths; invisible when the line fits. */}
-              <p className="empty-hint">
-                Liste aus den Zubereitungsschritten zusammen&shy;gesetzt. Mit Stern markierte
-                Referenz-Zutaten werden beim Skalieren mit angezeigt.
-              </p>
               <ul className="ingredient-list">
                 {computedIngredients.map((ingredient, index) => {
                   const jumpTarget = subRecipeTarget(ingredient.name);
@@ -3878,19 +3889,26 @@ function RecipeEditor({
               </ul>
             </>
           )}
-        </section>
+        </InfoHint>
 
         {/* Design — the recipe's visual skin for the export (DESIGN §4.8);
             every token is optional and falls back to the default independently. */}
-        <section className="editor-card" aria-label="Design">
-          <h3 className="editor-card-title">Design</h3>
-          <p className="field-hint">
-            Aussehen der Kochansicht anpassen. Alle Felder sind optional und fallen einzeln auf den
-            Standard zurück.
-          </p>
-          {/* The AI suggestion overwrites the whole theme at once. It sits
-              between the explanation and the manual controls: a starting point
-              for the fields below, which stay editable afterwards. */}
+        <InfoHint
+          className="editor-card"
+          label="Design"
+          hintLabel="Hinweis zum Design"
+          variant="card"
+          ariaLabel="Design"
+          hint={
+            <>
+              Aussehen der Kochansicht anpassen. Alle Felder sind optional und fallen einzeln auf
+              den Standard zurück.
+            </>
+          }
+        >
+          {/* The AI suggestion overwrites the whole theme at once. It is the
+              starting point above the manual controls, which stay editable
+              afterwards. */}
           <button
             type="button"
             className="outlined-button"
@@ -3906,7 +3924,7 @@ function RecipeEditor({
             theme={draft.theme}
             onChange={(theme) => patchDraft({ theme })}
           />
-        </section>
+        </InfoHint>
 
         {/* Danger zone (edit mode, or once this editor is backed by a draft) */}
         {(target !== null || isDraftBacked) && (

@@ -12,6 +12,9 @@ Patterns documented here:
 2. [Leaving a screen](#2-leaving-a-screen) — „Zurück" at the top left as the exit
    of a *place*, „Abbrechen" beside the primary button as the exit of a *change*.
 
+3. [Hint disclosure](#3-hint-disclosure) — the (i) toggle that keeps a field's
+   optional explanation out of the form until it is asked for.
+
 The visual ground rules the patterns sit on are binding and live in
 [CODING_CONVENTIONS.md](CODING_CONVENTIONS.md) (Design Conventions): the pixel
 ladder, the flat opaque surfaces, the one icon set (Material Symbols Rounded,
@@ -422,3 +425,104 @@ reported next to the button instead of in a snackbar).
 5. A place that needs a confirmation asks through the shared guard, never with a
    second button; a "change" that needs a confirmation is no longer a change and
    belongs in the flow as a step.
+
+---
+
+## 3. Hint disclosure
+
+**What it is.** A caption — a field label or a card title — ends in a small (i) button.
+Tapping it reveals the one quiet hint line that explains the thing below; a second tap
+hides it. The form stays short without hiding a rule the user must know before acting.
+
+**The instances so far.** The Stammdaten sheet's „Genauigkeit", „Vorrat" and „Synonyme";
+the quantity sheet's „Genauigkeit"; the editor's „Zutaten" and „Design" cards; the AI
+screen's „Quelltext" and „Gemini-API-Schlüssel" card.
+
+### 3.1 When to use it — and when not
+
+Use it for an explanation the user reads once: how a value is rounded, what a field means,
+what a card changes. The hint must be optional — nothing breaks if it is never opened.
+
+Do **not** use it for:
+
+- **a rule, constraint or warning.** „Beide ausfüllen oder beide leer lassen", „nur wenn
+  sie größer als die Arbeitszeit ist" and the warning about a stored API key stay
+  visible; a user who has to open a hint to avoid an error will not open it;
+- **a state, cause or validation message.** A missing shopping route, an empty list and
+  a field error keep their place next to the control (§6.3, §5.3);
+- **a caption, empty-state sentence or status line.** „Singular", „Noch keine Synonyme."
+  and „Wird oben einsortiert." are not hints;
+- **a group of unrelated fields.** One toggle explains one caption, not a whole form;
+- **a shortcut caption painted inside a field** (the composer's Ctrl+Enter line). It
+  belongs to the control's own behaviour and already appears only while focused.
+
+### 3.2 Anatomy
+
+```
+GENAUIGKEIT                              (i)
+Je niedriger die Genauigkeit, …          ← only while open
+[ sehr niedrig ] [ niedrig ] [ mittel ] …
+```
+
+| Part | Content | Notes |
+| --- | --- | --- |
+| Caption row | `.field-label` plus `.hint-toggle` | flex; the toggle at the inline end, the caption keeps the start edge |
+| Toggle | `InfoIcon` (Material Symbols Rounded `info`) | 18px glyph in a 32px box; 5px ring to a 42px hit area; muted; accent while open |
+| Panel | `.field-hint` | `--text-sm`, muted; between the caption and the control; `hidden` while closed |
+
+### 3.3 Geometry and placement
+
+- The toggle's visible box is 32px (`--space-8`); its 5px `::before` ring brings the hit
+  area to `--control-height` (42px). The field's 6px gap is wider than the ring, so the
+  target never reaches the control above or below. This is the same compact-icon-control
+  geometry as `.icon-button` (§5.1).
+- A field uses `.field-label-row`; a card title uses `.editor-card-head`. Both put the
+  toggle at the inline end, so its position never depends on the caption's length.
+- The panel is a sibling between the caption and the control, so the field's own
+  `--space-2` gap separates both sides. It carries no surface, border or shadow: the
+  hint is quiet text, not a callout.
+- The glyph is 18px (`--icon-md`, the 20px drawing), the size for a symbol beside a
+  label (§4.5). The state difference is colour only; the glyph stays unfilled.
+
+### 3.4 Behaviour and accessibility
+
+- Click or tap toggles; a second click closes. Focus stays on the toggle after either.
+- With focus on the toggle, Escape closes an open hint and stops there, so the
+  surrounding sheet's Escape handling receives the next press instead of both at once.
+- The toggle is a `<button type="button">` with `aria-expanded`, `aria-controls` and an
+  `aria-label` that names its subject in full German („Hinweis zur Genauigkeit", „Hinweis
+  zum Vorrat"). The icon is decorative (`aria-hidden`).
+- The panel stays in the DOM with `hidden`, which keeps `aria-controls` valid and removes
+  the text from the accessibility tree while closed.
+- There is no hover-only reveal: the same click works on the phone and with a keyboard.
+  There is no popover, scrim, focus trap or second layer — the hint belongs to the form,
+  not over it.
+- Each hint is independent. Opening one does not close another and nothing is remembered
+  across openings.
+
+### 3.5 Copy
+
+- The panel keeps the sentence that would have been the visible hint. It is not rewritten
+  as a label and never shortened to a fragment.
+- The toggle's name names its subject, not the control: „Hinweis zur Genauigkeit", not
+  „i" and not „Genauigkeit".
+- German, complete sentences; no „Mehr erfahren", no arrow, no question mark as the label.
+
+### 3.6 Implementation map
+
+| Layer | File | Responsibility |
+| --- | --- | --- |
+| Caption row, toggle, panel, state | `apps/web/src/components/InfoHint.tsx` | the one component; field and card variants; `useId`, `useState`, Escape |
+| Look | `apps/web/src/styles/editor.css` | `.field-label-row`, `.editor-card-head`, `.hint-toggle`, `.hint-toggle-icon` |
+| Symbol | `apps/web/src/components/icons.tsx` | `InfoIcon` (the set's own `info` drawing at 20 and 24px) |
+| The hints | `MasterDataSheet`, `IngredientSheet`, `RecipeEditor`, `AiCreateSheet` | the eight instances listed above |
+
+### 3.7 Adding a new hint
+
+1. Wrap the caption and the control in `InfoHint`; pass `label`, `hintLabel` and `hint`.
+2. For a card, add `variant="card"`; pass `headingLevel={2}` for an `h2` and `ariaLabel`
+   where the section's accessible name differs from the title.
+3. Omit `hint` while there is nothing to explain yet (an empty derived list). The toggle
+   disappears with it.
+4. Leave rules, warnings, causes and states visible. Do not put them behind the toggle.
+5. Do not add a second tooltip, popover or sheet for the same explanation.
