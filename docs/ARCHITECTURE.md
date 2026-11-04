@@ -52,7 +52,7 @@
 
 - The quantity optimizer and its master data (see
   [quantity_scaling.md](quantity_scaling.md),
-  [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md)): the allowed
+  [recipe_scaling_algorithm.md](recipe_scaling_algorithm.md)): the allowed
   base quantities live in `docs/BQs.csv`, the allowed additional quantities and
   their number-scheme columns in `docs/AQs.csv`. Both are compiled into
   `packages/core/src/quantityData.ts` via `npm run generate:quantity`

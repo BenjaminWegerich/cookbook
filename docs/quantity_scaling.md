@@ -2,7 +2,7 @@
 
 > Defines how a recipe's ingredient amounts scale and how the app chooses the
 > displayed BQ/AQ representation. The scoring model is specified in
-> [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md); this document
+> [recipe_scaling_algorithm.md](recipe_scaling_algorithm.md); this document
 > records the project-specific decisions, the master data and the integration
 > with the recipe format. Related documents:
 > [additional_quantity_specifications.md](additional_quantity_specifications.md)
@@ -172,7 +172,7 @@ setting; the quantity level is for exceptions.
 
 ## 6. Scoring and selection
 
-The full formulas are in [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md)
+The full formulas are in [recipe_scaling_algorithm.md](recipe_scaling_algorithm.md)
 §5–§6. The runtime parameters are fixed:
 
 - `p = 0.5` (user proportion, `USER_PROPORTION_P`);

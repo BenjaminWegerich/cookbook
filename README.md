@@ -99,9 +99,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the components and
 The `examples/` folder holds a snapshot of real recipes from the collection in the
 canonical file format (docs/storage_format.md): finished dishes plus the
 ingredient recipes they use. They are the core module's acceptance fixtures — the
-test suite parses every file, checks that the file name equals the title, and runs
+test suite parses every recipe, checks that the file name equals the title, and runs
 the cross-recipe validation (including the sub-recipe link graph) over the whole
-set. Keep the set self-contained and loadable when refreshing it.
+set. The three generated `sample-*.html` cooking views sit alongside them for design
+review. Keep the set self-contained and loadable when refreshing it.
 
 ## Documentation
 
@@ -112,5 +113,5 @@ set. Keep the set self-contained and loadable when refreshing it.
 - [docs/storage_format.md](docs/storage_format.md) — canonical recipe file format (Markdown + YAML)
 - [docs/quantity_scaling.md](docs/quantity_scaling.md) — scaling, the BQ/AQ optimizer, precision and yield views
 - [docs/additional_quantity_specifications.md](docs/additional_quantity_specifications.md) — how quantities are displayed (base + additional units)
-- [recipe_scaling_algorithm.md](recipe_scaling_algorithm.md) — the scoring model behind the optimizer
+- [recipe_scaling_algorithm.md](docs/recipe_scaling_algorithm.md) — the scoring model behind the optimizer
 - [docs/ui_patterns.md](docs/ui_patterns.md) — reusable UI patterns (the snackbar)

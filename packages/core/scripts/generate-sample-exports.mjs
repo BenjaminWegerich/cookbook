@@ -1,6 +1,7 @@
 /**
- * Regenerates the committed sample cooking-view exports in the repository root:
- * `sample-penne.html`, `sample-pitas.html` and `sample-cajun-spice.html`.
+ * Regenerates the committed sample cooking-view exports in the repository's
+ * `examples/` folder: `sample-penne.html`, `sample-pitas.html` and
+ * `sample-cajun-spice.html`.
  *
  * The samples are the *current* output of `generateRecipeHtml` for three of the
  * recipes in `examples/`, so a design review can open a real cooking view in a
@@ -66,6 +67,6 @@ function linksFor(recipe) {
 
 for (const { source, output, recipe } of parsed) {
   const html = generateRecipeHtml(recipe, linksFor(recipe));
-  writeFileSync(join(REPO_ROOT, output), html, 'utf8');
-  console.log(`${output}  ←  examples/${source}  (${html.length} bytes)`);
+  writeFileSync(join(EXAMPLES_DIR, output), html, 'utf8');
+  console.log(`examples/${output}  ←  examples/${source}  (${html.length} bytes)`);
 }

@@ -4,7 +4,7 @@
 > **base quantity** (BQ, metric `g`/`ml`) and optionally an **additional quantity**
 > (AQ, a household or packaging unit). Related documents:
 > [quantity_scaling.md](quantity_scaling.md) (scaling, optimizer, precision),
-> [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md) (the scoring model),
+> [recipe_scaling_algorithm.md](recipe_scaling_algorithm.md) (the scoring model),
 > [AQs.csv](AQs.csv) / [BQs.csv](BQs.csv) (the allowed values),
 > [recipe_structure.md](recipe_structure.md) (recipe model).
 
@@ -163,7 +163,7 @@ content (`(500 g)`), because the sentence's punctuation must stay visible.
 ## 6. Selection and exactness
 
 The detailed formula is in
-[recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md) §5–§6 and
+[recipe_scaling_algorithm.md](recipe_scaling_algorithm.md) §5–§6 and
 [quantity_scaling.md](quantity_scaling.md) §6. In short, the optimizer evaluates
 metric-only BQs, exact-unit AQs (where `BQ = q·c`) and non-exact BQ/AQ pairs,
 scores each candidate and picks the best; ties use higher BQ, then lower AQ (a
@@ -265,7 +265,7 @@ the user), so an exact unit never changes what is stored.
 
 - [quantity_scaling.md](quantity_scaling.md) — scaling, the optimizer, precision,
   BQ decade rule, yields and export views.
-- [recipe_scaling_algorithm.md](../recipe_scaling_algorithm.md) — the scoring
+- [recipe_scaling_algorithm.md](recipe_scaling_algorithm.md) — the scoring
   formulas and candidate rules.
 - [AQs.csv](AQs.csv) / [BQs.csv](BQs.csv) — the allowed values and schemes.
 - [recipe_structure.md](recipe_structure.md) — the recipe model and the stored
