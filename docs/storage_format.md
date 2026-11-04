@@ -91,7 +91,7 @@ independently:
 | Token | Type | Default | Notes |
 |---|---|---|---|
 | `font` | string | `Noto Sans` | One typeface of the export font shortlist (DESIGN.md §4.8); no other typeface is allowed. `Noto Sans Condensed` and `Noto Sans Mono` are retired: existing files may still carry them, new recipes must not choose them; neither face is embedded any more, so such an export falls back. |
-| `accent` | string | `#ad5632` | Active state, forward actions, links, sub-recipe badge. |
+| `accent` | string | `#ad5632` | Active state, forward actions, links, sub-recipe name link. |
 | `paper` | string | `#faf5ec` | Page background. |
 | `ink` | string | `#2b241d` | Primary text. |
 | `line` | string | `#e6dbc8` | Hairlines, borders, dividers. |

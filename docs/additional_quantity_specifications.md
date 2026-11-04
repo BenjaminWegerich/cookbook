@@ -139,10 +139,14 @@ If no AQ candidate fits, the base form `<BQ> <BU> <IN>` is shown (`400 g Joghurt
 The BQ/AQ values are selected by the optimizer, not read from a stored BQ; in the
 fallback the BQ is `V0` itself.
 
-A parenthesized group in an arrangement is a **note**. The app and the cooking
-view render it without brackets, muted and italic, after one en space:
-`1 Becher Joghurt␣500 g`. The written shopping list keeps the written form with
-brackets (`1 Becher Joghurt (500 g)`). Step prose is the exception: it keeps a
+A parenthesized group in an arrangement is a **note**. The web app renders it
+without brackets, muted and italic, after one en space:
+`1 Becher Joghurt␣500 g`. The cooking view's ingredient rows use the note as
+their quiet right edge: muted and italic, right-aligned, on the last text line
+while it fits there and otherwise on its own right-aligned line, with at least
+an En space to the text. The intro's reference readout keeps the inline form.
+The written shopping list keeps the written form with brackets
+(`1 Becher Joghurt (500 g)`). Step prose is the exception in both: it keeps a
 regular space and the brackets, styled muted and italic together with their
 content (`(500 g)`), because the sentence's punctuation must stay visible.
 

@@ -7,7 +7,7 @@
  * artifacts) all scale with the chosen size. The page is one document with three
  * screen states (Intro → Zutaten → Zubereitung), a fixed bottom bar and the
  * recipe's theme applied; sub-recipe uses (rows, master rows and artifacts)
- * carry the „Rezept" badge that opens the sub-recipe's export.
+ * make the ingredient name the link that opens the sub-recipe's export.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -21,10 +21,10 @@ import type { RecipePhoto } from './exportHtml.js';
 import type { Recipe } from './types.js';
 
 /**
- * The export's HTML for one amount line: the note leaves its brackets and
- * follows an en space in `.arrangement-note`, except in step prose, which keeps
- * the brackets and a regular space. The reference readout uses the same bare
- * form as the rows.
+ * The export's HTML for one *inline* amount line: the note leaves its brackets
+ * and follows an en space in `.arrangement-note` (the reference readout), or
+ * keeps the brackets and a regular space in step prose. Ingredient rows use
+ * `rowAmountHtml` below, where the note becomes the quiet `.tail` column.
  */
 function amountHtml(
   name: string,
@@ -44,6 +44,24 @@ function amountHtml(
       return ` <span class="arrangement-note">(${note})</span>`;
     })
     .join('');
+}
+
+/**
+ * The HTML of one amount line in the new row: the arrangement's text without
+ * its final note, then that note in the quiet `.tail` column. The name is not
+ * linked here; the link tests below cover that markup.
+ */
+function rowAmountHtml(name: string, value: number, bu: string): string {
+  const display = renderAQSDisplay(name, value, bu);
+  const last = display.parts[display.parts.length - 1];
+  const tail = last?.kind === 'note' ? escapeHtml(last.value) : undefined;
+  const body = (tail === undefined ? display.parts : display.parts.slice(0, -1))
+    .map((part) => {
+      if (part.kind === 'text') return escapeHtml(part.value);
+      return `${EN_SPACE}<span class="arrangement-note">${escapeHtml(part.value)}</span>`;
+    })
+    .join('');
+  return `${body}${tail === undefined ? '' : `<span class="tail">${tail}</span>`}`;
 }
 
 /** A finished dish with rows, a reference and inline artifacts. */
@@ -93,8 +111,8 @@ describe('generateRecipeHtml — finished dish', () => {
 
   it('scales the master list and the reference readout for an option', () => {
     // 6 → 9 servings is an exact factor of 1.5.
-    expect(html).toContain(amountHtml('Tortillas', 375, 'g'));
-    expect(html).toContain(amountHtml('Joghurt', 600, 'g'));
+    expect(html).toContain(rowAmountHtml('Tortillas', 375, 'g'));
+    expect(html).toContain(rowAmountHtml('Joghurt', 600, 'g'));
     // The written size's reference readout: one muted line per amount.
     expect(html).toContain(
       `<ul class="reference size-scoped" data-servings="6">\n` +
@@ -119,8 +137,50 @@ prep_time: 5 min
     );
     // Step rows show 1 Becher (500 g) and ½ Becher (250 g); the master sums
     // both the BQs (750 g) and the AQs (1 ½ Becher).
-    expect(repeated).toContain(`1${NNBSP}½${NNBSP}Becher Joghurt`);
-    expect(repeated).toContain(`<span class="arrangement-note">750${NNBSP}g</span>`);
+    expect(repeated).toContain(
+      `1${NNBSP}½${NNBSP}Becher Joghurt<span class="tail">750${NNBSP}g</span>`,
+    );
+  });
+
+  it('hangs the note as a right float and keeps the checkbox out of a label', () => {
+    // The left text is the row's flex child; the note is a right float after
+    // it, so it uses the last line when it fits and drops below otherwise.
+    expect(html).toContain(
+      '.ingredient-text { flex: 1; min-width: 0; display: flow-root; overflow-wrap: anywhere; }',
+    );
+    expect(html).toContain('.tail { float: right; margin-inline-start: 0.5em;');
+    // The name is a link, not a pill: accent underline, accent on hover.
+    expect(html).toContain('.name-link { position: relative; color: inherit;');
+    expect(html).toContain('text-decoration-color: var(--accent);');
+    expect(html).toContain('.name-link:hover { color: var(--accent); }');
+    // No badge survives in the export.
+    expect(html).not.toContain('.badge {');
+    // The checkbox gets its accessible name from the text span; there is no
+    // <label>, which would swallow the link's click.
+    expect(html).toContain('aria-labelledby="t-c-s0-0"');
+    expect(html).not.toContain('<label class="ingredient-text"');
+  });
+
+  it('links the name form the arrangement actually shows', () => {
+    const singular = generateRecipeHtml(
+      parseRecipe(`---
+title: Zwiebeln
+type: finished_dish
+servings: 3
+prep_time: 5 min
+---
+## Zubereitung
+1. - 80 g Zwiebeln
+   Zwiebeln schneiden.
+`),
+      { Zwiebeln: 'https://drive.example/Zwiebeln.html' },
+    );
+    // The `Stück (ZE zuerst)` arrangement shows the singular `<INF>` form;
+    // the link has to wrap that word, not fail on the canonical plural.
+    expect(singular).toContain('>Zwiebel</a>');
+    // The singular must be a whole word, not a prefix of "Zwiebeln" with a
+    // stray "n" left outside the anchor.
+    expect(singular).not.toContain('>Zwiebel</a>n');
   });
 
   it('stacks the reference readout without commas between the amounts', () => {
@@ -154,14 +214,15 @@ reference:
   it('renders each step with its own rows above the prose', () => {
     expect(html).toContain('<ul class="ingredient-list step-rows">');
     expect(html).toContain(
-      `<span class="ingredient-text">${amountHtml('Tortillas', 250, 'g')}</span>`,
+      `<span class="ingredient-text">${rowAmountHtml('Tortillas', 250, 'g')}</span>`,
     );
-    expect(html).toContain(amountHtml('Béchamelsauce', 500, 'ml'));
+    expect(html).toContain('class="name-link"');
+    expect(html).toContain('>Béchamelsauce</a>');
   });
 
   it('renders inline artifacts scaled inside the prose', () => {
     // Option 6 is the written size, so the {{1500 ml Wasser}} artifact is unscaled.
-    expect(html).toContain(amountHtml('Wasser', 1500, 'ml'));
+    expect(html).toContain(amountHtml('Wasser', 1500, 'ml', 'parenthesised'));
     // No raw artifact markers survive.
     expect(html).not.toContain('{{');
   });
@@ -179,31 +240,30 @@ prep_time: 5 min
 `);
     const butterHtml = generateRecipeHtml(recipe, {});
     // Master/step rows: no brackets, an en space and the muted note run.
-    expect(butterHtml).toContain(amountHtml('Butter', 250, 'g'));
+    expect(butterHtml).toContain(rowAmountHtml('Butter', 250, 'g'));
     // Step prose: a regular space, brackets kept, both inside the styled run.
     expect(butterHtml).toContain(amountHtml('Butter', 250, 'g', 'parenthesised'));
   });
 
-  it('links sub-recipe uses (rows and artifacts) through the „Rezept" badge', () => {
+  it('links sub-recipe uses (rows and artifacts) through the ingredient name', () => {
     const url = 'https://drive.example/Béchamelsauce.html';
-    expect(html).toContain('class="badge"');
-    // Each badge also promises the amount its use needs at that view, so the
+    expect(html).toContain('class="name-link"');
+    expect(html).not.toContain('class="badge"');
+    // Each link also promises the amount its use needs at that view, so the
     // sub-recipe opens scaled to the parent instead of at its own written
     // yield. The written 6-serving view uses 500 ml in the row and 200 ml in
     // the prose artifact.
     expect(html).toContain(`href="${url}#menge=500ml"`);
     expect(html).toContain(`href="${url}#menge=200ml"`);
     // Every size carries the three uses (master row + step row + artifact).
-    expect(html.match(/class="badge"/g)).toHaveLength(54);
-    expect(html).toContain('>Rezept</a>');
-    // The badge in running prose keeps a narrow no-break space from the word
-    // before it, so a screen reader never reads them as one word (§7).
-    expect(html).toContain('Béchamelsauce <a class="badge"');
-    // The step row separates the two with a margin instead, so it takes no space.
-    expect(html).toContain('Béchamelsauce</span><a class="badge"');
+    expect(html.match(/class="name-link"/g)).toHaveLength(54);
+    // The visible name is the anchor text in the rows and in running prose;
+    // no separate badge follows it.
+    expect(html).toContain('>Béchamelsauce</a>');
+    expect(html).not.toContain('>Rezept</a>');
   });
 
-  it('bakes each sub-recipe badge with that view’s amount, snapped to a BQ', () => {
+  it('bakes each sub-recipe link with that view’s amount, snapped to a BQ', () => {
     const url = 'https://drive.example/Béchamelsauce.html';
     // 9 servings scale the 500 ml row to 750 ml and the 200 ml artifact to
     // 300 ml; both are allowed BQ values.
@@ -221,9 +281,9 @@ prep_time: 5 min
     expect(hosted).toContain('href="https://host.example/exec?f=file-id&amp;menge=500ml"');
   });
 
-  it('renders no sub-recipe badges when no URLs are passed', () => {
+  it('renders no sub-recipe links when no URLs are passed', () => {
     const plain = generateRecipeHtml(WRAPS);
-    expect(plain).not.toContain('class="badge"');
+    expect(plain).not.toContain('class="name-link"');
     expect(plain).not.toContain('{{');
   });
 
@@ -270,8 +330,8 @@ prep_time: 15 min
 
   it('scales the master list and the reference per view', () => {
     // 500 ml → 5 l is an exact factor of 10.
-    expect(html).toContain(amountHtml('Milch', 3000, 'ml'));
-    expect(html).toContain(amountHtml('Butter', 250, 'g'));
+    expect(html).toContain(rowAmountHtml('Milch', 3000, 'ml'));
+    expect(html).toContain(rowAmountHtml('Butter', 250, 'g'));
   });
 
   it('offers one adaptive chip row per baked view, recentred on that view', () => {
@@ -418,7 +478,7 @@ prep_time: 15 min
   it('has no serving picker and keeps stored quantities', () => {
     expect(html).not.toContain('class="serving-chip"');
     expect(html).toContain(formatBQ(500, 'ml'));
-    expect(html).toContain(amountHtml('Butter', 25, 'g'));
+    expect(html).toContain(rowAmountHtml('Butter', 25, 'g'));
   });
 
   it('shows a reference ingredient as the intro readout', () => {
@@ -432,8 +492,8 @@ prep_time: 15 min
 
   it('renders rows and unscaled artifacts in the steps', () => {
     expect(html).toContain('<ul class="ingredient-list step-rows">');
-    expect(html).toContain(amountHtml('Milch', 300, 'ml'));
-    expect(html).toContain(amountHtml('Milch', 50, 'ml'));
+    expect(html).toContain(rowAmountHtml('Milch', 300, 'ml'));
+    expect(html).toContain(amountHtml('Milch', 50, 'ml', 'parenthesised'));
   });
 
   it('escapes user content', () => {

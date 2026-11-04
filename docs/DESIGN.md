@@ -436,12 +436,12 @@ size drawn for it:
 
 Icons are inline SVG (no icon font, no runtime fetch), drawn on the Material Symbols Rounded
 family's grid, weight 400, `fill="currentColor"` — the same family as the web app. The export
-uses these symbols: the sub-recipe badge's link glyph beside its visible „Rezept" label, the
-back/forward arrows on every navigation button (left = back, right = forward), and the Cookbook
-brand mark (menu book 2) beside „Erstellt mit Cookbook". The −/+ stepper's two buttons are the
-family's `remove` and `add` drawings, like the web app's stepper; a font character (`−`, `+`, `×`)
-is never used in place of a symbol. The check-list checkbox is a native `<input type="checkbox">`
-styled with the theme, never a hand-drawn glyph.
+uses these symbols: the back/forward arrows on every navigation button (left = back, right =
+forward) and the Cookbook brand mark (menu book 2) beside „Erstellt mit Cookbook". The
+sub-recipe link uses no symbol, only the accent underline on the ingredient name. The −/+
+stepper's two buttons are the family's `remove` and `add` drawings, like the web app's
+stepper; a font character (`−`, `+`, `×`) is never used in place of a symbol. The check-list
+checkbox is a native `<input type="checkbox">` styled with the theme, never a hand-drawn glyph.
 
 ### 4.6 Motion
 
@@ -541,7 +541,7 @@ theme independently:
 | Token | Default (the app palette) | Role |
 | --- | --- | --- |
 | `font` | Noto Sans | the export typeface (with `Noto Serif Display`: the main heading only, Noto Serif for the rest) |
-| `accent` | `#ad5632` (clay) | active state, the forward actions, the sub-recipe badge, links |
+| `accent` | `#ad5632` (clay) | active state, the forward actions, the sub-recipe name link, links |
 | `paper` | `#faf5ec` | page background |
 | `ink` | `#2b241d` | primary text |
 | `line` | `#e6dbc8` | hairlines, borders, dividers |
@@ -874,7 +874,8 @@ such action. *decided with the user*
 - An ingredient arrangement's parenthesized note is muted and italic. Every list, chip and
   readout drops the brackets after one en space (`1 Becher Joghurt␣500 g`); step prose keeps a
   regular space and the brackets, styled with their content (§5.11); the written shopping
-  list keeps its bracketed wording.
+  list keeps its bracketed wording. The cooking view's ingredient rows are the exception:
+  there the note is the row's quiet right edge (see the cooking-view paragraph below).
 - Trailing badges (`Neu`, `Rezept`, `Referenz`, `Unbekannt`) sit in a right-aligned column of
   their own at the row's end, at least one En space from the text before them; a multi-line
   text never pushes a badge into its last line. The draft badge is the exception: it belongs
@@ -896,10 +897,13 @@ such action. *decided with the user*
 
 *Applies to: cooking view.*
 
-The ingredient check list is rows, not cards: one row per master ingredient — a checkbox, the
-quantity line, and (for a sub-recipe) the „Rezept" badge — separated by hairlines, the first
-row without one. A row is tappable as a whole to toggle the check. An ingredient row's
-arrangement note follows one en space, muted and italic, like the app's rows.
+The ingredient check list is rows, not cards: one row per master ingredient — a checkbox and
+the quantity line — separated by hairlines, the first row without one. A row is tappable as a
+whole to toggle the check; the sub-recipe name link is the one exception (§5.7). The
+arrangement's last part is a quiet right-hung note: muted and italic, right-aligned at the
+row's edge, on the last text line while it fits there and otherwise on a right-aligned line of
+its own, with at least an En space to the text. The checkbox and the text stay together at the
+row's left edge; only the note drops.
 
 ### 5.5 Headers, titles and sticky bars
 
@@ -1032,9 +1036,11 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 
 *Applies to: cooking view.*
 
-A sub-recipe use (master row, step row or artifact) carries the app's „Rezept" badge: the link
-symbol, `--radius-sm`, accent fill, `on-accent` label. It opens the sub-recipe's export in a
-new tab. It is the one badge in the export.
+A sub-recipe use (master row, step row or artifact) makes the ingredient name the link that
+opens the sub-recipe's export in a new tab. The name is underlined in the `accent` colour,
+carries no symbol, and its text turns `accent` on hover; the underline stays `accent` when the
+row is checked and the rest of the row is muted. It is the cooking view's only link; the view
+has no `Rezept` badge.
 
 ### 5.8 Media: photo and thumbnail
 
@@ -1563,8 +1569,8 @@ the components follow; it does not override them.
 *Applies to: cooking view.*
 
 The cooking view is German, like the app. The bottom bar's two navigation buttons are the
-verbless „Zurück" and „Weiter". Its other strings: the step title „Schritt x von y", „Rezept"
-(sub-recipe badge), the size-picker captions „Portionen" / „Menge", the time captions
+verbless „Zurück" and „Weiter". Its other strings: the step title „Schritt x von y", the
+size-picker captions „Portionen" / „Menge", the time captions
 „Arbeitszeit" / „Gesamtzeit", and the footer „Erstellt mit Cookbook" beside the brand mark.
 Numbers and units are joined by the narrow no-break space. Quantities show proper fractions
 in the web app's vulgar-fraction glyphs — `½`, `⅗`, `1 ¼` — not the slash form: each theme's
@@ -1701,7 +1707,7 @@ that file.
 | §8 Accessibility | the components above (`aria-*`, `role`, `alt` live in the markup) |
 | §4.1–4.8 cooking view | `packages/core/src/recipe/exportHtml.ts` (inline `<style>`; theme tokens; embedded fonts → `embeddedFonts.ts`, generated by `scripts/generate-embedded-fonts.mjs`); theme data → `storage_format.md`, `types.ts`, `parse.ts`, `serialize.ts` |
 | §5.11 cooking view screens | `packages/core/src/recipe/exportHtml.ts` (structure + embedded script) |
-| §4.5 sub-recipe badge | `packages/core/src/recipe/exportHtml.ts` (inline SVG) |
+| §5.7 sub-recipe name link | `packages/core/src/recipe/exportHtml.ts` (no symbol) |
 | meal-plan preselect | `packages/core/src/planLink.ts` + `apps/export-host/Code.gs` (land on the intro at the promised size) |
 
 **Reading the map.** A rule that names a component finds its file in the component's own row; a

@@ -15,7 +15,7 @@
  * The trio covers the design surfaces a review needs: a dish with the serif
  * theme (`Penne all’arrabbiata`), a dish with a custom palette (`Pitas mit Tofu
  * und Spitzkohl`) and the ingredient recipe that dish uses (`Cajun Spice`) — the
- * last also demonstrates the „Rezept" badge on a sub-recipe link.
+ * last also demonstrates the ingredient name as the sub-recipe link.
  *
  * The only deliberate difference from the stored recipes is that sub-recipe
  * link map: an ingredient use whose name is another sampled recipe's title

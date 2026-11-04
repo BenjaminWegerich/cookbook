@@ -46,12 +46,12 @@
  * Sub-recipe links: when the caller passes a `links` map (ingredient-recipe
  * title → URL, e.g. the Drive link of the sub-recipe's own `<title>.html`),
  * every ingredient use whose name is present in the map — a master row, a step
- * row or an inline text artifact — carries the „Rezept" badge that opens that
+ * row or an inline text artifact — makes that name the link that opens the
  * export in a new tab (recipe_structure.md "The link means"; links are
  * implicit by name == recipe title, storage_format.md §4). Without a URL for a
  * title the display line stays plain text.
  *
- * The badge also promises the *amount* the use needs at the view it is shown
+ * The link also promises the *amount* the use needs at the view it is shown
  * in: the URL carries it as the meal-plan size parameter (`&menge=500ml` on the
  * export host, `#menge=500ml` on a Drive link, planLink.ts), so the sub-recipe
  * opens scaled to what the parent cooks instead of its written yield. The
@@ -77,6 +77,7 @@ import {
   renderAQSDisplay,
   renderMasterAQSDisplay,
   type ArrangementDisplay,
+  type ArrangementDisplayPart,
 } from '../additionalUnits.js';
 import { mappingsFor } from '../ingredientRegistry.js';
 import { optimizeUnitless } from '../quantityOptimizer.js';
@@ -338,11 +339,6 @@ const STEP_UP_SVG =
  */
 const YIELD_VALUE_PROBE_BQ = previousAllowedBQ(1000) ?? 950;
 
-/** Chain link of the sub-recipe „Rezept" badge. */
-const LINK_ICON_SVG =
-  '<svg viewBox="0 0 960 960" width="14" height="14" aria-hidden="true" focusable="false">' +
-  '<path d="M280,680Q197,680 138.5,621.5Q80,563 80,480Q80,397 138.5,338.5Q197,280 280,280L400,280Q417,280 428.5,291.5Q440,303 440,320Q440,337 428.5,348.5Q417,360 400,360L280,360Q230,360 195,395Q160,430 160,480Q160,530 195,565Q230,600 280,600L400,600Q417,600 428.5,611.5Q440,623 440,640Q440,657 428.5,668.5Q417,680 400,680L280,680ZM360,520Q343,520 331.5,508.5Q320,497 320,480Q320,463 331.5,451.5Q343,440 360,440L600,440Q617,440 628.5,451.5Q640,463 640,480Q640,497 628.5,508.5Q617,520 600,520L360,520ZM560,680Q543,680 531.5,668.5Q520,657 520,640Q520,623 531.5,611.5Q543,600 560,600L680,600Q730,600 765,565Q800,530 800,480Q800,430 765,395Q730,360 680,360L560,360Q543,360 531.5,348.5Q520,337 520,320Q520,303 531.5,291.5Q543,280 560,280L680,280Q763,280 821.5,338.5Q880,397 880,480Q880,563 821.5,621.5Q763,680 680,680L560,680Z" fill="currentColor"/></svg>';
-
 /** The precision context of an ingredient use in a recipe. */
 function ingredientContext(ingredient: Ingredient): PrecisionContext {
   return {
@@ -368,61 +364,138 @@ function unitlessText(value: number, context: PrecisionContext): string {
   return result.notation === undefined ? formatDecimal(result.value) : formatAQValue(result.value);
 }
 
+/** A whole-word boundary test for ingredient names: letters and digits count. */
+function isNameChar(char: string | undefined): boolean {
+  return char !== undefined && /[\p{L}\p{N}]/u.test(char);
+}
+
 /**
- * Renders one arrangement display as HTML. The default form (`bare`) lifts the
- * note out of its brackets and follows an en space in the muted, italic
- * `.arrangement-note` run (DESIGN §5.4) — every list, row and readout uses it.
- * Step prose passes `parenthesised`, which keeps a regular space and the
- * brackets (DESIGN §5.11). Every value is escaped; the surrounding markup is
- * fixed here.
+ * Finds `word` as a whole word in `text`, or -1. The name must not be matched
+ * inside a longer word: "Zwiebel" is not a match inside "Zwiebeln".
  */
-function arrangementHtml(display: ArrangementDisplay, noteForm: 'bare' | 'parenthesised'): string {
-  return display.parts
+function wholeWordIndex(text: string, word: string): number {
+  let from = 0;
+  for (;;) {
+    const index = text.indexOf(word, from);
+    if (index < 0) return -1;
+    const before = index === 0 ? undefined : text[index - 1];
+    const after = index + word.length >= text.length ? undefined : text[index + word.length];
+    if (!isNameChar(before) && !isNameChar(after)) return index;
+    from = index + 1;
+  }
+}
+
+/**
+ * Every name form an arrangement may show for an ingredient: the canonical name
+ * plus the master-data singular/plural forms (`<INF>` uses the latter). Longest
+ * first, so "Zwiebeln" wins over the "Zwiebel" prefix of the same text.
+ */
+function ingredientNameForms(name: string): readonly string[] {
+  const entry = mappingsFor(name);
+  const forms = [entry?.singular, entry?.plural, name].filter(
+    (form): form is string => form !== undefined && form !== '',
+  );
+  return [...new Set(forms)].sort((a, b) => b.length - a.length);
+}
+
+/** The visible ingredient name as the sub-recipe link (§5.7). */
+function nameLink(text: string, name: string, href: string): string {
+  return (
+    `<a class="name-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" ` +
+    `title="Zutaten-Rezept „${escapeHtml(name)}“ öffnen">${escapeHtml(text)}</a>`
+  );
+}
+
+/**
+ * Escapes one text run and, with a URL, wraps the ingredient's displayed name
+ * in the sub-recipe link. Without a URL (or when the name is not found as a
+ * whole word) the run stays plain.
+ */
+function textRunHtml(text: string, name: string | undefined, href: string | undefined): string {
+  if (name === undefined || href === undefined) return escapeHtml(text);
+  for (const form of ingredientNameForms(name)) {
+    const index = wholeWordIndex(text, form);
+    if (index < 0) continue;
+    return (
+      escapeHtml(text.slice(0, index)) +
+      nameLink(form, name, href) +
+      escapeHtml(text.slice(index + form.length))
+    );
+  }
+  return escapeHtml(text);
+}
+
+/**
+ * Renders an arrangement's parts. A note is lifted out of its brackets and
+ * styled as the muted, italic `.arrangement-note` run: bare after an en space
+ * (`bare`, every list and readout) or with its brackets and a regular space
+ * (`parenthesised`, step prose) — DESIGN §5.4 / §5.11. A text run whose
+ * ingredient name is found becomes the sub-recipe link when `name`/`href` are
+ * given.
+ */
+function partsHtml(
+  parts: readonly ArrangementDisplayPart[],
+  name: string | undefined,
+  href: string | undefined,
+  noteForm: 'bare' | 'parenthesised',
+): string {
+  return parts
     .map((part) => {
-      if (part.kind === 'text') {
-        return escapeHtml(part.value);
+      if (part.kind === 'note') {
+        const note = escapeHtml(part.value);
+        if (noteForm === 'bare') {
+          return `${EN_SPACE}<span class="arrangement-note">${note}</span>`;
+        }
+        return ` <span class="arrangement-note">(${note})</span>`;
       }
-      const note = escapeHtml(part.value);
-      if (noteForm === 'bare') {
-        return `${EN_SPACE}<span class="arrangement-note">${note}</span>`;
-      }
-      return ` <span class="arrangement-note">(${note})</span>`;
+      return textRunHtml(part.value, name, href);
     })
     .join('');
 }
 
+/** Renders one arrangement display, notes lifted out (§5.4). */
+function arrangementHtml(display: ArrangementDisplay, noteForm: 'bare' | 'parenthesised'): string {
+  return partsHtml(display.parts, undefined, undefined, noteForm);
+}
+
 /**
- * Renders the display HTML of a quantity/ingredient line (no link): the
- * arrangement's note is a muted, italic aside after an en space. A quantity-only
- * artifact may be unitless (`{{1/2}}`) and then renders through the unitless
- * branch (DESIGN §7).
+ * Splits the arrangement at its final note. That note is the "last part" the
+ * cooking view puts at the row's right edge; a display without a trailing note
+ * (the base form) has no tail.
  */
-function displayHtml(
+function splitTail(display: ArrangementDisplay): {
+  body: readonly ArrangementDisplayPart[];
+  tail: string | undefined;
+} {
+  const last = display.parts[display.parts.length - 1];
+  if (last?.kind !== 'note') {
+    return { body: display.parts, tail: undefined };
+  }
+  return { body: display.parts.slice(0, -1), tail: last.value };
+}
+
+/**
+ * A quantity-only prose artifact (`{{250 g}}`) has no name and no arrangement;
+ * an ingredient mention renders through its arrangement. Step prose keeps the
+ * note's brackets and a regular space (§5.11); the name is the sub-recipe link,
+ * exactly as in the rows.
+ */
+function artifactHtml(
   name: string | undefined,
   value: number,
   bu: Unit | undefined,
   context: PrecisionContext,
+  href: string | undefined,
 ): string {
   if (name === undefined) {
     return escapeHtml(bu === undefined ? unitlessText(value, context) : formatBQ(value, bu));
   }
-  return arrangementHtml(renderAQSDisplay(name, value, bu ?? 'g', context), 'bare');
-}
-
-/**
- * The step prose's variant of `displayHtml`: the brackets stay and are styled
- * with their content, separated from the sentence by a regular space.
- */
-function artifactDisplayHtml(
-  name: string | undefined,
-  value: number,
-  bu: Unit | undefined,
-  context: PrecisionContext,
-): string {
-  if (name === undefined) {
-    return displayHtml(name, value, bu, context);
-  }
-  return arrangementHtml(renderAQSDisplay(name, value, bu ?? 'g', context), 'parenthesised');
+  return partsHtml(
+    renderAQSDisplay(name, value, bu ?? 'g', context).parts,
+    name,
+    href,
+    'parenthesised',
+  );
 }
 
 /**
@@ -448,22 +521,19 @@ function subRecipeAmount(quantity: number, unit: Unit): { quantity: number; base
 }
 
 /**
- * The sub-recipe „Rezept" badge (§5.7), or an empty string when there is no
- * link for the title. The link opens the sub-recipe's export in a new tab, at
- * the amount this use needs at the current baked view: the badge sits inside a
- * size-scoped block, so a scaled parent hands the sub-recipe its scaled
- * requirement (`withPlanSize`). Without a quantity/unit the bare URL is used.
+ * The URL a sub-recipe use opens: the export URL plus the amount this use needs
+ * at the current baked view. The amount is snapped to an allowed BQ value
+ * (`subRecipeAmount`), because only BQ values are baked views of an ingredient
+ * recipe. `undefined` when the title has no link.
  */
-function subRecipeBadge(url: string | undefined, quantity?: number, unit?: Unit): string {
-  if (url === undefined) return '';
-  const href =
-    quantity === undefined || unit === undefined
-      ? url
-      : withPlanSize(url, { kind: 'yield', ...subRecipeAmount(quantity, unit) });
-  return (
-    `<a class="badge" href="${escapeHtml(href)}" target="_blank" rel="noopener">` +
-    `${LINK_ICON_SVG}Rezept</a>`
-  );
+function subRecipeHref(
+  url: string | undefined,
+  quantity?: number,
+  unit?: Unit,
+): string | undefined {
+  if (url === undefined) return undefined;
+  if (quantity === undefined || unit === undefined) return url;
+  return withPlanSize(url, { kind: 'yield', ...subRecipeAmount(quantity, unit) });
 }
 
 /**
@@ -528,27 +598,35 @@ function renderReferenceReadout(
 
 /**
  * One ingredient row, shared by the master check list and every step list
- * (DESIGN §5.4). Both surfaces use the same row skeleton — text column, then
- * the right-aligned badge column — so a quantity line reads identically in the
- * Zutaten list and beside a step. The master list's checkbox is the only
- * difference: it is the row's leading control and the label that toggles it.
+ * (DESIGN §5.4). The left text starts at the row's left edge; its final note is
+ * a right float at the end of that text, so it settles on the last text line
+ * when it fits there and otherwise drops to its own right-aligned line.
  *
- * `text` is already-rendered, escaped display HTML (the arrangement's note is a
- * muted, italic run); `badge` is the optional sub-recipe link. The caller owns
- * the surrounding `<ul>`.
+ * The master list's checkbox is the only difference between the two surfaces.
+ * It is the row's leading control; its accessible name comes from the text span
+ * (no `<label>`, so the sub-recipe link inside stays a link and does not toggle
+ * the box). The caller owns the surrounding `<ul>`.
  */
-function renderIngredientRow(text: string, badge: string, checkboxId?: string): string {
+function renderIngredientRow(
+  display: ArrangementDisplay,
+  name: string,
+  href: string | undefined,
+  checkboxId?: string,
+): string {
+  const { body, tail } = splitTail(display);
+  const tailHtml = tail === undefined ? '' : `<span class="tail">${escapeHtml(tail)}</span>`;
+  const text = `${partsHtml(body, name, href, 'bare')}${tailHtml}`;
   if (checkboxId === undefined) {
-    return `  <li class="ingredient-row"><span class="ingredient-text">${text}</span>${badge}</li>`;
+    return `  <li class="ingredient-row"><span class="ingredient-text">${text}</span></li>`;
   }
   return (
     `  <li class="ingredient-row check-row">` +
-    `<input type="checkbox" id="${checkboxId}">` +
-    `<label class="ingredient-text" for="${checkboxId}">${text}</label>${badge}</li>`
+    `<input type="checkbox" id="${checkboxId}" aria-labelledby="t-${checkboxId}">` +
+    `<span class="ingredient-text" id="t-${checkboxId}">${text}</span></li>`
   );
 }
 
-/** One checkable master-ingredient row (checkbox, quantity, optional badge). */
+/** One checkable master-ingredient row (checkbox, quantity, optional sub-recipe link). */
 function renderCheckRow(
   recipe: Recipe,
   ingredient: MasterIngredient,
@@ -556,10 +634,10 @@ function renderCheckRow(
   links: Readonly<Record<string, string>>,
   id: string,
 ): string {
-  const text = arrangementHtml(masterDisplay(recipe, ingredient, factor), 'bare');
   return renderIngredientRow(
-    text,
-    subRecipeBadge(links[ingredient.name], ingredient.quantity * factor, ingredient.unit),
+    masterDisplay(recipe, ingredient, factor),
+    ingredient.name,
+    subRecipeHref(links[ingredient.name], ingredient.quantity * factor, ingredient.unit),
     id,
   );
 }
@@ -605,39 +683,35 @@ function renderStep(
       : `<ul class="ingredient-list step-rows">\n` +
         step.ingredients
           .map((ingredient) => {
-            const text = displayHtml(
-              ingredient.name,
-              ingredient.quantity * factor,
-              ingredient.unit,
-              ingredientContext(ingredient),
-            );
             // The step list uses the exact same row as the master list; it only
             // omits the checkbox, because a step row is not checkable (§5.4).
             return renderIngredientRow(
-              text,
-              subRecipeBadge(links[ingredient.name], ingredient.quantity * factor, ingredient.unit),
+              renderAQSDisplay(
+                ingredient.name,
+                ingredient.quantity * factor,
+                ingredient.unit,
+                ingredientContext(ingredient),
+              ),
+              ingredient.name,
+              subRecipeHref(links[ingredient.name], ingredient.quantity * factor, ingredient.unit),
             );
           })
           .join('\n') +
         `\n</ul>\n`;
   // The prose artifacts are substituted with their scaled display form; the
   // surrounding text is HTML-escaped (renderArtifacts). An artifact that names
-  // an ingredient recipe carries the „Rezept" badge after its display form.
+  // an ingredient recipe makes its name the sub-recipe link, exactly as in the
+  // rows; the note keeps its brackets and regular space as prose (§5.11).
   const text = renderArtifacts(step.text, (artifact: TextArtifact) => {
-    const badge =
-      artifact.name !== undefined
-        ? subRecipeBadge(links[artifact.name], artifact.quantity * factor, artifact.unit)
-        : '';
-    const text = artifactDisplayHtml(
+    return artifactHtml(
       artifact.name,
       artifact.quantity * factor,
       artifact.unit,
       artifactContext(artifact),
+      artifact.name !== undefined
+        ? subRecipeHref(links[artifact.name], artifact.quantity * factor, artifact.unit)
+        : undefined,
     );
-    // A narrow no-break space in front of the badge only: without it a screen
-    // reader reads the badge and the ingredient as one word; without a badge the
-    // mention stays a plain word in the sentence (§7).
-    return badge === '' ? text : `${text}\u202f${badge}`;
   });
   return (
     `  <div class="step" data-step="${n}">\n` +
@@ -1330,12 +1404,12 @@ const NAVIGATION_SCRIPT = `
     touchX = null;
   }, { passive: true });
 
-  // A check-list row is tappable as a whole to toggle the check; the badge is
-  // the one exception (it opens the sub-recipe, it never toggles).
+  // A check-list row is tappable as a whole to toggle the check; the sub-recipe
+  // name link is the one exception (it opens the ingredient recipe, it never
+  // toggles). The checkbox toggles natively.
   document.querySelectorAll('.check-row').forEach(function (row) {
     row.addEventListener('click', function (e) {
-      if (e.target.closest('.badge')) { return; }
-      if (e.target.closest('label') || e.target.closest('input')) { return; }
+      if (e.target.closest('a') || e.target.closest('input')) { return; }
       var box = row.querySelector('input[type="checkbox"]');
       if (box) { box.checked = !box.checked; }
     });
@@ -1515,11 +1589,11 @@ const STYLES = `
 
   /* ---- Ingredient lists: one shared row design (§5.4) ----
      The Zutaten check list and every step's ingredient list are the same
-     surface: one raised sheet of hairlined rows, the same text/label size and
-     the same trailing badge column. The master row adds the checkbox as its
-     leading control; that checkbox is the only difference between the two
-     lists. The raised surface is a light lift off the page (§4.8), so the
-     sheet reads as one block without a shadow. */
+     surface: one raised sheet of hairlined rows, the same text size and the same
+     right-hand note edge. The master row adds the checkbox as its leading
+     control; that checkbox is the only difference between the two lists. The
+     raised surface is a light lift off the page (§4.8), so the sheet reads as
+     one block without a shadow. */
   .ingredient-list { list-style: none; margin: 0; padding: 0 var(--space-5);
                      background: var(--surface); border: 1px solid var(--line);
                      border-radius: var(--radius-lg); }
@@ -1527,15 +1601,31 @@ const STYLES = `
                     padding: var(--space-5) 0; border-top: 1px solid var(--line);
                     font-size: var(--text-md); line-height: var(--leading-md); }
   .ingredient-row:first-child { border-top: none; }
-  .ingredient-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  /* The left text is the whole row; the note (if any) floats at its end. A
+     flow-root contains the float, so the row height includes the dropped line. */
+  .ingredient-text { flex: 1; min-width: 0; display: flow-root; overflow-wrap: anywhere; }
   .check-row .ingredient-text { cursor: pointer; }
   .ingredient-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent);
                                            cursor: pointer; flex: none; }
   /* A checked row goes muted; its text is NOT crossed out (decided with the user). */
   .ingredient-row input:checked + .ingredient-text { color: var(--muted); }
-  /* The badge is the row's trailing column: it keeps its width when the
-     ingredient wraps, and it never moves into the last line of a wrapped row. */
-  .ingredient-row .badge { flex: none; align-self: center; }
+  /* The last part of the arrangement: a quiet right-hung note. It follows the
+     text in the source, so it sits on the last line while that line has room
+     and drops to a right-aligned line of its own once it does not (§5.4). The
+     en space is the minimum gap to the text. */
+  .tail { float: right; margin-inline-start: 0.5em; max-width: 100%;
+          text-align: right; color: var(--muted); font-style: italic;
+          overflow-wrap: break-word; }
+  /* A sub-recipe's name is the link itself: accent underline, no symbol. The
+     text stays in the row's ink and only the hover turns it into the accent. */
+  .name-link { position: relative; color: inherit; text-decoration-line: underline;
+               text-decoration-color: var(--accent); text-decoration-thickness: 1px;
+               text-underline-offset: 3px; }
+  .name-link:hover { color: var(--accent); }
+  .name-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* The old badge promised a 42 px target. The name's line box is only 24 px
+     high, so the pseudo-element restores the height without moving the text. */
+  .name-link::after { content: ''; position: absolute; inset: -9px -4px; }
 
   /* ---- Zubereitung (steps) ---- */
   .step-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-2); }
@@ -1557,16 +1647,6 @@ const STYLES = `
      one step looser than the heading leading, so a longer instruction keeps
      clear line separation on a phone. */
   .step-text { margin: 0; font-size: var(--text-lg); line-height: 1.5; overflow-wrap: anywhere; }
-
-  /* ---- Sub-recipe badge (§5.7): all-caps like the web app. ---- */
-  .badge { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm);
-           font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; line-height: var(--leading-sm);
-           padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
-           position: relative; background: var(--accent); color: var(--on-accent); text-decoration: none; white-space: nowrap; }
-  /* A control inside a badge gets its own 42px hit area, extended beyond the glyph
-     without disturbing the line it sits in (§5.7). */
-  .badge::after { content: ''; position: absolute; inset: -8px 0; }
-  .badge svg { width: 14px; height: 14px; fill: currentColor; }
 
   /* ---- Bottom bar (fixed): back · dots · forward on every screen (§5.11) ---- */
   .step-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 32rem;
@@ -1611,8 +1691,8 @@ const STYLES = `
  * @param links optional map of ingredient-recipe title → URL (e.g. the Drive
  *   link of the recipe's own `<title>.html` export). Whenever an ingredient
  *   use — master row, step row or text artifact — names a title present in
- *   this map, its display line carries the „Rezept" badge that opens that
- *   export (recipe_structure.md "The link means", storage_format.md §4).
+ *   this map, that name becomes the link that opens the export
+ *   (recipe_structure.md "The link means", storage_format.md §4).
  * @param photo optional base64-encoded recipe photo, inlined as a `data:` URI
  *   at the top of the Intro (§5.8). Omit it — or pass an empty payload — and
  *   the Intro starts with the title instead of a media area.
