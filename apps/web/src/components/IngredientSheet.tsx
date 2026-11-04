@@ -378,7 +378,7 @@ function IngredientSheet({
         aria-label={
           inlineMode
             ? mode === 'inline-add'
-              ? 'Menge zum Text hinzufügen'
+              ? 'Zutat oder Menge zum Text hinzufügen'
               : 'Menge im Text bearbeiten'
             : mode === 'row-add'
               ? 'Zutatenzeile hinzufügen'
@@ -392,7 +392,7 @@ function IngredientSheet({
           <h3 className="sheet-title">
             {inlineMode
               ? mode === 'inline-add'
-                ? 'Menge zum Text hinzufügen'
+                ? 'Zutat oder Menge zum Text hinzufügen'
                 : 'Menge im Text bearbeiten'
               : mode === 'row-add'
                 ? 'Zutatenzeile hinzufügen'

@@ -7,8 +7,9 @@
  *   ("Zutatenzeile hinzufügen", ↑/↓ on the row) and feed
  *   the derived master list (order of first use, duplicates merged with the
  *   total, storage_format.md §4);
- * - the step text is free prose; display-only inline artifacts ("Menge zum Text
- *   hinzufügen") scale with the serving count but are never counted;
+ * - the step text is free prose; display-only inline artifacts ("Zutat oder
+ *   Menge zum Text hinzufügen") scale with the serving count but are never
+ *   counted;
  * - the master list (Zutaten section) is read-only except for the reference
  *   role, which can only be set there (both recipe types, no limit); a step row
  *   shows an existing reference but cannot set one (its "REFERENZ" tag's × can
@@ -3730,9 +3731,14 @@ function RecipeEditor({
                     {issue.message}
                   </p>
                 ))}
+              {/* A quiet text button (§5.1), not an Add button: the step's text
+                  is the primary input, and this only annotates it, so it must
+                  not compete with the olive creation buttons above it. It
+                  opens the inline sheet that inserts a quantity — and, where
+                  wanted, the ingredient name — at the caret. */}
               <button
                 type="button"
-                className="add-button"
+                className="text-button step-text-add"
                 onClick={() =>
                   openSheet({
                     kind: 'inline',
@@ -3742,7 +3748,7 @@ function RecipeEditor({
                 }
               >
                 <PlusIcon className="button-icon" optical={20} />
-                <span>Menge zum Text hinzufügen</span>
+                <span>Zutat oder Menge zum Text hinzufügen</span>
               </button>
             </section>
           );

@@ -746,6 +746,24 @@
   gap: var(--space-4);
 }
 
+/* „Zutat oder Menge zum Text hinzufügen" under a step's text field: the shared
+   quiet text button (§5.1), because the step's text is the primary input and
+   this only annotates it — it must not compete with the olive creation buttons
+   above it. Only the leading padding is dropped so the label lines up with the
+   text field's own text (the same correction as .back-button and
+   .master-edit-action .text-button); the other three sides keep the tap area. */
+.step-text-add {
+  justify-self: start;
+  padding-inline-start: 0;
+}
+
+/* Its plus drops one step with the label (--icon-sm next to --text-sm):
+   .button-icon's 18 px belongs beside an 18 px label, an action variant. */
+.step-text-add .button-icon {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
 /* Compact bordered icon buttons (step ↑/↓/✕) — more prominent than the quiet
    text buttons they replaced (design decision with the user). The 32 px box is
    the §5.1 exception for a compact icon control inside a card row: the ring

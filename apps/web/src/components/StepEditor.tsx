@@ -15,8 +15,9 @@
  * the component syncs the string upward via onChange and only re-renders the
  * segments when the string changed externally (artifact insert/remove).
  *
- * The "Menge zum Text hinzufügen" insertion happens at the caret: the editor
- * calls `insertArtifact` (via the exposed ref) with the tracked caret offset.
+ * The "Zutat oder Menge zum Text hinzufügen" insertion happens at the caret:
+ * the editor calls `insertArtifact` (via the exposed ref) with the tracked
+ * caret offset.
  */
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
@@ -149,8 +150,7 @@ export interface StepEditorHandle {
   replaceArtifact: (artifact: TextArtifact, at: number, length: number) => void;
   /** Focuses the field with the caret at the end (Enter = "next" key). */
   focus: () => void;
-  /** The string offset of the current caret (for the "Menge zum Text
-   hinzufügen" button). */
+  /** The string offset of the current caret (for the text-insert button). */
   caretOffset: () => number;
 }
 

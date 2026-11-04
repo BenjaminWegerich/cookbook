@@ -666,6 +666,7 @@ primary stays unique per decision.
 
 - One primary action per decision; a row never shows two accent-filled buttons.
 - Add is the only olive button, and it only creates: it never decides between things that already exist.
+- The insert under a step's text — „Zutat oder Menge zum Text hinzufügen" — is a Text button, not an Add button: it annotates the prose the user is writing instead of creating a row, so it must not compete with the step's olive creation buttons. Its label lines up with the text field's own text, so only its leading padding is dropped. *decided with the user*
 - A compact icon-only control inside a card row may keep a box smaller than `--control-height` — the step head's 32px ↑ ↓ ✕ — as long as a ring beyond the box brings its hit area to `--control-height` and the row's gap is wide enough that two hit areas never overlap. *decided with the user*
 - Every action button is at least `--control-height` (42px) tall, so a change of leading can never
   shrink a target below thumb reach.
@@ -1634,7 +1635,7 @@ The cooking view (`.html`) has its own inventory, written below.
 | „Einkaufsartikel" | `setNav('shoppingPlaces')`, `ShoppingPlaces` | place | „Zurück" |
 | „Zum Essensplan hinzufügen" / „Übernehmen" | `MealPlanSheet` | change | „Abbrechen" |
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
-| „Zutatenzeile bearbeiten" / „Zutatenzeile hinzufügen" | `IngredientSheet` | change | „Abbrechen" |
+| „Zutatenzeile bearbeiten" / „Zutatenzeile hinzufügen" / „Zutat oder Menge zum Text hinzufügen" / „Menge im Text bearbeiten" | `IngredientSheet` | change | „Abbrechen" |
 | „Neue Zutat anlegen" / „Einkaufsartikel anlegen" | `NewIngredientSheet` / `MasterDataSheet` | change | „Abbrechen" |
 | „Zutat bearbeiten" / „Einkaufsartikel verwalten" | `EditIngredientSheet` / `EditShoppingItemSheet` (shared `MasterDataSheet`) | change | „Abbrechen" |
 | „Änderungen verwerfen?" | `LeaveConfirmSheet` (over the editor and the AI screen) | change | „Abbrechen", scrim, Escape, Back |
@@ -1669,7 +1670,7 @@ that file.
 | §4.5 Iconography | `apps/web/src/components/icons.tsx` |
 | §4.6 Motion | `apps/web/src/index.css` (global press/focus rules), the component stylesheets |
 | §4.7 Layout | `apps/web/src/index.css`, `apps/web/src/styles/recipe-list.css` |
-| §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.outlined-button`, `.text-button`, `.add-button`, `.sheet-actions`) |
+| §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.outlined-button`, `.text-button`, `.step-text-add`, `.add-button`, `.sheet-actions`) |
 | §5.2 Chips and segmented controls | `apps/web/src/styles/editor.css`, `apps/web/src/components/quantityChips.ts` |
 | §5.3 Form fields | `apps/web/src/styles/editor.css` (`.field`, `.field-label`, `.field-error`), `apps/web/src/index.css` (the shared text-field focus outline) |
 | §5.3 master-data form (shared) | `apps/web/src/components/MasterDataSheet.tsx`, `apps/web/src/components/ingredientMasterForm.ts`, `apps/web/src/components/ingredientMasterUpdate.tsx`, `apps/web/src/components/IngredientMappingsField.tsx` |
