@@ -27,7 +27,7 @@ import {
 
 /** Joghurt from the seed master data: a 500 g Becher plus EL / TL. */
 const joghurt = mappingsFor('Joghurt')!;
-/** Zitronensaft from the seed master data: spoons and pieces, no package. */
+/** Zitronensaft from the seed master data: spoons and a 200 ml bottle. */
 const lemon = mappingsFor('Zitronensaft')!;
 
 /**
@@ -68,12 +68,12 @@ describe('suggestQuantities', () => {
   });
 
   it('normalizes to the state the field shows after the tap', () => {
-    // The Zitronensaft BQ 110 optimizes to "3 Stück (100 ml)" but the field at
-    // 100 ml reads "10 EL (100 ml)". The chip must be the latter.
+    // The Zitronensaft BQ 110 optimizes to "½ Flasche (100 ml)": the chip at
+    // 100 ml must be that state, not a raw metric reading.
     const suggestions = suggestQuantities(110, lemon, 'ml');
     const hundred = suggestions.find((suggestion) => suggestion.value === 100);
     expect(hundred).toBeDefined();
-    expect(hundred?.display.text).toContain('EL');
+    expect(hundred?.display.text).toContain('Flasche');
     expect(suggestions.some((suggestion) => suggestion.value === 110)).toBe(false);
 
     // Every chip is a tap-state fixed point: tapping the displayed BQ leaves the
@@ -127,9 +127,9 @@ describe('suggestQuantities', () => {
     );
 
     // The same rule for the BE form, whose note holds the count.
-    const lemon = suggestQuantities(200, mappingsFor('Zitronensaft'), 'ml');
-    expect(lemon.find((suggestion) => suggestion.value === 200)?.display.text).toBe(
-      `200${NNBSP}ml (5${NNBSP}½${NNBSP}Stück)`,
+    const grapefruit = suggestQuantities(200, mappingsFor('Grapefruitsaft'), 'ml');
+    expect(grapefruit.find((suggestion) => suggestion.value === 200)?.display.text).toBe(
+      `200${NNBSP}ml (1${NNBSP}Stück)`,
     );
 
     // An ingredient without a Singular/Plural pair must not lose its unit

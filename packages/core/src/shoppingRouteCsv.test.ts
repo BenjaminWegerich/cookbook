@@ -168,7 +168,7 @@ describe('parseShoppingItemsCsv', () => {
     expect(parseShoppingItemsCsv(reordered, ROUTE)).toEqual(ITEMS);
   });
 
-  it('accepts an item name the ingredient list does not know (superset name set)', () => {
+  it('accepts an item name the ingredient list does not know (independent name set)', () => {
     // Klopapier, Seife and Blumen have no base unit and no reorder point, so
     // they cannot live in the ingredient master data — this file is their only
     // home, and it is deliberately not checked against the ingredient list.
@@ -348,13 +348,14 @@ describe('shopping master-data seed files (docs/)', () => {
   });
 
   it('covers items that are not recipe ingredients', () => {
-    // The whole point of the separate item table: Klopapier, Seife and Blumen
-    // exist in no ingredient list.
+    // The separate item table also identifies items that exist in no
+    // ingredient list: Bananen, Müsli and Vanilleeis are bought on a route
+    // without being ingredients of any recipe.
     const route = parseShoppingRouteCsv(readSeed('shopping_route.csv'));
     const items = parseShoppingItemsCsv(readSeed('shopping_items.csv'), route);
-    expect(items.Klopapier).toBeDefined();
-    expect(items.Seife).toBeDefined();
-    expect(items.Blumen).toBeDefined();
+    expect(items.Bananen).toBeDefined();
+    expect(items.Müsli).toBeDefined();
+    expect(items.Vanilleeis).toBeDefined();
   });
 
   it('parses the synonym seed against the item seed', () => {

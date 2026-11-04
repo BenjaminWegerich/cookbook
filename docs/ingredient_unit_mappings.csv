@@ -32,19 +32,19 @@ frischer Schnittlauch;Teelöffel;1;no
 frischer Thymian;Zweig;3;no
 frisches Basilikum;Zweig;4;no
 frisches Basilikum;Blatt;0.1;no
-frisches Koriandergrün;Zweig;1;no
+frisches Koriandergrün;Packung (teilbar);25;yes
 Frühlingszwiebeln;Stück (ZE zuerst);29.2;no
 ganze Gewürznelken;Esslöffel;5.623413252;no
 ganze Gewürznelken;Teelöffel;1.77827941;no
-gehackte Tomaten;Dose (Gesamtgewicht);400;yes
-gekochte Kichererbsen;Dose (Abtropfgewicht);240;yes
-gekochte Kichererbsen mit Aquafaba;Dose (Gesamtgewicht);400;yes
-gekochte Kidneybohnen;Dose (Abtropfgewicht);240;yes
-gekochte weiße Bohnen;Dose (Abtropfgewicht);250;yes
+gehackte Tomaten;Dose;400;yes
+Kichererbsen;Dose (Abtropfgewicht);240;yes
+Kichererbsen mit Aquafaba;Dose (Gesamtgewicht);400;yes
+Kidneybohnen;Dose (Abtropfgewicht);240;yes
+weiße Bohnen;Dose (Abtropfgewicht);250;yes
 gemahlene Gewürznelken;Esslöffel;6.493816316;no
 gemahlene Gewürznelken;Teelöffel;2.053525026;no
-gemahlene Koriandersamen;Esslöffel;4.216965034;no
-gemahlene Koriandersamen;Teelöffel;1.333521432;no
+gemahlener Koriander;Esslöffel;4.216965034;no
+gemahlener Koriander;Teelöffel;1.333521432;no
 gemahlene Kurkuma;Esslöffel;6.493816316;no
 gemahlene Kurkuma;Teelöffel;2.053525026;no
 gemahlene Muskatnuss;Esslöffel;10;no
@@ -57,8 +57,8 @@ gemahlener Kreuzkümmel;Esslöffel;5.121908158;no
 gemahlener Kreuzkümmel;Teelöffel;1.619689575;no
 getrockneter Liebstöckel;Esslöffel;4.216965034;no
 getrockneter Liebstöckel;Teelöffel;1.333521432;no
-gemahlener Pfeffer;Esslöffel;17.7827941;no
-gemahlener Pfeffer;Teelöffel;5.623413252;no
+Pfeffer;Esslöffel;17.7827941;no
+Pfeffer;Teelöffel;5.623413252;no
 Gemüsebrühe-Pulver;Esslöffel;10;no
 Gemüsebrühe-Pulver;Teelöffel;3.16227766;no
 geräuchertes Paprikapulver;Esslöffel;5.496908158;no
@@ -76,17 +76,17 @@ gerebelter Thymian;Teelöffel;1;no
 geriebener Käse;Packung (unteilbar);150;yes
 getrockneter Dill;Esslöffel;3.16227766;no
 getrockneter Dill;Teelöffel;1;no
-getrockneter Rosmarin;Esslöffel;4.869675252;no
-getrockneter Rosmarin;Teelöffel;1.539926526;no
+gemahlener Rosmarin;Esslöffel;4.869675252;no
+gemahlener Rosmarin;Teelöffel;1.539926526;no
 Gluten;Esslöffel;8.7;no
 Gluten;Teelöffel;2.751181564;no
 granulierter Knoblauch;Esslöffel;10;no
 granulierter Knoblauch;Teelöffel;3.16227766;no
 Grapefruits;Stück (ZE zuerst);393.5;yes
-Grapefruitsaft;Stück (BE zuerst);202.8463836;no
+Grapefruitsaft;Stück (BE zuerst);202.8463836;yes
 Grapefruitsaft;Esslöffel;10;no
 Grapefruitsaft;Teelöffel;3.16227766;no
-Grapefruitschale;Stück (BE zuerst);10.83;no
+Grapefruitschale;Stück (BE zuerst);10.83;yes
 Grapefruitschale;Esslöffel;5.623413252;no
 Grapefruitschale;Teelöffel;1.77827941;no
 grobkörniges Salz;Esslöffel;10;no
@@ -99,10 +99,8 @@ Kirschtomaten;Stück (ZE zuerst);11.3;yes
 Knollensellerie;Stück (ZE zuerst);876.8;yes
 Kopfsalat;Stück (ZE zuerst);348.3;yes
 Limetten;Stück (ZE zuerst);65;yes
-Limettensaft;Stück (BE zuerst);31.6227766;no
-Limettensaft;Esslöffel;10;no
-Limettensaft;Teelöffel;3.16227766;no
-Limettenschale;Stück (BE zuerst);1.333521432;no
+Limettensaft;Stück (BE zuerst);31.6227766;yes
+Limettenschale;Stück (BE zuerst);1.333521432;yes
 Limettenschale;Esslöffel;5.623413252;no
 Limettenschale;Teelöffel;1.77827941;no
 Mehl;Packung (unteilbar);1000;yes
@@ -110,19 +108,19 @@ Mais;Dose (Abtropfgewicht);285;yes
 Milch;Packung (unteilbar);1000;yes
 Milch;Esslöffel;10;no
 Milch;Teelöffel;3.16227766;no
-Naturtofu;Packung (teilbar);200;yes
+Naturtofu;Block;200;yes
 Öl;Esslöffel;10;no
 Öl;Teelöffel;3.16227766;no
 Orangen;Stück (ZE zuerst);225.5;yes
-Orangensaft;Stück (BE zuerst);86.59643234;no
 Orangensaft;Esslöffel;10;no
 Orangensaft;Teelöffel;3.16227766;no
-Orangenschale;Stück (BE zuerst);5.623413252;no
+Orangensaft;Flasche;1000;yes
+Orangenschale;Stück (BE zuerst);5.623413252;yes
 Orangenschale;Esslöffel;5.623413252;no
 Orangenschale;Teelöffel;1.77827941;no
 Paprikas;Stück (ZE zuerst);206.5624698;yes
 Pfirsiche;Stück (ZE zuerst);136.1;yes
-Räuchertofu;Packung (teilbar);200;yes
+Räuchertofu;Block;200;yes
 rote Beete;Stück (ZE zuerst);155.5;yes
 Rotkohl;Stück (ZE zuerst);1842.5;yes
 Kochsahne;Packung (unteilbar);200;yes
@@ -142,7 +140,7 @@ Speisestärke;Esslöffel;10;no
 Speisestärke;Teelöffel;3.16227766;no
 Spitzkohl;Stück (ZE zuerst);1000;yes
 Stangensellerie;Stück (ZE zuerst);56;no
-Strauchtomaten;Stück (ZE zuerst);110;yes
+Tomaten;Stück (ZE zuerst);110;yes
 süßes Paprikapulver;Esslöffel;5.496908158;no
 süßes Paprikapulver;Teelöffel;1.738274987;no
 Tomatenmark;Tube;200;yes
@@ -158,10 +156,10 @@ Wodka;Teelöffel;3.16227766;no
 gemahlener Zimt;Esslöffel;6.493816316;no
 gemahlener Zimt;Teelöffel;2.053525026;no
 Zitronen;Stück (ZE zuerst);115;yes
-Zitronensaft;Stück (BE zuerst);36.51741273;no
 Zitronensaft;Esslöffel;10;no
 Zitronensaft;Teelöffel;3.16227766;no
-Zitronenschale;Stück (BE zuerst);3.16227766;no
+Zitronensaft;Flasche;200;no
+Zitronenschale;Stück (BE zuerst);3.16227766;yes
 Zitronenschale;Esslöffel;5.623413252;no
 Zitronenschale;Teelöffel;1.77827941;no
 Zucchini;Stück (ZE zuerst);209.6;yes
@@ -189,6 +187,7 @@ Penne rigate;Packung (teilbar);500;yes
 Joghurt;Becher;500;yes
 Joghurt;Esslöffel;23.71373706;no
 Joghurt;Teelöffel;7.498942093;no
+Skyr;Becher;400;yes
 Mayonnaise;Esslöffel;23.71373706;no
 Mayonnaise;Teelöffel;7.498942093;no
 Kokosmilch;Dose (Gesamtgewicht);400;yes
@@ -212,3 +211,29 @@ Gemüsebrühe;Teelöffel;3;no
 Reis;Packung (halbierbar);1000;yes
 Rosinen;Packung (halbierbar);250;yes
 Sojaschnetzel;Packung (halbierbar);150;yes
+Spätzle;Packung (halbierbar);500;yes
+rote Zwiebeln;Stück (ZE zuerst);82.8;yes
+Dijon-Senf;Esslöffel;17.7827941;no
+Dijon-Senf;Teelöffel;5.623413252;no
+Umami-Paste;Esslöffel;16;no
+Ananassaft;Esslöffel;10;no
+Ananassaft;Packung (unteilbar);1000;yes
+Ananassaft;Teelöffel;3;no
+Maistortillas;Packung (halbierbar);320;yes
+Kokosöl;Esslöffel;10;no
+Kokosöl;Teelöffel;3;no
+Pitabrote;Packung (unteilbar);400;yes
+Pitabrote;Stück (ZE zuerst);80;no
+Erdbeermarmelade;Esslöffel;15;no
+Erdbeermarmelade;Teelöffel;4;no
+Erdbeeren;Stück (ZE zuerst);12;no
+Agar Agar;Esslöffel;10;no
+Agar Agar;Teelöffel;3;no
+Agar Agar;Päckchen;6;yes
+Sahnefest;Teelöffel;3;no
+Sahnefest;Päckchen;8;yes
+Vanillezucker;Teelöffel;3;no
+Vanillezucker;Päckchen;8;no
+gehackte Pistazien;Packung (halbierbar);25;yes
+Salzwasser;Esslöffel;10;no
+Salzwasser;Teelöffel;3.16227766;no

@@ -104,10 +104,9 @@
 
 - Markdown + YAML files, one per recipe, in the `Rezepte` subfolder of the Drive `Cookbook`
   folder (see [storage_format.md](storage_format.md)).
-- Sample recipes live in the repository's `examples/` folder (canonical
-  format, validated by the core test suite); they can be copied into the
-  `Rezepte` subfolder of the Drive "Cookbook" folder to develop against a populated
-  collection.
+- Example recipes — a snapshot of the real collection — live in the repository's
+  `examples/` folder (canonical format, validated by the core test suite,
+  including the cross-recipe checks).
 - Single source of truth, read by the web app, the HTML export, and (later) the backend
   module and the Gemini for Home preparation.
 - **Draft storage.** A saved, unfinished recipe lives in the `Entwürfe` subfolder as one
@@ -146,16 +145,16 @@
   variant text → item), in the canonical formats of docs/shopping_route.csv +
   docs/shopping_items.csv + docs/shopping_synonyms.csv (see
   [storage_format.md](storage_format.md) §10 and
-  [shopping_item_identity.md](shopping_item_identity.md)). The item table's name set is a
-  **superset of the ingredient list**, so items that are not recipe ingredients at all
-  („Klopapier“, „Seife“, „Blumen“) have their place there too, while `zutaten.csv` keeps the
-  ingredient master data without a route. The create sheet („Neue Zutat anlegen“) asks for the
+  [shopping_item_identity.md](shopping_item_identity.md)). The item table's name set is
+  **independent of the ingredient list**, so items that are not recipe ingredients at all have
+  their place there too, while `zutaten.csv` keeps the ingredient master data without a route.
+  The create sheet („Neue Zutat anlegen“) asks for the
   stop in an optional „Einkauf“ field while it collects the other master-data fields — the
   store as chips, the section as a searchable list of that store's sections — and writes the
   item row before the ingredient row when a stop is given: a row without an ingredient is valid
-  (the name set is a superset), and an ingredient without its row is valid too (it is then
-  simply never bought). Picking a store requires its section; the „Einkaufsartikel“ form keeps
-  the stop required. The „Einkaufsartikel“ screen
+  (the name set is independent of the ingredient list), and an ingredient without its row is
+  valid too (it is then simply never bought). Picking a store requires its section; the
+  „Einkaufsartikel“ form keeps the stop required. The „Einkaufsartikel“ screen
   (`apps/web/src/components/ShoppingPlaces.tsx`) creates and edits item rows and their
   synonym lists directly through the same shared sheet; a duplicate item name is rejected
   case-folded.

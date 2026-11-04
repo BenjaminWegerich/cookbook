@@ -452,9 +452,9 @@ to exactly one store; the same section name may exist in several stores, the pai
 
 The **item table** maps an item name to exactly one stop — it is the identity of everything
 that can be bought and the **only place a route is kept**, so "the same item with two
-conflicting routes" cannot exist. Its name set is a **superset of the ingredient list**: it
-carries recipe ingredients and items that are not ingredients at all („Klopapier“, „Seife“,
-„Blumen“), which have no base unit and no reorder point and therefore cannot live in
+conflicting routes" cannot exist. Its name set is **independent of the ingredient list**: it
+carries the recipe ingredients that are bought on a route and items that are not ingredients
+at all, which have no base unit and no reorder point and therefore cannot live in
 zutaten.csv. An item without a row here is not an error — it is simply never bought; an
 ingredient without an item row is valid for exactly that reason (Wasser), and the item row is
 what makes something buyable. The **synonym table** states meaning instead: a variant text

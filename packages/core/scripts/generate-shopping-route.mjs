@@ -125,7 +125,8 @@ function buildRoute() {
 /**
  * Reads the item file and validates every named stop against the route. The
  * item name is deliberately not checked against the ingredient list: the item
- * table's name set is a superset of it (Klopapier, Seife, Blumen).
+ * table lists only what is actually bought on the route (Bananen, Müsli and
+ * Vanilleeis are seed rows), not every ingredient.
  */
 function buildItems(route) {
   const { header, rows } = parseCsv(ITEMS_CSV);
@@ -238,7 +239,7 @@ function render(route, items, synonyms) {
   lines.push('];');
   lines.push('');
   lines.push(
-    '/** The seed item table: item name → stop (docs/shopping_items.csv); the name set is a superset of the ingredient list. */',
+    '/** The seed item table: item name → stop (docs/shopping_items.csv); the name set is independent of the ingredient list. */',
   );
   lines.push('export const SEED_SHOPPING_ITEMS: ShoppingItems = {');
   for (const entry of items) {

@@ -499,12 +499,10 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     precision: 'high',
     entries: [{ au: 'Packung (teilbar)', factor: 250, shoppingUnit: true }],
   },
-  Cashews: {
+  Cashewkerne: {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
-    singular: 'Cashew',
-    plural: 'Cashews',
     entries: [],
   },
   Chiliflocken: {
@@ -515,12 +513,6 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
       { au: 'Esslöffel', factor: 7, shoppingUnit: false },
       { au: 'Teelöffel', factor: 2, shoppingUnit: false },
     ],
-  },
-  Chilis: {
-    bu: 'g',
-    reorderPoint: 0,
-    precision: 'medium',
-    entries: [],
   },
   Currypulver: {
     bu: 'g',
@@ -541,7 +533,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
-    singular: 'Kopf Eisbergsalat',
+    singular: 'Eisbergsalat',
     plural: 'Köpfe Eisbergsalat',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 721.1, shoppingUnit: true }],
   },
@@ -549,7 +541,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
-    singular: 'Fenchelknolle',
+    singular: 'Fenchel',
     plural: 'Fenchelknollen',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 286.3, shoppingUnit: true }],
   },
@@ -657,7 +649,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'very low',
-    entries: [{ au: 'Zweig', factor: 1, shoppingUnit: false }],
+    entries: [{ au: 'Packung (teilbar)', factor: 25, shoppingUnit: true }],
   },
   Frühlingszwiebeln: {
     bu: 'g',
@@ -680,27 +672,27 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
-    entries: [{ au: 'Dose (Gesamtgewicht)', factor: 400, shoppingUnit: true }],
+    entries: [{ au: 'Dose', factor: 400, shoppingUnit: true }],
   },
-  'gekochte Kichererbsen': {
+  Kichererbsen: {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
     entries: [{ au: 'Dose (Abtropfgewicht)', factor: 240, shoppingUnit: true }],
   },
-  'gekochte Kichererbsen mit Aquafaba': {
+  'Kichererbsen mit Aquafaba': {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
     entries: [{ au: 'Dose (Gesamtgewicht)', factor: 400, shoppingUnit: true }],
   },
-  'gekochte Kidneybohnen': {
+  Kidneybohnen: {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
     entries: [{ au: 'Dose (Abtropfgewicht)', factor: 240, shoppingUnit: true }],
   },
-  'gekochte weiße Bohnen': {
+  'weiße Bohnen': {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
@@ -715,7 +707,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
       { au: 'Teelöffel', factor: 2.053525026, shoppingUnit: false },
     ],
   },
-  'gemahlene Koriandersamen': {
+  'gemahlener Koriander': {
     bu: 'g',
     reorderPoint: 100,
     precision: 'low',
@@ -778,7 +770,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
       { au: 'Teelöffel', factor: 1.333521432, shoppingUnit: false },
     ],
   },
-  'gemahlener Pfeffer': {
+  Pfeffer: {
     bu: 'g',
     reorderPoint: 100,
     precision: 'medium',
@@ -873,7 +865,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
       { au: 'Teelöffel', factor: 1, shoppingUnit: false },
     ],
   },
-  'getrockneter Rosmarin': {
+  'gemahlener Rosmarin': {
     bu: 'g',
     reorderPoint: 100,
     precision: 'low',
@@ -915,7 +907,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     singular: 'Grapefruit',
     plural: 'Grapefruits',
     entries: [
-      { au: 'Stück (BE zuerst)', factor: 202.8463836, shoppingUnit: false },
+      { au: 'Stück (BE zuerst)', factor: 202.8463836, shoppingUnit: true },
       { au: 'Esslöffel', factor: 10, shoppingUnit: false },
       { au: 'Teelöffel', factor: 3.16227766, shoppingUnit: false },
     ],
@@ -927,7 +919,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     singular: 'Grapefruit',
     plural: 'Grapefruits',
     entries: [
-      { au: 'Stück (BE zuerst)', factor: 10.83, shoppingUnit: false },
+      { au: 'Stück (BE zuerst)', factor: 10.83, shoppingUnit: true },
       { au: 'Esslöffel', factor: 5.623413252, shoppingUnit: false },
       { au: 'Teelöffel', factor: 1.77827941, shoppingUnit: false },
     ],
@@ -978,15 +970,15 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
-    singular: 'Sellerieknolle',
-    plural: 'Sellerieknollen',
+    singular: 'Knolle Sellerie',
+    plural: 'Knollen Sellerie',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 876.8, shoppingUnit: true }],
   },
   Kopfsalat: {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
-    singular: 'Salatkopf',
+    singular: 'Kopfsalat',
     plural: 'Salatköpfe',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 348.3, shoppingUnit: true }],
   },
@@ -1004,11 +996,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     precision: 'low',
     singular: 'Limette',
     plural: 'Limetten',
-    entries: [
-      { au: 'Stück (BE zuerst)', factor: 31.6227766, shoppingUnit: false },
-      { au: 'Esslöffel', factor: 10, shoppingUnit: false },
-      { au: 'Teelöffel', factor: 3.16227766, shoppingUnit: false },
-    ],
+    entries: [{ au: 'Stück (BE zuerst)', factor: 31.6227766, shoppingUnit: true }],
   },
   Limettenschale: {
     bu: 'g',
@@ -1017,7 +1005,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     singular: 'Limette',
     plural: 'Limetten',
     entries: [
-      { au: 'Stück (BE zuerst)', factor: 1.333521432, shoppingUnit: false },
+      { au: 'Stück (BE zuerst)', factor: 1.333521432, shoppingUnit: true },
       { au: 'Esslöffel', factor: 5.623413252, shoppingUnit: false },
       { au: 'Teelöffel', factor: 1.77827941, shoppingUnit: false },
     ],
@@ -1048,7 +1036,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 400,
     precision: 'medium',
-    entries: [{ au: 'Packung (teilbar)', factor: 200, shoppingUnit: true }],
+    entries: [{ au: 'Block', factor: 200, shoppingUnit: true }],
   },
   Öl: {
     bu: 'ml',
@@ -1074,9 +1062,9 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     singular: 'Orange',
     plural: 'Orangen',
     entries: [
-      { au: 'Stück (BE zuerst)', factor: 86.59643234, shoppingUnit: false },
       { au: 'Esslöffel', factor: 10, shoppingUnit: false },
       { au: 'Teelöffel', factor: 3.16227766, shoppingUnit: false },
+      { au: 'Flasche', factor: 1000, shoppingUnit: true },
     ],
   },
   Orangenschale: {
@@ -1086,7 +1074,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     singular: 'Orange',
     plural: 'Orangen',
     entries: [
-      { au: 'Stück (BE zuerst)', factor: 5.623413252, shoppingUnit: false },
+      { au: 'Stück (BE zuerst)', factor: 5.623413252, shoppingUnit: true },
       { au: 'Esslöffel', factor: 5.623413252, shoppingUnit: false },
       { au: 'Teelöffel', factor: 1.77827941, shoppingUnit: false },
     ],
@@ -1111,7 +1099,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'medium',
-    entries: [{ au: 'Packung (teilbar)', factor: 200, shoppingUnit: true }],
+    entries: [{ au: 'Block', factor: 200, shoppingUnit: true }],
   },
   'rote Beete': {
     bu: 'g',
@@ -1220,12 +1208,12 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     plural: 'Stangen Sellerie',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 56, shoppingUnit: false }],
   },
-  Strauchtomaten: {
+  Tomaten: {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
-    singular: 'Strauchtomate',
-    plural: 'Strauchtomaten',
+    singular: 'Tomate',
+    plural: 'Tomaten',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 110, shoppingUnit: true }],
   },
   'süßes Paprikapulver': {
@@ -1306,9 +1294,9 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     singular: 'Zitrone',
     plural: 'Zitronen',
     entries: [
-      { au: 'Stück (BE zuerst)', factor: 36.51741273, shoppingUnit: false },
       { au: 'Esslöffel', factor: 10, shoppingUnit: false },
       { au: 'Teelöffel', factor: 3.16227766, shoppingUnit: false },
+      { au: 'Flasche', factor: 200, shoppingUnit: false },
     ],
   },
   Zitronenschale: {
@@ -1318,7 +1306,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     singular: 'Zitrone',
     plural: 'Zitronen',
     entries: [
-      { au: 'Stück (BE zuerst)', factor: 3.16227766, shoppingUnit: false },
+      { au: 'Stück (BE zuerst)', factor: 3.16227766, shoppingUnit: true },
       { au: 'Esslöffel', factor: 5.623413252, shoppingUnit: false },
       { au: 'Teelöffel', factor: 1.77827941, shoppingUnit: false },
     ],
@@ -1451,7 +1439,7 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 800,
     precision: 'medium',
-    entries: [],
+    entries: [{ au: 'Becher', factor: 400, shoppingUnit: true }],
   },
   Mayonnaise: {
     bu: 'g',
@@ -1472,16 +1460,12 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'medium',
-    singular: 'rote Linse',
-    plural: 'rote Linsen',
     entries: [{ au: 'Packung (teilbar)', factor: 500, shoppingUnit: true }],
   },
   Linsen: {
     bu: 'g',
     reorderPoint: 0,
     precision: 'medium',
-    singular: 'Linse',
-    plural: 'Linsen',
     entries: [{ au: 'Packung (teilbar)', factor: 500, shoppingUnit: true }],
   },
   Olivenöl: {
@@ -1506,6 +1490,8 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
+    singular: 'Hokkaido-Kürbis',
+    plural: 'Hokkaido-Kürbisse',
     entries: [{ au: 'Stück (ZE zuerst)', factor: 1500, shoppingUnit: true }],
   },
   Feta: {
@@ -1518,6 +1504,8 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
+    singular: 'Walnusskern',
+    plural: 'Walnusskerne',
     entries: [{ au: 'Packung (unteilbar)', factor: 200, shoppingUnit: true }],
   },
   Ahornsirup: {
@@ -1583,12 +1571,161 @@ export const INGREDIENT_MAPPINGS: Readonly<Record<string, IngredientEntry>> = {
     bu: 'g',
     reorderPoint: 0,
     precision: 'low',
+    singular: 'Süßkartoffel',
+    plural: 'Süßkartoffeln',
     entries: [],
   },
   Tortillas: {
     bu: 'g',
     reorderPoint: 0,
     precision: 'very low',
+    singular: 'Tortilla',
+    plural: 'Tortillas',
     entries: [],
+  },
+  Spätzle: {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'medium',
+    entries: [{ au: 'Packung (halbierbar)', factor: 500, shoppingUnit: true }],
+  },
+  'rote Zwiebeln': {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'low',
+    singular: 'rote Zwiebel',
+    plural: 'rote Zwiebeln',
+    entries: [{ au: 'Stück (ZE zuerst)', factor: 82.8, shoppingUnit: true }],
+  },
+  'Dijon-Senf': {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'medium',
+    entries: [
+      { au: 'Esslöffel', factor: 17.7827941, shoppingUnit: false },
+      { au: 'Teelöffel', factor: 5.623413252, shoppingUnit: false },
+    ],
+  },
+  Kräuter: {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'very low',
+    entries: [],
+  },
+  'Umami-Paste': {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'medium',
+    entries: [{ au: 'Esslöffel', factor: 16, shoppingUnit: false }],
+  },
+  Ananassaft: {
+    bu: 'ml',
+    reorderPoint: 0,
+    precision: 'low',
+    entries: [
+      { au: 'Esslöffel', factor: 10, shoppingUnit: false },
+      { au: 'Packung (unteilbar)', factor: 1000, shoppingUnit: true },
+      { au: 'Teelöffel', factor: 3, shoppingUnit: false },
+    ],
+  },
+  Maistortillas: {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'very low',
+    entries: [{ au: 'Packung (halbierbar)', factor: 320, shoppingUnit: true }],
+  },
+  'Pico de gallo': {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'low',
+    entries: [],
+  },
+  'Mürbeteig mit Zucker': {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'medium',
+    entries: [],
+  },
+  'Biskuit-Teig': {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'medium',
+    entries: [],
+  },
+  Kokosöl: {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'medium',
+    entries: [
+      { au: 'Esslöffel', factor: 10, shoppingUnit: false },
+      { au: 'Teelöffel', factor: 3, shoppingUnit: false },
+    ],
+  },
+  Pitabrote: {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'very low',
+    entries: [
+      { au: 'Packung (unteilbar)', factor: 400, shoppingUnit: true },
+      { au: 'Stück (ZE zuerst)', factor: 80, shoppingUnit: false },
+    ],
+  },
+  Erdbeermarmelade: {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'medium',
+    entries: [
+      { au: 'Esslöffel', factor: 15, shoppingUnit: false },
+      { au: 'Teelöffel', factor: 4, shoppingUnit: false },
+    ],
+  },
+  Erdbeeren: {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'low',
+    entries: [{ au: 'Stück (ZE zuerst)', factor: 12, shoppingUnit: false }],
+  },
+  'Agar Agar': {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'very high',
+    entries: [
+      { au: 'Esslöffel', factor: 10, shoppingUnit: false },
+      { au: 'Teelöffel', factor: 3, shoppingUnit: false },
+      { au: 'Päckchen', factor: 6, shoppingUnit: true },
+    ],
+  },
+  Sahnefest: {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'high',
+    entries: [
+      { au: 'Teelöffel', factor: 3, shoppingUnit: false },
+      { au: 'Päckchen', factor: 8, shoppingUnit: true },
+    ],
+  },
+  Vanillezucker: {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'medium',
+    entries: [
+      { au: 'Teelöffel', factor: 3, shoppingUnit: false },
+      { au: 'Päckchen', factor: 8, shoppingUnit: false },
+    ],
+  },
+  'gehackte Pistazien': {
+    bu: 'g',
+    reorderPoint: 0,
+    precision: 'low',
+    entries: [{ au: 'Packung (halbierbar)', factor: 25, shoppingUnit: true }],
+  },
+  Salzwasser: {
+    bu: 'ml',
+    reorderPoint: Infinity,
+    precision: 'medium',
+    entries: [
+      { au: 'Esslöffel', factor: 10, shoppingUnit: false },
+      { au: 'Teelöffel', factor: 3.16227766, shoppingUnit: false },
+    ],
   },
 };

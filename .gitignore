@@ -34,6 +34,9 @@ coverage/
 # never repo data — the seed lives in docs/)
 /zutaten.csv
 /zutaten-umrechnungen.csv
+/einkaufsweg.csv
+/einkaufs-artikel.csv
+/einkaufs-synonyme.csv
 
 # Font verification scratch
 .fonts/
@@ -44,3 +47,4 @@ coverage/
 # Local scratch prototypes (standalone HTML experiments, not shipped)
 /quantity-weight-lab.html
 /precision-default-lab.html
+/export-long-flow-preview.html

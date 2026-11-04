@@ -96,12 +96,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the components and
 
 ## Example recipes
 
-The `examples/` folder contains sample recipes in the canonical file format
-(docs/storage_format.md). They are manual test data you can copy into the
-`Rezepte` subfolder of the Google Drive "Cookbook" folder — useful while
-developing features that act on a populated collection (e.g. the recipe-list
-search). Every example is validated by the core module's test suite, so the
-folder always stays in a loadable state.
+The `examples/` folder holds a snapshot of real recipes from the collection in the
+canonical file format (docs/storage_format.md): finished dishes plus the
+ingredient recipes they use. They are the core module's acceptance fixtures — the
+test suite parses every file, checks that the file name equals the title, and runs
+the cross-recipe validation (including the sub-recipe link graph) over the whole
+set. Keep the set self-contained and loadable when refreshing it.
 
 ## Documentation
 

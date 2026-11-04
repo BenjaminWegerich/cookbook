@@ -214,9 +214,9 @@ describe('the built-in seed (no fixture)', () => {
     // The shipped seed (docs/shopping_items.csv) must stay resolvable through
     // the pipeline; a new seed row whose name collides with the decoration
     // vocabulary would break this.
-    expect(matchShoppingItem('2 Becher Joghurt (800 g)')).toBe('Joghurt');
-    expect(matchShoppingItem('850 g Mehl')).toBe('Mehl');
-    expect(matchShoppingItem('Klopapier')).toBe('Klopapier');
+    expect(matchShoppingItem('2 Becher Skyr (500 g)')).toBe('Skyr');
+    expect(matchShoppingItem('850 g Karotten')).toBe('Karotten');
+    expect(matchShoppingItem('Bananen')).toBe('Bananen');
     expect(matchShoppingItem('1 Handvoll Petersilie')).toBeNull();
   });
 });

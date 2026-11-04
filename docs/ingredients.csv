@@ -8,13 +8,12 @@ Birnen;Birne;Birnen;g;low;0
 Blumenkohl;Blumenkohl;Blumenkohlköpfe;g;low;0
 Brokkoli;Brokkoli;Brokkoli;g;low;0
 Butter;;;g;high;500
-Cashews;Cashew;Cashews;g;low;0
+Cashewkerne;;;g;low;0
 Chiliflocken;;;g;medium;100
-Chilis;;;g;medium;0
 Currypulver;;;g;low;100
 Dill;;;g;low;100
-Eisbergsalat;Kopf Eisbergsalat;Köpfe Eisbergsalat;g;low;0
-Fenchel;Fenchelknolle;Fenchelknollen;g;low;0
+Eisbergsalat;Eisbergsalat;Köpfe Eisbergsalat;g;low;0
+Fenchel;Fenchel;Fenchelknollen;g;low;0
 frische Chilis;frische Chili;frische Chilis;g;medium;0
 frische Hefe;;;g;very high;0
 frische Petersilie;;;g;very low;0
@@ -34,19 +33,19 @@ frisches Koriandergrün;;;g;very low;0
 Frühlingszwiebeln;Frühlingszwiebel;Frühlingszwiebeln;g;low;0
 ganze Gewürznelken;;;g;medium;0
 gehackte Tomaten;;;g;low;0
-gekochte Kichererbsen;;;g;low;0
-gekochte Kichererbsen mit Aquafaba;;;g;low;0
-gekochte Kidneybohnen;;;g;low;0
-gekochte weiße Bohnen;;;g;low;0
+Kichererbsen;;;g;low;0
+Kichererbsen mit Aquafaba;;;g;low;0
+Kidneybohnen;;;g;low;0
+weiße Bohnen;;;g;low;0
 gemahlene Gewürznelken;;;g;medium;0
-gemahlene Koriandersamen;;;g;low;100
+gemahlener Koriander;;;g;low;100
 gemahlene Kurkuma;;;g;low;100
 gemahlene Muskatnuss;;;g;medium;100
 gemahlener Ingwer;;;g;low;100
 gemahlener Kardamom;;;g;medium;0
 gemahlener Kreuzkümmel;;;g;low;100
 getrockneter Liebstöckel;;;g;low;100
-gemahlener Pfeffer;;;g;medium;100
+Pfeffer;;;g;medium;100
 Gemüsebrühe-Pulver;;;g;low;100
 geräuchertes Paprikapulver;;;g;low;100
 gerebelter Kerbel;;;g;low;0
@@ -57,7 +56,7 @@ gerebelter Thymian;;;g;low;0
 geriebener Käse;;;g;medium;0
 getrocknete Chilis;getrocknete Chili;getrocknete Chilis;g;medium;0
 getrockneter Dill;;;g;low;100
-getrockneter Rosmarin;;;g;low;100
+gemahlener Rosmarin;;;g;low;100
 Gluten;;;g;high;0
 granulierter Knoblauch;;;g;medium;100
 Grapefruits;Grapefruit;Grapefruits;g;low;0
@@ -68,8 +67,8 @@ Hefeflocken;;;g;low;300
 Karotten;Karotte;Karotten;g;low;0
 Kartoffeln;Kartoffel;Kartoffeln;g;low;0
 Kirschtomaten;Kirschtomate;Kirschtomaten;g;low;0
-Knollensellerie;Sellerieknolle;Sellerieknollen;g;low;0
-Kopfsalat;Salatkopf;Salatköpfe;g;low;0
+Knollensellerie;Knolle Sellerie;Knollen Sellerie;g;low;0
+Kopfsalat;Kopfsalat;Salatköpfe;g;low;0
 Limetten;Limette;Limetten;g;low;0
 Limettensaft;Limette;Limetten;ml;low;0
 Limettenschale;Limette;Limetten;g;medium;0
@@ -97,7 +96,7 @@ Sojasauce;;;ml;medium;250
 Speisestärke;;;g;high;400
 Spitzkohl;Spitzkohl;Spitzkohlköpfe;g;low;0
 Stangensellerie;Stange Sellerie;Stangen Sellerie;g;low;0
-Strauchtomaten;Strauchtomate;Strauchtomaten;g;low;0
+Tomaten;Tomate;Tomaten;g;low;0
 süßes Paprikapulver;;;g;low;100
 Tomatenmark;;;g;medium;200
 Trockenbackhefe;;;g;very high;42
@@ -126,13 +125,13 @@ Joghurt;;;g;medium;800
 Skyr;;;g;medium;800
 Mayonnaise;;;g;low;250
 Kokosmilch;;;ml;low;0
-rote Linsen;rote Linse;rote Linsen;g;medium;0
-Linsen;Linse;Linsen;g;medium;0
+rote Linsen;;;g;medium;0
+Linsen;;;g;medium;0
 Olivenöl;;;ml;low;1000
 Apfelessig;;;ml;medium;750
-Hokkaido-Kürbis;;;g;low;0
+Hokkaido-Kürbis;Hokkaido-Kürbis;Hokkaido-Kürbisse;g;low;0
 Feta;;;g;medium;0
-Walnusskerne;;;g;low;0
+Walnusskerne;Walnusskern;Walnusskerne;g;low;0
 Ahornsirup;;;g;medium;375
 Hackfleisch;;;g;medium;0
 brauner Zucker;;;g;high;0
@@ -141,5 +140,24 @@ Reis;;;g;medium;0
 Rosinen;;;g;low;0
 Sojaschnetzel;;;g;medium;0
 Tahin;;;g;medium;0
-Süßkartoffeln;;;g;low;0
-Tortillas;;;g;very low;0
+Süßkartoffeln;Süßkartoffel;Süßkartoffeln;g;low;0
+Tortillas;Tortilla;Tortillas;g;very low;0
+Spätzle;;;g;medium;0
+rote Zwiebeln;rote Zwiebel;rote Zwiebeln;g;low;0
+Dijon-Senf;;;g;medium;0
+Kräuter;;;g;very low;0
+Umami-Paste;;;g;medium;0
+Ananassaft;;;ml;low;0
+Maistortillas;;;g;very low;0
+Pico de gallo;;;g;low;0
+Mürbeteig mit Zucker;;;g;medium;0
+Biskuit-Teig;;;g;medium;0
+Kokosöl;;;g;medium;0
+Pitabrote;;;g;very low;0
+Erdbeermarmelade;;;g;medium;0
+Erdbeeren;;;g;low;0
+Agar Agar;;;g;very high;0
+Sahnefest;;;g;high;0
+Vanillezucker;;;g;medium;0
+gehackte Pistazien;;;g;low;0
+Salzwasser;;;ml;medium;inf

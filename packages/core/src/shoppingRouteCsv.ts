@@ -19,9 +19,9 @@
  *   several stores (the pair is the key);
  * - the **items** (`Item;Store;Section`, one row per item): the identity of
  *   everything that can be bought, and the **single place a route is kept**.
- *   Its name set is a **superset of the ingredient list**: it carries recipe
- *   ingredients and items that are not ingredients at all („Klopapier“,
- *   „Seife“, „Blumen“), which have no base unit and no reorder point and
+ *   Its name set is **independent of the ingredient list**: it carries the
+ *   recipe ingredients that are bought on a route and items that are not
+ *   ingredients at all, which have no base unit and no reorder point and
  *   therefore cannot live in the ingredient master data. An item without a row
  *   here is not an error — it is simply never bought. The row order of this
  *   file carries no meaning — a spreadsheet may sort it freely;
@@ -68,7 +68,7 @@ export type ShoppingRoute = readonly ShoppingStop[];
 
 /**
  * The item table: the identity of everything buyable, keyed by item name, with
- * the route of each item. The name set is a superset of the ingredient list
+ * the route of each item. The name set is independent of the ingredient list
  * (see the module comment); an item without an entry simply has no place in the
  * route. The record's key order carries no meaning.
  */
@@ -174,7 +174,7 @@ export function serializeShoppingRouteCsv(route: ShoppingRoute): string {
  * about: every stop an item names must exist in the route — a typo fails loudly
  * at load, like a mapping for an unknown ingredient in the ingredient master
  * data. The item name itself is deliberately NOT checked against the ingredient
- * list: the name set is a superset of it (see the module comment), which is
+ * list: the name set is independent of it (see the module comment), which is
  * exactly why an item row is the identity and an ingredient row is only a view
  * (docs/shopping_item_identity.md §1).
  *
