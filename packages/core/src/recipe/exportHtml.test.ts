@@ -187,7 +187,12 @@ prep_time: 5 min
   it('links sub-recipe uses (rows and artifacts) through the „Rezept" badge', () => {
     const url = 'https://drive.example/Béchamelsauce.html';
     expect(html).toContain('class="badge"');
-    expect(html).toContain(`href="${url}"`);
+    // Each badge also promises the amount its use needs at that view, so the
+    // sub-recipe opens scaled to the parent instead of at its own written
+    // yield. The written 6-serving view uses 500 ml in the row and 200 ml in
+    // the prose artifact.
+    expect(html).toContain(`href="${url}#menge=500ml"`);
+    expect(html).toContain(`href="${url}#menge=200ml"`);
     // Every size carries the three uses (master row + step row + artifact).
     expect(html.match(/class="badge"/g)).toHaveLength(54);
     expect(html).toContain('>Rezept</a>');
@@ -196,6 +201,24 @@ prep_time: 5 min
     expect(html).toContain('Béchamelsauce <a class="badge"');
     // The step row separates the two with a margin instead, so it takes no space.
     expect(html).toContain('Béchamelsauce</span><a class="badge"');
+  });
+
+  it('bakes each sub-recipe badge with that view’s amount, snapped to a BQ', () => {
+    const url = 'https://drive.example/Béchamelsauce.html';
+    // 9 servings scale the 500 ml row to 750 ml and the 200 ml artifact to
+    // 300 ml; both are allowed BQ values.
+    expect(html).toContain(`href="${url}#menge=750ml"`);
+    expect(html).toContain(`href="${url}#menge=300ml"`);
+    // 7 servings scale the row to 583.33 ml, which has no baked view; the
+    // nearest allowed BQ (600 ml) is what the link promises.
+    expect(html).toContain(`href="${url}#menge=600ml"`);
+  });
+
+  it('adds the amount as a query parameter on an export-host link', () => {
+    const hosted = generateRecipeHtml(WRAPS, {
+      Béchamelsauce: 'https://host.example/exec?f=file-id',
+    });
+    expect(hosted).toContain('href="https://host.example/exec?f=file-id&amp;menge=500ml"');
   });
 
   it('renders no sub-recipe badges when no URLs are passed', () => {

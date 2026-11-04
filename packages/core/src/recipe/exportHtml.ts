@@ -51,6 +51,14 @@
  * implicit by name == recipe title, storage_format.md §4). Without a URL for a
  * title the display line stays plain text.
  *
+ * The badge also promises the *amount* the use needs at the view it is shown
+ * in: the URL carries it as the meal-plan size parameter (`&menge=500ml` on the
+ * export host, `#menge=500ml` on a Drive link, planLink.ts), so the sub-recipe
+ * opens scaled to what the parent cooks instead of its written yield. The
+ * amount is snapped to an allowed BQ value, because only BQ values are baked
+ * views of an ingredient recipe (yieldViews.ts); a use outside the target's
+ * ±1 decade band still falls back to its written yield.
+ *
  * The recipe's photo (§5.8) is embedded the same self-contained way: the caller
  * passes its base64-encoded bytes and the export inlines them as a `data:` URI
  * at the top of the Intro, so the file needs no sibling image and no network.
@@ -73,7 +81,7 @@ import {
 import { mappingsFor } from '../ingredientRegistry.js';
 import { optimizeUnitless } from '../quantityOptimizer.js';
 import { suggestQuantities } from '../quantitySuggestions.js';
-import { previousAllowedBQ } from '../quantityValues.js';
+import { nearestAllowedBQ, previousAllowedBQ } from '../quantityValues.js';
 import { SERVING_COUNTS } from '../servingSizes.js';
 import type { PrecisionContext } from '../precision.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
@@ -83,7 +91,9 @@ import {
   PLAN_FRAGMENT_SERVINGS,
   PLAN_FRAGMENT_YIELD,
   PLAN_PRESELECT_ELEMENT_ID,
+  convertYieldUnit,
   formatLinkQuantity,
+  withPlanSize,
 } from '../planLink.js';
 import { resolveTheme, resolveThemeFonts } from './theme.js';
 import type { ResolvedTheme } from './theme.js';
@@ -416,13 +426,42 @@ function artifactDisplayHtml(
 }
 
 /**
- * The sub-recipe „Rezept" badge (§5.7), or an empty string when there is no
- * link for the title. The link opens the sub-recipe's export in a new tab.
+ * The amount one sub-recipe use needs, in the shape the export's size
+ * parameter takes: the exact scaled quantity snapped to an allowed BQ value
+ * and converted to the family base unit (`kg` / `l` → `g` / `ml`).
+ *
+ * The snap is not cosmetic. An ingredient recipe bakes one view per allowed BQ
+ * in a ±1 decade band around its written yield (`yieldViews.ts`), so an exact
+ * scaled target such as 583.33 ml has no view of its own; the nearest BQ (600
+ * ml here) is the amount the sub-recipe can actually open on. The band still
+ * decides whether the target has that view at all — a use far outside it opens
+ * on the written yield, like any other size the export does not hold.
  */
-function subRecipeBadge(url: string | undefined): string {
+function subRecipeAmount(quantity: number, unit: Unit): { quantity: number; baseUnit: Unit } {
+  // The stored unit may be a display form (`kg` / `l`) in a hand-built recipe;
+  // the parser normalizes it, but the export must not depend on that caller.
+  const conversion = convertYieldUnit(unit) ?? { baseUnit: unit, factor: 1 };
+  return {
+    quantity: nearestAllowedBQ(quantity * conversion.factor),
+    baseUnit: conversion.baseUnit,
+  };
+}
+
+/**
+ * The sub-recipe „Rezept" badge (§5.7), or an empty string when there is no
+ * link for the title. The link opens the sub-recipe's export in a new tab, at
+ * the amount this use needs at the current baked view: the badge sits inside a
+ * size-scoped block, so a scaled parent hands the sub-recipe its scaled
+ * requirement (`withPlanSize`). Without a quantity/unit the bare URL is used.
+ */
+function subRecipeBadge(url: string | undefined, quantity?: number, unit?: Unit): string {
   if (url === undefined) return '';
+  const href =
+    quantity === undefined || unit === undefined
+      ? url
+      : withPlanSize(url, { kind: 'yield', ...subRecipeAmount(quantity, unit) });
   return (
-    `<a class="badge" href="${escapeHtml(url)}" target="_blank" rel="noopener">` +
+    `<a class="badge" href="${escapeHtml(href)}" target="_blank" rel="noopener">` +
     `${LINK_ICON_SVG}Rezept</a>`
   );
 }
@@ -518,7 +557,11 @@ function renderCheckRow(
   id: string,
 ): string {
   const text = arrangementHtml(masterDisplay(recipe, ingredient, factor), 'bare');
-  return renderIngredientRow(text, subRecipeBadge(links[ingredient.name]), id);
+  return renderIngredientRow(
+    text,
+    subRecipeBadge(links[ingredient.name], ingredient.quantity * factor, ingredient.unit),
+    id,
+  );
 }
 
 /**
@@ -570,7 +613,10 @@ function renderStep(
             );
             // The step list uses the exact same row as the master list; it only
             // omits the checkbox, because a step row is not checkable (§5.4).
-            return renderIngredientRow(text, subRecipeBadge(links[ingredient.name]));
+            return renderIngredientRow(
+              text,
+              subRecipeBadge(links[ingredient.name], ingredient.quantity * factor, ingredient.unit),
+            );
           })
           .join('\n') +
         `\n</ul>\n`;
@@ -578,7 +624,10 @@ function renderStep(
   // surrounding text is HTML-escaped (renderArtifacts). An artifact that names
   // an ingredient recipe carries the „Rezept" badge after its display form.
   const text = renderArtifacts(step.text, (artifact: TextArtifact) => {
-    const badge = artifact.name !== undefined ? subRecipeBadge(links[artifact.name]) : '';
+    const badge =
+      artifact.name !== undefined
+        ? subRecipeBadge(links[artifact.name], artifact.quantity * factor, artifact.unit)
+        : '';
     const text = artifactDisplayHtml(
       artifact.name,
       artifact.quantity * factor,

@@ -22,6 +22,11 @@
  * family unit (`g` / `ml`). `kg` / `l` are accepted on read and normalized, so
  * a hand-written link keeps working. A URL without a size names the dish
  * without one: the export opens at the recipe's written size.
+ *
+ * The HTML export's own sub-recipe badges write the `menge` form too: a badge
+ * carries the amount its use needs at the view it is shown in, so the
+ * sub-recipe opens scaled to that use instead of at its written yield
+ * (`recipe/exportHtml.ts`).
  */
 
 import type { Recipe, Unit } from './recipe/types.js';
