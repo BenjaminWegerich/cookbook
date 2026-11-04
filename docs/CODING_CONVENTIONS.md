@@ -118,29 +118,32 @@
   starting with a capital letter; nouns keep their capitals, nothing else is forced. No
   all-lowercase, no Title Case, no all-caps in the source string — ALL CAPS stays a
   CSS-only effect for data badges and `.field-label`. A leading icon is not a letter and
-  never replaces the capital (the add icon in front of `Zutatenzeile hinzufügen`, the
+  never replaces the capital (the add icon in front of `Zutat zur Liste hinzufügen`, the
   close icon in front of `Entfernen`);
   icon-only buttons carry no visible text, only an `aria-label`. A caption above a button
   group is a noun (`.field-label`), never a sentence fragment — so no option ever reads
   as a lowercase sentence continuation.
-- **Master data vs. recipe row:** a **„Zutat“** is the master-data record (the global
-  ingredient); a **„Zutatenzeile“** is one line in a recipe's ingredient list. Use exactly
-  these nouns and do not blur them: the master-data sheet is „Zutat bearbeiten“, a recipe
-  row is „Zutatenzeile bearbeiten“ / „Zutatenzeile hinzufügen“, and the cross-link from a
-  row to the master data is the outlined „Stammdaten bearbeiten“. Do not use „Zutat in der
-  Liste“ (ambiguous) or „Rezeptzutat“ (it collides with the established „Zutaten-Rezept“
-  for a sub-recipe). Creating a master record is always „Neue Zutat anlegen“ /
-  „Einkaufsartikel anlegen“.
+- **One noun, two scopes:** a **„Zutat“** is the ingredient wherever the user sees it — the
+  master-data record and the recipe row alike; there is no „Zutatenzeile“ in the UI. The
+  scope is carried by the action, not by a second noun: inside a recipe a row is created
+  with „Zutat zur Liste hinzufügen“ and changed with „Zutat bearbeiten“; the master record is
+  created with „Neue Zutat anlegen“ and changed with „Stammdaten bearbeiten“, its home being
+  the „Zutaten“ place. The cross-link from a row into the master data is the outlined
+  „Stammdaten bearbeiten“ and opens exactly that sheet. The shopping item keeps its own pair,
+  „Einkaufsartikel anlegen“ / „Einkaufsartikel verwalten“. Do not use „Zutat in der Liste“
+  (ambiguous) or „Rezeptzutat“ (it collides with the established „Zutaten-Rezept“ for a
+  sub-recipe). „Zutatenzeile“ survives only as the technical name of one line in the stored
+  recipe file (format docs, parser, AI-facing text), never as a UI label.
 - **Action buttons name the action (German infinitive):** every button that triggers or
   submits an action contains a verb in the infinitive — alone (`Speichern`, `Entfernen`) or
-  with the object it acts on when the verb alone is ambiguous (`Zutatenzeile hinzufügen`,
+  with the object it acts on when the verb alone is ambiguous (`Zutat zur Liste hinzufügen`,
   `Neue Zutat anlegen`, `Rezept löschen`). Word order is free (the verb may lead or trail), but
   a label is never only its object or destination. Verbless labels stay reserved for the
   three non-action cases: recognised navigation (`Zurück`), the overflow/menu trigger
   (`Mehr`), and controls that pick a value or state instead of running an action (segmented
   options like `Gericht`, quantity and time chips, unit toggles). The same action gets the
   same wording in every context (list, overview, editor, sheet), and an icon-only button
-  repeats its verb phrase verbatim in `aria-label` (`Zutatenzeile hinzufügen`), never a
+  repeats its verb phrase verbatim in `aria-label` (`Zutat zur Liste hinzufügen`), never a
   bare noun. Confirmation labels stay questions that contain the verb (`Wirklich
   entfernen?`) — a state of the same button, not a second naming scheme. Rationale:
   [NN/g — UI Copy: UX Guidelines for Command Names](https://www.nngroup.com/articles/ui-copy/).

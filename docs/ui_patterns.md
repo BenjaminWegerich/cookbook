@@ -337,9 +337,9 @@ top left. Never mind → „Abbrechen" next to the commit.*
 | Recipe overview, create menu | browsing layer over the list | none — the scrim / close button leaves it, there is no pending decision |
 | „Zum Essensplan hinzufügen" / „Übernehmen" | change (sheet) | „Abbrechen" |
 | „Eintrag ersetzen" | change (sheet) | „Abbrechen" |
-| „Zutatenzeile bearbeiten/hinzufügen" quantity sheet | change (sheet) | „Abbrechen" |
+| „Zutat bearbeiten" / „Zutat zur Liste hinzufügen" quantity sheet | change (sheet) | „Abbrechen" |
 | „Neue Zutat anlegen" / „Einkaufsartikel anlegen" | change (sheet) | „Abbrechen" |
-| „Zutat bearbeiten" / „Einkaufsartikel verwalten" | change (sheet) | „Abbrechen" |
+| „Stammdaten bearbeiten" / „Einkaufsartikel verwalten" | change (sheet) | „Abbrechen" |
 | „Rezept löschen" → „… wirklich löschen?" | question pending inside a place | „Abbrechen" |
 
 The last row is no contradiction: that button drops an armed question in place. It

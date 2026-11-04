@@ -3,7 +3,7 @@
  *
  * Two surfaces edit the same fields and must validate them identically:
  * - `NewIngredientSheet` („Neue Zutat anlegen“) creates a master-data entry;
- * - `EditIngredientSheet` („Zutat bearbeiten“) changes an existing one.
+ * - `EditIngredientSheet` („Stammdaten bearbeiten“) changes an existing one.
  *
  * Keeping the parsing, the row model and the German validation messages here
  * means the two sheets can never drift into different rules — the same mistake

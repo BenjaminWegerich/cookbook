@@ -1112,10 +1112,10 @@
 }
 
 /* A sheet stacked over another sheet — the recipe editor's master-data sheet
-   over the Zutatenzeile sheet. The wrapper is an empty stacking context above
-   both normal sheet layers (backdrop 20, sheet 30), so the upper sheet's
-   backdrop dims the lower sheet instead of the lower sheet painting above it.
-   It stays below the snackbar (50), whose notice reports the save. */
+   over the row's „Zutat bearbeiten“ sheet. The wrapper is an empty stacking
+   context above both normal sheet layers (backdrop 20, sheet 30), so the upper
+   sheet's backdrop dims the lower sheet instead of the lower sheet painting
+   above it. It stays below the snackbar (50), whose notice reports the save. */
 .sheet-layer-top {
   position: relative;
   z-index: 40;

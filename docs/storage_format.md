@@ -382,7 +382,7 @@ New ingredients are created in the web app („Neue Zutat anlegen“) with a sto
 adaptive suggestion chips around the current amount, the pinned 0 and ∞, and a stepper. A typed
 value is stored exactly as entered and never snaps to an additional unit; a tapped chip stores
 the base-unit amount its label shows. There is no preview line. The same applies when editing an
-ingredient („Zutat bearbeiten“), so a 150 g entry stays 150 g even for a 160 g Becher (decided
+ingredient („Stammdaten bearbeiten“), so a 150 g entry stays 150 g even for a 160 g Becher (decided
 with the user; see additional_quantity_specifications.md §6.3). „∞“ in the picker stores `inf`.
 
 The mappings file is a pure overlay; an ingredient without additional units (e.g.

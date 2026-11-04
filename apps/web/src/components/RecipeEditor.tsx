@@ -4,7 +4,7 @@
  * Decided with the user:
  * - every step carries its own counted ingredient list (rows) that appears
  *   above the step text; rows are added, edited and reordered per step
- *   ("Zutatenzeile hinzufügen", ↑/↓ on the row) and feed
+ *   ("Zutat zur Liste hinzufügen", ↑/↓ on the row) and feed
  *   the derived master list (order of first use, duplicates merged with the
  *   total, storage_format.md §4);
  * - the step text is free prose; display-only inline artifacts ("Zutat oder
@@ -1928,7 +1928,7 @@ function RecipeEditor({
         list.push({
           path: `steps[${index}].text`,
           message:
-            'Der Schritt-Text darf nicht mit "- " beginnen (das ist Zutatenzeilen vorbehalten).',
+            'Der Schritt-Text darf nicht mit "- " beginnen; Zutaten stehen in eigenen Zeilen.',
         });
       }
       step.ingredients.forEach((ingredient, rowIndex) => {
@@ -3771,7 +3771,7 @@ function RecipeEditor({
                   onClick={() => openSheet({ kind: 'row-add', stepIndex })}
                 >
                   <PlusIcon className="button-icon" optical={20} />
-                  <span>Zutatenzeile hinzufügen</span>
+                  <span>Zutat zur Liste hinzufügen</span>
                 </button>
               </div>
 
@@ -3880,7 +3880,7 @@ function RecipeEditor({
             </p>
           ))}
           {computedIngredients.length === 0 ? (
-            <p className="empty-hint">Füge Zutatenzeilen zu den Schritten hinzu.</p>
+            <p className="empty-hint">Füge Zutaten zu den Schritten hinzu.</p>
           ) : (
             <>
               <ul className="ingredient-list">

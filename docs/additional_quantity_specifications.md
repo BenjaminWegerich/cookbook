@@ -218,7 +218,7 @@ the **lower** AQ wins, so the packaging unit beats the spoon count.
 
 The exact flag affects display only. The stored `V0` is never rewritten by
 display selection. The ingredient master-data forms („Neue Zutat anlegen“,
-„Zutat bearbeiten“) store the **reorder point** exactly as entered; the former
+„Stammdaten bearbeiten“) store the **reorder point** exactly as entered; the former
 stock-state exception — snapping it to a whole package — is gone (decided with
 the user), so an exact unit never changes what is stored.
 

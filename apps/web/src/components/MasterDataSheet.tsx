@@ -2,7 +2,7 @@
  * The one bottom sheet behind the whole master data.
  *
  * Four flows render this component:
- * - „Zutat bearbeiten“ — the ingredient's fields except name and base unit
+ * - „Stammdaten bearbeiten“ — the ingredient's fields except name and base unit
  *   (both are the entry's identity and shown disabled);
  * - „Neue Zutat anlegen“ — the same sheet with the name and base unit editable;
  * - „Einkaufsartikel verwalten“ — only the name, the shopping stop and the
@@ -596,7 +596,7 @@ function MasterDataSheet({
   const title = ingredientMode
     ? creating
       ? 'Neue Zutat anlegen'
-      : 'Zutat bearbeiten'
+      : 'Stammdaten bearbeiten'
     : creating
       ? 'Einkaufsartikel anlegen'
       : 'Einkaufsartikel verwalten';

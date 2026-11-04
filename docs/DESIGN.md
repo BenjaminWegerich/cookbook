@@ -621,7 +621,7 @@ A typeface joins the shortlist only when it meets every requirement:
 | Danger | danger fill, `--color-on-accent` label | a destructive action („Rezept löschen", „Entfernen") |
 | Outlined | surface fill, hairline border, ink label | secondary actions in a row („Einplanen", „Mehr", photo „Auswählen" / „Ersetzen") *decided with the user* |
 | Text | no fill, no border, muted label (the draft save is ochre) | navigation („Zurück"), quiet answers („Abbrechen", „Rückgängig") and the editor's secondary save („Als Entwurf speichern") |
-| Add | surface fill, olive border, olive label | a creation action inside a card or list („Schritt hinzufügen", „Zutatenzeile hinzufügen", „Neue Zutat anlegen") |
+| Add | surface fill, olive border, olive label | a creation action inside a card or list („Schritt hinzufügen", „Zutat zur Liste hinzufügen", „Neue Zutat anlegen") |
 
 **Geometry.** Action buttons: `--radius-md`, padding `--space-3` / `--space-4`, label
 `--text-md` weight 600, `--space-2` gap to an 18px symbol (`--icon-md`). The 10px inline
@@ -1236,7 +1236,7 @@ edited in the sheet behind the row; repeating them in the list would turn the re
 into a data table. Search matches the canonical name and both display forms; a search without a
 match is the bare „—". *decided with the user*
 
-**„Zutat bearbeiten" is a change.** The shared `MasterDataSheet` edits the optional
+**„Stammdaten bearbeiten" is a change.** The shared `MasterDataSheet` edits the optional
 Singular/Plural pair (§5.3), the reorder point (§5.3, the create sheet's picker), the AU
 mappings, the ingredient-level precision, the shopping stop („Einkauf", §5.13) and the item's
 synonyms. The canonical name and the base unit are the entry's identity: the name is a
@@ -1648,9 +1648,9 @@ The cooking view (`.html`) has its own inventory, written below.
 | „Einkaufsartikel" | `setNav('shoppingPlaces')`, `ShoppingPlaces` | place | „Zurück" |
 | „Zum Essensplan hinzufügen" / „Übernehmen" | `MealPlanSheet` | change | „Abbrechen" |
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
-| „Zutatenzeile bearbeiten" / „Zutatenzeile hinzufügen" / „Zutat oder Menge zum Text hinzufügen" / „Menge im Text bearbeiten" | `IngredientSheet` | change | „Abbrechen" |
+| „Zutat bearbeiten" / „Zutat zur Liste hinzufügen" / „Zutat oder Menge zum Text hinzufügen" / „Menge im Text bearbeiten" | `IngredientSheet` | change | „Abbrechen" |
 | „Neue Zutat anlegen" / „Einkaufsartikel anlegen" | `NewIngredientSheet` / `MasterDataSheet` | change | „Abbrechen" |
-| „Zutat bearbeiten" / „Einkaufsartikel verwalten" | `EditIngredientSheet` / `EditShoppingItemSheet` (shared `MasterDataSheet`) | change | „Abbrechen" |
+| „Stammdaten bearbeiten" / „Einkaufsartikel verwalten" | `EditIngredientSheet` / `EditShoppingItemSheet` (shared `MasterDataSheet`) | change | „Abbrechen" |
 | „Änderungen verwerfen?" | `LeaveConfirmSheet` (over the editor and the AI screen) | change | „Abbrechen", scrim, Escape, Back |
 | Snackbar | `Snackbar` (app root) | transient, never a layer | none |
 

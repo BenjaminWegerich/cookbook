@@ -5,8 +5,9 @@
  * An ingredient and its shopping item are two views of one name: the ingredient
  * carries the base unit, precision, stock and mappings; the item carries the
  * store/section and synonyms. The shared master-data sheet edits both, so both
- * screens that open it — the „Zutaten“ place and a recipe's „Zutatenzeile“ —
- * must persist them the same way. This module is that one write path.
+ * screens that open it — the „Zutaten“ place and a recipe row's „Stammdaten
+ * bearbeiten“ action — must persist them the same way. This module is that one
+ * write path.
  *
  * The write is transactional in the practical sense: the two file pairs are
  * independent, so the ingredient is written first and rolled back when the

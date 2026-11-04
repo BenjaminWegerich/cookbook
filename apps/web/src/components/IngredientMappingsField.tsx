@@ -3,7 +3,7 @@
  *
  * One row per known additional unit (Becher, EL, TL, …): the unit's name and the
  * amount of base unit per one unit (the conversion factor). The grid is shared
- * by the create sheet („Neue Zutat anlegen“) and the edit sheet („Zutat
+ * by the create sheet („Neue Zutat anlegen“) and the edit sheet („Stammdaten
  * bearbeiten“), so both forms show the same units in the same order with the
  * same labels. Per-ingredient priorities are gone: the optimizer scores every
  * compatible unit. The **Einkaufs-Einheit** is a per-mapping flag: a chip row

@@ -382,8 +382,8 @@ function IngredientSheet({
               ? 'Zutat oder Menge zum Text hinzufügen'
               : 'Menge im Text bearbeiten'
             : mode === 'row-add'
-              ? 'Zutatenzeile hinzufügen'
-              : 'Zutatenzeile bearbeiten'
+              ? 'Zutat zur Liste hinzufügen'
+              : 'Zutat bearbeiten'
         }
       >
         {/* Head block: title + explanatory line. Grouped into a single grid
@@ -396,8 +396,8 @@ function IngredientSheet({
                 ? 'Zutat oder Menge zum Text hinzufügen'
                 : 'Menge im Text bearbeiten'
               : mode === 'row-add'
-                ? 'Zutatenzeile hinzufügen'
-                : 'Zutatenzeile bearbeiten'}
+                ? 'Zutat zur Liste hinzufügen'
+                : 'Zutat bearbeiten'}
           </h3>
           {rowMode && (
             <p className="sheet-subtitle">
