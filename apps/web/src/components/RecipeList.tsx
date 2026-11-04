@@ -249,13 +249,11 @@ interface RecipeListProps {
  * recipes that each need 300 g tofu round to two 200 g blocks on their own, but
  * to three blocks when they are written together (./ShoppingListSelect). The
  * button acts on the plan, so it appears only while the plan is connected and
- * actually carries entries; it is a soft accent chip (clay text on a light clay
- * tint, one clay hairline, pill shape, plus symbol) — decided with the user, who
- * wanted the entry clearly more prominent than the bare text button it used to
- * be, while the filled floating action button stays the screen's one loud
- * control. The caption names the list in full, and the buttons shorten it to
- * "Liste" so the pair of actions stays compact while still naming its object;
- * the entry into the flow still reads on its own.
+ * actually carries entries. It is an outlined button (surface fill, hairline,
+ * ink label) — not the filled floating action button, which stays the screen's
+ * one loud control. The caption names the list in full, and the buttons shorten
+ * it to "Liste" so the pair of actions stays compact while still naming its
+ * object; the entry into the flow still reads on its own.
  *
  * Once that flow has written the list, the button reads **"Liste
  * geschrieben"**, carries the check instead of the plus and is unavailable — for

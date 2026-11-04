@@ -327,9 +327,10 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   stays and the body carries the placeholder sentence, so a section that is empty only because
   of the search still says which section it is. The whole „Einkaufsliste“ heading — caption,
   counter and both actions — disappears the same way, because its actions act on the whole Keep
-  list rather than the filtered result. Both actions are soft accent chips (clay text on a light
-  clay tint), not filled buttons: they act on the plan and the list, and a filled button would
-  compete with the floating action button.
+  list rather than the filtered result. Both actions are outlined buttons (surface fill,
+  hairline, ink label), not filled ones: they act on the plan and the list, and a filled
+  button would compete with the floating action button. The row starts at the section's
+  left edge and wraps onto a second line on a narrow phone.
 - **Recognition.** An entry is a recipe when its text — without a trailing export link and
   without an optional ` (6 Portionen)`, ` (500 g)` or ` (1,5 l)` suffix — is the exact,
   case-sensitive title of a recipe file, and a stated size fits the recipe: an allowed
