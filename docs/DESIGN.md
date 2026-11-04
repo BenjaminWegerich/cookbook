@@ -866,7 +866,9 @@ such action. *decided with the user*
   only thing that may carry its own target.
 - A card title clamps to three lines and is cut with an ellipsis; it is never pushed to a fourth
   line or set in a smaller size to fit. Without a media area the title may use up to six lines,
-  so a text-only card can carry a longer name.
+  so a text-only card can carry a longer name. The unrecognized meal-plan title is the one
+  exception: it flows in full, because a clamped block would push its „Unbekannt" badge onto a
+  line of its own (§5.7).
 - A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
   muted) beneath it.
 - An ingredient arrangement's parenthesized note is muted and italic. Every list, chip and
@@ -887,8 +889,10 @@ such action. *decided with the user*
 - An empty list is never a blank area: either it carries the established placeholder, or one
   muted German sentence when §6.3 asks for it.
 - Rows are separated by a hairline, never by a shadow or a gap in the surface.
-- Cards in one row are equal height; the media row keeps its square height, so every title
-  starts on the same line.
+- The recipe grid is masonry in the manner of Google Keep: every card is exactly as tall as
+  its content, and each card drops into the lowest free space of its column. Card edges do not
+  line up horizontally — that alignment is deliberately given up, and no card is padded to the
+  tallest card of its row. *decided with the user*
 
 *Applies to: cooking view.*
 
@@ -1021,8 +1025,10 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 - A badge's wording matches the action that caused it and the action that undoes it.
 - The „Entwurf" badge belongs to the title block: it sits directly below the title in the
   list card and in the recipe overview, never over the media and never in the meta row.
-- The „Unbekannt" badge belongs to the title block on its meal-plan card: it sits directly
-  below the title. In the recipe overview it leads the caption/value row instead.
+- The „Unbekannt" badge belongs to the title block on its meal-plan card: it follows the title
+  as its final word, sharing the title's last line while it fits there and moving to a line of
+  its own when the last line is full. In the recipe overview it leads the caption/value row
+  instead.
 
 *Applies to: cooking view.*
 
@@ -1051,8 +1057,9 @@ broken image.
 **The overview sheet shows a media area only for a recipe with a photo.** A recognized recipe
 without a photo starts its body at the sheet's top padding, like an unrecognized entry.
 
-**An unrecognised meal-plan line carries the „Unbekannt" badge under its title** (§5.7); its
-card is text-only, like any card without a photo.
+**An unrecognised meal-plan line carries the „Unbekannt" badge at the end of its title**
+(§5.7): it sits on the title's last line while it still fits there, otherwise on a line of its
+own; its card is text-only, like any card without a photo.
 
 **Sizes.** Card media: the full card width, 4:3. Overview hero: the full sheet content width,
 4:3. Editor preview: 160 × 120px (4:3).

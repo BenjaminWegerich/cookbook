@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { matchShoppingItem } from '@cookbook/core';
 
 import type { StoredRecipe } from '../drive/recipeStorage';
+import { useMasonryGrid } from '../hooks/useMasonryGrid';
 import type { KeepItem } from '../keep/keepClient';
 import type { MealPlanCard } from '../keep/mealPlanCards';
 import type { KeepStatus } from '../keep/useKeep';
@@ -33,6 +34,18 @@ const SEARCH_LABEL = 'Rezept oder Gericht suchen';
 const SHOPPING_CAPTION_ID = 'recipe-section-shopping';
 const MEALPLAN_CAPTION_ID = 'recipe-section-mealplan';
 const COLLECTION_CAPTION_ID = 'recipe-section-collection';
+
+/**
+ * The gap between an unrecognized entry's title and its „Unbekannt" badge, as
+ * an en space (U+2002, half an em). It is deliberately wider than a word space
+ * (decided with the user, who wanted more air between the two) and still counts
+ * as word spacing — the same separator the AI field hint uses (AiCreateSheet).
+ * A margin could not do this job: the badge may start a line of its own when the
+ * title's last line is full, and an inline margin would then indent it from the
+ * title's edge; an en space is not collapsible, so it simply stays at the end of
+ * the broken line. The escape keeps the source readable.
+ */
+const TITLE_BADGE_GAP = '\u2002';
 
 /**
  * Salt drawn once per page load: this module is evaluated once per reload, so
@@ -171,7 +184,8 @@ interface RecipeListProps {
 /**
  * Home screen: one sticky search field, below it the "Einkaufsliste" heading and
  * then the two captioned sections of the collection, each rendered as the same
- * adaptive card grid (two columns on a phone, more on wider screens) and both
+ * Keep-style masonry (two columns on a phone, more on wider screens; every card
+ * is exactly as tall as its content, see ../hooks/useMasonryGrid) and both
  * filtered by the one search field (decided with the user):
  *
  * - **Einkaufsliste** is the shopping list's own heading, directly below the
@@ -194,7 +208,9 @@ interface RecipeListProps {
  *   the known card format; every other entry renders as a text-only card with
  *   the entry's title (the export link, a stated size and a free-text note are
  *   left out — the overview behind the card shows them) and the danger
- *   "Unbekannt" badge under the title. A card shows a photo only when the recipe
+ *   "Unbekannt" badge at the end of that title, on the same line when it still
+ *   fits there and on a line of its own when it does not (decided with the
+ *   user). A card shows a photo only when the recipe
  *   has one; without a photo it is text-only and its title may run to more lines
  *   (decided with the user). Tapping either card opens the overview: the
  *   recognized one with its stated size and "Umplanen", the unrecognized one as
@@ -286,6 +302,12 @@ function RecipeList({
 }: RecipeListProps) {
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
+
+  // Masonry for both card sections (see ../hooks/useMasonryGrid): each list
+  // measures its own cards, so a section can be empty, filtered or still
+  // loading without affecting the other.
+  const mealPlanListRef = useMasonryGrid<HTMLUListElement>();
+  const collectionListRef = useMasonryGrid<HTMLUListElement>();
 
   // Normalized once so the per-render filters below only repeat the cheap
   // includes comparisons, not the normalization. Empty query and thus an empty
@@ -476,7 +498,7 @@ function RecipeList({
     }
 
     return (
-      <ul className="recipe-list">
+      <ul className="recipe-list" ref={mealPlanListRef}>
         {visiblePlanCards.map((card) => {
           const recipe = card.recipe;
           if (recipe !== null) {
@@ -497,18 +519,23 @@ function RecipeList({
           }
           // Unrecognized: no recipe stands behind the entry, so the card carries
           // no media at all — the title alone states the entry. The danger
-          // "Unbekannt" badge sits under the title like the draft's badge
-          // (decided with the user): the serving cloche of RoomServiceIcon before
-          // the label keeps the meaning "a dish, not known yet" without claiming
-          // a photo area. The title is the entry without its export URL, its
-          // stated size and its free-text note — exactly the shape a known
-          // recipe's card has — and the overview behind the card shows those
-          // recognized parts (size, note, link).
+          // "Unbekannt" badge follows the title as a word does (decided with the
+          // user): it shares the title's last line while it still fits there
+          // and only drops to a line of its own when it does not. The serving
+          // cloche of RoomServiceIcon before the label keeps the meaning "a
+          // dish, not known yet" without claiming a photo area. The title is
+          // the entry without its export URL, its stated size and its free-text
+          // note — exactly the shape a known recipe's card has — and the
+          // overview behind the card shows those recognized parts (size, note,
+          // link). The en space before the badge belongs to that flow (see
+          // TITLE_BADGE_GAP): it widens the gap and, being non-collapsible,
+          // leaves a badge that breaks to the next line unindented.
           return (
             <li key={card.key}>
               <button type="button" className="recipe-card" onClick={() => onOpenPlanCard(card)}>
-                <span className="recipe-card-title">
+                <span className="recipe-card-title recipe-card-title--badge-inline">
                   <span className="recipe-card-title-text">{card.title}</span>
+                  {TITLE_BADGE_GAP}
                   <span className="recipe-card-badge">
                     <span className="recipe-badge recipe-badge-unknown">
                       <RoomServiceIcon className="recipe-badge-icon" optical={20} />
@@ -541,7 +568,7 @@ function RecipeList({
       );
     }
     return (
-      <ul className="recipe-list">
+      <ul className="recipe-list" ref={collectionListRef}>
         {visibleRecipes.map((recipe) => (
           <li key={recipe.fileId}>
             <button type="button" className="recipe-card" onClick={() => onOpenRecipe(recipe)}>

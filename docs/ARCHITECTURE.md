@@ -14,7 +14,7 @@
 > integration has started: its gateway (`apps/keep-gateway/`) reads both Keep lists over a
 > thin HTTP boundary, and the web app shows the meal plan as the first of the recipe list's two
 > captioned sections („Essensplan“ over „Restliche Sammlung“, entry recognition, the
-> danger „Unbekannt“ badge under an unrecognized card's title) and writes a planned
+> danger „Unbekannt“ badge at the end of an unrecognized card's title) and writes a planned
 > dish back, linking it at the recipe's HTML export
 > behind the caller's Google sign-in, degrading to "Keep off" when the gateway is unreachable. That export link is served by a
 > small Apps Script web app (`apps/export-host/`), because a Drive viewer renders the stored
@@ -342,10 +342,11 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   entry that matches no recipe, `splitTitleNote` separates it as a free-text note.
 - **Cards.** Recognized entries use the known card format; a card shows a photo only when the
   recipe has one and is text-only otherwise (its title may then run to six lines instead of
-  three). An unrecognized entry renders as a text-only card too, carrying the danger
-  „Unbekannt“ badge under its title (the serving cloche of `RoomServiceIcon`, so the state reads
-  as "a dish, not known yet" and not as a failure) and
-  its title without export link, stated size and free-text note — the shape a known card has —
+  three). An unrecognized entry renders as a text-only card too. Its title is not line-clamped:
+  the danger „Unbekannt“ badge ends it — on the title's last line while it still fits there,
+  otherwise on a line of its own (the serving cloche of `RoomServiceIcon`, so the state reads as
+  "a dish, not known yet" and not as a failure). The card shows the title without export link,
+  stated size and free-text note — the shape a known card has —
   and is tappable: the recipe overview is its destination, where the entry can be replaced by
   an existing recipe or by a new one (manual or AI) or dropped from the plan with „Abhaken“.
 - **Recipe overview.** A card opens the overview sheet in one of three forms. A recipe that is

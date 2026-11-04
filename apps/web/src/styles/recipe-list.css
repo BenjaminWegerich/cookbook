@@ -328,34 +328,66 @@
 
 /* ---- Recipe list -------------------------------------------------------- */
 
+/* Keep-style masonry (decided with the user; consider Google Keep as the
+   reference): every card is exactly as tall as its content, and the next card
+   drops into the lowest free space, so the column edges stop lining up
+   horizontally. The list is a grid of fixed columns over very short fixed rows.
+   `useMasonryGrid` measures each card and spans its item over as many rows as
+   the card is tall plus one card gap; `grid-auto-flow: row dense` then places
+   every item in the first free slot, scanning left to right and top to bottom —
+   the same packing as Keep's shortest column, without measuring the columns.
+   The hook reads the row quantum, the gap and nothing else from this rule, so
+   the layout stays defined in one place. */
 .recipe-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  /* Two columns phone-first; more columns only once the viewport is wide
-     enough that each card keeps a usable photo. The breakpoint thresholds
-     reuse ladder numbers (42 rem ≈ 672 px, 74 rem ≈ 1184 px) and are layout
-     breakpoints, not geometric scale values. */
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5);
+  /* One column per breakpoint, phone-first: two columns, more only once the
+     viewport is wide enough that each card keeps a usable photo. The
+     breakpoint thresholds reuse ladder numbers (42 rem ≈ 672 px, 74 rem ≈
+     1184 px) and are layout breakpoints, not geometric scale values. The
+     custom property is the single place that names the count; the media
+     queries below only change it, and the hook never needs the breakpoints. */
+  --recipe-columns: 2;
+  grid-template-columns: repeat(var(--recipe-columns), minmax(0, 1fr));
+  /* The row quantum: the finest step a card's span can be rounded to. Small
+     enough that a card never shows a visible slack (at most one quantum below
+     it), large enough that a long list does not create thousands of rows. */
+  grid-auto-rows: var(--space-1);
+  /* Dense packing puts each item in the first free slot instead of after the
+     previous one; that is what turns the row spans into masonry. */
+  grid-auto-flow: row dense;
+  /* Cards are separated vertically by their own span (the hook adds one gap
+     per card), so a row gap would be added to every 4 px row instead. */
+  row-gap: 0;
+  column-gap: var(--space-5);
+  /* The last row of the tallest column carries a card gap that must not add to
+     the section spacing below it (--space-7 between two sections). This is the
+     same trick the sticky bars use for their opaque step: the gap is reused as
+     a negative margin, so the rhythm is unchanged. */
+  margin-block-end: calc(-1 * var(--space-5));
 }
 
 @media (min-width: 42rem) {
   .recipe-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    --recipe-columns: 3;
   }
 }
 
 @media (min-width: 74rem) {
   .recipe-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    --recipe-columns: 4;
   }
 }
 
+/* The list item is the grid cell (its row span comes from the hook). It only
+   has to pass the column width down to the card and keep the card at the top of
+   its area: the leftover of the span rounding below the card stays empty. */
 .recipe-list > li {
   min-width: 0;
-  display: grid; /* let the card button fill the whole (stretched) row cell */
+  display: grid;
+  align-content: start;
   /* A zero-minimum single column: the implicit `auto` column takes its minimum
      from the content, so one unbreakable word in a title (a URL, typically)
      would push the cell — and with it the card and its landscape media area —
@@ -376,13 +408,11 @@
   /* Same reason as the list cell above: the media area is `width: 100%` of this
      column, so the column itself must never grow past the card. */
   grid-template-columns: minmax(0, 1fr);
-  /* Cards in one row stretch to the tallest card. A photo keeps its natural
-     (4:3) height, so all left-over height lands in the title row instead of
-     being split across both rows — otherwise a one-line title would be pushed
-     down by half a line and its first line would no longer line up with the
-     two-line neighbour's. A text-only card has no media row at all: its title
-     is the first (and only) child and starts at the card's top mat. */
-  grid-template-rows: auto 1fr;
+  /* The card is exactly as tall as its content (decided with the user, see the
+     masonry rule above): the media keeps its natural 4:3 height and the title
+     block follows it without absorbing any left-over height, because there is
+     none. A text-only card has no media row at all: its title is the first (and
+     only) child and starts at the card's top mat. */
   align-content: start;
   width: 100%;
   /* The one mat of the card: photo and title both start at this inset (the
@@ -425,7 +455,10 @@
 /* The title text: at most three lines, then an ellipsis. `min-width: 0` lets
    the text shrink below its longest word and `overflow-wrap: anywhere` breaks a
    long unbreakable word (a URL in a title, in practice) instead of widening the
-   card. */
+   card. The one exception is the unrecognized meal-plan title, which flows
+   inline so its badge can share the line (`.recipe-card-title--badge-inline`):
+   a line clamp needs a block-level box, and a block box would put the badge on
+   a line of its own. */
 .recipe-card-title-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -447,9 +480,9 @@
    editor's ingredient tags use the same recipe). A badge is plain content
    inside its card or row and never a hitbox of its own — the whole card is the
    single tap target. An unrecognized meal-plan card carries its „Unbekannt"
-   badge under the title (it has no media area of its own any more); the badge
-   itself also leads the recipe overview's caption/value row and sits inline
-   after an entry's text in the shopping-list selection
+   badge in the title's flow (see `.recipe-card-title--badge-inline` below); the
+   badge itself also leads the recipe overview's caption/value row and sits
+   inline after an entry's text in the shopping-list selection
    (styles/shopping-list-select.css). */
 .recipe-badge {
   display: inline-flex;
@@ -487,6 +520,33 @@
 .recipe-card-badge {
   display: block;
   margin-block-start: var(--space-2);
+}
+
+/* The „Unbekannt" badge of an unrecognized meal-plan entry is not a block of its
+   own: it follows the title text like a final word (decided with the user), so
+   a short title carries it on the same line and only a title whose last line has
+   no room left pushes it down. That needs the title text to flow inline, which
+   is also why this one card's title no longer clamps to lines with an ellipsis:
+   a clamp needs a block-level box, and a block box would leave the badge no line
+   to sit on. The gap between text and badge is the en space the markup renders
+   (TITLE_BADGE_GAP in RecipeList.tsx), and it is deliberately not a margin: a
+   margin would indent the badge when it starts a line of its own. The stacked
+   badge's 6 px step does not apply here. */
+.recipe-card-title--badge-inline .recipe-card-title-text {
+  display: inline;
+}
+
+/* The badge is a box of its own inside the title's line, so it has to say where
+   it sits on that line: `middle` centres the pill on the title's x-height
+   (decided with the user, who found the default alignment sitting too high).
+   `inline-flex`, not `inline-block`: an inline-block would take the title's
+   24 px line-height as a strut and hand `middle` a 24 px box, which would push
+   the pill down by the difference; as a flex container the wrapper is exactly
+   as tall as the pill. */
+.recipe-card-title--badge-inline .recipe-card-badge {
+  display: inline-flex;
+  margin-block-start: 0;
+  vertical-align: middle;
 }
 
 .recipe-badge-draft {
