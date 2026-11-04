@@ -11,9 +11,10 @@
  *   Menge zum Text hinzufügen") scale with the serving count but are never
  *   counted;
  * - the master list (Zutaten section) is read-only except for the reference
- *   role, which can only be set there (both recipe types, no limit); a step row
- *   shows an existing reference but cannot set one (its "REFERENZ" tag's × can
- *   only clear it);
+ *   role, which can only be set there (both recipe types, no limit) — step rows
+ *   do not show it. The role is stored as a name, so renaming the last row of a
+ *   reference ingredient moves the role to the new name, and removing that row
+ *   drops it (a reference without a matching row is invalid, §4);
  * - sub-recipes are implicit (name == ingredient-recipe title) and clickable
  *   wherever they appear (step rows, master list, text artifacts). Tapping the
  *   "REZEPT" badge opens the sub-recipe as a new level above the current one
@@ -187,6 +188,61 @@ function withIngredients(draft: EditorDraft): Recipe {
     ...draft,
     ingredients: deriveIngredients(draft.steps, draft.reference ?? []),
   };
+}
+
+/**
+ * Drops reference names that no step row carries any more
+ * (storage_format.md §4: every reference name must occur among the recipe's
+ * merged ingredients). Removing or renaming the last row of a reference
+ * ingredient used to leave the name in the draft, which core then rejected —
+ * and because the master list only shows the "REFERENZ" badge on an existing
+ * row, there was no control left to clear it. Pruning keeps the draft valid.
+ *
+ * The unchanged array is returned by identity when nothing is dropped, so the
+ * draft-change checks do not see a false change.
+ */
+function pruneReference(
+  reference: string[] | undefined,
+  steps: readonly Step[],
+): string[] | undefined {
+  if (reference === undefined || reference.length === 0) return undefined;
+  const usedNames = new Set(
+    steps.flatMap((step) => step.ingredients.map((ingredient) => ingredient.name.trim())),
+  );
+  const kept = reference.filter((name) => usedNames.has(name.trim()));
+  if (kept.length === reference.length) return reference;
+  return kept.length > 0 ? kept : undefined;
+}
+
+/**
+ * The reference list after renaming one step row, or `undefined` when the list
+ * stays as it is. The reference role is a recipe-level name (§4), so it follows
+ * the row to the new name when that row was the last use of the old name.
+ * While another row still carries the old name, the reference is still valid
+ * there and stays put. `steps` must already contain the renamed row; a name
+ * that was already a reference is not listed twice.
+ */
+function referenceAfterRowRename(
+  draft: EditorDraft,
+  steps: readonly Step[],
+  oldName: string,
+  newName: string,
+): string[] | undefined {
+  const from = oldName.trim();
+  const to = newName.trim();
+  if (draft.reference === undefined || !draft.reference.includes(from) || from === to) {
+    return undefined;
+  }
+  const oldNameStillUsed = steps.some((step) =>
+    step.ingredients.some((ingredient) => ingredient.name.trim() === from),
+  );
+  if (oldNameStillUsed) return undefined;
+  const next: string[] = [];
+  for (const name of draft.reference) {
+    const moved = name === from ? to : name;
+    if (!next.includes(moved)) next.push(moved);
+  }
+  return next;
 }
 
 /**
@@ -533,8 +589,9 @@ function normalizeTheme(theme: RecipeTheme | undefined): RecipeTheme | undefined
 /**
  * Normalizes the draft into the form that is written to Drive (§7 round-trip):
  * trimmed single-line step prose (internal line breaks collapse to spaces),
- * empty optional fields dropped, the reference list kept for both recipe types,
- * and the master list derived from the step rows (§4).
+ * empty optional fields dropped, the reference list kept for both recipe types
+ * (minus names no row carries any more, §4), and the master list derived from
+ * the step rows (§4).
  */
 function normalizeRecipe(draft: EditorDraft): Recipe {
   // A step is kept when it has prose OR counted rows — a row-only step stays
@@ -551,8 +608,7 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
       text: step.text.replace(/\s*\n\s*/g, ' ').trim(),
     }))
     .filter((step) => step.text !== '' || step.ingredients.length > 0);
-  const reference =
-    draft.reference !== undefined && draft.reference.length > 0 ? draft.reference : undefined;
+  const reference = pruneReference(draft.reference, steps);
   const ingredients = deriveIngredients(steps, reference ?? []);
   const theme = normalizeTheme(draft.theme);
   const base = {
@@ -2296,9 +2352,20 @@ function RecipeEditor({
   /**
    * Applies an updater to the draft; a no-op while the draft is still loading
    * (the updater always receives a non-null EditorDraft).
+   *
+   * Every update also prunes reference names whose last row disappeared (§4).
+   * Doing it here and not only on save keeps the reference list in step with
+   * the rows: deleting a step or its last reference row drops the role while
+   * the master list can still show it. A rename moves the role within its own
+   * update before this prune runs (see `referenceAfterRowRename`).
    */
   const updateDraft = (updater: (current: EditorDraft) => EditorDraft): void => {
-    setDraft((current) => (current === null ? current : updater(current)));
+    setDraft((current) => {
+      if (current === null) return current;
+      const next = updater(current);
+      const reference = pruneReference(next.reference, next.steps);
+      return reference === next.reference ? next : { ...next, reference };
+    });
   };
 
   const patchDraft = (patch: Partial<EditorDraft>): void => {
@@ -2445,10 +2512,26 @@ function RecipeEditor({
           ingredients: step.ingredients.filter((_, index) => index !== sheet.rowIndex),
         }));
       } else if ('name' in value) {
-        updateStep(sheet.stepIndex, (step) => {
+        // Replace the row and carry its reference role over to the new name in
+        // one draft update: pruning must not fire between the two changes, or
+        // the old name (the last thing that still matched) would be gone before
+        // the role could move.
+        const nextIngredient = value as Ingredient;
+        updateDraft((current) => {
+          const step = current.steps[sheet.stepIndex];
+          const previous = step?.ingredients[sheet.rowIndex];
+          if (step === undefined || previous === undefined) return current;
+          const steps = [...current.steps];
           const ingredients = [...step.ingredients];
-          ingredients[sheet.rowIndex] = value as Ingredient;
-          return { ...step, ingredients };
+          ingredients[sheet.rowIndex] = nextIngredient;
+          steps[sheet.stepIndex] = { ...step, ingredients };
+          const reference = referenceAfterRowRename(
+            current,
+            steps,
+            previous.name,
+            nextIngredient.name,
+          );
+          return { ...current, steps, ...(reference !== undefined ? { reference } : {}) };
         });
       }
     } else if (sheet.kind === 'inline') {
