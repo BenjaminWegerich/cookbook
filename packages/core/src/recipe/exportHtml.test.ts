@@ -13,6 +13,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { EN_SPACE, NNBSP, formatBQ, renderAQSDisplay } from '../additionalUnits.js';
+import { mappingsFor } from '../ingredientRegistry.js';
 import { escapeHtml } from './artifacts.js';
 import { parseRecipe } from './parse.js';
 import { yieldViewQuantities } from './yieldViews.js';
@@ -47,9 +48,41 @@ function amountHtml(
 }
 
 /**
+ * Escapes one arrangement text run and wraps the ingredient's displayed name in
+ * the row's bold run, exactly as the export does for master and step rows. The
+ * name is not linked here; the link tests below cover that markup.
+ */
+function emphasizeNameHtml(text: string, name: string): string {
+  const entry = mappingsFor(name);
+  const forms = [entry?.singular, entry?.plural, name]
+    .filter((form): form is string => form !== undefined && form !== '')
+    .sort((a, b) => b.length - a.length);
+  const isNameChar = (char: string | undefined): boolean =>
+    char !== undefined && /[\p{L}\p{N}]/u.test(char);
+  for (const form of forms) {
+    let from = 0;
+    for (;;) {
+      const index = text.indexOf(form, from);
+      if (index < 0) break;
+      const before = index === 0 ? undefined : text[index - 1];
+      const after = index + form.length >= text.length ? undefined : text[index + form.length];
+      if (!isNameChar(before) && !isNameChar(after)) {
+        return (
+          escapeHtml(text.slice(0, index)) +
+          `<strong class="ingredient-name">${escapeHtml(form)}</strong>` +
+          escapeHtml(text.slice(index + form.length))
+        );
+      }
+      from = index + 1;
+    }
+  }
+  return escapeHtml(text);
+}
+
+/**
  * The HTML of one amount line in the new row: the arrangement's text without
- * its final note, then that note in the quiet `.tail` column. The name is not
- * linked here; the link tests below cover that markup.
+ * its final note, then that note in the quiet `.tail` column, with the name in
+ * the bold `.ingredient-name` run.
  */
 function rowAmountHtml(name: string, value: number, bu: string): string {
   const display = renderAQSDisplay(name, value, bu);
@@ -57,7 +90,7 @@ function rowAmountHtml(name: string, value: number, bu: string): string {
   const tail = last?.kind === 'note' ? escapeHtml(last.value) : undefined;
   const body = (tail === undefined ? display.parts : display.parts.slice(0, -1))
     .map((part) => {
-      if (part.kind === 'text') return escapeHtml(part.value);
+      if (part.kind === 'text') return emphasizeNameHtml(part.value, name);
       return `${EN_SPACE}<span class="arrangement-note">${escapeHtml(part.value)}</span>`;
     })
     .join('');
@@ -138,7 +171,8 @@ prep_time: 5 min
     // Step rows show 1 Becher (500 g) and ½ Becher (250 g); the master sums
     // both the BQs (750 g) and the AQs (1 ½ Becher).
     expect(repeated).toContain(
-      `1${NNBSP}½${NNBSP}Becher Joghurt<span class="tail">750${NNBSP}g</span>`,
+      `1${NNBSP}½${NNBSP}Becher <strong class="ingredient-name">Joghurt</strong>` +
+        `<span class="tail">750${NNBSP}g</span>`,
     );
   });
 
@@ -149,6 +183,8 @@ prep_time: 5 min
       '.ingredient-text { flex: 1; min-width: 0; display: flow-root; overflow-wrap: anywhere; }',
     );
     expect(html).toContain('.tail { float: right; margin-inline-start: 0.5em;');
+    // Only the name is emphasized; the rest of the row keeps its weight.
+    expect(html).toContain('.ingredient-name { font-weight: 600; }');
     // The name is a link, not a pill: accent underline, accent on hover.
     expect(html).toContain('.name-link { position: relative; color: inherit;');
     expect(html).toContain('text-decoration-color: var(--accent);');
@@ -159,6 +195,23 @@ prep_time: 5 min
     // <label>, which would swallow the link's click.
     expect(html).toContain('aria-labelledby="t-c-s0-0"');
     expect(html).not.toContain('<label class="ingredient-text"');
+  });
+
+  it('bolds the ingredient name in the master and step rows only', () => {
+    // Both lists share the row renderer: the name is the row's one bold run,
+    // after the amount (which keeps its regular weight).
+    expect(html).toContain('Becher <strong class="ingredient-name">Joghurt</strong>');
+    expect(html).toContain('<strong class="ingredient-name">Tortillas</strong>');
+    expect(html).not.toMatch(/<strong class="ingredient-name">[^<]*\d/);
+    // The intro's reference readout stays plain.
+    const readout =
+      /<ul class="reference size-scoped" data-servings="6">([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? '';
+    expect(readout).toContain('Tortillas');
+    expect(readout).not.toContain('ingredient-name');
+    // Step prose stays plain, including its inline artifacts.
+    const prose = /<p class="step-text">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '';
+    expect(prose).toContain('Wasser');
+    expect(prose).not.toContain('ingredient-name');
   });
 
   it('links the name form the arrangement actually shows', () => {
@@ -176,8 +229,12 @@ prep_time: 5 min
       { Zwiebeln: 'https://drive.example/Zwiebeln.html' },
     );
     // The `Stück (ZE zuerst)` arrangement shows the singular `<INF>` form;
-    // the link has to wrap that word, not fail on the canonical plural.
+    // the link has to wrap that word, not fail on the canonical plural, and
+    // the whole linked name stays the row's one bold run.
     expect(singular).toContain('>Zwiebel</a>');
+    expect(singular).toMatch(
+      /<strong class="ingredient-name"><a class="name-link"[^>]*>Zwiebel<\/a><\/strong>/,
+    );
     // The singular must be a whole word, not a prefix of "Zwiebeln" with a
     // stray "n" left outside the anchor.
     expect(singular).not.toContain('>Zwiebel</a>n');
@@ -257,6 +314,8 @@ prep_time: 5 min
     expect(html).toContain(`href="${url}#menge=200ml"`);
     // Every size carries the three uses (master row + step row + artifact).
     expect(html.match(/class="name-link"/g)).toHaveLength(54);
+    // Only the two row uses are bold; the prose artifact keeps the plain link.
+    expect(html.match(/<strong class="ingredient-name"><a class="name-link"/g)).toHaveLength(36);
     // The visible name is the anchor text in the rows and in running prose;
     // no separate badge follows it.
     expect(html).toContain('>Béchamelsauce</a>');
@@ -284,6 +343,8 @@ prep_time: 5 min
   it('renders no sub-recipe links when no URLs are passed', () => {
     const plain = generateRecipeHtml(WRAPS);
     expect(plain).not.toContain('class="name-link"');
+    // The name is still bold in the rows; emphasis does not depend on a link.
+    expect(plain).toContain('<strong class="ingredient-name">Béchamelsauce</strong>');
     expect(plain).not.toContain('{{');
   });
 

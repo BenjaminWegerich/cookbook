@@ -408,18 +408,28 @@ function nameLink(text: string, name: string, href: string): string {
 
 /**
  * Escapes one text run and, with a URL, wraps the ingredient's displayed name
- * in the sub-recipe link. Without a URL (or when the name is not found as a
- * whole word) the run stays plain.
+ * in the sub-recipe link. `emphasizeName` additionally wraps that name in the
+ * bold `.ingredient-name` run — the cooking view's ingredient rows do this, so
+ * the name leads the row and the amounts stay quiet. Without a URL (or when the
+ * name is not found as a whole word) the run stays plain, but an emphasized
+ * name is still bold.
  */
-function textRunHtml(text: string, name: string | undefined, href: string | undefined): string {
-  if (name === undefined || href === undefined) return escapeHtml(text);
+function textRunHtml(
+  text: string,
+  name: string | undefined,
+  href: string | undefined,
+  emphasizeName: boolean,
+): string {
+  if (name === undefined) return escapeHtml(text);
   for (const form of ingredientNameForms(name)) {
     const index = wholeWordIndex(text, form);
     if (index < 0) continue;
+    const shown = href === undefined ? escapeHtml(form) : nameLink(form, name, href);
+    // The emphasis wraps the whole shown name, so a sub-recipe link stays one
+    // bold link instead of splitting its target across a nested tag.
+    const nameHtml = emphasizeName ? `<strong class="ingredient-name">${shown}</strong>` : shown;
     return (
-      escapeHtml(text.slice(0, index)) +
-      nameLink(form, name, href) +
-      escapeHtml(text.slice(index + form.length))
+      escapeHtml(text.slice(0, index)) + nameHtml + escapeHtml(text.slice(index + form.length))
     );
   }
   return escapeHtml(text);
@@ -431,13 +441,14 @@ function textRunHtml(text: string, name: string | undefined, href: string | unde
  * (`bare`, every list and readout) or with its brackets and a regular space
  * (`parenthesised`, step prose) — DESIGN §5.4 / §5.11. A text run whose
  * ingredient name is found becomes the sub-recipe link when `name`/`href` are
- * given.
+ * given; `emphasizeName` makes that name the row's bold run.
  */
 function partsHtml(
   parts: readonly ArrangementDisplayPart[],
   name: string | undefined,
   href: string | undefined,
   noteForm: 'bare' | 'parenthesised',
+  emphasizeName: boolean,
 ): string {
   return parts
     .map((part) => {
@@ -448,14 +459,14 @@ function partsHtml(
         }
         return ` <span class="arrangement-note">(${note})</span>`;
       }
-      return textRunHtml(part.value, name, href);
+      return textRunHtml(part.value, name, href, emphasizeName);
     })
     .join('');
 }
 
 /** Renders one arrangement display, notes lifted out (§5.4). */
 function arrangementHtml(display: ArrangementDisplay, noteForm: 'bare' | 'parenthesised'): string {
-  return partsHtml(display.parts, undefined, undefined, noteForm);
+  return partsHtml(display.parts, undefined, undefined, noteForm, false);
 }
 
 /**
@@ -495,6 +506,7 @@ function artifactHtml(
     name,
     href,
     'parenthesised',
+    false,
   );
 }
 
@@ -615,7 +627,7 @@ function renderIngredientRow(
 ): string {
   const { body, tail } = splitTail(display);
   const tailHtml = tail === undefined ? '' : `<span class="tail">${escapeHtml(tail)}</span>`;
-  const text = `${partsHtml(body, name, href, 'bare')}${tailHtml}`;
+  const text = `${partsHtml(body, name, href, 'bare', true)}${tailHtml}`;
   if (checkboxId === undefined) {
     return `  <li class="ingredient-row"><span class="ingredient-text">${text}</span></li>`;
   }
@@ -1604,6 +1616,9 @@ const STYLES = `
   /* The left text is the whole row; the note (if any) floats at its end. A
      flow-root contains the float, so the row height includes the dropped line. */
   .ingredient-text { flex: 1; min-width: 0; display: flow-root; overflow-wrap: anywhere; }
+  /* The ingredient name is the row's one bold run, so the eye can scan the
+     names while the amounts, units and notes keep the row's regular weight. */
+  .ingredient-name { font-weight: 600; }
   .check-row .ingredient-text { cursor: pointer; }
   .ingredient-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent);
                                            cursor: pointer; flex: none; }
