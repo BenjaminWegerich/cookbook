@@ -98,9 +98,10 @@ describe('renderAQS (optimizer-backed)', () => {
 
   it('renders half a spoon for the seed spoons', () => {
     // The spoons share the halves_and_integers_up_to_10 scheme, so their counts
-    // now include ½, 1½, … 9½ up to 10 (docs/additional_units.csv).
-    expect(renderAQS('Salz', 8, 'g')).toBe(`½${NB}EL Salz (8${NB}g)`);
-    expect(renderAQS('Salz', 2.5, 'g')).toBe(`½${NB}TL Salz (3${NB}g)`);
+    // include ½, 1½, … 9½ up to 10 (docs/additional_units.csv). The seed's
+    // spoons are 18 g (EL) and 6 g (TL), so half a spoon is 9 g / 3 g.
+    expect(renderAQS('Salz', 9, 'g')).toBe(`½${NB}EL Salz (9${NB}g)`);
+    expect(renderAQS('Salz', 3, 'g')).toBe(`½${NB}TL Salz (3${NB}g)`);
   });
 
   it('rejects a quarter of an unteilbar pack and shows the metric BQ', () => {

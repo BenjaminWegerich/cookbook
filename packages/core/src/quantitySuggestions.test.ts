@@ -41,6 +41,21 @@ const integerPack: OptimizableEntry = {
   entries: [{ au: 'Packung (unteilbar)', factor: 125, shoppingUnit: false }],
 };
 
+/**
+ * A package plus a spoon, for the “no package-vs-spoon rule” case. Kept as a
+ * local fixture so the test pins the algorithm, not one revision of the seed
+ * factors: at 250 g the 500 g Becher is exact and the 20 g spoon reads 10 EL
+ * (200 g), which is closer than the 350 g metric chip.
+ */
+const packageAndSpoon: OptimizableEntry = {
+  bu: 'g',
+  precision: 'medium',
+  entries: [
+    { au: 'Becher', factor: 500, shoppingUnit: true },
+    { au: 'Esslöffel', factor: 20, shoppingUnit: false },
+  ],
+};
+
 /** The ranking score of one suggestion, mirroring round 5. */
 function rank(suggestion: QuantitySuggestion): number {
   return (
@@ -108,7 +123,7 @@ describe('suggestQuantities', () => {
   });
 
   it('keeps a closer spoon at 250 g (no package-vs-spoon rule)', () => {
-    const suggestions = suggestQuantities(250, joghurt, 'g');
+    const suggestions = suggestQuantities(250, packageAndSpoon, 'g');
     expect(suggestions[0]?.value).toBe(250); // ½ Becher (250 g)
     const values = suggestions.map((suggestion) => suggestion.value);
     const spoon = suggestions.find((suggestion) => suggestion.value === 200);
@@ -129,7 +144,7 @@ describe('suggestQuantities', () => {
     // The same rule for the BE form, whose note holds the count.
     const grapefruit = suggestQuantities(200, mappingsFor('Grapefruitsaft'), 'ml');
     expect(grapefruit.find((suggestion) => suggestion.value === 200)?.display.text).toBe(
-      `200${NNBSP}ml (1${NNBSP}Stück)`,
+      `200${NNBSP}ml (1${NNBSP}¼${NNBSP}Stück)`,
     );
 
     // An ingredient without a Singular/Plural pair must not lose its unit

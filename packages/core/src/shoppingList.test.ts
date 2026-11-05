@@ -249,12 +249,12 @@ describe('shoppingRow', () => {
     );
   });
 
-  it('names whole pieces for an approximate shopping unit (Stück, 62.1 g)', () => {
-    // Carrots are bought by the piece, but a piece is only about 62.1 g (§6.3):
-    // 500 g needed → 9 pieces, while the line keeps the amount the dishes need
-    // (9 × 62.1 g is the approximate reading, 500 g the authoritative one).
+  it('names whole pieces for an approximate shopping unit (Stück, 70 g)', () => {
+    // Carrots are bought by the piece, but a piece is only about 70 g (§6.3):
+    // 500 g needed → 8 pieces, while the line keeps the amount the dishes need
+    // (8 × 70 g is the approximate reading, 500 g the authoritative one).
     expect(shoppingRow(need({ ingredient: 'Karotten', needed: 500 }), 0).text).toBe(
-      `9${NB}Karotten (500${NB}g)`,
+      `8${NB}Karotten (500${NB}g)`,
     );
   });
 
@@ -370,8 +370,8 @@ describe('buyAmount (the rounded-up "kaufen" default)', () => {
   });
 
   it('keeps the missing amount for an approximate shopping unit', () => {
-    // 500 g of carrots at about 62.1 g a piece → 9 pieces, but the authoritative
-    // amount stays the 500 g the dishes need (not 9 × 62.1 g).
+    // 500 g of carrots at about 70 g a piece → 8 pieces, but the authoritative
+    // amount stays the 500 g the dishes need (not 8 × 70 g).
     expect(buyAmount(need({ ingredient: 'Karotten', needed: 500 }), 0)).toBe(500);
   });
 
@@ -487,7 +487,7 @@ describe("suggestedStocks (the stock chips' suggested values)", () => {
 
   it('offers no package thresholds for an approximate shopping unit', () => {
     // Carrots are bought by the piece, but a stock is a weight: the suggestions
-    // are clean BQ amounts, not "n × 62.1 g" package thresholds.
+    // are clean BQ amounts, not "n × 70 g" package thresholds.
     const values = suggestedStocks(need({ ingredient: 'Karotten', needed: 500 }));
     expect(values[0]).toBe(0);
     expect(values[1]).toBe(500);
@@ -522,7 +522,7 @@ describe('suggestedSubRecipeStocks', () => {
 
 describe('shoppingUnitOf', () => {
   it('answers the shopping unit and its factor', () => {
-    // Flour is bought in 1000 g packs, carrots in pieces of about 62.1 g.
+    // Flour is bought in 1000 g packs, carrots in pieces of about 70 g.
     expect(shoppingUnitOf(need({ ingredient: 'Mehl', needed: 1200 }))).toMatchObject({
       au: { name: 'Packung (unteilbar)' },
       factor: 1000,
@@ -556,7 +556,7 @@ describe('needText', () => {
     expect(needText(need({ ingredient: 'Joghurt', needed: 600 }))).toBe(`600${NB}g Joghurt`);
     // An approximate unit names the count beside the authoritative amount.
     expect(needText(need({ ingredient: 'Karotten', needed: 500 }))).toBe(
-      `8${NB}Karotten (500${NB}g)`,
+      `7${NB}Karotten (500${NB}g)`,
     );
   });
 
@@ -582,8 +582,8 @@ describe('needText', () => {
 
 describe('stockCountText', () => {
   it('translates the stock into the shopping unit of an approximate one', () => {
-    // 500 g of carrots at about 62.1 g per piece is eight pieces.
-    expect(stockCountText(need({ ingredient: 'Karotten', needed: 800 }), 500)).toBe(`8${NB}Stück`);
+    // 500 g of carrots at about 70 g per piece is seven pieces.
+    expect(stockCountText(need({ ingredient: 'Karotten', needed: 800 }), 500)).toBe(`7${NB}Stück`);
     expect(stockCountText(need({ ingredient: 'Karotten', needed: 800 }), 0)).toBe(`0${NB}Stück`);
   });
 
@@ -591,7 +591,7 @@ describe('stockCountText', () => {
     // The scheme bounds what a *recipe* line may say (ten pieces), not how many
     // carrots are on the shelf.
     expect(stockCountText(need({ ingredient: 'Karotten', needed: 800 }), 2000)).toBe(
-      `32${NB}Stück`,
+      `28${NB}Stück`,
     );
   });
 
