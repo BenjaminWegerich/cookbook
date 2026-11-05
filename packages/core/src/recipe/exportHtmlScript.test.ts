@@ -194,6 +194,8 @@ interface Page {
   counter: ElementStub;
   /** The window's `popstate` listeners, so a test can deliver a browser Back. */
   popstate: ((event: unknown) => void)[];
+  /** Fires one of the document's touch listeners, as a finger would. */
+  touch: (type: 'touchstart' | 'touchend' | 'touchcancel', event: unknown) => void;
 }
 
 /** Scrapes the generated HTML into the stub page the script runs against. */
@@ -253,6 +255,9 @@ function buildPage(html: string, hash: string, injected?: string): Page {
   // Every check list's boxes, so the size-change reset can be observed.
   const allBoxes = checkLists.flatMap((list) => (list.boxes = [new ElementStub()]));
   const popstate: ((event: unknown) => void)[] = [];
+  // The script binds its touch listeners on the document; keep them so a test
+  // can drive a finger across the page.
+  const documentListeners: Record<string, ((event: unknown) => void)[]> = {};
   const document = {
     querySelectorAll: (selector: string): ElementStub[] => {
       switch (selector) {
@@ -318,7 +323,9 @@ function buildPage(html: string, hash: string, injected?: string): Page {
           return new ElementStub();
       }
     },
-    addEventListener: (): void => {},
+    addEventListener: (type: string, handler: (event: unknown) => void): void => {
+      (documentListeners[type] ??= []).push(handler);
+    },
   };
   const window = {
     location: { hash, search: '' },
@@ -341,6 +348,9 @@ function buildPage(html: string, hash: string, injected?: string): Page {
     stepTitle,
     counter,
     popstate,
+    touch: (type, event) => {
+      for (const handler of documentListeners[type] ?? []) handler(event);
+    },
   };
 }
 
@@ -377,6 +387,15 @@ function visibleSizes(recipe: Recipe, hash: string, injected?: string): (string 
   return page.checkLists
     .filter((list) => !list.hidden)
     .map((list) => list.getAttribute('data-servings') ?? list.getAttribute('data-yield'));
+}
+
+/**
+ * Drives one one-finger touch from (200, 300) and lifts it `dx` horizontally
+ * and `dy` vertically away, i.e. a swipe in the finger's direction of travel.
+ */
+function drag(page: Page, dx: number, dy = 0): void {
+  page.touch('touchstart', { touches: [{ clientX: 200, clientY: 300 }] });
+  page.touch('touchend', { changedTouches: [{ clientX: 200 + dx, clientY: 300 + dy }] });
 }
 
 const DISH: Recipe = parseRecipe(`---
@@ -501,6 +520,52 @@ describe('embedded script — the bar and the browser history (§6.6)', () => {
     expect(page.screens.zubereitung.hasClass('active')).toBe(true);
     expect(page.stepTitle.textContent).toBe('Schritt 1 von 1');
     expect(page.forwardButton.hidden).toBe(true);
+  });
+});
+
+describe('embedded script — swipe navigation (§6.6)', () => {
+  it('moves one node on a deliberate horizontal swipe', () => {
+    const page = runPage(DISH, '');
+    drag(page, -120);
+    expect(page.screens.zutaten.hasClass('active')).toBe(true);
+    drag(page, 120);
+    expect(page.screens.intro.hasClass('active')).toBe(true);
+  });
+
+  it('ignores a vertical scroll, even when the finger drifts sideways', () => {
+    const page = runPage(DISH, '');
+    // A long scroll up can carry 60px of sideways drift; the vertical travel
+    // dominates, so this is a scroll and must not navigate.
+    drag(page, 60, -400);
+    expect(page.screens.intro.hasClass('active')).toBe(true);
+  });
+
+  it('ignores a horizontal drag below the 48px threshold', () => {
+    const page = runPage(DISH, '');
+    drag(page, -47);
+    expect(page.screens.intro.hasClass('active')).toBe(true);
+  });
+
+  it('ignores a pinch-zoom gesture', () => {
+    const page = runPage(DISH, '');
+    page.touch('touchstart', {
+      touches: [
+        { clientX: 100, clientY: 300 },
+        { clientX: 300, clientY: 300 },
+      ],
+    });
+    // One finger of the pinch travels 120px; a multi-finger gesture is never
+    // a page swipe.
+    page.touch('touchend', { changedTouches: [{ clientX: 220, clientY: 300 }] });
+    expect(page.screens.intro.hasClass('active')).toBe(true);
+  });
+
+  it('drops a start the browser cancels, so no later end navigates', () => {
+    const page = runPage(DISH, '');
+    page.touch('touchstart', { touches: [{ clientX: 200, clientY: 300 }] });
+    page.touch('touchcancel', {});
+    page.touch('touchend', { changedTouches: [{ clientX: 80, clientY: 300 }] });
+    expect(page.screens.intro.hasClass('active')).toBe(true);
   });
 });
 

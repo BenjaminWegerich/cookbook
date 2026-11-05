@@ -1406,15 +1406,29 @@ const NAVIGATION_SCRIPT = `
     show(index, index > current ? 'forward' : 'back');
   });
 
-  // Swipe on every screen (not only the steps): left = forward, right = back.
-  var touchX = null;
-  document.addEventListener('touchstart', function (e) { touchX = e.touches[0].clientX; }, { passive: true });
-  document.addEventListener('touchend', function (e) {
-    if (touchX === null) { return; }
-    var dx = e.changedTouches[0].clientX - touchX;
-    if (Math.abs(dx) > 48) { (dx < 0 ? forward : back)(); }
-    touchX = null;
+  // Swipe on every screen (not only the steps): a deliberately horizontal drag
+  // left = forward, right = back. A finger that scrolls the page also drifts
+  // sideways, so the horizontal distance alone cannot decide: the drag must
+  // dominate the vertical one, or a scroll would navigate by accident. The
+  // start is also dropped for a multi-finger gesture (a pinch is never a page
+  // swipe) and on touchcancel (the browser took the touch over, e.g. for a
+  // scroll).
+  var touchStart = null;
+  document.addEventListener('touchstart', function (e) {
+    touchStart = e.touches.length === 1
+      ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      : null;
   }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (touchStart === null) { return; }
+    var touch = e.changedTouches[0];
+    var dx = touch.clientX - touchStart.x;
+    var dy = touch.clientY - touchStart.y;
+    touchStart = null;
+    if (Math.abs(dx) <= 48 || Math.abs(dx) <= Math.abs(dy)) { return; }
+    (dx < 0 ? forward : back)();
+  }, { passive: true });
+  document.addEventListener('touchcancel', function () { touchStart = null; }, { passive: true });
 
   // A check-list row is tappable as a whole to toggle the check; the sub-recipe
   // name link is the one exception (it opens the ingredient recipe, it never
