@@ -35,8 +35,15 @@
 
 import { parseDocument } from 'yaml';
 
-import { parseArtifactContent, parseIngredientPhrase, replaceArtifacts } from './artifacts.js';
+import { formatDecimal } from '../additionalUnits.js';
+import {
+  parseArtifactContent,
+  parseIngredientPhrase,
+  replaceArtifacts,
+  type SizeArtifact,
+} from './artifacts.js';
 import { isServingCount } from '../servingSizes.js';
+import { sizeMarkerFor } from '../sizeMarkers.js';
 import { parsePrecisionLevel, PRECISION_LEVELS, type PrecisionLevel } from '../precision.js';
 import { deriveIngredients } from './ingredientList.js';
 import { isHexColor, THEME_FONT_VALUES } from './theme.js';
@@ -294,7 +301,8 @@ function parsePhrase(
     return null;
   }
   checkPositiveQuantity(parsed.quantity, path, issues);
-  return parsed as Ingredient;
+  if (parsed.name === undefined || parsed.unit === undefined) return null;
+  return { name: parsed.name, quantity: parsed.quantity, unit: parsed.unit };
 }
 
 /**
@@ -521,6 +529,37 @@ function parseRow(line: string, path: string, issues: ValidationIssue[]): Ingred
 }
 
 /**
+ * Validates one size marker against the master data: the marker must exist,
+ * the written unit must match its canonical unit, and the written nominal size
+ * must be one of its physically available sizes. The count is already checked
+ * by the grammar (a positive integer).
+ */
+function checkSizeArtifact(artifact: SizeArtifact, path: string, issues: ValidationIssue[]): void {
+  const definition = sizeMarkerFor(artifact.marker);
+  if (definition === undefined) {
+    issues.push({
+      path,
+      message: `Unbekannter Größenmarker "${artifact.marker}". Bitte den Marker in den Stammdaten anlegen.`,
+    });
+    return;
+  }
+  if (artifact.unit !== definition.unit) {
+    issues.push({
+      path,
+      message: `Der Größenmarker "${artifact.marker}" erwartet die Einheit "${definition.unit}" (gefunden: "${artifact.unit}").`,
+    });
+  }
+  if (!definition.sizes.includes(artifact.size)) {
+    issues.push({
+      path,
+      message:
+        `Die Größe ${formatDecimal(artifact.size)} ist für "${artifact.marker}" nicht zulässig ` +
+        `(erlaubt: ${definition.sizes.map((size) => formatDecimal(size)).join(', ')}).`,
+    });
+  }
+}
+
+/**
  * Validates the artifacts of one step text and normalizes them to the
  * canonical family form (kg/l and German comma decimals → g/ml + '.',
  * unitless counts → AQ notation where possible, optional `|precision: high`.
@@ -536,11 +575,15 @@ function validateAndNormalizeText(text: string, path: string, issues: Validation
     if (parsed === null) {
       issues.push({
         path,
-        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}}, {{100}}, {{1/2}} oder {{1/2|precision: high}}).`,
+        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}}, {{1/2}} oder {{1 26 cm Backring|size}}).`,
       });
       continue;
     }
-    checkPositiveQuantity(parsed.quantity, path, issues);
+    if (parsed.kind === 'size') {
+      checkSizeArtifact(parsed, path, issues);
+    } else {
+      checkPositiveQuantity(parsed.quantity, path, issues);
+    }
   }
   // Normalization: rewrite every valid artifact to the canonical text form.
   return replaceArtifacts(text, (artifact) => artifact);

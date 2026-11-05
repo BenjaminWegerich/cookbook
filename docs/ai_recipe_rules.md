@@ -90,6 +90,7 @@ Schritte — sonst nichts:
   deine Ausgabe ist bereits kanonisch.
 - Jede Zeile und jede `{{…}}`-Angabe braucht eine positive Zahl; mit Einheit in g/ml, ohne
   Einheit eine Stückzahl (`{{1/2}}`, `{{1+1/4}}` oder `{{0.5}}`). Mengen im üblichen Rahmen.
+  Größenmarker sind die Ausnahme (siehe „Größenmarker“).
 
 ## Genauigkeit
 - Die **Genauigkeit** ist eine **Darstellungspräferenz**, kein Skalierungsfaktor: Sie
@@ -123,6 +124,19 @@ Schritte — sonst nichts:
   Zeilen vorkommen.
 - Prioritäten oder zusätzliche Einheiten an der Zeile gibt es nicht; die App wählt die
   Anzeige-Einheit selbst aus den Stammdaten.
+
+## Größenmarker
+- Ausrüstungsgrößen in der Schritt-Prosa: `{{1 26 cm Backring|size}}` oder
+  `{{2 20 cm Backring|size}}`. Sie zählen nicht als Zutaten und erscheinen nie in der
+  Zutatenliste.
+- Grammatik: `{{ ANZAHL GRÖSSE EINHEIT MARKER|size }}`. Die Anzahl ist eine ganze Zahl ab 1
+  und wird immer angezeigt, auch bei 1 (`1 26er Backring`).
+- Nur Marker aus den Stammdaten verwenden. Für `Backring` sind die Größen
+  `16, 18, 20, 22, 24, 26, 28, 30` zulässig; keine erfundenen Marker oder Größen.
+- Die Größe skaliert mit der Gesamtmenge nach der Skalierung des Markers. `Backring` ist
+  flächenskaliert: Der Durchmesser wächst mit der Quadratwurzel des Faktors, und oberhalb
+  der größten Form teilt die App in mehrere Kuchen.
+- Keine Genauigkeit am Größenmarker: `|precision` ist dort ungültig.
 
 ## Sammlung
 - `title` muss in der Sammlung eindeutig sein.

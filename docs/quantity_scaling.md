@@ -1,7 +1,8 @@
 # Quantity Scaling and Display Optimization
 
-> Defines how a recipe's ingredient amounts scale and how the app chooses the
-> displayed BQ/AQ representation. The scoring model is specified in
+> Defines how a recipe's ingredient amounts and display-only equipment sizes
+> scale, and how the app chooses the displayed BQ/AQ representation for amounts.
+> The scoring model is specified in
 > [recipe_scaling_algorithm.md](recipe_scaling_algorithm.md); this document
 > records the project-specific decisions, the master data and the integration
 > with the recipe format. Related documents:
@@ -257,9 +258,10 @@ factor = T / writtenSize
 V0'    = V0 × factor          // exact, no ladder step
 ```
 
-Every ingredient use and every inline artifact is scaled with the same factor.
-The optimizer runs on `V0'`; the stored recipe is never rewritten by viewing or
-exporting it.
+Every ingredient use and every quantity artifact is scaled with the same factor.
+A size marker uses the same factor but applies its marker's own scale law
+(“Size markers” below). The optimizer runs on `V0'`; the stored recipe is never
+rewritten by viewing or exporting it.
 
 ### Servings
 
@@ -278,6 +280,77 @@ are all allowed BQ values in the band `writtenYield / 10 … writtenYield × 10`
 The view the export opens on is the written yield when it is a BQ value,
 otherwise the allowed BQ nearest to it. The meal plan accepts only a baked view,
 so its link can always open exactly the size it promised.
+
+### Size markers
+
+A size marker is display-only equipment inside a step's prose, written as
+`{{ COUNT SIZE UNIT MARKER|size }}`:
+
+```
+{{1 26 cm Backring|size}}      one 26 cm ring
+{{2 20 cm Backring|size}}      the written recipe already uses two
+```
+
+The count is mandatory and always appears in the display, including 1: the
+renderer shows `1 26er Backring`, `2 22er Backringe`. The stored arrangement is
+the recipe's own equipment; every other serving count is derived.
+
+The master data lives in [size_markers.csv](size_markers.csv):
+
+| Column | Meaning |
+|---|---|
+| `Marker` | Canonical key used in the artifact, e.g. `Backring`. |
+| `Singular` / `Plural` | Display noun for a count of 1 / above 1. |
+| `Unit` | Canonical size unit, e.g. `cm`. |
+| `Scale` | How the size follows the quantity: `linear` (exponent 1), `area` (2), `volume` (3). |
+| `Sizes` | Physically available nominal sizes, ascending. The first and last entry bound the display. |
+| `Default` | Size a fresh marker starts with; must be one of `Sizes`. |
+| `Pattern` | Display template with `<N>`, `<SIZE>`, `<UNIT>` and `<INF>`. |
+
+`Backring` uses `Scale=area`: the batter quantity is proportional to the mold
+area, so a recipe scaled by `f` needs a diameter multiplied by `√f`, not by `f`.
+The resolver in `sizeMarkers.ts` derives the display from the written count `N0`
+and size `D0` (the largest allowed size is `Dmax`):
+
+```
+p      = 2 for area (1 linear, 3 volume)
+A      = f × N0 × D0^p
+N      = max(1, ceil(A / Dmax^p))
+Dideal = (A / N)^(1/p)
+D      = nearest(Sizes, Dideal)      // relative distance; tie → larger
+```
+
+- `f = 1` returns the written arrangement unchanged.
+- If `Dideal` is above the largest available size, `N` is the smallest number
+  of equal molds whose per-mold diameter fits; this is the “above 30 I use
+  multiple cakes” rule. The split is strict at the largest size.
+- If `Dideal` is below the smallest available size, one smallest mold is shown;
+  the batter is simply shallower.
+- The nominal size is the nearest allowed one by relative distance; a tie goes
+  to the larger size, mirroring the optimizer's higher-BQ tie-break.
+- The display always prints the count; `<INF>` selects the singular or plural
+  noun.
+
+Size markers have **no precision**: there is no BQ/AQ candidate to score and no
+target amount to display differently. A `|precision` suffix on a size marker is
+a validation error, not a silent no-op.
+
+Example with the 8-serving/26er cake and the even sizes `16 … 30`:
+
+| Requested servings | `f` | Derived display |
+|---|---:|---|
+| 8 (written) | 1 | `1 26er Backring` |
+| 10 | 1.25 | `1 30er Backring` |
+| 12 | 1.5 | `2 22er Backringe` |
+| 16 | 2 | `2 26er Backringe` |
+| 4 | 0.5 | `1 18er Backring` |
+| 2 | 0.25 | `1 16er Backring` (clamped) |
+
+A size marker never enters the ingredient list, the shopping list or the
+sub-recipe graph. Adding another marker with the same geometry is one row in
+[size_markers.csv](size_markers.csv); a new scaling law needs one enum value
+and one resolver branch. The current build loads the built-in seed;
+`setSizeMarkers()` is ready for a future collection master-data file.
 
 ## 8. Unitless inline artifacts
 
@@ -324,10 +397,12 @@ the cleanup task in [ROADMAP.md](ROADMAP.md).
 | Precision | `packages/core/src/precision.ts` |
 | Serving counts | `packages/core/src/servingSizes.ts` |
 | Display arrangements | `packages/core/src/additionalUnits.ts` |
+| Size markers | `packages/core/src/sizeMarkers.ts` (generated data: `sizeMarkersData.ts`) |
 | Shopping list arithmetic | `packages/core/src/shoppingList.ts` |
 | Sub-recipe cooking plan | `packages/core/src/subRecipePlan.ts` |
 | Export views | `packages/core/src/recipe/exportHtml.ts`, `yieldViews.ts` |
-| Data generators | `packages/core/scripts/generate-quantity-data.mjs`, `generate-additional-data.mjs` |
+| Data generators | `packages/core/scripts/generate-quantity-data.mjs`, `generate-additional-data.mjs`, `generate-size-markers.mjs` |
 
-Run `npm run generate:quantity` and `npm run generate:additional` from
-`packages/core` after changing the corresponding CSVs.
+Run `npm run generate:quantity`, `npm run generate:additional` and
+`npm run generate:size-markers` from `packages/core` after changing the
+corresponding CSVs.

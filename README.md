@@ -46,6 +46,12 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
   step's arrangement; repeated uses add up their displayed BQs exactly and, when all use
   the same additional unit, their AQs exactly; the master row takes the highest precision
   of its uses. See [quantity_scaling.md](docs/quantity_scaling.md) §6.
+- Display-only equipment sizes scale with the same recipe factor: `{{1 26 cm Backring|size}}`
+  becomes `2 22er Backringe` at 12 servings. The marker's `Scale` decides the law
+  (`area` for a cake ring: diameter × √factor); above the largest available size the display
+  splits into multiple cakes. The count is always shown, including at 1. See
+  [size_markers.csv](docs/size_markers.csv) and
+  [quantity_scaling.md](docs/quantity_scaling.md) §7, “Size markers”.
 
 ### 4. Layout & design
 
@@ -111,7 +117,8 @@ review. Keep the set self-contained and loadable when refreshing it.
 - [docs/CODING_CONVENTIONS.md](docs/CODING_CONVENTIONS.md) — binding style guidelines
 - [docs/ROADMAP.md](docs/ROADMAP.md) — open tasks and how they relate
 - [docs/storage_format.md](docs/storage_format.md) — canonical recipe file format (Markdown + YAML)
-- [docs/quantity_scaling.md](docs/quantity_scaling.md) — scaling, the BQ/AQ optimizer, precision and yield views
+- [docs/quantity_scaling.md](docs/quantity_scaling.md) — scaling, the BQ/AQ optimizer, precision, yield views and size markers
+- [docs/size_markers.csv](docs/size_markers.csv) — size-marker master data (marker key, scale, allowed sizes, display pattern)
 - [docs/additional_quantity_specifications.md](docs/additional_quantity_specifications.md) — how quantities are displayed (base + additional units)
 - [recipe_scaling_algorithm.md](docs/recipe_scaling_algorithm.md) — the scoring model behind the optimizer
 - [docs/ui_patterns.md](docs/ui_patterns.md) — reusable UI patterns (the snackbar)

@@ -102,6 +102,14 @@
   master ingredient list (an author writing "500 g Nudeln" as prose only, without
   a step row, keeps the noodle amount out of the list on purpose — e.g. water that
   is always in stock).
+- **Size markers are equipment, not ingredients.** A step may name a piece of
+  equipment whose size follows the recipe, e.g. `{{1 26 cm Backring|size}}`. The
+  stored count and size describe the recipe's own equipment; the display for
+  another serving count is derived (diameter × √factor for an area-scaled mold,
+  split into multiple molds above the largest available size). The marker never
+  appears in the ingredient list, the shopping list or a sub-recipe link, and it
+  has no precision. See [quantity_scaling.md](quantity_scaling.md) §7, “Size markers” and
+  [storage_format.md](storage_format.md) §4.
 - Recipes may define any number of reference ingredients — 0, 1, or all of them. Example (finished dish): "6 Personen (700 g Nudeln)"; example (ingredient recipe): "500 ml (300 ml Milch)".
 - A reference ingredient anchors the recipe's size: for a finished dish, how much of a key ingredient belongs to the specified number of servings; for an ingredient recipe, how much of a key ingredient the stated yield contains. When the recipe is scaled, the reference ingredient's amount moves by the same exact factor and the result is displayed as a sanity check for the user. Example: scaling the finished dish above from 6 to 9 people (factor 1.5) makes the noodle target 1050 g; the display optimizer shows its practical reading (e.g. "1 kg Nudeln").
 - The reference role is a property of the **master list** only: it is set by name in the read-only master view (★ toggle, available for both recipe types), never on a step row or artifact (see [storage_format.md](storage_format.md) §4). Renaming the last row that carries a reference name moves the role to the new name; removing that row drops the role — a reference without a matching row is invalid (the toggle lives only on an existing master row).
@@ -117,5 +125,6 @@
     reorder or remove rows; quantities are changed there, never in the master
     list);
   - the prose is free text that may reference ingredients by name as plain words
-    and may contain display-only inline artifacts for scaled quantities.
+    and may contain display-only inline artifacts for scaled quantities or
+    equipment sizes.
 - There is no summary; the recipe ends with the last step. However, this step may include serving suggestions.

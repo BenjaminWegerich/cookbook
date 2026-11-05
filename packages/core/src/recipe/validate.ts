@@ -31,7 +31,9 @@ function usedIngredientNames(recipe: Recipe): Set<string> {
       names.add(ingredient.name);
     }
     for (const span of splitArtifacts(step.text).spans) {
-      if (span.artifact.name !== undefined) names.add(span.artifact.name);
+      if (span.artifact.kind === 'quantity' && span.artifact.name !== undefined) {
+        names.add(span.artifact.name);
+      }
     }
   }
   return names;

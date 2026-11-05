@@ -76,7 +76,7 @@ export function renameRecipeInCollection(
       return { ...ingredient, name: newTitle };
     });
     const text = replaceArtifacts(step.text, (artifact) => {
-      if (artifact.name !== oldTitle) return artifact;
+      if (artifact.kind !== 'quantity' || artifact.name !== oldTitle) return artifact;
       changed = true;
       return { ...artifact, name: newTitle };
     });

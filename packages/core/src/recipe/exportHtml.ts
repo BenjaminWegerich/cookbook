@@ -84,9 +84,10 @@ import { optimizeUnitless } from '../quantityOptimizer.js';
 import { suggestQuantities } from '../quantitySuggestions.js';
 import { nearestAllowedBQ, previousAllowedBQ } from '../quantityValues.js';
 import { SERVING_COUNTS } from '../servingSizes.js';
+import { resolveSizeMarker, sizeMarkerFallbackText } from '../sizeMarkers.js';
 import type { PrecisionContext } from '../precision.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
-import type { TextArtifact } from './artifacts.js';
+import type { QuantityArtifact, TextArtifact } from './artifacts.js';
 import { masterUsesFor } from './masterQuantity.js';
 import {
   PLAN_FRAGMENT_SERVINGS,
@@ -347,7 +348,7 @@ function ingredientContext(ingredient: Ingredient): PrecisionContext {
 }
 
 /** The precision context of an inline artifact in a recipe. */
-function artifactContext(artifact: TextArtifact): PrecisionContext {
+function artifactContext(artifact: QuantityArtifact): PrecisionContext {
   return {
     ...(artifact.precision !== undefined ? { quantity: artifact.precision } : {}),
   };
@@ -715,6 +716,12 @@ function renderStep(
   // an ingredient recipe makes its name the sub-recipe link, exactly as in the
   // rows; the note keeps its brackets and regular space as prose (§5.11).
   const text = renderArtifacts(step.text, (artifact: TextArtifact) => {
+    if (artifact.kind === 'size') {
+      // The marker's own written arrangement is the fallback for a draft whose
+      // master data is missing; a parsed canonical recipe always resolves.
+      const resolved = resolveSizeMarker(artifact, factor);
+      return escapeHtml(resolved === undefined ? sizeMarkerFallbackText(artifact) : resolved.text);
+    }
     return artifactHtml(
       artifact.name,
       artifact.quantity * factor,

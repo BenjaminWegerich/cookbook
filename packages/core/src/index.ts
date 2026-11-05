@@ -9,6 +9,8 @@
  * - additional-unit display — implemented (docs/additional_quantity_specifications.md,
  *   src/additionalUnits.ts; master data in docs/*.csv, compiled by
  *   scripts/generate-additional-data.mjs)
+ * - display-only equipment sizes — implemented (src/sizeMarkers.ts; master data
+ *   in docs/size_markers.csv, compiled by scripts/generate-size-markers.mjs)
  * - ingredient and shopping master data parsing — implemented
  *   (docs/storage_format.md §9/§10, src/ingredientCsv.ts +
  *   src/shoppingRouteCsv.ts: route, item table and synonym table)
@@ -32,6 +34,8 @@ export * from './quantityValues.js';
 export * from './quantityOptimizer.js';
 export * from './quantitySuggestions.js';
 export * from './servingSizes.js';
+export * from './sizeMarkers.js';
+export * from './sizeMarkersData.js';
 export * from './precision.js';
 export * from './ingredientCsv.js';
 export * from './ingredientRegistry.js';

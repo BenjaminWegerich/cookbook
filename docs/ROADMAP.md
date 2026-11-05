@@ -56,6 +56,10 @@ Keep integration is a follow-up milestone. Sharing builds on the web app and the
       until the recipe is saved or the ingredient is edited in the app. Decide the detection
       (file mtime vs a stored diff) and the scope (affected recipes vs every stale export)
       before building.
+- [ ] Load the size-marker master data from the collection's `Stammdaten/` folder like the
+      ingredient files. The current build seeds from `docs/size_markers.csv`;
+      `setSizeMarkers()` in `packages/core/src/sizeMarkers.ts` is the runtime seam. Decide the
+      Drive file name/shape and whether the editor gets a marker-management sheet.
 
 ### Design system: follow-ups from the DESIGN.md compliance pass
 

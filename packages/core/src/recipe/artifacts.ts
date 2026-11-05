@@ -9,6 +9,7 @@
  *   {{1500 ml Wasser}}          ingredient mention (name after the unit)
  *   {{100 g}}                   quantity-only mention
  *   {{100}}                     quantity-only mention without a unit
+ *   {{1 26 cm Backring|size}}   size marker (equipment, display-only)
  *
  * A name always requires a unit (so `{{100 Teig}}` is never ambiguous); a
  * quantity-only mention may omit it (unitless count).
@@ -22,6 +23,11 @@
  * (comma → dot, kg/l → g/ml ×1000) so the in-memory model and every
  * downstream writer are canonical.
  *
+ * A size marker is the third artifact kind: display-only equipment whose
+ * nominal size follows the recipe quantity. It stores the written arrangement
+ * (`count`, `size`, marker key) and is resolved by ../sizeMarkers.ts; it never
+ * enters an ingredient list and deliberately has no precision.
+ *
  * Artifacts never carry a reference flag and never link a sub-recipe
  * explicitly: when the name equals the title of an `ingredient_recipe` it *is*
  * that sub-recipe (implicit link, §4). An ingredient mention renders with the
@@ -34,10 +40,14 @@
 import { aqNotation, isAQValue } from '../aqLadder.js';
 import { formatStoredNumber } from '../quantityValues.js';
 import { parsePrecisionLevel, type PrecisionLevel } from '../precision.js';
-import type { Ingredient, Unit } from './types.js';
+import type { Unit } from './types.js';
 
-/** One parsed inline artifact (ingredient or quantity-only mention). */
-export interface TextArtifact {
+/**
+ * A quantity artifact (`{{1500 ml Wasser}}`, `{{100 g}}`, `{{1/2}}`). The
+ * optional precision is the quantity-level override of the precision cascade.
+ */
+export interface QuantityArtifact {
+  kind: 'quantity';
   /** Unrounded target amount; any positive finite number. */
   quantity: number;
   /**
@@ -55,6 +65,43 @@ export interface TextArtifact {
    * count has none and uses the internal neutral level.
    */
   precision?: PrecisionLevel;
+}
+
+/**
+ * A size marker (`{{1 26 cm Backring|size}}`) — display-only equipment whose
+ * nominal size follows the recipe quantity with the marker's own scaling law.
+ * It carries no precision: there is no BQ/AQ candidate to score.
+ */
+export interface SizeArtifact {
+  kind: 'size';
+  /** Canonical marker key (e.g. `Backring`). */
+  marker: string;
+  /** Written count of molds; a positive integer. */
+  count: number;
+  /** Written nominal size of one mold, in the marker's unit. */
+  size: number;
+  /** Unit as written (e.g. `cm`); the marker definition owns the canonical unit. */
+  unit: string;
+}
+
+/** One parsed inline artifact: a quantity or a size marker. */
+export type TextArtifact = QuantityArtifact | SizeArtifact;
+
+/** A parsed amount-first phrase, before it is classified as an artifact. */
+export interface ParsedQuantityPhrase {
+  quantity: number;
+  unit?: Unit;
+  name?: string;
+}
+
+/** True when the artifact is a size marker. */
+export function isSizeArtifact(artifact: TextArtifact): artifact is SizeArtifact {
+  return artifact.kind === 'size';
+}
+
+/** True when the artifact is a quantity artifact. */
+export function isQuantityArtifact(artifact: TextArtifact): artifact is QuantityArtifact {
+  return artifact.kind === 'quantity';
 }
 
 /** A validated artifact with its character span inside the step text. */
@@ -90,6 +137,16 @@ const PHRASE_RE =
   /^\s*(\d+\s*\/\s*\d+|\d+(?:[.,]\d+)?(?:\s*\+\s*\d+\s*\/\s*\d+)?)\s*(kg|ml|l|g)?\s*([^{}]*)$/;
 
 /**
+ * The size-marker grammar: `{{ COUNT SIZE UNIT MARKER|size }}`, e.g.
+ * `{{1 26 cm Backring|size}}` or `{{2 20 cm Backring|size}}`. The count is
+ * always present — the display always shows it, including 1 — so the numbers
+ * cannot be confused and the stored form states the written arrangement
+ * explicitly. The unit is a free token; the marker definition validates it
+ * against its canonical unit.
+ */
+const SIZE_PHRASE_RE = /^\s*(\d+)\s+(\d+(?:[.,]\d+)?)\s+([^\s{}|]+)\s+([^{}|]+?)\s*$/;
+
+/**
  * Parses an amount written as an integer, a decimal (`.` or German `,`), a
  * fraction (`1/3`) or a mixed number (`1+1/4`) into its numeric value. Optical
  * spaces around `/` and `+` are tolerated. A zero denominator yields Infinity,
@@ -118,12 +175,12 @@ function parseAmount(raw: string): number {
  * @param phrase the phrase, e.g. `1500 ml Wasser`, `100 g`, `100`, `1,5 l Wasser`,
  *   `1/2` or `1+1/4`
  * @param requireName when true (rows), a phrase without a name is invalid
- * @returns the canonical ingredient/artifact, or null
+ * @returns the canonical phrase, or null
  */
 export function parseIngredientPhrase(
   phrase: string,
   requireName = false,
-): Ingredient | TextArtifact | null {
+): ParsedQuantityPhrase | null {
   const match = PHRASE_RE.exec(phrase);
   if (match === null) return null;
   const rawQuantity = parseAmount(match[1]!);
@@ -149,21 +206,58 @@ export function parseIngredientPhrase(
 }
 
 /**
- * Parses one `{{ … }}` content into an artifact, including the optional
- * trailing `|precision: high` precision suffix.
- * Returns null when the phrase is invalid or the level unknown; the caller
- * reports it as a malformed artifact.
+ * Parses the phrase part of a size artifact (`1 26 cm Backring`). Returns null
+ * for a missing count, a non-positive/non-integer count, a non-positive size,
+ * or an empty unit/marker. Marker existence and the allowed size list are
+ * checked by the recipe validator, which can report a precise issue.
+ */
+export function parseSizePhrase(phrase: string): SizeArtifact | null {
+  const match = SIZE_PHRASE_RE.exec(phrase);
+  if (match === null) return null;
+  const count = Number(match[1]);
+  const size = Number(match[2]!.replace(',', '.'));
+  const marker = match[4]!.trim();
+  if (!Number.isSafeInteger(count) || count < 1) return null;
+  if (!Number.isFinite(size) || size <= 0) return null;
+  if (marker === '') return null;
+  return {
+    kind: 'size',
+    marker,
+    count,
+    size,
+    unit: match[3]!,
+  };
+}
+
+/**
+ * Parses one `{{ … }}` content into an artifact.
+ *
+ * Two suffix forms exist:
+ * - `|size` marks a size marker (`{{1 26 cm Backring|size}}`), whose phrase is
+ *   the count/size/unit/marker grammar above;
+ * - `|precision: high` marks the optional quantity-level precision of a
+ *   quantity artifact.
+ *
+ * Returns null when the phrase is invalid, the precision level is unknown, or
+ * a size marker also carries a precision suffix (a size marker has no
+ * precision). The caller reports it as a malformed artifact.
  */
 export function parseArtifactContent(content: string): TextArtifact | null {
+  const sizeMatch = /\|\s*size\s*$/i.exec(content);
+  if (sizeMatch !== null) {
+    const phrase = content.slice(0, sizeMatch.index).trimEnd();
+    return parseSizePhrase(phrase);
+  }
+
   const precisionMatch = /\|precision:\s*([^|}]*)\s*$/i.exec(content);
   const phrase =
     precisionMatch === null ? content : content.slice(0, precisionMatch.index).trimEnd();
   const parsed = parseIngredientPhrase(phrase);
   if (parsed === null) return null;
-  if (precisionMatch === null) return parsed;
+  if (precisionMatch === null) return { kind: 'quantity', ...parsed };
   const precision = parsePrecisionLevel(precisionMatch[1]!);
   if (precision === undefined) return null;
-  return { ...parsed, precision };
+  return { kind: 'quantity', ...parsed, precision };
 }
 
 /**
@@ -176,8 +270,17 @@ export function parseArtifactContent(content: string): TextArtifact | null {
  * back to its plain numeric form so normalization never crashes; the parser
  * reports the value as invalid separately. Weighted and named artifacts keep
  * the family-unit decimal form (`{{1500 ml Wasser}}`).
+ *
+ * A size marker always writes its explicit count and the `|size` suffix:
+ * `{{1 26 cm Backring|size}}`.
  */
 export function artifactToText(artifact: TextArtifact): string {
+  if (artifact.kind === 'size') {
+    return (
+      `{{${artifact.count} ${formatStoredNumber(artifact.size)} ` +
+      `${artifact.unit} ${artifact.marker}|size}}`
+    );
+  }
   const base =
     artifact.unit === undefined
       ? isAQValue(artifact.quantity)
@@ -193,9 +296,9 @@ export function artifactToText(artifact: TextArtifact): string {
 /**
  * Splits a step text into prose segments and validated artifact spans (in
  * order). Every `{{ … }}` block is classified: a block whose content parses as
- * a natural amount phrase becomes an artifact; anything else is kept as prose
- * text — the validator (./parse.ts) rejects such blocks before they reach the
- * editor, so a block is never silently dropped here.
+ * a quantity phrase or a `|size` marker becomes an artifact; anything else is
+ * kept as prose text — the validator (./parse.ts) rejects such blocks before
+ * they reach the editor, so a block is never silently dropped here.
  */
 export function splitArtifacts(text: string): { segments: TextSegment[]; spans: ArtifactSpan[] } {
   const segments: TextSegment[] = [];

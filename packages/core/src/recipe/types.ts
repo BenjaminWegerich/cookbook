@@ -59,9 +59,10 @@ export interface Ingredient {
  * The step rows are the source of truth for the recipe's ingredient list — the
  * master list is *derived* from the rows of all steps (./ingredientList.ts).
  * The text is prose that may contain inline display-only artifacts
- * (./artifacts.ts): `{{1500 ml Wasser}}` (ingredient mention) and `{{100 g}}`
- * (quantity mention). Artifacts scale with the serving count but are never
- * counted toward any ingredient list.
+ * (./artifacts.ts): `{{1500 ml Wasser}}` (ingredient mention), `{{100 g}}`
+ * (quantity mention) and `{{1 26 cm Backring|size}}` (equipment size). Artifacts
+ * scale with the serving count but are never counted toward any ingredient
+ * list.
  */
 export interface Step {
   /** The step's own counted ingredients, in order of use within the step. */

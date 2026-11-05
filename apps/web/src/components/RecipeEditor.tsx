@@ -8,8 +8,8 @@
  *   the derived master list (order of first use, duplicates merged with the
  *   total, storage_format.md §4);
  * - the step text is free prose; display-only inline artifacts ("Zutat oder
- *   Menge zum Text hinzufügen") scale with the serving count but are never
- *   counted;
+ *   Menge zum Text hinzufügen" / "Größe zum Text hinzufügen") scale with the
+ *   serving count but are never counted;
  * - the master list (Zutaten section) is read-only except for the reference
  *   role, which can only be set there (both recipe types, no limit) — step rows
  *   do not show it. The role is stored as a name, so renaming the last row of a
@@ -92,7 +92,9 @@ import {
   type Recipe,
   type RecipeTheme,
   type Step,
+  type QuantityArtifact,
   type ShoppingStop,
+  type SizeArtifact,
   type TextArtifact,
   type ValidationIssue,
 } from '@cookbook/core';
@@ -150,6 +152,7 @@ import {
   type IngredientMasterSheetUpdate,
 } from './ingredientMasterUpdate';
 import StepEditor, { type StepEditorHandle } from './StepEditor';
+import SizeMarkerSheet from './SizeMarkerSheet';
 import QuantityInput from './QuantityInput';
 import ArrangementLine from './ArrangementLine';
 import { safeRenderAQSDisplay, safeRenderMasterAQSDisplay } from './ingredientDisplay';
@@ -302,12 +305,14 @@ function baselineDraftFor(target: StoredRecipe | null, initialDraft?: Recipe): E
 function toTextArtifact(value: SheetResult): TextArtifact {
   return 'name' in value
     ? {
+        kind: 'quantity',
         name: value.name,
         quantity: value.quantity,
         unit: value.unit ?? 'g',
         ...(value.precision !== undefined ? { precision: value.precision } : {}),
       }
     : {
+        kind: 'quantity',
         quantity: value.quantity,
         ...(value.unit !== undefined ? { unit: value.unit } : {}),
         ...(value.precision !== undefined ? { precision: value.precision } : {}),
@@ -332,6 +337,7 @@ function unknownIngredientNames(
     for (const segment of splitArtifacts(step.text).segments) {
       if (
         segment.type === 'artifact' &&
+        segment.artifact.kind === 'quantity' &&
         segment.artifact.name !== undefined &&
         !isKnown(segment.artifact.name)
       ) {
@@ -352,6 +358,7 @@ function unknownMentionNames(text: string, isKnown: (name: string) => boolean): 
   for (const segment of splitArtifacts(text).segments) {
     if (
       segment.type === 'artifact' &&
+      segment.artifact.kind === 'quantity' &&
       segment.artifact.name !== undefined &&
       !isKnown(segment.artifact.name)
     ) {
@@ -441,7 +448,12 @@ type SheetState =
   | { kind: 'row-add'; stepIndex: number }
   | { kind: 'row-edit'; stepIndex: number; rowIndex: number }
   | { kind: 'inline'; stepIndex: number; insertAt: number }
-  | { kind: 'inline-edit'; stepIndex: number; at: number; artifact: TextArtifact };
+  | { kind: 'inline-edit'; stepIndex: number; at: number; artifact: QuantityArtifact };
+
+/** One size-marker sheet session (separate from the quantity sheet). */
+type SizeSheetState =
+  | { kind: 'size-add'; stepIndex: number; insertAt: number }
+  | { kind: 'size-edit'; stepIndex: number; at: number; artifact: SizeArtifact };
 
 /** A queued photo change, applied on Speichern (§2). */
 type PhotoChange = { kind: 'set'; blob: Blob; extension: 'jpg' | 'png' } | { kind: 'remove' };
@@ -1373,6 +1385,8 @@ function RecipeEditor({
    */
   const [generatingTheme, setGeneratingTheme] = useState(false);
   const [sheet, setSheet] = useState<SheetState | null>(null);
+  /** Size-marker sheet; mutually exclusive with the quantity sheet. */
+  const [sizeSheet, setSizeSheet] = useState<SizeSheetState | null>(null);
   /** Create-master-data sheet (opened from the ingredient sheet). */
   const [createSheet, setCreateSheet] = useState<{ name: string } | null>(null);
   const [createSaving, setCreateSaving] = useState(false);
@@ -2554,6 +2568,21 @@ function RecipeEditor({
     setSheetPrefill(null);
   };
 
+  /** Applies the size-marker sheet: insert at the caret or replace in place. */
+  const handleSizeConfirm = (artifact: SizeArtifact, action: 'add' | 'update'): void => {
+    if (sizeSheet === null) return;
+    if (action === 'add' && sizeSheet.kind === 'size-add') {
+      stepEditorRefs.current[sizeSheet.stepIndex]?.insertArtifact(artifact, sizeSheet.insertAt);
+    } else if (action === 'update' && sizeSheet.kind === 'size-edit') {
+      stepEditorRefs.current[sizeSheet.stepIndex]?.replaceArtifact(
+        artifact,
+        sizeSheet.at,
+        artifactToText(sizeSheet.artifact).length,
+      );
+    }
+    setSizeSheet(null);
+  };
+
   /**
    * Persists a new ingredient to the Drive master data. On success the create
    * sheet closes and the ingredient sheet re-opens (restore target) — with
@@ -2636,16 +2665,35 @@ function RecipeEditor({
     guard.reset();
   }, [guard]);
 
+  /** Closes the size-marker sheet without applying it. */
+  const handleCloseSizeSheet = useCallback((): void => {
+    setSizeSheet(null);
+    guard.reset();
+  }, [guard]);
+
   /**
    * Opens the ingredient sheet. Opening disarms a standing discard question:
    * the user is working inside the editor again, so the next exit must ask fresh
    * instead of discarding (this is the leak the shared guard closes — the
-   * confirmation used to survive a sheet).
+   * confirmation used to survive a sheet). The two sheet families are mutually
+   * exclusive.
    */
   const openSheet = useCallback(
     (next: SheetState): void => {
       guard.reset();
+      setSizeSheet(null);
       setSheet(next);
+    },
+    [guard],
+  );
+
+  /** Opens the size-marker sheet, closing the quantity sheet if needed. */
+  const openSizeSheet = useCallback(
+    (next: SizeSheetState): void => {
+      guard.reset();
+      setSheet(null);
+      setSheetPrefill(null);
+      setSizeSheet(next);
     },
     [guard],
   );
@@ -2766,6 +2814,10 @@ function RecipeEditor({
         handleCreateClose();
         return true;
       }
+      if (sizeSheet !== null) {
+        handleCloseSizeSheet();
+        return true;
+      }
       if (sheet !== null) {
         handleCloseSheet();
         return true;
@@ -2779,18 +2831,21 @@ function RecipeEditor({
       masterEditName,
       createSheet,
       sheet,
+      sizeSheet,
       guard,
       executeLeave,
       handleCreateClose,
       handleCloseSheet,
+      handleCloseSizeSheet,
       handleMasterEditClose,
     ],
   );
 
   // Escape is the keyboard equivalent of the browser Back button and follows
   // the same layer order as notifyBack below (master-data sheet, create sheet,
-  // ingredient sheet, then the discard confirmation). Only the visible level listens: the levels
-  // below stay mounted (hidden) and must not react.
+  // size-marker sheet, ingredient sheet, then the discard confirmation). Only
+  // the visible level listens: the levels below stay mounted (hidden) and must
+  // not react.
   useEscapeTrigger(() => void requestLeave('escape'), visible);
 
   // Ctrl+S is the keyboard equivalent of the „Speichern" button. It belongs to
@@ -2803,6 +2858,7 @@ function RecipeEditor({
     () => void handleSave(),
     visible &&
       sheet === null &&
+      sizeSheet === null &&
       createSheet === null &&
       masterEditName === null &&
       recovery === null &&
@@ -3787,9 +3843,13 @@ function RecipeEditor({
                 onChange={(next) =>
                   updateStep(stepIndex, (current) => ({ ...current, text: next }))
                 }
-                onArtifactEdit={(artifact, at) =>
-                  openSheet({ kind: 'inline-edit', stepIndex, at, artifact })
-                }
+                onArtifactEdit={(artifact, at) => {
+                  if (artifact.kind === 'size') {
+                    openSizeSheet({ kind: 'size-edit', stepIndex, at, artifact });
+                  } else {
+                    openSheet({ kind: 'inline-edit', stepIndex, at, artifact });
+                  }
+                }}
                 onEnterNext={() => {
                   // Enter advances to the next step's text (phone keyboard
                   // "next"); the last step hands back to the form.
@@ -3815,25 +3875,43 @@ function RecipeEditor({
                     {issue.message}
                   </p>
                 ))}
-              {/* A quiet text button (§5.1), not an Add button: the step's text
-                  is the primary input, and this only annotates it, so it must
-                  not compete with the olive creation buttons above it. It
-                  opens the inline sheet that inserts a quantity — and, where
-                  wanted, the ingredient name — at the caret. */}
-              <button
-                type="button"
-                className="text-button step-text-add"
-                onClick={() =>
-                  openSheet({
-                    kind: 'inline',
-                    stepIndex,
-                    insertAt: stepEditorRefs.current[stepIndex]?.caretOffset() ?? step.text.length,
-                  })
-                }
-              >
-                <PlusIcon className="button-icon" optical={20} />
-                <span>Zutat oder Menge zum Text hinzufügen</span>
-              </button>
+              {/* Two quiet text buttons (§5.1), not Add buttons: the step's
+                  text is the primary input, and these only annotate it, so
+                  they must not compete with the olive creation buttons above.
+                  They insert a quantity/ingredient mention or an equipment
+                  size at the caret. */}
+              <div className="step-text-actions">
+                <button
+                  type="button"
+                  className="text-button step-text-add"
+                  onClick={() =>
+                    openSheet({
+                      kind: 'inline',
+                      stepIndex,
+                      insertAt:
+                        stepEditorRefs.current[stepIndex]?.caretOffset() ?? step.text.length,
+                    })
+                  }
+                >
+                  <PlusIcon className="button-icon" optical={20} />
+                  <span>Zutat oder Menge zum Text hinzufügen</span>
+                </button>
+                <button
+                  type="button"
+                  className="text-button step-text-add"
+                  onClick={() =>
+                    openSizeSheet({
+                      kind: 'size-add',
+                      stepIndex,
+                      insertAt:
+                        stepEditorRefs.current[stepIndex]?.caretOffset() ?? step.text.length,
+                    })
+                  }
+                >
+                  <PlusIcon className="button-icon" optical={20} />
+                  <span>Größe zum Text hinzufügen</span>
+                </button>
+              </div>
             </section>
           );
         })}
@@ -4064,6 +4142,14 @@ function RecipeEditor({
             }}
           />
         </div>
+      )}
+      {sizeSheet !== null && (
+        <SizeMarkerSheet
+          mode={sizeSheet.kind === 'size-add' ? 'add' : 'edit'}
+          initial={sizeSheet.kind === 'size-edit' ? sizeSheet.artifact : undefined}
+          onConfirm={handleSizeConfirm}
+          onClose={handleCloseSizeSheet}
+        />
       )}
       {createSheet !== null && (
         <NewIngredientSheet

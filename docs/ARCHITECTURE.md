@@ -3,7 +3,7 @@
 > **Status:** v1 foundation and the recipe-management UI (Phase 2) implemented. The web app
 > (React + TypeScript on Vite, hosted on GitHub Pages) reads and writes the canonical
 > Markdown + YAML files (Google Drive OAuth), and the core logic module provides
-> deterministic scaling, the additional-unit display and the recipe format parsing. The
+> deterministic scaling, the additional-unit display, the size-marker display and the recipe format parsing. The
 > recipe editor uses the per-step ingredient model: every step has its own counted
 > ingredient rows above a free-prose text, and the master ingredient list is derived from
 > the rows (the step text may contain display-only inline artifacts for scaled
@@ -71,6 +71,13 @@
   shopping flag; no priority) are compiled into
   `packages/core/src/additionalUnitsData.ts` via
   `npm run generate:additional` (`scripts/generate-additional-data.mjs`).
+- Size-marker display logic (see [quantity_scaling.md](quantity_scaling.md) §7, “Size markers”):
+  `docs/size_markers.csv` (marker key, display forms, scale, allowed sizes,
+  default and pattern) is compiled into `packages/core/src/sizeMarkersData.ts`
+  via `npm run generate:size-markers` (`scripts/generate-size-markers.mjs`);
+  `sizeMarkers.ts` resolves the written arrangement at a recipe factor (area
+  scaling, the split above the largest size and the nearest-size rule) and
+  formats the display text.
 - The legacy AQ bridge (`packages/core/src/aqLadder.ts`) still backs the
   nearest-AQ display helpers in `additionalUnits.ts`; the recipe and shopping
   code use the optimizer and BQ/AQ tables directly. The old ladder modules
@@ -95,7 +102,9 @@
   `resolveSubRecipePlan` adds the invalidation rule: a row whose requirement moved
   away from the acknowledged one loses its stock and marks the rows below it in turn.
 - Recipe format parsing and validation
-  (see [storage_format.md](storage_format.md)).
+  (see [storage_format.md](storage_format.md)): it validates step rows, quantity
+  artifacts and `|size` markers (marker key, unit and allowed size against
+  `docs/size_markers.csv`).
 - No React, no DOM — a plain TypeScript module, unit-tested with Vitest.
 - Consumed by the web app and by the export generator (which pre-computes the display values
   for the share file).

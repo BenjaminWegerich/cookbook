@@ -62,7 +62,7 @@ import {
   renderAQSDisplay,
   type Ingredient,
   type PrecisionLevel,
-  type TextArtifact,
+  type QuantityArtifact,
   type Unit,
 } from '@cookbook/core';
 
@@ -109,7 +109,7 @@ interface IngredientSheetProps {
   mode: IngredientSheetMode;
   /** Existing value when editing: a row (row modes) or an inline artifact
    *  (inline-edit mode). */
-  initial?: Ingredient | TextArtifact;
+  initial?: Ingredient | QuantityArtifact;
   /** Prefill after the create-master-data flow (name + quantity restored). */
   prefill?: { name: string; quantity: number };
   /** The collection's ingredient recipes, offered in the name autofill. */

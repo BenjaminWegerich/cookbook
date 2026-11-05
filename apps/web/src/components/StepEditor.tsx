@@ -2,13 +2,13 @@
  * StepEditor — a contenteditable step field for the step *prose*.
  *
  * The prose may contain inline display-only artifacts ({{100 g}} /
- * {{1500 ml Wasser}}, storage_format.md §4). Artifacts render as non-editable
- * code-like chips ("wie ein Inline-Code-Schnipsel", decided with the user);
- * they are inserted at the caret from the ingredient sheet, carry a small
- * "×" to remove them, and tapping a chip opens the ingredient sheet
- * prefilled to edit the element in place. They never count toward any
- * ingredient list — the counted ingredients live in the step's own list
- * above this editor.
+ * {{1500 ml Wasser}} / {{1 26 cm Backring|size}}, storage_format.md §4).
+ * Artifacts render as non-editable code-like chips ("wie ein Inline-Code-
+ * Schnipsel", decided with the user); they are inserted at the caret from the
+ * ingredient sheet or the size-marker sheet, carry a small "×" to remove them,
+ * and tapping a chip opens the matching sheet prefilled to edit the element in
+ * place. They never count toward any ingredient list — the counted ingredients
+ * live in the step's own list above this editor.
  *
  * Model: the step text string is the source of truth. The DOM is authoritative
  * while the user types (re-rendering on every keystroke would lose the caret);
@@ -31,6 +31,8 @@ import {
   insertArtifact,
   optimizeUnitless,
   renderAQSDisplay,
+  resolveSizeMarker,
+  sizeMarkerFallbackText,
   splitArtifacts,
   type ArrangementDisplay,
   type TextArtifact,
@@ -204,42 +206,52 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         span.contentEditable = 'false';
         span.dataset.artifact = segment.stored;
         span.title = 'Antippen zum Bearbeiten';
-        const artifactContext = {
-          ...(segment.artifact.precision !== undefined
-            ? { quantity: segment.artifact.precision }
-            : {}),
-        };
         // The chip is a flex row of content and its remove button; keeping the
         // mention in one child span lets the note sit inline inside the phrase
         // instead of becoming a flex item of its own.
         const content = document.createElement('span');
         content.className = 'step-artifact-content';
-        if (segment.artifact.name === undefined) {
-          if (segment.artifact.unit === undefined) {
-            const unitless = optimizeUnitless(segment.artifact.quantity, artifactContext);
-            content.textContent =
-              unitless.notation === undefined
-                ? formatDecimal(unitless.value)
-                : formatAQValue(unitless.value);
-          } else {
-            content.textContent = formatBQ(segment.artifact.quantity, segment.artifact.unit);
-          }
+        if (segment.artifact.kind === 'size') {
+          // The editor shows the written recipe, so the factor is 1 here; the
+          // sheet's preview and the export derive the other sizes.
+          const resolved = resolveSizeMarker(segment.artifact, 1);
+          content.textContent = resolved?.text ?? sizeMarkerFallbackText(segment.artifact);
         } else {
-          appendArtifactDisplay(
-            content,
-            renderAQSDisplay(
-              segment.artifact.name,
-              segment.artifact.quantity,
-              segment.artifact.unit ?? 'g',
-              artifactContext,
-            ),
-          );
+          const artifactContext = {
+            ...(segment.artifact.precision !== undefined
+              ? { quantity: segment.artifact.precision }
+              : {}),
+          };
+          if (segment.artifact.name === undefined) {
+            if (segment.artifact.unit === undefined) {
+              const unitless = optimizeUnitless(segment.artifact.quantity, artifactContext);
+              content.textContent =
+                unitless.notation === undefined
+                  ? formatDecimal(unitless.value)
+                  : formatAQValue(unitless.value);
+            } else {
+              content.textContent = formatBQ(segment.artifact.quantity, segment.artifact.unit);
+            }
+          } else {
+            appendArtifactDisplay(
+              content,
+              renderAQSDisplay(
+                segment.artifact.name,
+                segment.artifact.quantity,
+                segment.artifact.unit ?? 'g',
+                artifactContext,
+              ),
+            );
+          }
         }
         span.appendChild(content);
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'artifact-remove';
-        remove.setAttribute('aria-label', 'Menge entfernen');
+        remove.setAttribute(
+          'aria-label',
+          segment.artifact.kind === 'size' ? 'Größe entfernen' : 'Menge entfernen',
+        );
         // The cross comes from the shared symbol set; the SVG string is the
         // only form usable here (the chip is built imperatively and must stay
         // outside React's DOM ownership). Keep it in sync with CloseIcon.

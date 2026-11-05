@@ -666,7 +666,7 @@ primary stays unique per decision.
 
 - One primary action per decision; a row never shows two accent-filled buttons.
 - Add is the only olive button, and it only creates: it never decides between things that already exist.
-- The insert under a step's text — „Zutat oder Menge zum Text hinzufügen" — is a Text button, not an Add button: it annotates the prose the user is writing instead of creating a row, so it must not compete with the step's olive creation buttons. Its label lines up with the text field's own text, so only its leading padding is dropped. *decided with the user*
+- The inserts under a step's text — „Zutat oder Menge zum Text hinzufügen" and „Größe zum Text hinzufügen" — are Text buttons, not Add buttons: they annotate the prose the user is writing instead of creating a row, so they must not compete with the step's olive creation buttons. Their labels line up with the text field's own text, so only their leading padding is dropped. *decided with the user*
 - A compact icon-only control inside a card row may keep a box smaller than `--control-height` — the step head's 32px ↑ ↓ ✕ — as long as a ring beyond the box brings its hit area to `--control-height` and the row's gap is wide enough that two hit areas never overlap. *decided with the user*
 - Every action button is at least `--control-height` (42px) tall, so a change of leading can never
   shrink a target below thumb reach.
@@ -1655,6 +1655,7 @@ The cooking view (`.html`) has its own inventory, written below.
 | „Zum Essensplan hinzufügen" / „Übernehmen" | `MealPlanSheet` | change | „Abbrechen" |
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
 | „Zutat bearbeiten" / „Zutat zur Liste hinzufügen" / „Zutat oder Menge zum Text hinzufügen" / „Menge im Text bearbeiten" | `IngredientSheet` | change | „Abbrechen" |
+| „Größe zum Text hinzufügen" / „Größe im Text bearbeiten" | `SizeMarkerSheet` | change | „Abbrechen" |
 | „Neue Zutat anlegen" / „Einkaufsartikel anlegen" | `NewIngredientSheet` / `MasterDataSheet` | change | „Abbrechen" |
 | „Stammdaten bearbeiten" / „Einkaufsartikel verwalten" | `EditIngredientSheet` / `EditShoppingItemSheet` (shared `MasterDataSheet`) | change | „Abbrechen" |
 | „Änderungen verwerfen?" | `LeaveConfirmSheet` (over the editor and the AI screen) | change | „Abbrechen", scrim, Escape, Back |

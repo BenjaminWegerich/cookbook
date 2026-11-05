@@ -177,6 +177,26 @@ layout). The rows are written in a natural, amount-first phrase:
     `- 0,2 kg Reis`); the parser normalizes them on read (comma → dot, kg/l →
     g/ml ×1000). Non-positive or malformed values remain validation errors.
   - A malformed `{{…}}` block is a validation error — never silently treated as prose.
+- **Size markers** are display-only equipment mentions inside the step prose:
+  ```
+  Den Teig für {{1 26 cm Backring|size}} ausrollen.
+  ```
+  - Grammar: `{{ COUNT SIZE UNIT MARKER|size }}`, e.g. `{{1 26 cm Backring|size}}`
+    or `{{2 20 cm Backring|size}}`. The count is a positive integer and is
+    **mandatory**; the display always prints it, including 1 (`1 26er Backring`).
+    The size uses a decimal with `.` or German `,`.
+  - The marker key, unit and nominal size are validated against
+    [size_markers.csv](size_markers.csv): the marker must exist, its written unit
+    must equal the master unit, and its written size must be one of the allowed
+    `Sizes`. Unknown markers and unavailable sizes are validation errors.
+  - The written count and size describe the recipe's own equipment. The display
+    for another serving count is derived by the marker's `Scale` (see
+    [quantity_scaling.md](quantity_scaling.md) §7, “Size markers”); for `Backring`
+    the diameter scales with the square root of the recipe factor, and above the
+    largest available size the display splits into multiple molds.
+  - A size marker is never counted toward an ingredient list, never enters the
+    shopping list and never links a sub-recipe. It has **no precision**: an
+    artifact carrying both `|size` and `|precision: …` is malformed.
 - **Reference role** (size anchor, both recipe types): stored as a front-matter
   list of ingredient names, `reference: [Tortillas]` (any number of entries). It
   anchors the portion size on a `finished_dish` and the yield on an
@@ -257,6 +277,9 @@ the file. Two levels:
   membership check anymore. A precision tag, when present, must be one of
   `very low`, `low`, `medium`, `high`, `very high`. A front-matter `tolerance`
   field is an unknown field and is rejected.
+- A size marker's count must be a positive integer; its marker key, unit and
+  nominal size must match `size_markers.csv` (§4). A size marker with a
+  precision suffix is rejected.
 - Row syntax, step structure and the artifacts of each step are validated (issue
   paths `steps[i].ingredients[j]…` and `steps[i].text`). A row without a name or
   quantity, a step whose prose is missing, and prose starting with `- ` are errors.

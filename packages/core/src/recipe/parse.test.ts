@@ -181,6 +181,49 @@ describe('parseRecipe — happy paths', () => {
     expect(recipe.ingredients).toEqual([]);
   });
 
+  it('parses and normalizes a size marker artifact', () => {
+    const recipe = parseRecipe(
+      '---\ntitle: Backring\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Den Teig für {{1 26 cm Backring|size}} ausrollen.\n',
+    );
+    expect(recipe.steps[0]!.text).toBe('Den Teig für {{1 26 cm Backring|size}} ausrollen.');
+    expect(recipe.ingredients).toEqual([]);
+
+    const normalized = parseRecipe(
+      '---\ntitle: Backring\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Den Teig für {{2 20,0 cm Backring|size}} ausrollen.\n',
+    );
+    expect(normalized.steps[0]!.text).toBe('Den Teig für {{2 20 cm Backring|size}} ausrollen.');
+  });
+
+  it('validates a size marker against the master data', () => {
+    const unknown = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{1 26 cm Springform|size}} backen.\n',
+    );
+    expectIssueAt(unknown, 'steps[0].text', 'Unbekannter Größenmarker');
+
+    const badSize = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{1 25 cm Backring|size}} backen.\n',
+    );
+    expectIssueAt(badSize, 'steps[0].text', 'nicht zulässig');
+
+    const badUnit = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{1 26 mm Backring|size}} backen.\n',
+    );
+    expectIssueAt(badUnit, 'steps[0].text', 'erwartet die Einheit "cm"');
+
+    // A size marker has no precision; the block is malformed rather than
+    // silently accepting a tag that would not influence the arrangement.
+    const precision = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{1 26 cm Backring|precision: high|size}} backen.\n',
+    );
+    expectIssueAt(precision, 'steps[0].text', 'Ungültiger Mengen-Baustein');
+  });
+
   it('allows unitless quantity-only artifacts and stores them as AQ fractions', () => {
     const recipe = parseRecipe(
       '---\ntitle: Einheitenlos\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' +

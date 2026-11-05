@@ -494,6 +494,36 @@ prep_time: 5 min
   });
 });
 
+describe('generateRecipeHtml — size markers', () => {
+  const cake: Recipe = parseRecipe(`---
+title: Backring
+type: finished_dish
+servings: 8
+prep_time: 10 min
+---
+## Zubereitung
+1. Den Teig für {{1 26 cm Backring|size}} ausrollen.
+`);
+
+  const cakeHtml = generateRecipeHtml(cake);
+
+  it('bakes the derived arrangement for every serving view', () => {
+    // 8 is the written size; the count is always rendered, including 1.
+    expect(cakeHtml).toContain('Den Teig für 1 26er Backring ausrollen.');
+    // 10 servings: 29.07 cm ideal, nearest even 30.
+    expect(cakeHtml).toContain('Den Teig für 1 30er Backring ausrollen.');
+    // 12 servings: 31.84 cm ideal → two molds of 22.52 cm; nearest even 22.
+    expect(cakeHtml).toContain('Den Teig für 2 22er Backringe ausrollen.');
+    // 16 servings: two 26er molds exactly.
+    expect(cakeHtml).toContain('Den Teig für 2 26er Backringe ausrollen.');
+    // 4 servings: 18.38 cm ideal; nearest even 18.
+    expect(cakeHtml).toContain('Den Teig für 1 18er Backring ausrollen.');
+    // 2 servings: below the smallest mold, clamped to 16.
+    expect(cakeHtml).toContain('Den Teig für 1 16er Backring ausrollen.');
+    expect(cakeHtml).not.toContain('{{');
+  });
+});
+
 describe('generateRecipeHtml — unitless inline counts (AQ ladder)', () => {
   const counts: Recipe = parseRecipe(`---
 title: Zählen

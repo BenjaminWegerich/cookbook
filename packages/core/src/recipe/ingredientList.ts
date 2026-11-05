@@ -132,6 +132,8 @@ export function recipeUsesIngredient(recipe: Recipe, name: string): boolean {
     return true;
   }
   return recipe.steps.some((step) =>
-    splitArtifacts(step.text).spans.some((span) => span.artifact.name === name),
+    splitArtifacts(step.text).spans.some(
+      (span) => span.artifact.kind === 'quantity' && span.artifact.name === name,
+    ),
   );
 }
