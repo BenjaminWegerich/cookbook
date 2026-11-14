@@ -169,6 +169,103 @@ describe('parseRecipe — happy paths', () => {
     ]);
   });
 
+  it('parses the optional source link on both recipe types and trims it', () => {
+    const dish = parseRecipe(
+      '---\ntitle: Mit Quelle\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' +
+        'source: "  https://www.example.com/rezept  "\n' +
+        '---\n## Zubereitung\n1. Kochen.\n',
+    );
+    expect(dish.source).toBe('https://www.example.com/rezept');
+
+    const base = parseRecipe(
+      '---\ntitle: Basis mit Quelle\ntype: ingredient_recipe\nyield: 500\nyield_unit: ml\n' +
+        'prep_time: 10 min\nsource: https://example.com/basis\n' +
+        '---\n## Zubereitung\n1. Rühren.\n',
+    );
+    expect(base.source).toBe('https://example.com/basis');
+  });
+
+  it('parses recipe-level and per-step tips with paragraphs', () => {
+    const recipe = parseRecipe(`---
+title: Mit Tipps
+type: finished_dish
+servings: 2
+prep_time: 10 min
+tips: |
+  Erster Tipp.
+
+  Zweiter Tipp.
+---
+## Zubereitung
+1. - 200 g Reis
+   Reis kochen.
+   > Den Reis vorher waschen.
+   >
+   > Salz erst am Ende.
+`);
+    expect(recipe.tips).toBe('Erster Tipp.\n\nZweiter Tipp.');
+    expect(recipe.steps[0]!.tips).toBe('Den Reis vorher waschen.\n\nSalz erst am Ende.');
+    // Tips are prose, never ingredients.
+    expect(recipe.ingredients).toEqual([{ name: 'Reis', quantity: 200, unit: 'g' }]);
+  });
+
+  it('keeps artifacts in step tips literal', () => {
+    const recipe = parseRecipe(`---
+title: Tipp-Menge
+type: finished_dish
+servings: 2
+prep_time: 5 min
+---
+## Zubereitung
+1. Kochen.
+   > Bei {{100 g}} bleibt das ein Literal.
+`);
+    expect(recipe.steps[0]!.tips).toBe('Bei {{100 g}} bleibt das ein Literal.');
+  });
+
+  it('rejects empty tips and tips before the step prose', () => {
+    expectIssueAt(
+      parseIssues(
+        '---\ntitle: Leer\ntype: finished_dish\nservings: 2\nprep_time: 5 min\ntips: ""\n' +
+          '---\n## Zubereitung\n1. Kochen.\n',
+      ),
+      'tips',
+      'nicht leer',
+    );
+    expectIssueAt(
+      parseIssues(
+        '---\ntitle: Vorher\ntype: finished_dish\nservings: 2\nprep_time: 5 min\n' +
+          '---\n## Zubereitung\n1. > Erst der Tipp.\n',
+      ),
+      'steps[0]',
+      'nach dem Schritt-Text',
+    );
+    expectIssueAt(
+      parseIssues(
+        '---\ntitle: Leer\ntype: finished_dish\nservings: 2\nprep_time: 5 min\n' +
+          '---\n## Zubereitung\n1. Kochen.\n   >\n',
+      ),
+      'steps[0].tips',
+      'nicht leer',
+    );
+  });
+
+  it('rejects an empty, non-string or non-http(s) source link', () => {
+    const prefix =
+      '---\ntitle: Quelle\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' + 'source: ';
+    const suffix = '\n---\n## Zubereitung\n1. Kochen.\n';
+
+    expectIssueAt(parseIssues(`${prefix}""${suffix}`), 'source', 'nicht leer');
+    expectIssueAt(parseIssues(`${prefix}42${suffix}`), 'source', 'Text');
+    expectIssueAt(parseIssues(`${prefix}example.com/rezept${suffix}`), 'source', 'http');
+    expectIssueAt(parseIssues(`${prefix}javascript:alert(1)${suffix}`), 'source', 'http');
+    expectIssueAt(
+      parseIssues(`${prefix}"https://example.com/a b"${suffix}`),
+      'source',
+      'Leerzeichen',
+    );
+  });
+
   it('normalizes inline artifact text to the canonical family form', () => {
     const recipe = parseRecipe(
       '---\ntitle: Artifakt\ntype: finished_dish\nservings: 4\nprep_time: 10 min\n' +

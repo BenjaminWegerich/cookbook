@@ -4,8 +4,9 @@
  *
  * Inverse of `parseRecipe()` (./parse.ts): writes a {@link Recipe} object back
  * to the canonical file text — YAML front matter via the `yaml` package with
- * the field order and 2-space indentation of §3 (including the `reference`
- * name list), plus the `## Zubereitung` step blocks of §4/§5.
+ * the field order and 2-space indentation of §3 (including the `source` link,
+ * the `tips` block and the `reference` name list), plus the `## Zubereitung`
+ * step blocks of §4/§5.
  *
  * Canonical body shape (§5): every quantity is stored in the family unit
  * (g/ml, '.' decimals); rows read as `- 250 g Reis`, the prose as the final
@@ -24,6 +25,31 @@ import { stringify } from 'yaml';
 import { formatStoredNumber } from '../quantityValues.js';
 import { isPrecisionLevel, type PrecisionLevel } from '../precision.js';
 import type { Recipe, RecipeTheme, Unit } from './types.js';
+
+/**
+ * Validates a tips value for the canonical round-trip: edge whitespace, CRLF
+ * and trailing spaces on a line would be normalized away by the parser (§5), so
+ * the serializer refuses them instead of silently changing the text. Empty
+ * tips are never written (they mean "no tips").
+ */
+function assertTips(tips: string, where: string): void {
+  if (tips.trim() === '' || tips !== tips.trim() || /\r/.test(tips)) {
+    throw new Error(
+      `serializeRecipe: ${where} must be a non-empty, edge-trimmed text without CR, got: ${JSON.stringify(tips)}`,
+    );
+  }
+  if (tips.split('\n').some((line) => line !== line.trimEnd())) {
+    throw new Error(
+      `serializeRecipe: ${where} must not have trailing spaces on a line, got: ${JSON.stringify(tips)}`,
+    );
+  }
+}
+
+/** The canonical blockquote block of one step's tips (§5). */
+function tipsBlock(tips: string): string {
+  const lines = tips.split('\n').map((line) => (line === '' ? '   >' : `   > ${line}`));
+  return `\n${lines.join('\n')}`;
+}
 
 /** Returns the canonical text of a quantity row / artifact base ("250 g"). */
 function quantityText(quantity: number, unit: Unit): string {
@@ -58,6 +84,9 @@ function buildFrontMatter(recipe: Recipe): Record<string, unknown> {
     type: recipe.type,
   };
   if (recipe.description !== undefined) frontMatter.description = recipe.description;
+  // The source link (original recipe / inspiration) sits with the descriptive
+  // fields, directly after the description (§3).
+  if (recipe.source !== undefined) frontMatter.source = recipe.source;
   if (recipe.type === 'finished_dish') {
     frontMatter.servings = recipe.servings;
   } else {
@@ -71,6 +100,9 @@ function buildFrontMatter(recipe: Recipe): Record<string, unknown> {
   }
   frontMatter.prep_time = recipe.prep_time;
   if (recipe.total_time !== undefined) frontMatter.total_time = recipe.total_time;
+  // Recipe-level tips sit after the times and before the theme, the last
+  // content field of the front matter (§3).
+  if (recipe.tips !== undefined) frontMatter.tips = recipe.tips;
   // The theme is the recipe's visual skin for the export (DESIGN §4.8); written
   // last, after total_time; only the tokens that are set are written.
   const theme = recipe.theme === undefined ? undefined : buildTheme(recipe.theme);
@@ -123,6 +155,7 @@ export function serializeRecipe(recipe: Recipe): string {
         `serializeRecipe: a step text must not start with "- ", got: ${JSON.stringify(step.text)}`,
       );
     }
+    if (step.tips !== undefined) assertTips(step.tips, `step ${JSON.stringify(step.text)} tips`);
     for (const ingredient of step.ingredients) {
       if (ingredient.name !== ingredient.name.trim() || ingredient.name === '') {
         throw new Error(
@@ -151,6 +184,17 @@ export function serializeRecipe(recipe: Recipe): string {
       `serializeRecipe: the title must be a single line, got: ${JSON.stringify(recipe.title)}`,
     );
   }
+  // The parser trims the source and rejects whitespace inside it, so a value
+  // that does not already round-trip is a programming error (§3).
+  if (
+    recipe.source !== undefined &&
+    (recipe.source !== recipe.source.trim() || /\s/.test(recipe.source))
+  ) {
+    throw new Error(
+      `serializeRecipe: the source must be a trimmed URL without whitespace, got: ${JSON.stringify(recipe.source)}`,
+    );
+  }
+  if (recipe.tips !== undefined) assertTips(recipe.tips, 'recipe tips');
   if (recipe.servings !== undefined && !Number.isFinite(recipe.servings)) {
     throw new Error(`serializeRecipe: servings must be finite, got ${recipe.servings}`);
   }
@@ -170,8 +214,9 @@ export function serializeRecipe(recipe: Recipe): string {
           ingredient.precision,
         )}`,
     );
+    const tips = step.tips === undefined ? '' : tipsBlock(step.tips);
     if (rows.length === 0) {
-      return `${number}. ${step.text}`;
+      return `${number}. ${step.text}${tips}`;
     }
     // The first row shares the number line; rows and prose are indented so the
     // block reads as one Markdown list item.
@@ -181,7 +226,7 @@ export function serializeRecipe(recipe: Recipe): string {
       step.ingredients[0]!.quantity,
       step.ingredients[0]!.unit,
       step.ingredients[0]!.precision,
-    )}\n${continuation.length > 0 ? `${continuation}\n` : ''}   ${step.text}`;
+    )}\n${continuation.length > 0 ? `${continuation}\n` : ''}   ${step.text}${tips}`;
   });
   const body = `## Zubereitung\n${stepLines.join('\n')}\n`;
   return `---\n${frontMatter}---\n${body}`;

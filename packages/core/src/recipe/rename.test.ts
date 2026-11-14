@@ -145,6 +145,23 @@ prep_time: 10 min
     expect(updated).toHaveLength(0);
   });
 
+  it('keeps a step tips block when its row is renamed', () => {
+    const parent = parse(`---
+title: Mit Tipp
+type: finished_dish
+servings: 2
+prep_time: 10 min
+---
+## Zubereitung
+1. - 250 ml Béchamelsauce
+   Sauce erwärmen.
+   > Nicht kochen lassen.
+`);
+    const { updated } = renameRecipeInCollection([BECHAMEL, parent], 'Béchamelsauce', 'Käsesauce');
+    expect(updated[0]!.steps[0]!.ingredients[0]!.name).toBe('Käsesauce');
+    expect(updated[0]!.steps[0]!.tips).toBe('Nicht kochen lassen.');
+  });
+
   it('throws when the old title is not in the collection', () => {
     expect(() => renameRecipeInCollection([BECHAMEL], 'Fehlt', 'Neu')).toThrow(
       /not in the collection/,

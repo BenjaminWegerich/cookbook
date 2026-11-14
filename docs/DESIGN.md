@@ -816,6 +816,12 @@ toggle is the only way a hint may be hidden — optional explanation is not a st
 - An error is never colour-only: the words carry the message, the danger colour supports it.
 - A field that can only contain numbers is right-aligned; every other field stays left-aligned.
 
+**Long optional text opens in place.** The recipe-level tips at the bottom of the Kopfdaten
+card and each step's tips are one quiet disclosure row: `+ Tipps` when empty, `Tipps · <first
+line>` when filled, `Tipps` plus a growing textarea and `Entfernen` when open. The row is
+always visible; the field is only on request, and adding a new block focuses it. Enter inserts
+a paragraph. The same row shape appears in the cooking view.
+
 *Cooking view: not applicable* (no text entry). The one input is the check-list checkbox (§5.11).
 
 ### 5.4 Cards and list items
@@ -1200,7 +1206,16 @@ and no personalisation.
 readout below the picker (the Einplanen sheet's look). A reference amount is a reference
 ingredient or a flagged inline artifact (e.g. a size marker such as `2 22er Backringe`); the
 readout stacks its amounts: one per line, with no comma between the lines. An arrangement note
-drops its brackets and follows one en space in the muted, italic run.
+drops its brackets and follows one en space in the muted, italic run. When the recipe has a
+„Quelle" entry, the meta line also carries a „Quelle" caption/value pair whose value is its
+domain as a link to the full URL in a new tab; the recipe overview shows the same „Quelle"
+item after the times. Both use the existing caption/value look and the existing link treatment — no
+new visual language.
+When the recipe has tips, the intro ends with a collapsed „Tipps" disclosure after the
+reference readout and before the footer; each step screen carries the same disclosure after
+the step prose, separated from it by a hairline. The summary is a caption row with the
+shared caret; the opened paragraphs use the body face. Both are closed on load and never affect the
+step count or navigation.
 Scaling happens here and only here. A meal-plan link opens this screen with the promised size
 pre-selected.
 
@@ -1698,6 +1713,7 @@ that file.
 | §5.1 Buttons | `apps/web/src/styles/editor.css` (`.primary-button`, `.danger-button`, `.outlined-button`, `.text-button`, `.step-text-add`, `.add-button`, `.sheet-actions`) |
 | §5.2 Chips and segmented controls | `apps/web/src/styles/editor.css`, `apps/web/src/components/quantityChips.ts` |
 | §5.3 Form fields | `apps/web/src/styles/editor.css` (`.field`, `.field-label`, `.field-error`), `apps/web/src/index.css` (the shared text-field focus outline) |
+| §5.3 tips disclosure | `apps/web/src/components/TipsField.tsx`, `apps/web/src/components/AutoGrowTextarea.tsx`, `apps/web/src/styles/editor.css` (`.tips-*`) |
 | §5.3 master-data form (shared) | `apps/web/src/components/MasterDataSheet.tsx`, `apps/web/src/components/ingredientMasterForm.ts`, `apps/web/src/components/ingredientMasterUpdate.tsx`, `apps/web/src/components/IngredientMappingsField.tsx` |
 | §5.4 Cards and list items | `apps/web/src/styles/recipe-list.css`, `apps/web/src/components/RecipeList.tsx`, `apps/web/src/styles/pantry-select.css` (`.pantry-row--attention`, `.pantry-attention-note`) |
 | §5.5 Headers and sticky bars | `apps/web/src/styles/recipe-list.css` (`.app-header`, `.app-header-stacked`, `.app-header-title`, `.app-header-subtitle`) |

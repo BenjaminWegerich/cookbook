@@ -470,11 +470,17 @@ export function draftToEditText(draft: EditorDraft): string {
   if (draft.description !== undefined && draft.description.trim() !== '') {
     lines.push(`Beschreibung: ${draft.description.trim()}`);
   }
+  if (draft.source !== undefined && draft.source.trim() !== '') {
+    lines.push(`Quelle: ${draft.source.trim()}`);
+  }
   lines.push(
     `Arbeitszeit: ${draft.prep_time.trim() === '' ? '(noch keine)' : draft.prep_time.trim()}`,
   );
   if (draft.total_time !== undefined && draft.total_time.trim() !== '') {
     lines.push(`Gesamtzeit: ${draft.total_time.trim()}`);
+  }
+  if (draft.tips !== undefined && draft.tips.trim() !== '') {
+    lines.push('Tipps:', draft.tips.trim());
   }
   if (draft.type === 'finished_dish') {
     lines.push(`Portionen: ${draft.servings === undefined ? '(noch keine)' : draft.servings}`);
@@ -505,6 +511,9 @@ export function draftToEditText(draft: EditorDraft): string {
         }
       }
       lines.push(`Text: ${step.text.trim() === '' ? '(noch kein Text)' : step.text.trim()}`);
+      if (step.tips !== undefined && step.tips.trim() !== '') {
+        lines.push('Tipps:', step.tips.trim());
+      }
       lines.push('');
     });
   }

@@ -860,15 +860,27 @@ function RecipeOverview({
   const linkHref = target.kind === 'unknown' ? target.link : null;
   const linkDomain = linkHref !== null ? displayLinkDomain(linkHref) : null;
   /**
+   * The recipe's own source link (original recipe / inspiration), or null. A
+   * draft may already carry one; an unrecognized meal-plan entry has no recipe
+   * behind it, so its own `link` is the only link it shows.
+   */
+  const sourceHref =
+    target.kind === 'draft' ? (draftDetails?.source ?? null) : (details?.source ?? null);
+  const sourceDomain = sourceHref !== null ? displayLinkDomain(sourceHref) : null;
+  /**
    * Whether the caption/value row has anything to show. An unrecognized entry
    * always has its "Unbekannt" badge in that row (decided with the user: the
    * sheet names the state itself instead of leaving it to its differing
    * actions), so the row exists even for a bare "Kürbissuppe" line; a recipe or
-   * draft shows the row when it has a plan size or a time. The draft badge sits
-   * under the title instead, not in this row.
+   * draft shows the row when it has a plan size, a time or a source. The draft
+   * badge sits under the title instead, not in this row.
    */
   const hasMeta =
-    target.kind === 'unknown' || prepTime !== null || totalTime !== null || plannedText !== null;
+    target.kind === 'unknown' ||
+    prepTime !== null ||
+    totalTime !== null ||
+    plannedText !== null ||
+    sourceHref !== null;
 
   /**
    * The inline position/width the open popover renders at, or undefined while
@@ -1004,6 +1016,22 @@ function RecipeOverview({
                 <div className="overview-meta-item">
                   <dt>Gesamtzeit</dt>
                   <dd>{totalTime}</dd>
+                </div>
+              )}
+              {sourceHref !== null && sourceDomain !== null && (
+                <div className="overview-meta-item">
+                  <dt>Quelle</dt>
+                  <dd>
+                    {/* A new tab, like every other link in this sheet. */}
+                    <a
+                      className="overview-link"
+                      href={sourceHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {sourceDomain}
+                    </a>
+                  </dd>
                 </div>
               )}
             </dl>

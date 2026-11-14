@@ -61,6 +61,59 @@ describe('serializeRecipe', () => {
     expect(reparsed.ingredients).toEqual(makeDish().ingredients);
   });
 
+  it('writes recipe-level tips as a block scalar and step tips as a blockquote', () => {
+    const recipe = makeDish({
+      tips: 'Erster Tipp.\n\nZweiter Tipp.',
+      steps: [
+        {
+          ingredients: [{ name: 'Tortillas', quantity: 250, unit: 'g' }],
+          text: 'Tortillas im Ofen erwärmen.',
+          tips: 'Den Teig 30 Minuten ruhen lassen.\n\nZwischen den Lagen Backpapier verwenden.',
+        },
+        { ingredients: [], text: 'Tofu marinieren.' },
+      ],
+    });
+    const text = serializeRecipe(recipe);
+    expect(text).toContain('tips: |-\n  Erster Tipp.\n\n  Zweiter Tipp.\n');
+    expect(text).toContain('   > Den Teig 30 Minuten ruhen lassen.');
+    expect(text).toContain('   >');
+    expect(text).toContain('   > Zwischen den Lagen Backpapier verwenden.');
+
+    const reparsed = parseRecipe(text);
+    expect(reparsed.tips).toBe('Erster Tipp.\n\nZweiter Tipp.');
+    expect(reparsed.steps[0]!.tips).toBe(
+      'Den Teig 30 Minuten ruhen lassen.\n\nZwischen den Lagen Backpapier verwenden.',
+    );
+    expect(reparsed.steps[1]!.tips).toBeUndefined();
+  });
+
+  it('refuses a tips value that cannot round-trip', () => {
+    expect(() => serializeRecipe(makeDish({ tips: ' Tipp' }))).toThrow('recipe tips');
+    expect(() =>
+      serializeRecipe(
+        makeDish({
+          steps: [{ ingredients: [], text: 'Kochen.', tips: 'Zeile mit Leerzeichen   ' }],
+        }),
+      ),
+    ).toThrow('step');
+  });
+
+  it('writes the source link after the description and round-trips it', () => {
+    const recipe = makeDish({ source: 'https://www.example.com/rezept' });
+    const text = serializeRecipe(recipe);
+    expect(text).toContain('description: Knusprig.\nsource: https://www.example.com/rezept\n');
+    expect(parseRecipe(text).source).toBe('https://www.example.com/rezept');
+  });
+
+  it('refuses a source value that cannot round-trip', () => {
+    expect(() => serializeRecipe(makeDish({ source: ' https://example.com' }))).toThrow(
+      'trimmed URL without whitespace',
+    );
+    expect(() => serializeRecipe(makeDish({ source: 'https://example.com/a b' }))).toThrow(
+      'trimmed URL without whitespace',
+    );
+  });
+
   it('round-trips a per-quantity precision tag', () => {
     const recipe = makeDish({
       steps: [

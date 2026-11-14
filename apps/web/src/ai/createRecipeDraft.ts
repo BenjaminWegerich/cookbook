@@ -158,6 +158,14 @@ export interface AiCreateSessionOptions {
   knownIngredientNames: ReadonlySet<string>;
   /** Titles of the collection's ingredient-recipes (valid link targets). */
   ingredientRecipeTitles: ReadonlySet<string>;
+  /**
+   * Known URL of the page the recipe was created from: the link that was shared
+   * into the app, or the existing source of a recipe being edited. It is filled
+   * into the draft's `source` when the AI did not return one — the model never
+   * sees a TikTok URL (only its extracted caption), so the app carries it. A
+   * value the AI wrote itself is never overwritten.
+   */
+  sourceUrl?: string;
 }
 
 /** A recipe file extracted from a reply, plus the prose that preceded it. */
@@ -181,6 +189,11 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
   let specificationsText = options.specificationsText ?? '';
   /** Valid sub-recipe titles for the new-ingredient proposal list. */
   let ingredientRecipeTitles = options.ingredientRecipeTitles;
+  /**
+   * The known source link: the shared URL passed in by the caller. Filled into
+   * a parsed draft that has no `source` of its own.
+   */
+  const knownSourceUrl = options.sourceUrl;
   const messages: AiMessage[] = [{ role: 'system', content: '' }];
   let repairRounds = 0;
 
@@ -329,8 +342,15 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
       return requestRepair();
     }
 
-    // Parsed cleanly — hand over to the caller with the unknown-ingredient
-    // list (informational; creation is deferred to the editor).
+    // Parsed cleanly — fill the known source link when the model left it out
+    // (a TikTok caption carries no URL the model could see). An explicit value
+    // from the AI wins, so a user asking for a different source is not
+    // overridden.
+    if (knownSourceUrl !== undefined && recipe.source === undefined) {
+      recipe = { ...recipe, source: knownSourceUrl };
+    }
+    // Hand over to the caller with the unknown-ingredient list (informational;
+    // creation is deferred to the editor).
     messages.push({ role: 'assistant', content: reply });
     return {
       kind: 'draft',

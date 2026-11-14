@@ -11,10 +11,9 @@
  * Intro → Zutaten → Zubereitung and the step-by-step navigation).
  *
  * The cooking view is one page with three screen states (§5.11): the Intro
- * (the photo, title, description, meta, size picker, reference readout, the
- * „Erstellt mit Cookbook" brand), the Zutaten check list and the Zubereitung
- * steps shown one
- * at a time. A fixed bottom bar carries the „Zurück" / „Weiter" buttons and the
+ * (the photo, title, description, meta with the optional source link, size picker,
+ * reference readout, the optional tips, the „Erstellt mit Cookbook" brand), the
+ * Zutaten check list and the Zubereitung steps shown one at a time. A fixed bottom bar carries the „Zurück" / „Weiter" buttons and the
  * flow dots; a swipe, Escape and the browser Back/Forward keys move through the
  * flow. The recipe's theme skins the whole view (§4.8): its typeface and
  * palette, plus the derived `muted` and `on-accent` colours computed here.
@@ -551,6 +550,28 @@ function subRecipeHref(
   return withPlanSize(url, { kind: 'yield', ...subRecipeAmount(quantity, unit) });
 }
 
+/** The disclosure caret of a tips block (points right when closed). */
+const TIPS_CARET_SVG =
+  '<svg class="tips-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z"/></svg>';
+
+/**
+ * One collapsed tips block (recipe-level or per step). Native <details> keeps
+ * the disclosure accessible and working without the page script; paragraphs
+ * are real <p> elements and single line breaks stay visible.
+ */
+function renderTips(tips: string, className: string): string {
+  const paragraphs = tips
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+  return (
+    `<details class="tips ${className}">\n` +
+    `  <summary class="tips-summary">${TIPS_CARET_SVG}<span class="tips-label">Tipps</span></summary>\n` +
+    `  <div class="tips-body">\n${paragraphs}\n  </div>\n` +
+    `</details>`
+  );
+}
+
 /**
  * The Intro's media area (§5.8): the recipe photo as a 4:3 landscape image, or
  * '' when the recipe has none (the intro then starts with the title). The photo
@@ -743,6 +764,7 @@ function renderStep(
     `  <div class="step" data-step="${n}">\n` +
     `${rows}` +
     `    <p class="step-text">${text}</p>\n` +
+    (step.tips !== undefined ? `    ${renderTips(step.tips, 'step-tips')}\n` : '') +
     `  </div>`
   );
 }
@@ -931,7 +953,20 @@ function sizeViews(
   return { picker, references, checkLists, stepWraps };
 }
 
-/** The intro's meta line: „Arbeitszeit" / „Gesamtzeit" caption/value pairs. */
+/** The domain a source link displays, without `www.` (the link itself is full). */
+function sourceDomain(source: string): string {
+  try {
+    return new URL(source).hostname.replace(/^www\./i, '');
+  } catch {
+    return source;
+  }
+}
+
+/**
+ * The intro's meta line: „Arbeitszeit" / „Gesamtzeit" caption/value pairs and,
+ * when the recipe names one, the source link (original recipe / inspiration)
+ * behind a „Quelle" caption.
+ */
 function metaLine(recipe: Recipe): string {
   const items = [
     `<span class="meta-item"><span class="caption">Arbeitszeit</span><span class="meta-value">${escapeHtml(displayTimeText(recipe.prep_time))}</span></span>`,
@@ -939,6 +974,11 @@ function metaLine(recipe: Recipe): string {
   if (recipe.total_time !== undefined) {
     items.push(
       `<span class="meta-item"><span class="caption">Gesamtzeit</span><span class="meta-value">${escapeHtml(displayTimeText(recipe.total_time))}</span></span>`,
+    );
+  }
+  if (recipe.source !== undefined) {
+    items.push(
+      `<span class="meta-item"><span class="caption">Quelle</span><span class="meta-value"><a class="source-link" href="${escapeHtml(recipe.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sourceDomain(recipe.source))}</a></span></span>`,
     );
   }
   return `<div class="meta-line">\n    ${items.join('\n    ')}\n  </div>`;
@@ -1583,6 +1623,29 @@ const STYLES = `
   .reference { margin: var(--space-3) 0 0; padding: 0; list-style: none; color: var(--muted);
                font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
+  /* Tips (docs/DESIGN.md §5.11): one collapsed disclosure per surface — the
+     recipe-level tips on the Intro, the step tips under the step prose. The
+     summary is the same quiet caption row everywhere; only the text below it
+     opens. Native <details> carries the state, so the page script stays out. */
+  .tips { margin: var(--space-5) 0 0; }
+  .step-tips { margin-top: var(--space-6); padding-top: var(--space-4);
+               border-top: 1px solid var(--line); }
+  .tips-summary { display: flex; align-items: center; gap: var(--space-2);
+                  min-height: 42px; color: var(--muted); font-size: var(--text-sm);
+                  line-height: var(--leading-sm); font-weight: 600; cursor: pointer;
+                  list-style: none; }
+  .tips-summary::-webkit-details-marker { display: none; }
+  .tips-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tips-caret { flex: none; width: 20px; height: 20px; fill: currentColor;
+                transform: rotate(-90deg); transition: transform var(--motion-base) ease-out; }
+  .tips[open] .tips-caret { transform: rotate(0); }
+  .tips-label { text-transform: uppercase; }
+  .tips-body { margin: var(--space-2) 0 0; color: var(--ink);
+               font-size: var(--text-md); line-height: var(--leading-md);
+               overflow-wrap: anywhere; }
+  .tips-body p { margin: 0 0 var(--space-3); }
+  .tips-body p:last-child { margin-bottom: 0; }
+
   /* Ingredient-recipe stepper (§5.2 "exactly as today"). Each button is the
      app's 42 px circle with the 24 px Material „remove" / „add" drawing centred
      by the grid, not by a line box — the SVG would otherwise sit on the text
@@ -1666,6 +1729,13 @@ const STYLES = `
                text-underline-offset: 3px; }
   .name-link:hover { color: var(--accent); }
   .name-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* The intro's source link (original recipe / inspiration): a quiet meta
+     value, underlined in the accent like the sub-recipe name link. */
+  .source-link { color: inherit; text-decoration: underline;
+                 text-decoration-color: var(--accent); text-decoration-thickness: 1px;
+                 text-underline-offset: 2px; }
+  .source-link:hover { color: var(--accent); }
+  .source-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   /* The old badge promised a 42 px target. The name's line box is only 24 px
      high, so the pseudo-element restores the height without moving the text. */
   .name-link::after { content: ''; position: absolute; inset: -9px -4px; }
@@ -1761,6 +1831,7 @@ export function generateRecipeHtml(
     `  ${metaLine(recipe)}\n` +
     views.picker +
     views.references +
+    (recipe.tips !== undefined ? `  ${renderTips(recipe.tips, 'intro-tips')}\n` : '') +
     `  <footer class="brand">${BRAND_SVG}<span>Erstellt mit Cookbook</span></footer>\n` +
     `</section>`;
 

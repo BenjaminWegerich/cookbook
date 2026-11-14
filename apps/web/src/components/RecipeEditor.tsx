@@ -36,7 +36,7 @@
  *   follow, the canonical file and its export are removed). A normal save of a
  *   draft validates it and promotes it to a canonical recipe;
  * - sections: Kopfdaten (Titel, Details, Typ, Portionen/Ergiebigkeit,
- *   Zeiten, Bild), one card per step (there is no „Zubereitung" card or heading:
+ *   Zeiten, Bild, Tipps), one card per step (there is no „Zubereitung" card or heading:
  *   the card rung never nests, §4.4), Zutaten, Design.
  * - the Design card can fill its whole theme from the recipe's title,
  *   description and photo via Gemini („Mit KI generieren"): the suggestion
@@ -141,6 +141,7 @@ import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useL
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 import type { SnackbarMessage } from '../hooks/useSnackbar';
 import AutoGrowTextarea from './AutoGrowTextarea';
+import TipsField from './TipsField';
 import DraftRecoverySheet from './DraftRecoverySheet';
 import EditIngredientSheet from './EditIngredientSheet';
 import InfoHint from './InfoHint';
@@ -550,7 +551,7 @@ async function landscapeCropPhoto(file: File, extension: 'jpg' | 'png'): Promise
 type IssueTarget =
   | {
       kind: 'field';
-      field: 'title' | 'prep_time' | 'total_time' | 'servings' | 'yield' | 'yield_unit';
+      field: 'title' | 'source' | 'prep_time' | 'total_time' | 'servings' | 'yield' | 'yield_unit';
     }
   | { kind: 'step'; index: number }
   | { kind: 'step-row'; index: number; rowIndex: number }
@@ -563,6 +564,7 @@ type IssueTarget =
 function mapIssue(issue: ValidationIssue): IssueTarget {
   const path = issue.path;
   if (path === 'title') return { kind: 'field', field: 'title' };
+  if (path === 'source') return { kind: 'field', field: 'source' };
   if (path === 'prep_time') return { kind: 'field', field: 'prep_time' };
   if (path === 'total_time') return { kind: 'field', field: 'total_time' };
   if (path === 'servings') return { kind: 'field', field: 'servings' };
@@ -609,9 +611,23 @@ function normalizeTheme(theme: RecipeTheme | undefined): RecipeTheme | undefined
 }
 
 /**
+ * Trims one tips block and drops an empty value: blank lines inside are
+ * paragraphs and stay, edge whitespace does not.
+ */
+function normalizeTips(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const tips = value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+$/gm, '')
+    .trim();
+  return tips === '' ? undefined : tips;
+}
+
+/**
  * Normalizes the draft into the form that is written to Drive (§7 round-trip):
  * trimmed single-line step prose (internal line breaks collapse to spaces),
- * empty optional fields dropped, the reference list kept for both recipe types
+ * multi-line tips trimmed at their edges, empty optional fields dropped, the
+ * reference list kept for both recipe types
  * (minus names no row carries any more, §4), and the master list derived from
  * the step rows (§4).
  */
@@ -620,28 +636,35 @@ function normalizeRecipe(draft: EditorDraft): Recipe {
   // visible so the editor can report the missing text instead of silently
   // dropping the rows. Purely empty placeholder steps are removed.
   const steps = draft.steps
-    .map((step) => ({
-      ingredients: step.ingredients.map((ingredient) => ({
-        name: ingredient.name.trim(),
-        quantity: ingredient.quantity,
-        unit: ingredient.unit,
-        ...(ingredient.precision !== undefined ? { precision: ingredient.precision } : {}),
-      })),
-      text: step.text.replace(/\s*\n\s*/g, ' ').trim(),
-    }))
+    .map((step) => {
+      const tips = normalizeTips(step.tips);
+      return {
+        ingredients: step.ingredients.map((ingredient) => ({
+          name: ingredient.name.trim(),
+          quantity: ingredient.quantity,
+          unit: ingredient.unit,
+          ...(ingredient.precision !== undefined ? { precision: ingredient.precision } : {}),
+        })),
+        text: step.text.replace(/\s*\n\s*/g, ' ').trim(),
+        ...(tips !== undefined ? { tips } : {}),
+      };
+    })
     .filter((step) => step.text !== '' || step.ingredients.length > 0);
   const reference = pruneReference(draft.reference, steps);
   const ingredients = deriveIngredients(steps, reference ?? []);
   const theme = normalizeTheme(draft.theme);
+  const tips = normalizeTips(draft.tips);
   const base = {
     title: draft.title.trim(),
     type: draft.type,
     description: draft.description?.trim() !== '' ? draft.description?.trim() : undefined,
+    source: draft.source?.trim() !== '' ? draft.source?.trim() : undefined,
     prep_time: draft.prep_time.trim(),
     total_time:
       draft.total_time !== undefined && draft.total_time.trim() !== ''
         ? draft.total_time.trim()
         : undefined,
+    ...(tips !== undefined ? { tips } : {}),
     steps: steps.length > 0 ? steps : [{ ingredients: [], text: '' }],
     ...(theme !== undefined ? { theme } : {}),
   };
@@ -1362,7 +1385,7 @@ function RecipeEditor({
   >(null);
 
   /** Focuses a Kopf text field with the caret at the end (Enter = next). */
-  const focusEditorField = (field: HTMLTextAreaElement | null): void => {
+  const focusEditorField = (field: HTMLInputElement | HTMLTextAreaElement | null): void => {
     if (field === null) return;
     field.focus();
     field.setSelectionRange(field.value.length, field.value.length);
@@ -1470,6 +1493,7 @@ function RecipeEditor({
   /** Kopf text fields — Enter (the phone keyboard's "next") walks this chain. */
   const titleFieldRef = useRef<HTMLTextAreaElement | null>(null);
   const descriptionFieldRef = useRef<HTMLTextAreaElement | null>(null);
+  const sourceFieldRef = useRef<HTMLInputElement | null>(null);
   const stepEditorRefs = useRef<(StepEditorHandle | null)[]>([]);
   /**
    * The in-flight collection load. `handleSave` awaits it before validating,
@@ -3236,7 +3260,7 @@ function RecipeEditor({
   const mappedIssues = liveIssues.map((issue) => ({ issue, target: mapIssue(issue) }));
   /** Issues belonging to one editor field (by its IssueTarget field name). */
   const fieldIssue = (
-    field: 'title' | 'prep_time' | 'total_time' | 'servings' | 'yield' | 'yield_unit',
+    field: 'title' | 'source' | 'prep_time' | 'total_time' | 'servings' | 'yield' | 'yield_unit',
   ): ValidationIssue[] =>
     mappedIssues
       .filter((entry) => entry.target.kind === 'field' && entry.target.field === field)
@@ -3455,12 +3479,54 @@ function RecipeEditor({
             <AutoGrowTextarea
               ref={descriptionFieldRef}
               tall
-              enterKeyHint="done"
+              enterKeyHint="next"
               value={draft.description ?? ''}
               onChange={(description) => patchDraft({ description })}
-              onEnter={() => descriptionFieldRef.current?.blur()}
+              onEnter={() => focusEditorField(sourceFieldRef.current)}
             />
           </label>
+
+          <div className="field">
+            <label className="field-label" htmlFor="editor-field-source">
+              Quelle<span className="optional-mark">optional</span>
+            </label>
+            <span className="field-hint" id="editor-hint-source">
+              Link zum Originalrezept oder zur Inspiration (vollständige URL)
+            </span>
+            <input
+              ref={sourceFieldRef}
+              id="editor-field-source"
+              type="url"
+              inputMode="url"
+              enterKeyHint="done"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              value={draft.source ?? ''}
+              onChange={(event) => patchDraft({ source: event.target.value })}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  sourceFieldRef.current?.blur();
+                }
+              }}
+              aria-describedby={
+                fieldIssue('source').length > 0
+                  ? 'editor-hint-source editor-error-source'
+                  : 'editor-hint-source'
+              }
+              aria-invalid={fieldIssue('source').length > 0}
+            />
+          </div>
+          {fieldIssue('source').length > 0 && (
+            <div className="field-errors" id="editor-error-source">
+              {fieldIssue('source').map((issue, index) => (
+                <p className="field-error" key={`source-${index}`} role="alert">
+                  {issue.message}
+                </p>
+              ))}
+            </div>
+          )}
 
           {/* Typ — direkt vor den typabhängigen Feldern (Portionen/Ergiebigkeit) */}
           <div className="field">
@@ -3630,6 +3696,14 @@ function RecipeEditor({
               ))}
             </div>
           )}
+
+          {/* Recipe-level tips close the Kopfdaten card: one collapsible block,
+              collapsed on load, open while adding/editing. */}
+          <TipsField
+            value={draft.tips}
+            onChange={(tips) => patchDraft({ tips })}
+            ariaLabel="Tipps"
+          />
         </section>
 
         {/* The steps — one top-level card each (§4.4: the card rung never nests,
@@ -3922,6 +3996,13 @@ function RecipeEditor({
                   <span>Größe zum Text hinzufügen</span>
                 </button>
               </div>
+              {/* Step tips close the step card, under the prose and its quiet
+                  insertion actions. */}
+              <TipsField
+                value={step.tips}
+                onChange={(tips) => updateStep(stepIndex, (current) => ({ ...current, tips }))}
+                ariaLabel={`Tipps zu Schritt ${stepIndex + 1}`}
+              />
             </section>
           );
         })}

@@ -74,6 +74,12 @@ const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 const CURLY_BLOCK_RE = /\{\{([^{}]*)\}\}/g;
 /** Optional trailing per-quantity precision tag on an ingredient row. */
 const ROW_PRECISION_RE = /\s*\{precision:\s*([^{}]*)\}\s*$/i;
+/**
+ * One line of a step's tips: a blockquote (`> …`) after the step prose. The
+ * captured group is the line without the quote marker and its one optional
+ * space; an empty `>` line is a paragraph break inside the tips (§5).
+ */
+const STEP_TIPS_LINE = /^\s*>\s?(.*)$/;
 
 const UNITS: readonly Unit[] = ['g', 'kg', 'ml', 'l'];
 
@@ -82,10 +88,12 @@ const COMMON_FIELDS: ReadonlySet<string> = new Set([
   'title',
   'type',
   'description',
+  'source',
   'reference',
   'theme',
   'prep_time',
   'total_time',
+  'tips',
 ]);
 /** The five theme tokens (DESIGN §4.8); unknown sub-fields are rejected. */
 const THEME_FIELDS: ReadonlySet<string> = new Set(['font', 'accent', 'paper', 'ink', 'line']);
@@ -141,6 +149,80 @@ function readOptionalString(
     return undefined;
   }
   return value;
+}
+
+/**
+ * Validates the optional `source` front-matter field (§3): an absolute http(s)
+ * link to the original recipe or the inspiration. The value is trimmed (the one
+ * normalization applied here); an empty value, whitespace inside the URL, or a
+ * non-http(s) scheme is a validation error rather than a broken link. Returns
+ * undefined when the field is absent or invalid.
+ */
+function readSource(data: Record<string, unknown>, issues: ValidationIssue[]): string | undefined {
+  const value = data['source'];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    issues.push({ path: 'source', message: 'Das Feld „Quelle“ muss ein Link als Text sein.' });
+    return undefined;
+  }
+  const source = value.trim();
+  if (source === '') {
+    issues.push({ path: 'source', message: 'Die Quelle darf nicht leer sein.' });
+    return undefined;
+  }
+  if (/\s/.test(source)) {
+    issues.push({
+      path: 'source',
+      message: 'Die Quelle darf keine Leerzeichen enthalten.',
+    });
+    return undefined;
+  }
+  try {
+    const url = new URL(source);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('not http(s)');
+    }
+  } catch {
+    issues.push({
+      path: 'source',
+      message:
+        `Die Quelle muss eine vollständige URL sein, die mit http:// oder https:// beginnt ` +
+        `(gefunden: ${JSON.stringify(value)}).`,
+    });
+    return undefined;
+  }
+  return source;
+}
+
+/**
+ * Normalizes a tips text: CRLF/CR to LF, trailing spaces off every line, and
+ * edge blank lines away. Blank lines inside the text are paragraphs and stay.
+ */
+function normalizeTipsText(value: string): string {
+  return value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+$/gm, '')
+    .trim();
+}
+
+/**
+ * Validates the optional recipe-level `tips` front-matter field (§3): a
+ * plain-text block with paragraphs, shown collapsed as „Tipps“ in the editor
+ * and the cooking view. Returns undefined when the field is absent or invalid.
+ */
+function readTips(data: Record<string, unknown>, issues: ValidationIssue[]): string | undefined {
+  const value = data['tips'];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    issues.push({ path: 'tips', message: 'Tipps müssen Text sein.' });
+    return undefined;
+  }
+  const tips = normalizeTipsText(value);
+  if (tips === '') {
+    issues.push({ path: 'tips', message: 'Tipps dürfen nicht leer sein.' });
+    return undefined;
+  }
+  return tips;
 }
 
 /**
@@ -354,8 +436,10 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
   if (title !== undefined) checkTitle(title, issues);
 
   const description = readOptionalString(data, 'description', issues, 'description');
+  const source = readSource(data, issues);
   const prepTime = readString(data, 'prep_time', issues, 'prep_time');
   const totalTime = readOptionalString(data, 'total_time', issues, 'total_time');
+  const tips = readTips(data, issues);
 
   // Per-type required fields (§3) and their value rules (§7.1).
   let servings: number | undefined;
@@ -465,8 +549,10 @@ function validateRecipeData(data: unknown, issues: ValidationIssue[]): Recipe | 
     // Filled by the caller from the derived master list.
     ingredients: [],
     ...(description !== undefined ? { description } : {}),
+    ...(source !== undefined ? { source } : {}),
     prep_time: prepTime,
     ...(totalTime !== undefined ? { total_time: totalTime } : {}),
+    ...(tips !== undefined ? { tips } : {}),
     ...(reference !== undefined ? { reference } : {}),
     ...(theme !== undefined ? { theme } : {}),
     ...(servings !== undefined ? { servings } : {}),
@@ -660,12 +746,23 @@ function parseSteps(body: string, issues: ValidationIssue[]): Step[] | undefined
     const ingredients: Ingredient[] = [];
     const firstContent = match[2]!;
     let prose: string | undefined;
+    let tips: string | undefined;
     const blockStart = i;
 
     // A step either starts with its rows ("- 250 g Reis") — then the rows run
     // until the first line that is not a row, which must be the prose — or it
     // is a single prose line.
     if (!firstContent.startsWith('- ')) {
+      // A blockquote on the number line would be tips without the prose they
+      // belong to.
+      if (STEP_TIPS_LINE.test(firstContent)) {
+        issues.push({
+          path: stepPath,
+          message: 'Tipps müssen nach dem Schritt-Text stehen.',
+        });
+        i = blockStart + 1;
+        continue;
+      }
       prose = firstContent.trim();
       i = blockStart + 1;
     } else {
@@ -685,12 +782,18 @@ function parseSteps(body: string, issues: ValidationIssue[]): Step[] | undefined
           i++;
           continue;
         }
+        // A blockquote is the step's tips, so it cannot stand in for the
+        // missing prose line.
+        if (STEP_TIPS_LINE.test(lines[i]!)) break;
         prose = next;
         i++;
       }
     }
 
     if (prose === undefined || prose === '') {
+      // Consume a tips block so the outer loop does not also report its lines
+      // as non-numbered steps; the missing prose is the real problem.
+      while (i <= last && STEP_TIPS_LINE.test(lines[i]!)) i++;
       issues.push({
         path: stepPath,
         message: 'Jeder Schritt braucht nach seinen Zutaten einen Text.',
@@ -705,7 +808,26 @@ function parseSteps(body: string, issues: ValidationIssue[]): Step[] | undefined
       });
     }
     const text = validateAndNormalizeText(prose, `${stepPath}.text`, issues);
-    steps.push({ ingredients, text });
+
+    // Tips follow the prose as a blockquote, one line per source line; a bare
+    // `>` line is a paragraph break (§5).
+    const tipsLines: string[] = [];
+    while (i <= last) {
+      const tipsMatch = STEP_TIPS_LINE.exec(lines[i]!);
+      if (tipsMatch === null) break;
+      tipsLines.push(tipsMatch[1] ?? '');
+      i++;
+    }
+    if (tipsLines.length > 0) {
+      const normalizedTips = normalizeTipsText(tipsLines.join('\n'));
+      if (normalizedTips === '') {
+        issues.push({ path: `${stepPath}.tips`, message: 'Tipps dürfen nicht leer sein.' });
+      } else {
+        tips = normalizedTips;
+      }
+    }
+
+    steps.push({ ingredients, text, ...(tips !== undefined ? { tips } : {}) });
   }
 
   if (steps.length === 0) {

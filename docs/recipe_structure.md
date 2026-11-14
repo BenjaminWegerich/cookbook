@@ -23,6 +23,15 @@
   It may be phrased as a continuation of the title instead of a standalone sentence, e.g.
   "Bauernfrühstück / mit Kartoffeln, Karotten und Tofu".
 
+### Quelle (optional)
+
+- A single link to the original recipe or to the inspiration the recipe was written from.
+- Must be a complete `http(s)` URL; a bare domain, a relative path or a note is rejected.
+- Stored in the front-matter field `source` (the „Quelle“ link); the app shows it under the
+  caption „Quelle“ in the recipe overview and the cooking view.
+- When a recipe is created from a shared or pasted link, the app carries that link into
+  the field; the AI never invents one.
+
 ### Servings (required)
 
 - For finished-dish recipes (see "Recipe Type"): Number of people the portion serves. Example: "6 Personen".
@@ -42,6 +51,13 @@
 
 - The time from the start of the first preparation step until serving. Includes passive time such as resting, simmering, or oven time.
 - Only specify if it is larger than the preparation time, e.g., if the dish needs to rest or simmer.
+
+### Tipps (optional)
+
+- A longer note for the whole recipe: techniques, pitfalls, background or a variant.
+- Plain text with paragraphs (blank lines); no ingredient quantities and no ingredient list.
+- A step may carry its own tips as a blockquote directly after its prose.
+- The editor and cooking view show both collapsed; nothing is counted as an ingredient.
 
 ### Prep Time (required)
 
@@ -128,4 +144,7 @@
   - the prose is free text that may reference ingredients by name as plain words
     and may contain display-only inline artifacts for scaled quantities or
     equipment sizes.
+  - a step may end with its own **tips**: a block of `>` lines directly after the
+    prose. A bare `>` line separates paragraphs; the text is plain prose, never
+    scaled and never part of an ingredient list.
 - There is no summary; the recipe ends with the last step. However, this step may include serving suggestions.

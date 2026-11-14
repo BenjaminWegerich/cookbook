@@ -64,8 +64,23 @@ The app writes YAML through a serializer; hand-written files are validated on re
 | `title` | string | yes | Unique within the whole collection; the stable identifier (see §6). Example: `Shredded Tofu Wraps`. |
 | `type` | enum | yes | `finished_dish` or `ingredient_recipe` — never derived, set by the author. |
 | `description` | string | no | A single paragraph; may suggest side dishes or other uses, and may be phrased as a continuation of the title (e.g. `Bauernfrühstück / mit Kartoffeln, Karotten und Tofu`). |
+| `source` | string | no | „Quelle“: absolute http(s) URL of the original recipe or the inspiration. One link; no free-text note. |
 | `prep_time` | string | yes | Free-text display value, e.g. `25 min`, `1 h 30 min`. The editor offers the standard values 1/3/5/10/15/20/30/45 min and 1/1.5/2/3/6/12/24/48 h as chips. |
 | `total_time` | string | no | Only if it is larger than `prep_time`. |
+| `tips` | string | no | Recipe-level tips: plain text with paragraphs (blank lines). Shown collapsed as „Tipps“ in the editor and the cooking view. |
+
+`source` (the „Quelle“) is the recipe's one back-link to where it came from: the original recipe
+or the inspiration (e.g. a blog post or a TikTok video). It is a single absolute
+`http(s)` URL and is allowed on both types. A bare domain, a relative path, an
+empty value and every non-`http(s)` scheme are validation errors; the value is
+trimmed on read. The app shows it as a „Quelle“ link in the recipe overview and
+in the cooking view's intro.
+
+`tips` is a plain-text block, not Markdown: blank lines separate paragraphs,
+single line breaks stay line breaks. It never carries ingredient quantities, is not parsed
+for `{{…}}` artifacts and does not affect any ingredient list. The editor and
+the cooking view show it as a collapsed „Tipps“ disclosure; the recipe-level
+block sits on the intro, each step's block under that step's prose.
 
 ### Type-specific fields
 
@@ -230,6 +245,9 @@ layout). The rows are written in a natural, amount-first phrase:
   ## Zubereitung
   1. - 250 g Tortillas
      Tortillas im Ofen erwärmen.
+     > Der Teig ruht 30 Minuten besser.
+     >
+     > Zwischen den Lagen Backpapier verwenden.
   2. - 400 g Joghurt
      - 15 ml Zitronensaft
      Joghurt mit Zitronensaft verrühren.
@@ -241,12 +259,17 @@ layout). The rows are written in a natural, amount-first phrase:
 - Each step is a numbered block:
   - **With rows:** the numbered line starts with the first row (`1. - 250 g
     Tortillas`); further rows follow as `- ` lines (indented for readability), and
-    then exactly one prose line ends the block. A row line is the only place
-    `- ` may start a line.
+    then exactly one prose line; optional tips may follow it. A row line is the
+    only place `- ` may start a line.
   - **Without rows:** the step is a single prose line (`3. Mit frischen Kräutern
     servieren.`).
   - The prose may contain the inline artifacts of §4. The editor collapses line
     breaks on save; prose must not start with `- `.
+  - **Tips (optional):** a step may end with consecutive blockquote lines (`> `)
+    directly after the prose — one block per step, no blank line between prose
+    and tips. Each `>` line is one text line; a bare `>` line is a paragraph
+    break. The block is plain text: it carries no ingredient quantities, is never parsed
+    for `{{…}}`, never enters an ingredient list and does not scale.
 - Blank lines separate steps. Step numbers are explicit in the file (Markdown
   ordered list); the order is authoritative, even where it does not matter.
 - There is no summary section; the recipe ends with the last step, which may include
@@ -281,6 +304,10 @@ the file. Two levels:
   types, required/forbidden fields per `type`); an `ingredients` field is rejected
   (it is derived from the step rows, §4).
 - `title` is non-empty and file-name-safe.
+- `source` („Quelle“), when present, is a non-empty absolute `http(s)` URL without
+  whitespace; a bare domain or any other scheme is rejected.
+- `tips` (recipe-level and per step) must be non-empty when present; a step's
+  tips block must follow its prose, and a blank tips block is rejected.
 - `servings` must be one of the allowed serving counts; `yield` and every row /
   artifact `Menge` must be a positive finite number (`V0`). There is no ladder
   membership check anymore. A precision tag, when present, must be one of
@@ -323,15 +350,19 @@ Finished dish:
 title: Shredded Tofu Wraps
 type: finished_dish
 description: Knusprige Wraps mit mariniertem Tofu und frischem Gemüse.
+source: https://example.com/rezept
 servings: 6
 prep_time: 25 min
 total_time: 40 min
+tips: |
+  Die Tortillas warm halten, damit sie sich besser falten lassen.
 reference:
   - Tortillas
 ---
 ## Zubereitung
 1. - 250 g Tortillas
    Tortillas im Ofen erwärmen und warm halten.
+   > Nach dem Erwärmen in ein sauberes Tuch wickeln.
 2. Tofu marinieren und scharf anbraten.
 3. - 400 g Joghurt
    - 15 ml Zitronensaft
@@ -555,9 +586,9 @@ fields losslessly:
 - `version` is the payload shape version; an incompatible change bumps it, and an unknown
   version is not read.
 - `savedAt` is the client's epoch milliseconds at the last write.
-- `draft` holds the editor fields: `title`, `type`, `description?`, `prep_time`,
-  `total_time?`, `servings?` or `yield?` + `yield_unit?`, `reference?`, `theme?`, and
-  `steps` (each with `ingredients` and `text`). Every field is optional except `type` and
+- `draft` holds the editor fields: `title`, `type`, `description?`, `source?` („Quelle“), `prep_time`,
+  `total_time?`, `tips?`, `servings?` or `yield?` + `yield_unit?`, `reference?`, `theme?`, and
+  `steps` (each with `ingredients`, `text` and optional `tips`). Every field is optional except `type` and
   `steps`; a draft may be empty. The derived `ingredients` list is never stored.
 - A draft's optional photo is `Bilder/<draft-id>.jpg` / `.png`, where `<draft-id>` is the
   draft file's basename without `.json`. The id, not the title, names the file, so an empty

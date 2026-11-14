@@ -250,6 +250,7 @@
    Without the exclusion this higher-specificity rule would win the cascade
    and make the slot's hidden width probe disagree with the rendered value. */
 .field input[type='text']:not(.quantity-input),
+.field input[type='url'],
 .field textarea {
   width: 100%;
   padding: var(--space-3) var(--space-4);
@@ -879,6 +880,80 @@
 
 .icon-button.danger-text {
   color: var(--color-danger);
+}
+
+/* ---- Tips --------------------------------------------------------------- */
+
+/* The recipe-level tips close the Kopfdaten card; the step tips close each step
+   card. Both are always present as a quiet row and only open on request. */
+.tips-field {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+/* The whole row is one quiet button (§5.1); it keeps the control height so the
+   tap target does not shrink with the label. */
+.tips-summary {
+  width: 100%;
+  min-height: var(--control-height);
+  padding-inline: 0;
+  text-align: start;
+}
+
+/* The empty state is the creation affordance: olive like every add control. */
+.tips-summary-empty {
+  color: var(--color-olive);
+}
+
+.tips-summary .button-icon {
+  flex: none;
+}
+
+.tips-label {
+  flex: none;
+  font-weight: 600;
+}
+
+/* The one-line preview names a collapsed block without opening it. */
+.tips-preview {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--color-ink-muted);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tips-preview::before {
+  content: '·';
+  margin-inline: var(--space-2);
+}
+
+.tips-caret {
+  transform: rotate(-90deg);
+  transition: transform var(--motion-base) ease-out;
+}
+
+.tips-caret-open {
+  transform: rotate(0);
+}
+
+.tips-panel {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* The textarea fills the panel; the field wrapper only lends it the shared
+   input look. */
+.tips-panel .field {
+  gap: 0;
+}
+
+.tips-remove {
+  justify-self: start;
+  padding-inline-start: 0;
 }
 
 /* ---- Computed ingredient list ------------------------------------------- */

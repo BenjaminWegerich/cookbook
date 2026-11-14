@@ -69,6 +69,13 @@ export interface Step {
   ingredients: Ingredient[];
   /** The instruction prose (single line, may contain {{…}} artifacts). */
   text: string;
+  /**
+   * Optional tips for this step: plain-text paragraphs that follow the prose
+   * and are shown collapsed as „Tipps“ in the editor and the cooking view. They
+   * carry no quantities, never enter an ingredient list and are not parsed for
+   * {{…}} artifacts (§5).
+   */
+  tips?: string;
 }
 
 /**
@@ -122,10 +129,24 @@ export interface Recipe {
   type: RecipeType;
   /** A single paragraph; may suggest side dishes or other uses. */
   description?: string;
+  /**
+   * Optional absolute http(s) link to the original recipe or to the
+   * inspiration the recipe was written from (e.g. a blog post, a TikTok video).
+   * Stored in the `source` front-matter field (§3); both recipe types may carry
+   * one. Never derived from an ingredient or a sub-recipe link.
+   */
+  source?: string;
   /** Free-text display value, e.g. `25 min`, `1 h 30 min`; required. */
   prep_time: string;
   /** Only if it differs from `prep_time`. */
   total_time?: string;
+  /**
+   * Optional recipe-level tips: longer prose that explains techniques, pitfalls
+   * or background without belonging to one step. Plain text with paragraphs
+   * (blank lines); stored in the `tips` front-matter field (§3) and shown
+   * collapsed as „Tipps“ in the editor and the cooking view.
+   */
+  tips?: string;
   /**
    * Names of the ingredients anchored to the recipe's size: the portion size
    * for a `finished_dish`, the yield for an `ingredient_recipe` (§4). The names

@@ -662,6 +662,80 @@ total_time: 1 h 30 min
     expect(html).not.toContain('1 h 30 min');
   });
 
+  it('adds the source link behind a Quelle caption', () => {
+    const html = generateRecipeHtml(
+      parseRecipe(`---
+title: Mit Quelle
+type: finished_dish
+servings: 4
+prep_time: 25 min
+source: https://www.example.com/rezept
+---
+## Zubereitung
+1. Kochen.
+`),
+    );
+    expect(html).toContain('<span class="caption">Quelle</span>');
+    expect(html).toContain(
+      '<a class="source-link" href="https://www.example.com/rezept" target="_blank" rel="noopener noreferrer">',
+    );
+    // The value is the domain, the href stays the full URL.
+    expect(html).toContain('>example.com</a>');
+  });
+
+  it('renders recipe and step tips as collapsed disclosures', () => {
+    const html = generateRecipeHtml(
+      parseRecipe(`---
+title: Mit Tipps
+type: finished_dish
+servings: 2
+prep_time: 10 min
+tips: |
+  Erster Tipp.
+
+  Zweiter Tipp.
+---
+## Zubereitung
+1. - 200 g Reis
+   Reis kochen.
+   > Den Reis vorher waschen.
+   >
+   > Salz erst am Ende.
+`),
+    );
+    expect(html).toContain('<details class="tips intro-tips">');
+    expect(html).toContain('<details class="tips step-tips">');
+    // Closed by default; native details carries the state.
+    expect(html).not.toMatch(/<details[^>]*\sopen/);
+    expect(html).toContain('<span class="tips-label">Tipps</span>');
+    expect(html).toContain('<p>Erster Tipp.</p>');
+    expect(html).toContain('<p>Zweiter Tipp.</p>');
+    expect(html).toContain('<p>Den Reis vorher waschen.</p>');
+    expect(html).toContain('<p>Salz erst am Ende.</p>');
+  });
+
+  it('escapes tips and keeps line breaks', () => {
+    const html = generateRecipeHtml(
+      parseRecipe(`---
+title: Tipp-Escape
+type: finished_dish
+servings: 2
+prep_time: 5 min
+tips: |
+  Zeile 1 <b> & Zeile 2
+  noch eine Zeile
+---
+## Zubereitung
+1. Kochen.
+`),
+    );
+    expect(html).toContain('Zeile 1 &lt;b&gt; &amp; Zeile 2<br>noch eine Zeile');
+  });
+
+  it('omits the Quelle caption when the recipe has no source', () => {
+    expect(generateRecipeHtml(WRAPS)).not.toContain('<span class="caption">Quelle</span>');
+  });
+
   it('shows unparseable free-text durations verbatim', () => {
     const html = generateRecipeHtml(
       parseRecipe(`---

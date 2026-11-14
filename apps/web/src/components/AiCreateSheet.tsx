@@ -277,6 +277,14 @@ interface AiCreateSheetProps {
    */
   initialSource?: string;
   /**
+   * The URL the create task was opened from, when App has one: a shared link or
+   * a link prefilled into the request. The session fills it into the draft's
+   * `source` when the AI did not return one — a TikTok caption reaches the
+   * model without its URL, so the app carries it. Ignored in `'edit'` mode,
+   * where the original recipe's own source is used instead.
+   */
+  initialSourceUrl?: string;
+  /**
    * True while this screen is the visible one. The sheet deliberately stays
    * mounted (hidden) while its own draft is edited, so its Escape trigger must
    * be off in that state — otherwise Escape would hit the editor and this sheet
@@ -352,6 +360,7 @@ async function prepareSession(
   token: string,
   stored: readonly StoredRecipe[],
   editTarget?: StoredRecipe,
+  initialSourceUrl?: string,
 ): Promise<AiCreateSession> {
   const apiKey = getAiApiKey();
   if (apiKey === null) {
@@ -364,9 +373,17 @@ async function prepareSession(
     // recipe at all. The draft task explicitly asks the AI to complete missing
     // mandatory fields, and the session still validates the reply as canonical.
     const unfinishedDraft = editTarget.status === 'draft';
-    const originalText = unfinishedDraft
-      ? draftToEditText((await readDraft(token, editTarget.fileId)).draft)
-      : serializeRecipe(await readRecipe(token, editTarget.fileId));
+    let originalText: string;
+    let originalSource: string | undefined;
+    if (unfinishedDraft) {
+      const draft = (await readDraft(token, editTarget.fileId)).draft;
+      originalText = draftToEditText(draft);
+      originalSource = draft.source;
+    } else {
+      const recipe = await readRecipe(token, editTarget.fileId);
+      originalText = serializeRecipe(recipe);
+      originalSource = recipe.source;
+    }
     return createAiCreateSession({
       client: createAiClient({ provider: 'gemini', apiKey }),
       guidelinesText: context.guidelinesText,
@@ -375,6 +392,8 @@ async function prepareSession(
       task: 'edit',
       knownIngredientNames: new Set(Object.keys(allIngredientMappings())),
       ingredientRecipeTitles: context.ingredientRecipeTitles,
+      // Keep the original source when the AI returns a revised file without it.
+      ...(originalSource !== undefined ? { sourceUrl: originalSource } : {}),
     });
   }
   return createAiCreateSession({
@@ -383,6 +402,9 @@ async function prepareSession(
     collectionText: context.collectionText,
     knownIngredientNames: new Set(Object.keys(allIngredientMappings())),
     ingredientRecipeTitles: context.ingredientRecipeTitles,
+    ...(initialSourceUrl !== undefined && initialSourceUrl !== ''
+      ? { sourceUrl: initialSourceUrl }
+      : {}),
   });
 }
 
@@ -444,6 +466,7 @@ export default function AiCreateSheet({
   editTarget,
   initialPrompt,
   initialSource,
+  initialSourceUrl,
   visible,
   recipes,
   handoff,
@@ -523,8 +546,8 @@ export default function AiCreateSheet({
   /** Loads the session prerequisites (throws on failure). */
   const loadSession = useCallback(
     (activeToken: string): Promise<AiCreateSession> =>
-      prepareSession(activeToken, recipes, editTarget),
-    [recipes, editTarget],
+      prepareSession(activeToken, recipes, editTarget, initialSourceUrl),
+    [recipes, editTarget, initialSourceUrl],
   );
 
   /** Applies the prepared session (state updates from promise callbacks). */

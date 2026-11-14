@@ -18,6 +18,7 @@ Zweier-Einrückung, Felder in dieser Reihenfolge:
 title: Hähnchen-Curry
 type: finished_dish
 description: …            (optional, ein Absatz oder eine Titel-Fortsetzung)
+source: https://example.com/rezept   (optional, Quelle)
 servings: 4               (nur finished_dish)
 reference:                (optional, beide Typen)
   - Reis
@@ -39,6 +40,15 @@ theme:                    (optional, beide Typen — s. u.)
 - `description` (optional): ein Absatz, der das Gericht beschreibt und ggf. passende Beilagen
   oder andere Verwendungen nennt; er darf den Titel fortsetzen statt ein eigenständiger Satz
   zu sein (z. B. „Bauernfrühstück / mit Kartoffeln, Karotten und Tofu").
+- `source` („Quelle“, optional, beide Typen): die vollständige `http(s)`-URL des
+  Originalrezepts oder der Inspiration. Setze das Feld nur, wenn im Auftrag oder in der
+  mitgegebenen Quell-URL eine eindeutige URL steht; übernimm sie exakt und erfinde keine URL.
+  Ohne URL lass es weg.
+- `tips` (optional, beide Typen): ein Block aus Absätzen mit Technik-, Hintergrund- oder
+  Fehlervermeidungs-Tipps für das ganze Rezept (reiner Text, kein Markdown). Steht nach
+  `total_time` und vor `theme`.
+  Nur wenn der Quelltext echte Hinweise enthält; erfinde keine Füllsätze, keine
+  Zutatenmengen und keine `{{…}}`.
 - `reference` (optional): Namen, die die Portion (Gericht) bzw. die Ergiebigkeit (Basis)
   verankern; jeder Name muss in den zusammengeführten Zutaten vorkommen.
 - `theme` (optional, beide Typen): die visuelle Gestaltung des HTML-Exports — Schriftart und
@@ -56,7 +66,7 @@ theme:                    (optional, beide Typen — s. u.)
 - `prep_time` (Pflicht): deutsche Anzeige, z. B. `25 min`, `1 h 30 min`; bevorzugt
   Standardwerte `1/3/5/10/15/20/30/45 min` und `1/1.5/2/3/6/12/24/48 h`.
 - Kein `ingredients`-Feld (die Zutatenliste wird aus den Schritten abgeleitet) und keine
-  weiteren Felder (`tags`, `source`, `image` …); `theme` ist gültig (s. o.).
+  weiteren Felder (`tags`, `image` …); `source`, `tips` und `theme` sind gültig (s. o.).
 
 ## Schritte
 Nach dem Frontmatter genau eine Überschrift `## Zubereitung`, dann die nummerierten
@@ -66,6 +76,9 @@ Schritte — sonst nichts:
 ## Zubereitung
 1. - 250 g Tortillas
    Tortillas im Ofen erwärmen.
+   > Nach dem Erwärmen in ein sauberes Tuch wickeln.
+   >
+   > Zwischen den Lagen Backpapier verwenden.
 2. - 400 g Joghurt
    - 15 ml Zitronensaft
    Joghurt mit Zitronensaft verrühren.
@@ -75,8 +88,12 @@ Schritte — sonst nichts:
 - Überschrift exakt `## Zubereitung`; keine weiteren Überschriften.
 - Schritte `1.`, `2.`, … fortlaufend, Leerzeile zwischen den Schritten.
 - Schritt mit Zeilen: Nummernzeile beginnt mit der ersten Zutatenzeile, weitere Zeilen
-  `- …`, am Ende genau eine Prosa-Zeile (die Anweisung, darf nicht mit `- ` beginnen).
+  `- …`, dann genau eine Prosa-Zeile (die Anweisung, darf nicht mit `- ` beginnen); danach
+  darf der Tipps-Block folgen.
 - Schritt ohne Zeilen: eine einzelne Prosa-Zeile.
+- Ein Schritt darf nach der Prosa einen Tipps-Block aus `>`-Zeilen tragen. Eine leere
+  `>`-Zeile trennt Absätze. Tipps sind reiner Text: keine `{{…}}`-Bausteine, keine
+  Zutatenzeilen, keine Zutatenmengen.
 - Natürliche, konkrete deutsche Anweisungen.
 
 ## Mengen
@@ -171,8 +188,9 @@ es lieber weg.
 ## Überarbeitungen
 - Nach einer gelieferten Datei kannst du Änderungen erhalten: liefere immer wieder die
   vollständige, korrigierte Datei — nie ein Diff, nie nur geänderte Zeilen.
-- Behalte `title`, `type` und ein vorhandenes `theme`, sofern der Wunsch nichts anderes
-  verlangt. Eine Überarbeitung ist kein zweites Rezept.
+- Behalte `title`, `type`, ein vorhandenes `theme`, ein vorhandenes `source` und vorhandene
+  Tipps, sofern der Wunsch nichts anderes verlangt. Eine Überarbeitung ist kein zweites
+  Rezept.
 
 ## Ein Rezept pro Unterhaltung
 - Pro Unterhaltung entsteht genau ein neues Rezept (Überarbeitungen zählen nicht).

@@ -29,6 +29,12 @@ export interface SharedSource {
   prompt?: string;
   /** Prefill of the "Quelltext" field (text extracted from a blocked page). */
   source?: string;
+  /**
+   * The link the share carried, when it had one. The AI-create session keeps it
+   * as the saved recipe's `source` even when only the caption reaches the model
+   * (TikTok), so the original video stays reachable.
+   */
+  sourceUrl?: string;
 }
 
 /** Failure of a share that needs extracting, with a code the caller can map to
@@ -151,9 +157,9 @@ export async function resolveIncomingShare(
   }
   const url = share.url ?? textUrl;
   if (url === null) return {};
-  if (!isTikTokUrl(url)) return { prompt: url };
+  if (!isTikTokUrl(url)) return { prompt: url, sourceUrl: url };
   if (extractorUrl === undefined || extractorUrl.trim() === '') {
     throw new ShareResolveError('no-extractor', 'VITE_TIKTOK_EXTRACTOR_URL ist nicht gesetzt.');
   }
-  return { source: await fetchTikTokCaption(url, extractorUrl) };
+  return { source: await fetchTikTokCaption(url, extractorUrl), sourceUrl: url };
 }

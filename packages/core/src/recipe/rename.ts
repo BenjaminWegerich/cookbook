@@ -80,7 +80,7 @@ export function renameRecipeInCollection(
       changed = true;
       return { ...artifact, name: newTitle };
     });
-    return { step: { ingredients, text }, changed };
+    return { step: { ...step, ingredients, text }, changed };
   };
 
   const updated: Recipe[] = [];

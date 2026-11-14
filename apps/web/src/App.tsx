@@ -122,7 +122,8 @@ type TopScreen =
  * stored recipe the user opened it for.
  */
 type AiScreen =
-  { mode: 'create'; prompt?: string; source?: string } | { mode: 'edit'; recipe: StoredRecipe };
+  | { mode: 'create'; prompt?: string; source?: string; sourceUrl?: string }
+  | { mode: 'edit'; recipe: StoredRecipe };
 
 /**
  * German notice for a share that could not be turned into a prefill. The share
@@ -2229,7 +2230,12 @@ function App() {
     incomingShareConsumedRef.current = true;
     void resolveIncomingShare(incomingShare, TIKTOK_EXTRACTOR_URL)
       .then((resolved) => {
-        setAiScreen({ mode: 'create', prompt: resolved.prompt, source: resolved.source });
+        setAiScreen({
+          mode: 'create',
+          prompt: resolved.prompt,
+          source: resolved.source,
+          sourceUrl: resolved.sourceUrl,
+        });
         setNav('ai');
       })
       .catch((error: unknown) => {
@@ -2378,6 +2384,7 @@ function App() {
             editTarget={aiScreen.mode === 'edit' ? aiScreen.recipe : undefined}
             initialPrompt={aiScreen.mode === 'create' ? aiScreen.prompt : undefined}
             initialSource={aiScreen.mode === 'create' ? aiScreen.source : undefined}
+            initialSourceUrl={aiScreen.mode === 'create' ? aiScreen.sourceUrl : undefined}
             token={token ?? ''}
             visible={!editorOpen}
             recipes={recipes ?? []}
