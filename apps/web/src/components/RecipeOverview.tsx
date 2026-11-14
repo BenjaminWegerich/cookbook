@@ -636,9 +636,10 @@ function RecipeOverview({
    * "Kochen": opens the recipe's pre-computed HTML export — its cooking
    * view — in a new tab. The size rides in the URL exactly like it does on a
    * meal-plan link (core's `withPlanSize`): a dish that is on the plan opens at
-   * the size the entry states, so the cooking view is the amount that was
-   * planned — the same amount the sheet's "Geplant" value names. A dish that is
-   * *not* on the plan, and a planned entry that states no size at all, opens the
+   * the plan's size — stated by the entry, or recovered from its short link's
+   * target — so the cooking view is the amount that was planned, the same amount
+   * the sheet's "Geplant" value names. A dish that is
+   * *not* on the plan, and a planned entry whose size is unknown, opens the
    * export's own default: the size the recipe is written in. Nothing has to be
    * read for that, because the export falls back to its written view when the
    * URL carries no size — which is why this action works before the details
@@ -658,9 +659,10 @@ function RecipeOverview({
       setNotice(MISSING_EXPORT_NOTICE);
       return;
     }
-    // The plan's promised size, when the entry states one; otherwise the
-    // export's own default (the written size), which is also exactly what a
-    // size-less plan entry means — so no size parameter is added then.
+    // The plan's promised size (stated, or recovered from the entry's short
+    // link); otherwise the export's own default (the written size), which is
+    // also exactly what a plan entry with no known size means — so no size
+    // parameter is added then.
     const url =
       onMealPlan && planned !== null
         ? withPlanSize(recipeExportUrl(recipe.exportFileId), planned)
@@ -833,9 +835,10 @@ function RecipeOverview({
   /**
    * The size this dish is cooked at, as display text, or null.
    *
-   * A recognized recipe: the plan's stated size when the entry states one;
-   * otherwise — while the dish is on the plan — the recipe's written size (core's
-   * `writtenPlannedAmount`), because that is what a size-less entry's link opens.
+   * A recognized recipe: the plan's size — stated by the entry, or recovered from
+   * its short link's target; otherwise — while the dish is on the plan — the
+   * recipe's written size (core's `writtenPlannedAmount`), because that is what an
+   * entry with no known size opens.
    * An unrecognized entry shows the size it states and nothing else: there is no
    * recipe file to fall back to, and no "Umplanen" action either. A draft is
    * never on the plan and shows no "Geplant" value.

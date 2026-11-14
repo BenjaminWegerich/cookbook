@@ -28,6 +28,19 @@
  * dish stays recognized without its file (there is nothing to fit); it simply
  * carries no written size, so the shopping-list selection shows none for it.
  *
+ * **A short-link entry states no size of its own.** The app writes the promised
+ * size into the link's target only (a redirect cannot reliably carry an added
+ * parameter), so a recognized entry whose link states nothing is resolved
+ * through the Keep gateway (`POST /shorten/resolve`, via the caller's
+ * `resolveShortLink`) and the target is parsed with core's `plannedFromUrl`.
+ * The recovered size then behaves exactly like a stated one: it is fitted
+ * against the recipe, carried as the card's `planned` and shown as the
+ * overview's "Geplant" value. A resolution that fails — a dead link, a gateway
+ * that is down — leaves `planned` null, and the entry reads like a hand-typed
+ * line without a size (the recipe's written size is the fallback). Legacy lines
+ * that still name the size in a parenthetical need no resolution: the parser
+ * reads the size there, and a stated size always wins over the link's target.
+ *
  * The returned `plannedRecipeTitles` is what keeps a planned recipe out of the
  * "Restliche Sammlung" section; a recipe planned twice, or planned once and
  * referenced by an unrecognized entry as well, still counts exactly once
@@ -36,9 +49,11 @@
  */
 
 import {
+  isShortLink,
   mealPlanEntryLabel,
   parseMealPlanText,
   plannedAmountFitsRecipe,
+  plannedFromUrl,
   splitTitleNote,
   writtenPlannedAmount,
   type MealPlanRecipeInfo,
@@ -49,6 +64,13 @@ import {
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
 import type { KeepItem } from './keepClient';
 
+/**
+ * Reads a short meal-plan link's target (the Keep hook's `resolveShortLink`), or
+ * answers null when it cannot be read. Injected rather than imported so this
+ * module stays free of the gateway client and of the sign-in behind it.
+ */
+export type ShortLinkResolver = (shortUrl: string) => Promise<string | null>;
+
 /** One card of the "Essensplan" section. */
 export interface MealPlanCard {
   /** Stable React key: position in Keep's order plus the entry text. */
@@ -57,9 +79,10 @@ export interface MealPlanCard {
   text: string;
   /**
    * The entry in human form without its export URL — "Kürbissuppe (6
-   * Portionen)", or the whole text when it states no parsable size. This is what
-   * an unrecognized card's search matches and what the notices and the
-   * shopping-list selection name; the raw `text` would put a long URL there.
+   * Portionen)" — including a size a short link only promises (recovered from
+   * its target, see the file header), or the whole text when it has no size.
+   * This is what an unrecognized card's search matches and what the notices and
+   * the shopping-list selection name; the raw `text` would put a long URL there.
    */
   displayText: string;
   /**
@@ -79,11 +102,11 @@ export interface MealPlanCard {
   /** The recognized recipe (photo + title), or null when unrecognized. */
   recipe: StoredRecipe | null;
   /**
-   * The size the entry states, or null when it states none. For a recognized
-   * card it has passed the fit check (`plannedAmountFitsRecipe`); an
-   * unrecognized card carries whatever the text states, so its overview can
-   * show the size as its "Geplant" value exactly like a known planned recipe
-   * (decided with the user).
+   * The size the entry states — or the size its short link promises, recovered
+   * from the link's target — or null when it has none. For a recognized card it
+   * has passed the fit check (`plannedAmountFitsRecipe`); an unrecognized card
+   * carries whatever the text states, so its overview can show the size as its
+   * "Geplant" value exactly like a known planned recipe (decided with the user).
    */
   planned: PlannedAmount | null;
   /**
@@ -95,11 +118,13 @@ export interface MealPlanCard {
   link: string | null;
   /**
    * The size the recipe is *written* in (core's `writtenPlannedAmount`), or null
-   * for an unrecognized card. It is the fallback for a recognized entry that
-   * states no size: such an entry means the dish at its written size — that is
-   * what its link opens — so the shopping-list selection names this amount
-   * instead of showing nothing. `planned` stays exactly what Keep says, so the
-   * "Umplanen" overlay still knows whether the entry stated a size.
+   * for an unrecognized card. It is the fallback for a recognized entry whose
+   * size is unknown — the line states none and its short link could not be
+   * resolved: such an entry then means the dish at its written size, which is
+   * that link's own default, so the shopping-list selection names this amount
+   * instead of showing nothing. `planned` stays exactly what the entry (or its
+   * link) promises, so the "Umplanen" overlay still knows whether there was a
+   * size.
    */
   writtenPlanned: PlannedAmount | null;
 }
@@ -138,17 +163,61 @@ function fitInfo(loaded: Recipe): MealPlanRecipeInfo {
  * access token, needed for the recipe files: one is read per recognized entry,
  * both to check a stated size against the recipe and to carry the recipe's
  * written size onto the card (see MealPlanCard.writtenPlanned).
+ *
+ * `resolveShortLink` is the Keep hook's short-link resolver. Without it (Keep
+ * features off, or a caller that has no gateway) a short-link entry is read as
+ * one that states no size. With it, the size a short link promises is recovered
+ * from the link's target (see the file header).
  */
 export async function resolveMealPlan(
   recipes: StoredRecipe[],
   items: KeepItem[],
   token: string,
+  resolveShortLink?: ShortLinkResolver,
 ): Promise<MealPlanResolution> {
   // Recipe titles are unique within the collection (storage_format.md §2), so
   // a title lookup is unambiguous.
   const recipesByTitle = new Map(recipes.map((recipe) => [recipe.title, recipe]));
   /** Per-title cache of the loaded recipe file, or null when unreadable. */
   const fileByTitle = new Map<string, Recipe | null>();
+
+  /**
+   * The size a short link promises, keyed by the link — filled before the cards
+   * are built, because building one may need it.
+   *
+   * The app writes the size into the link's target only, so a short-link line
+   * states none. Only entries that name a known recipe are resolved, and only a
+   * short link that the gateway can read (`isShortLink`): the size is what the
+   * fit check, the "Geplant" value and the shopping list need, a hand-written
+   * link on an unknown entry is none of the app's business, and a long link
+   * without a size would only cost a failing request. One
+   * request per distinct link — the Keep hook caches the answer for the session,
+   * and a link the app just created is already known from its shortening call.
+   */
+  const resolvedSizes = new Map<string, PlannedAmount | null>();
+  if (resolveShortLink !== undefined) {
+    const wanted = new Set<string>();
+    for (const item of items) {
+      if (item.checked) continue;
+      const parsed = parseMealPlanText(item.text.trim());
+      if (
+        parsed.link !== null &&
+        parsed.planned === null &&
+        isShortLink(parsed.link) &&
+        recipesByTitle.has(parsed.title)
+      ) {
+        wanted.add(parsed.link);
+      }
+    }
+    // Resolved together: the calls are independent, and a plan with several
+    // short links should not wait for one round trip per dish.
+    await Promise.all(
+      [...wanted].map(async (link) => {
+        const target = await resolveShortLink(link);
+        resolvedSizes.set(link, target === null ? null : plannedFromUrl(target));
+      }),
+    );
+  }
 
   const readFile = async (recipe: StoredRecipe): Promise<Recipe | null> => {
     const cached = fileByTitle.get(recipe.title);
@@ -175,6 +244,10 @@ export async function resolveMealPlan(
     if (text === '') continue;
 
     const parsed = parseMealPlanText(text);
+    // What the entry states, or — for a short link, which states nothing — what
+    // its resolved target promises. Anything else stays "no size".
+    const planned =
+      parsed.planned ?? (parsed.link === null ? null : (resolvedSizes.get(parsed.link) ?? null));
     const recipe = recipesByTitle.get(parsed.title) ?? null;
     let recognized = false;
     /** The loaded file of a recognized entry (its written size is a card fact). */
@@ -187,9 +260,9 @@ export async function resolveMealPlan(
       // and a size-less entry — a hand-typed Keep line — is not the common case.
       file = await readFile(recipe);
       recognized =
-        parsed.planned === null
+        planned === null
           ? true // the entry only names the dish: nothing has to fit
-          : file !== null && plannedAmountFitsRecipe(parsed.planned, fitInfo(file));
+          : file !== null && plannedAmountFitsRecipe(planned, fitInfo(file));
     }
     if (recognized && recipe !== null) {
       plannedRecipeTitles.add(recipe.title);
@@ -198,8 +271,8 @@ export async function resolveMealPlan(
       // the more useful one to carry over, so a size-less duplicate never
       // shadows it.
       const previous = plannedAmounts.get(recipe.title);
-      if (previous === undefined || (previous === null && parsed.planned !== null)) {
-        plannedAmounts.set(recipe.title, parsed.planned);
+      if (previous === undefined || (previous === null && planned !== null)) {
+        plannedAmounts.set(recipe.title, planned);
       }
     }
 
@@ -212,7 +285,7 @@ export async function resolveMealPlan(
     cards.push({
       key: `${index}:${text}`,
       text,
-      displayText: mealPlanEntryLabel(parsed.title, parsed.planned),
+      displayText: mealPlanEntryLabel(parsed.title, planned),
       title: displayTitle.title,
       note: displayTitle.note,
       recipe: recognized ? recipe : null,
@@ -220,7 +293,7 @@ export async function resolveMealPlan(
       // fit check above, an unrecognized one shows it as its "Geplant" value
       // (it cannot be scaled — there is no recipe behind the entry — so it is a
       // display fact there, decided with the user).
-      planned: parsed.planned,
+      planned,
       link: parsed.link,
       writtenPlanned: recognized && file !== null ? writtenPlannedAmount(file) : null,
     });

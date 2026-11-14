@@ -29,7 +29,14 @@
  * hook when the Drive login is done, via `UseKeepOptions.enabled`.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import {
+  planLinkCandidates,
+  plannedAmountMatches,
+  plannedFromUrl,
+  type PlannedAmount,
+} from '@cookbook/core';
 
 import { clearIdentityToken, getIdentityToken, requestIdentityToken } from '../auth/googleAuth';
 import {
@@ -38,6 +45,7 @@ import {
   fetchKeepState,
   isKeepConfigured,
   keepErrorMessage,
+  resolveShortUrl,
   setMealPlanChecked,
   shortenUrl,
   sortShoppingList,
@@ -83,6 +91,35 @@ export interface UseKeepResult {
    * never pre-generated for sizes nobody chose.
    */
   shortenExportUrl: (target: string) => Promise<string | null>;
+  /**
+   * Resolves one short meal-plan link to its target, or null when the link cannot be read
+   * (dead link, gateway down, refused sign-in). The caller parses the promised size out of the
+   * target with core's `plannedFromUrl`.
+   *
+   * The meal-plan lines no longer state a size, so this is the only way the app knows which
+   * size a short-link entry is planned at. Resolutions are cached for the session per link,
+   * and a link the app just created is known from its shortening call, so a fresh plan costs
+   * no extra request. A failure is not cached, so the next read retries it.
+   *
+   * Deliberately never changes the connection status (same reasoning as
+   * `shortenExportUrl`): the plan stays readable, it just falls back to the recipe's written
+   * size.
+   */
+  resolveShortLink: (shortUrl: string) => Promise<string | null>;
+  /**
+   * Finds the short link a plan already carries for `title` at `planned`, or null — the
+   * app's free cache before it asks the shortener for a new one.
+   *
+   * `texts` are the plan lines the write is about to replace. The lines state no size any
+   * more, so the comparison runs on what each candidate link opens (its resolved target), not
+   * on the text; a candidate that cannot be resolved is skipped, so a dead link is never
+   * reused.
+   */
+  findReusablePlanLink: (
+    texts: readonly string[],
+    title: string,
+    planned: PlannedAmount,
+  ) => Promise<string | null>;
   /**
    * Undoes a `planMeal` write (the success pop-up's "Rückgängig"): removes the entry that
    * was added and puts the `restore` lines the write replaced back on the plan. The caller
@@ -200,6 +237,15 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
   const [error, setError] = useState<string | null>(null);
   /** Bumped by `retry()` to re-run the effect below. */
   const [attempt, setAttempt] = useState(0);
+  /**
+   * The short links this session has already resolved, keyed by the shortener's own URL.
+   *
+   * The promise is stored (not only its result), so two plan reads of one link join a running
+   * request instead of paying for it twice. A failure is removed again — see
+   * `resolveShortLink` — and the hook instance is the app's single one, so no other store is
+   * needed.
+   */
+  const shortLinkTargets = useRef(new Map<string, Promise<string | null>>());
 
   // Startup / retry: probe the gateway, then try a silent sign-in and a read. `cancelled`
   // drops the result of a superseded attempt (retry while a request is in flight, or
@@ -358,14 +404,72 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
    * Every failure is swallowed on purpose (see the interface doc): the write must succeed
    * without a shortener, and a status/error change here would show a Keep failure for what is
    * only a missing refinement. The link itself is optional; the line is not.
+   *
+   * A successful answer also fills the resolution cache: the target of the link just created
+   * is exactly the URL that was shortened, so the plan read after the write needs no extra
+   * request for it.
    */
   const shortenExportUrl = useCallback(async (target: string): Promise<string | null> => {
     try {
-      return await withIdentityToken((token) => shortenUrl(token, target));
+      const shortUrl = await withIdentityToken((token) => shortenUrl(token, target));
+      shortLinkTargets.current.set(shortUrl, Promise.resolve(target));
+      return shortUrl;
     } catch {
       return null;
     }
   }, []);
+
+  /**
+   * Resolves one short meal-plan link to its target, or answers null (see the interface doc).
+   *
+   * Failures — a dead link, an unreachable gateway, a refused sign-in — are swallowed and the
+   * entry is read as one that states no size, exactly like a hand-typed line without one.
+   * That keeps a plan readable while the gateway is down, and it is why this never touches the
+   * connection status: the plan is Keep's, the resolution is only a refinement of it.
+   */
+  const resolveShortLink = useCallback(async (shortUrl: string): Promise<string | null> => {
+    const cached = shortLinkTargets.current.get(shortUrl);
+    if (cached !== undefined) return cached;
+    const request = (async () => {
+      try {
+        return await withIdentityToken((token) => resolveShortUrl(token, shortUrl));
+      } catch {
+        return null;
+      }
+    })();
+    shortLinkTargets.current.set(shortUrl, request);
+    // Only a real target is worth remembering: caching "this link is dead" would hide a
+    // gateway that comes back during the session, and the next read retries it.
+    void request.then((target) => {
+      if (target === null) shortLinkTargets.current.delete(shortUrl);
+    });
+    return request;
+  }, []);
+
+  /**
+   * Finds the short link a plan already carries for `title` at `planned`, or null (see the
+   * interface doc).
+   *
+   * The comparison runs on what each candidate link opens — its target's stated size — not on
+   * the line's text, which no longer names a size. A candidate that cannot be resolved is
+   * skipped: a dead link must not be reused for a fresh plan.
+   */
+  const findReusablePlanLink = useCallback(
+    async (
+      texts: readonly string[],
+      title: string,
+      planned: PlannedAmount,
+    ): Promise<string | null> => {
+      for (const link of planLinkCandidates(texts, title)) {
+        const target = await resolveShortLink(link);
+        if (target === null) continue;
+        const stated = plannedFromUrl(target);
+        if (stated !== null && plannedAmountMatches(stated, planned)) return link;
+      }
+      return null;
+    },
+    [resolveShortLink],
+  );
 
   const undoMealPlan = useCallback(
     async (entry: string, restore: readonly string[]): Promise<void> => {
@@ -514,6 +618,8 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
     connect,
     planMeal,
     shortenExportUrl,
+    resolveShortLink,
+    findReusablePlanLink,
     undoMealPlan,
     checkMealPlan,
     uncheckMealPlan,

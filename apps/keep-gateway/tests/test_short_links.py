@@ -13,8 +13,8 @@ import unittest
 import urllib.error
 from unittest import mock
 
-from keep_gateway.errors import ShortenFailed
-from keep_gateway.short_links import TinyUrlShortener, _tiny_url_from
+from keep_gateway.errors import ResolveFailed, ShortenFailed
+from keep_gateway.short_links import TinyUrlShortener, _NoRedirect, _tiny_url_from
 
 OK_BODY = json.dumps(
     {
@@ -115,6 +115,110 @@ class TinyUrlShortenerTests(unittest.TestCase):
             with self.assertRaises(ShortenFailed) as caught:
                 shortener.shorten("https://example.com/x")
         self.assertNotIn("super-secret-token", caught.exception.detail or "")
+
+
+class FakeStatusResponse:
+    """A stand-in for a 2xx answer: it has a status and can be used as a context manager."""
+
+    status = 200
+
+    def __enter__(self) -> "FakeStatusResponse":
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+
+class ResolveTests(unittest.TestCase):
+    """Reading a short link's target: the redirect is the answer, nothing is fetched."""
+
+    LINK = "https://tinyurl.com/kuerbis6"
+    TARGET = "https://script.google.com/macros/s/abc/exec?f=1AbCdEf&portionen=6"
+
+    def _resolve_with(self, open_result: object, link: str = LINK) -> str:
+        """Runs `resolve` against a fake opener that returns or raises `open_result`."""
+        opener = mock.Mock()
+        if isinstance(open_result, Exception):
+            opener.open.side_effect = open_result
+        else:
+            opener.open.return_value = open_result
+        with mock.patch(
+            "keep_gateway.short_links.urllib.request.build_opener", lambda _handler: opener
+        ):
+            return TinyUrlShortener("unused-token").resolve(link)
+
+    def test_reads_the_redirect_location_without_following_it(self) -> None:
+        # A 3xx that urllib reports as an HTTPError: what the no-redirect handler produces.
+        error = urllib.error.HTTPError(
+            self.LINK, 301, "Moved Permanently", {"Location": self.TARGET}, None
+        )
+        with mock.patch(
+            "keep_gateway.short_links.urllib.request.build_opener"
+        ) as build_opener:
+            build_opener.return_value.open.side_effect = error
+            target = TinyUrlShortener("unused-token").resolve(self.LINK)
+
+        self.assertEqual(target, self.TARGET)
+        opener = build_opener.call_args.args[0]
+        # The redirect must be stopped, not followed: this is the whole safety of the call.
+        # `build_opener` takes the handler class and instantiates it itself.
+        self.assertIs(opener, _NoRedirect)
+        request = build_opener.return_value.open.call_args.args[0]
+        self.assertEqual(request.full_url, self.LINK)
+        self.assertEqual(request.get_method(), "GET")
+
+    def test_an_answer_that_is_no_redirect_is_a_failure(self) -> None:
+        """A 200 means a challenge or error page, not a target."""
+        with self.assertRaises(ResolveFailed) as caught:
+            self._resolve_with(FakeStatusResponse())
+        self.assertEqual(caught.exception.code, "resolve_failed")
+
+    def test_a_missing_location_is_a_failure(self) -> None:
+        error = urllib.error.HTTPError(self.LINK, 302, "Found", {}, None)
+        with self.assertRaises(ResolveFailed) as caught:
+            self._resolve_with(error)
+        self.assertEqual(caught.exception.code, "resolve_failed")
+
+    def test_a_non_redirect_http_error_is_a_failure(self) -> None:
+        error = urllib.error.HTTPError(self.LINK, 404, "Not Found", {}, None)
+        with self.assertRaises(ResolveFailed) as caught:
+            self._resolve_with(error)
+        self.assertEqual(caught.exception.code, "resolve_failed")
+        self.assertIn("404", caught.exception.detail or "")
+
+    def test_a_transport_error_is_a_failure(self) -> None:
+        with self.assertRaises(ResolveFailed) as caught:
+            self._resolve_with(urllib.error.URLError("name resolution failed"))
+        self.assertEqual(caught.exception.code, "resolve_failed")
+
+    def test_a_target_that_is_not_http_is_refused(self) -> None:
+        """The target ends up in the app and in the next shortening call: no `javascript:`."""
+        for location in (
+            "javascript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "file:///etc/passwd",
+            "ftp://example.com/x",
+            "https://" + "a" * 3000,
+        ):
+            with self.subTest(location=location):
+                error = urllib.error.HTTPError(
+                    self.LINK, 301, "Moved Permanently", {"Location": location}, None
+                )
+                with self.assertRaises(ResolveFailed):
+                    self._resolve_with(error)
+
+    def test_a_link_that_is_not_a_tinyurl_is_refused_without_a_request(self) -> None:
+        """The check sits in the client too, so no caller can turn it into an open reader."""
+        with mock.patch("keep_gateway.short_links.urllib.request.build_opener") as build_opener:
+            for link in ("https://evil.example/k7f2qa", "http://tinyurl.com/k7f2qa", ""):
+                with self.subTest(link=link):
+                    with self.assertRaises(ResolveFailed):
+                        TinyUrlShortener("unused-token").resolve(link)
+        build_opener.assert_not_called()
+
+    def test_the_no_redirect_handler_declines_every_redirect(self) -> None:
+        """Returning None is what makes urllib surface the 3xx instead of following it."""
+        self.assertIsNone(_NoRedirect().redirect_request(None, None, 301, "Moved", {}, "https://x"))
 
 
 if __name__ == "__main__":

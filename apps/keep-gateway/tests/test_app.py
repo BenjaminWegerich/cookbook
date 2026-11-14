@@ -18,6 +18,7 @@ from keep_gateway.errors import (
     IdentityCheckUnavailable,
     KeepApiError,
     KeepAuthRejected,
+    ResolveFailed,
     ShortenFailed,
     Unauthorized,
 )
@@ -134,23 +135,36 @@ class FakeIdentityVerifier:
 
 
 class FakeShortener:
-    """Stands in for `TinyUrlShortener`: records targets, returns a fixed link or fails."""
+    """Stands in for `TinyUrlShortener`: records calls, returns a fixed answer or fails."""
 
     def __init__(
         self,
         short: str = "https://tinyurl.com/abc123",
         error: Exception | None = None,
+        *,
+        target: str = "https://script.google.com/macros/s/abc/exec?f=1AbCdEf&portionen=6",
+        resolve_error: Exception | None = None,
     ) -> None:
         self._short = short
+        self._target = target
         self._error = error
+        self._resolve_error = resolve_error
         # Every target the boundary asked to shorten, in order.
         self.targets: list[str] = []
+        # Every link the boundary asked to resolve, in order.
+        self.resolved: list[str] = []
 
     def shorten(self, target: str) -> str:
         self.targets.append(target)
         if self._error is not None:
             raise self._error
         return self._short
+
+    def resolve(self, short_url: str) -> str:
+        self.resolved.append(short_url)
+        if self._resolve_error is not None:
+            raise self._resolve_error
+        return self._target
 
 
 class GatewayBoundaryTests(unittest.TestCase):
@@ -806,6 +820,87 @@ class GatewayBoundaryTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), ALLOWED_ORIGIN)
+
+    # ----------------------------------------------------------------------------------
+    # Short-link resolution: the size a written meal-plan line no longer states
+    # ----------------------------------------------------------------------------------
+
+    RESOLVE_LINK = "https://tinyurl.com/kuerbis6"
+
+    def test_resolve_returns_the_target_and_passes_the_link(self) -> None:
+        shortener = FakeShortener(target=self.SHORTEN_TARGET)
+        app, _fake = self.build_app(shortener=shortener)
+        with app.test_client() as client:
+            response = client.post(
+                "/shorten/resolve",
+                headers=self.auth_headers(),
+                json={"url": self.RESOLVE_LINK},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"target": self.SHORTEN_TARGET})
+        self.assertEqual(shortener.resolved, [self.RESOLVE_LINK])
+
+    def test_resolve_rejects_anything_but_a_tinyurl_link(self) -> None:
+        """The route must not become a reader for arbitrary redirects on a public URL."""
+        app, _fake = self.build_app()
+        for payload in (
+            {},
+            {"url": ""},
+            {"url": "   "},
+            # A foreign host, a scheme-less host and a user-info trick are all refused.
+            {"url": "https://evil.example/k7f2qa"},
+            {"url": "http://tinyurl.com/k7f2qa"},
+            {"url": "https://tinyurl.com@evil.example/k7f2qa"},
+            # The host alone names no link.
+            {"url": "https://tinyurl.com/"},
+            {"url": "https://tinyurl.com/" + "a" * 400},
+            "not an object",
+        ):
+            with self.subTest(payload=payload):
+                with app.test_client() as client:
+                    response = client.post(
+                        "/shorten/resolve", headers=self.auth_headers(), json=payload
+                    )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["error"]["code"], "bad_request")
+
+    def test_resolve_needs_no_tinyurl_token(self) -> None:
+        """Reading a redirect is free, so a plan written earlier keeps resolving after the
+        shortening token is removed."""
+        shortener = FakeShortener(target=self.SHORTEN_TARGET)
+        app, _fake = self.build_app(shortener=shortener, tinyurl_api_token="")
+        with app.test_client() as client:
+            response = client.post(
+                "/shorten/resolve",
+                headers=self.auth_headers(),
+                json={"url": self.RESOLVE_LINK},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"target": self.SHORTEN_TARGET})
+
+    def test_resolve_reports_a_resolution_failure(self) -> None:
+        """A dead link or an unusable target reaches the app as its own code; the app then
+        falls back to the recipe's written size."""
+        app, _fake = self.build_app(
+            shortener=FakeShortener(
+                resolve_error=ResolveFailed("Der Kurzlink kann nicht gelesen werden.")
+            )
+        )
+        with app.test_client() as client:
+            response = client.post(
+                "/shorten/resolve",
+                headers=self.auth_headers(),
+                json={"url": self.RESOLVE_LINK},
+            )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json()["error"]["code"], "resolve_failed")
+
+    def test_resolve_still_requires_a_token(self) -> None:
+        app, _fake = self.build_app()
+        with app.test_client() as client:
+            response = client.post("/shorten/resolve", json={"url": self.RESOLVE_LINK})
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.get_json()["error"]["code"], "unauthorized")
 
     # ----------------------------------------------------------------------------------
     # POST /keep/shopping/sort (the aisle sort)

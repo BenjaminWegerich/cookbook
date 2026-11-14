@@ -4,10 +4,11 @@
  * Both accepted shapes were agreed with the user:
  * - the link shape the app writes today — `Titel: <Export-URL>` with the chosen
  *   size in the URL's fragment (`#portionen=6`, `#menge=500g`);
- * - the short-link shape — `Titel (6 Portionen): tinyurl.com/…` — where the URL
- *   states no size, so the visible parenthetical carries it (baked into the
- *   short link's target before shortening). The line drops the scheme because
- *   Keep links the bare host too; the parser restores it on read;
+ * - the short-link shape — `Titel: tinyurl.com/…` — where the promised size lives
+ *   in the link's target (baked in before shortening) and is recovered by
+ *   resolving the link. The line drops the scheme because Keep links the bare
+ *   host too; the parser restores it on read, and reports no stated size. The
+ *   older `Titel (6 Portionen): tinyurl.com/…` still parses;
  * - the linkless shape with a parenthetical size — `Titel (6 Portionen)`,
  *   `Titel (500 g)`, `Titel (1,5 l)` — with a space or a narrow no-break space
  *   between number and unit.
@@ -19,14 +20,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  existingPlanLink,
   formatPlannedAmount,
+  isShortLink,
   mealPlanEntriesForTitle,
   mealPlanEntryLabel,
   mealPlanEntryText,
   mealPlanEntryTextWithShortLink,
   parseMealPlanText,
+  planLinkCandidates,
   plannedAmountFitsRecipe,
+  plannedAmountMatches,
   splitTitleNote,
   type MealPlanRecipeInfo,
 } from './mealPlan.js';
@@ -234,7 +237,7 @@ describe('parseMealPlanText — link shape', () => {
   });
 
   it('reads a bare short link as a link and restores its scheme', () => {
-    // The shape the app writes into Keep (mealPlanEntryTextWithShortLink).
+    // The legacy label shape (the app's old line) and a hand edit.
     const parsed = parseMealPlanText('Kürbissuppe (6 Portionen): tinyurl.com/k7f2qa');
     expect(parsed.title).toBe('Kürbissuppe');
     expect(parsed.planned).toEqual({ kind: 'servings', servings: 6 });
@@ -242,6 +245,15 @@ describe('parseMealPlanText — link shape', () => {
     expect(parseMealPlanText('Kürbissuppe (6 Portionen): www.tinyurl.com/k7f2qa').link).toBe(
       'https://www.tinyurl.com/k7f2qa',
     );
+  });
+
+  it('reads the line the app writes today as a link without a stated size', () => {
+    // The size lives in the link's target, so the parser reports none and the
+    // app resolves it through the gateway (mealPlanCards.resolveMealPlan).
+    const parsed = parseMealPlanText('Kürbissuppe: tinyurl.com/k7f2qa');
+    expect(parsed.title).toBe('Kürbissuppe');
+    expect(parsed.planned).toBeNull();
+    expect(parsed.link).toBe('https://tinyurl.com/k7f2qa');
   });
 
   it('leaves a bare domain that is not the shortener host unrecognized', () => {
@@ -551,128 +563,161 @@ describe('mealPlanEntryTextWithShortLink', () => {
   /** The same link as the Keep line carries it: without the scheme. */
   const BARE_SHORT_URL = 'tinyurl.com/k7f2qa';
 
-  it('writes the size as the visible label, because the short link hides it', () => {
-    expect(
-      mealPlanEntryTextWithShortLink('Kürbissuppe', { kind: 'servings', servings: 6 }, SHORT_URL),
-    ).toBe(`Kürbissuppe (6${NNBSP}Portionen): ${BARE_SHORT_URL}`);
-    expect(
-      mealPlanEntryTextWithShortLink(
-        'Béchamelsauce',
-        { kind: 'yield', quantity: 1500, baseUnit: 'ml' },
-        SHORT_URL,
-      ),
-    ).toBe(`Béchamelsauce (1,5${NNBSP}l): ${BARE_SHORT_URL}`);
+  it('writes the dish and the bare link, and no size of its own', () => {
+    // The promised size travels in the link's target, which the app resolves
+    // through the Keep gateway. Repeating it in the line was dropped (decided
+    // with the user): the tap already opens exactly that size.
+    expect(mealPlanEntryTextWithShortLink('Kürbissuppe', SHORT_URL)).toBe(
+      `Kürbissuppe: ${BARE_SHORT_URL}`,
+    );
   });
 
   it('writes the link without its scheme, and reads the shortener URL back', () => {
     // Keep links a bare `tinyurl.com/…` too, so the scheme is dead weight in the
     // line. The parser restores it, so the value the app trades in stays the
     // shortener's own URL.
-    const text = mealPlanEntryTextWithShortLink(
-      'Soljanka',
-      { kind: 'servings', servings: 4 },
-      SHORT_URL,
-    );
-    expect(text).toBe(`Soljanka (4${NNBSP}Portionen): ${BARE_SHORT_URL}`);
+    const text = mealPlanEntryTextWithShortLink('Soljanka', SHORT_URL);
+    expect(text).toBe(`Soljanka: ${BARE_SHORT_URL}`);
     expect(parseMealPlanText(text).link).toBe(SHORT_URL);
   });
 
   it('keeps a link that carries no scheme of its own bare', () => {
-    expect(
-      mealPlanEntryTextWithShortLink('Soljanka', { kind: 'servings', servings: 4 }, BARE_SHORT_URL),
-    ).toBe(`Soljanka (4${NNBSP}Portionen): ${BARE_SHORT_URL}`);
+    expect(mealPlanEntryTextWithShortLink('Soljanka', BARE_SHORT_URL)).toBe(
+      `Soljanka: ${BARE_SHORT_URL}`,
+    );
   });
 
-  it('round-trips through the parser to the same title, size and link', () => {
-    // The size is read out of the parenthetical here, not out of the URL: the
-    // fallback branch of parseMealPlanText is what makes the shape work.
-    const parsed = parseMealPlanText(
-      mealPlanEntryTextWithShortLink('Soljanka', { kind: 'servings', servings: 4 }, SHORT_URL),
-    );
+  it('reads back as a link without a stated size', () => {
+    // The size is not in the line: the parser reports `null`, and the app is
+    // what resolves the link's target and parses the size out of it.
+    const parsed = parseMealPlanText(mealPlanEntryTextWithShortLink('Soljanka', SHORT_URL));
     expect(parsed.title).toBe('Soljanka');
-    expect(parsed.planned).toEqual({ kind: 'servings', servings: 4 });
+    expect(parsed.planned).toBeNull();
     expect(parsed.link).toBe(SHORT_URL);
   });
 
   it('trims the URL it is handed', () => {
-    expect(
-      mealPlanEntryTextWithShortLink(
-        'Soljanka',
-        { kind: 'servings', servings: 4 },
-        ` ${SHORT_URL} `,
-      ),
-    ).toBe(`Soljanka (4${NNBSP}Portionen): ${BARE_SHORT_URL}`);
+    expect(mealPlanEntryTextWithShortLink('Soljanka', ` ${SHORT_URL} `)).toBe(
+      `Soljanka: ${BARE_SHORT_URL}`,
+    );
   });
 
   it('is still collected as an instance of its recipe by the removal rule', () => {
-    const text = mealPlanEntryTextWithShortLink(
-      'Kürbissuppe',
-      { kind: 'servings', servings: 6 },
-      SHORT_URL,
-    );
+    const text = mealPlanEntryTextWithShortLink('Kürbissuppe', SHORT_URL);
     expect(mealPlanEntriesForTitle([text, 'Kürbiscremesuppe'], 'Kürbissuppe')).toEqual([text]);
   });
 });
 
-describe('existingPlanLink', () => {
+describe('planLinkCandidates', () => {
   const SHORT_URL = 'https://tinyurl.com/k7f2qa';
   const SERVINGS_6: PlannedAmount = { kind: 'servings', servings: 6 };
-  const YIELD_500: PlannedAmount = { kind: 'yield', quantity: 500, baseUnit: 'g' };
 
-  it('returns the short link an entry already carries for the same size', () => {
-    const text = mealPlanEntryTextWithShortLink('Kürbissuppe', SERVINGS_6, SHORT_URL);
-    expect(existingPlanLink([text], 'Kürbissuppe', SERVINGS_6)).toBe(SHORT_URL);
-    expect(
-      existingPlanLink(
-        [mealPlanEntryTextWithShortLink('Béchamelsauce', YIELD_500, SHORT_URL)],
-        'Béchamelsauce',
-        YIELD_500,
-      ),
-    ).toBe(SHORT_URL);
+  it('returns the short links of the entries that name the recipe, in order', () => {
+    const texts = [
+      mealPlanEntryTextWithShortLink('Kürbissuppe', SHORT_URL),
+      'Kürbissuppe (4 Portionen)',
+      mealPlanEntryTextWithShortLink('Béchamelsauce', 'https://tinyurl.com/b4chamel'),
+      'Bratkartoffeln',
+    ];
+    expect(planLinkCandidates(texts, 'Kürbissuppe')).toEqual([SHORT_URL]);
+    expect(planLinkCandidates(texts, 'Béchamelsauce')).toEqual(['https://tinyurl.com/b4chamel']);
+    expect(planLinkCandidates(texts, 'Bratkartoffeln')).toEqual([]);
   });
 
-  it('does not reuse a long export link: it states its size in the URL', () => {
+  it('does not return a long export link: it states its size in the URL', () => {
     // Reusing the long link would defeat the shortening, and the app must
     // rebuild (and shorten) its target instead.
-    const long = mealPlanEntryText('Kürbissuppe', SERVINGS_6, HOST_URL);
-    expect(existingPlanLink([long], 'Kürbissuppe', SERVINGS_6)).toBeNull();
-    const drive = mealPlanEntryText('Kürbissuppe', SERVINGS_6, DRIVE_URL);
-    expect(existingPlanLink([drive], 'Kürbissuppe', SERVINGS_6)).toBeNull();
+    expect(
+      planLinkCandidates([mealPlanEntryText('Kürbissuppe', SERVINGS_6, HOST_URL)], 'Kürbissuppe'),
+    ).toEqual([]);
+    expect(
+      planLinkCandidates([mealPlanEntryText('Kürbissuppe', SERVINGS_6, DRIVE_URL)], 'Kürbissuppe'),
+    ).toEqual([]);
   });
 
-  it('ignores another size, another unit and another recipe', () => {
-    const other = mealPlanEntryTextWithShortLink(
-      'Kürbissuppe',
-      { kind: 'servings', servings: 4 },
-      SHORT_URL,
-    );
-    expect(existingPlanLink([other], 'Kürbissuppe', SERVINGS_6)).toBeNull();
-    expect(
-      existingPlanLink(
-        [mealPlanEntryTextWithShortLink('Béchamelsauce', YIELD_500, SHORT_URL)],
-        'Béchamelsauce',
-        { kind: 'yield', quantity: 500, baseUnit: 'ml' },
-      ),
-    ).toBeNull();
-    expect(
-      existingPlanLink(
-        [mealPlanEntryTextWithShortLink('Kürbiscremesuppe', SERVINGS_6, SHORT_URL)],
-        'Kürbissuppe',
-        SERVINGS_6,
-      ),
-    ).toBeNull();
+  it('also returns a legacy label link, which the caller resolves like the rest', () => {
+    // The old line named its size in the parenthetical. The link is the same
+    // candidate; a resolved target is what decides the reuse now.
+    const legacy = `Kürbissuppe (6${NNBSP}Portionen): tinyurl.com/k7f2qa`;
+    expect(planLinkCandidates([legacy], 'Kürbissuppe')).toEqual([SHORT_URL]);
   });
 
   it('ignores a linkless entry and a hand-written long link without a size', () => {
-    expect(existingPlanLink(['Kürbissuppe (6 Portionen)'], 'Kürbissuppe', SERVINGS_6)).toBeNull();
-    expect(existingPlanLink([`Kürbissuppe: ${HOST_URL}`], 'Kürbissuppe', SERVINGS_6)).toBeNull();
+    expect(planLinkCandidates(['Kürbissuppe (6 Portionen)'], 'Kürbissuppe')).toEqual([]);
+    expect(planLinkCandidates([`Kürbissuppe: ${HOST_URL}`], 'Kürbissuppe')).toEqual([]);
   });
 
-  it('keeps a hand-written link whose size sits in the label', () => {
-    // The user wrote the link, so their choice is reused rather than replaced —
-    // the same rule that reuses the app's own short link.
-    const handWritten = `Kürbissuppe (6${NNBSP}Portionen): ${DRIVE_URL}`;
-    expect(existingPlanLink([handWritten], 'Kürbissuppe', SERVINGS_6)).toBe(DRIVE_URL);
+  it('ignores an entry whose text continues after the link', () => {
+    // Only a trailing link makes a Cookbook line; the parser keeps the text whole.
+    expect(planLinkCandidates([`Kürbissuppe: ${SHORT_URL} und mehr`], 'Kürbissuppe')).toEqual([]);
+  });
+});
+
+describe('isShortLink', () => {
+  it('accepts only a tinyurl.com link, with or without the scheme', () => {
+    for (const url of [
+      'https://tinyurl.com/k7f2qa',
+      'http://tinyurl.com/k7f2qa',
+      'https://www.tinyurl.com/k7f2qa',
+    ]) {
+      expect(isShortLink(url)).toBe(true);
+    }
+  });
+
+  it('rejects every other host, and the bare host without an alias', () => {
+    for (const url of [
+      // The long export link and the Drive fallback are not resolvable.
+      'https://script.google.com/macros/s/DEPLOYMENT_ID/exec?f=FILE_ID&portionen=6',
+      'https://drive.google.com/file/d/FILE_ID/view',
+      // A look-alike host, a host without an alias, and the scheme-less form
+      // (the parser restores the scheme before anything asks this question).
+      'https://tinyurl.com.evil.example/k7f2qa',
+      'https://tinyurl.com/',
+      'tinyurl.com/k7f2qa',
+    ]) {
+      expect(isShortLink(url)).toBe(false);
+    }
+  });
+});
+
+describe('plannedAmountMatches', () => {
+  it('compares a serving count with a serving count', () => {
+    expect(
+      plannedAmountMatches({ kind: 'servings', servings: 6 }, { kind: 'servings', servings: 6 }),
+    ).toBe(true);
+    expect(
+      plannedAmountMatches({ kind: 'servings', servings: 6 }, { kind: 'servings', servings: 4 }),
+    ).toBe(false);
+  });
+
+  it('compares a yield in the same family unit only', () => {
+    expect(
+      plannedAmountMatches(
+        { kind: 'yield', quantity: 500, baseUnit: 'g' },
+        { kind: 'yield', quantity: 500, baseUnit: 'g' },
+      ),
+    ).toBe(true);
+    expect(
+      plannedAmountMatches(
+        { kind: 'yield', quantity: 500, baseUnit: 'g' },
+        { kind: 'yield', quantity: 500, baseUnit: 'ml' },
+      ),
+    ).toBe(false);
+    expect(
+      plannedAmountMatches(
+        { kind: 'yield', quantity: 500, baseUnit: 'g' },
+        { kind: 'yield', quantity: 1500, baseUnit: 'g' },
+      ),
+    ).toBe(false);
+  });
+
+  it('never matches a serving count against a yield', () => {
+    expect(
+      plannedAmountMatches(
+        { kind: 'servings', servings: 6 },
+        { kind: 'yield', quantity: 6, baseUnit: 'g' },
+      ),
+    ).toBe(false);
   });
 });
 

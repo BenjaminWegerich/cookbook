@@ -399,14 +399,19 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   has to stand in the item; the fragment on a Drive fallback link is the same size in the shape
   that page could read. Since the host URL is enormous, the gateway shortens that link on
   request (`POST /shorten`, TinyURL token `TINYURL_API_TOKEN`) and the line becomes
-  „Kürbissuppe (6 Portionen): tinyurl.com/…“ — the size moves into the visible label
-  because the short link hides it, while the link's *target* still carries the size. The short
-  link is written without its `https://`, because Keep links a bare `tinyurl.com/…` too and the
-  scheme only lengthens the line; `parseMealPlanText` restores it on read, so the link the app
-  reuses stays the shortener's own URL. Links are created on demand per (recipe, size) and
-  reused from the plan when it already carries one;
-  without a token, or when TinyURL fails, the long URL is written as before. A recipe without an
-  export file falls back to the linkless „Kürbissuppe (6 Portionen)“.
+  „Kürbissuppe: tinyurl.com/…“ — the promised size is not repeated in the visible line,
+  because it already lives in the short link's *target*. The app reads it back by resolving the
+  line (`POST /shorten/resolve`: it reads the redirect, never follows it, needs no TinyURL token
+  and accepts only `tinyurl.com` links), and the fit check, the "Geplant" value, the shopping
+  list and "Kochen" all use that recovered size. The short link is written without its
+  `https://`, because Keep links a bare `tinyurl.com/…` too and the scheme only lengthens the
+  line; `parseMealPlanText` restores it on read, so the link the app reuses stays the
+  shortener's own URL. Links are created on demand per (recipe, size) and reused from the plan
+  when it already carries one — the reuse compares the resolved target, since the line states
+  no size, and a dead link is never reused. A line that still names its size in the old
+  parenthetical keeps working without a resolution. Without a token, or when TinyURL fails, the
+  long URL is written as before. A recipe without an export file falls back to the linkless
+  „Kürbissuppe (6 Portionen)“.
   The app owns that rule; the gateway only executes the action. It places the new line above
   every remaining item with the spike's sort-id rule, deletes the replaced entries, syncs once
   and verifies the result before answering the changed list — a write is never reported as

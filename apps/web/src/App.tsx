@@ -2,12 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   analyzeShoppingList,
-  existingPlanLink,
   mealPlanEntriesForTitle,
   mealPlanEntryLabel,
   mealPlanEntryText,
   mealPlanEntryTextWithShortLink,
-  parseMealPlanText,
   shoppingSortOrder,
   shoppingStopFor,
   withPlanSize,
@@ -1221,14 +1219,16 @@ function App() {
   // Resolve the meal plan into cards as soon as both halves are there: the
   // recipe list (for the title match) and the Keep state. Only entries that
   // state a size need a recipe file read (see ./keep/mealPlanCards), and the
-  // Drive content cache makes repeated entries of one recipe free. A failed
+  // Drive content cache makes repeated entries of one recipe free. A short-link
+  // entry states no size: its link is resolved through the Keep hook so the
+  // promised size is known (keep.resolveShortLink, cached per link). A failed
   // resolution leaves the section in its loading state instead of showing a card
   // set built from half the data.
   useEffect(() => {
     const keepState = keep.state;
     if (keepState === null || recipes === null || token === null) return;
     let cancelled = false;
-    void resolveMealPlan(recipes, keepState.mealplan.items, token)
+    void resolveMealPlan(recipes, keepState.mealplan.items, token, keep.resolveShortLink)
       .then((resolution) => {
         if (!cancelled) setMealPlan({ source: keepState, resolution });
       })
@@ -1243,7 +1243,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [keep.state, recipes, token]);
+  }, [keep.resolveShortLink, keep.state, recipes, token]);
 
   /**
    * True while the current meal plan is the one the shopping list was written
@@ -1521,6 +1521,7 @@ function App() {
   const writeShopping = keep.writeShopping;
   const sortShopping = keep.sortShopping;
   const shortenExportUrl = keep.shortenExportUrl;
+  const findReusablePlanLink = keep.findReusablePlanLink;
 
   /**
    * The shortener the recipe overview prefetches its share links through, or null while Keep is
@@ -1543,9 +1544,11 @@ function App() {
    * the range of sizes the export bakes) changes. So a link is created at the moment a dish is
    * planned, and reused whenever the plan already carries one for the same size.
    *
-   * Reuse comes from the plan itself (`existingPlanLink`), which is free and needs no second
-   * store: the lines that are about to be replaced are exactly the entries for this recipe.
-   * A recipe without an export file keeps the linkless parenthetical shape.
+   * Reuse comes from the plan itself (`findReusablePlanLink`), which needs no second store:
+   * the lines about to be replaced are exactly the entries for this recipe. Their links no
+   * longer state a size, so the reuse compares what each link opens (its resolved target,
+   * cached by the Keep hook) with the size being planned — a dead or different-sized link is
+   * not reused. A recipe without an export file keeps the linkless parenthetical shape.
    */
   const resolveMealPlanEntry = useCallback(
     async (
@@ -1558,13 +1561,13 @@ function App() {
       if (exportUrl === undefined) {
         return mealPlanEntryText(recipe.title, planned);
       }
-      const reused = existingPlanLink(texts, recipe.title, planned);
+      const reused = await findReusablePlanLink(texts, recipe.title, planned);
       const shortUrl = reused ?? (await shortenExportUrl(withPlanSize(exportUrl, planned)));
       return shortUrl === null
         ? mealPlanEntryText(recipe.title, planned, exportUrl)
-        : mealPlanEntryTextWithShortLink(recipe.title, planned, shortUrl);
+        : mealPlanEntryTextWithShortLink(recipe.title, shortUrl);
     },
-    [shortenExportUrl],
+    [findReusablePlanLink, shortenExportUrl],
   );
 
   /**
@@ -1601,10 +1604,12 @@ function App() {
       await planMeal(entryText, replace);
       closeOverview();
       // The written line is "<Titel>: <URL>" and would read poorly in the
-      // notice; the parser gives back the human form ("Kürbissuppe (6
-      // Portionen)") for it. The exact line stays the undo's business.
-      const written = parseMealPlanText(entryText);
-      const label = mealPlanEntryLabel(written.title, written.planned);
+      // notice, so the notice names the dish and the size that was just chosen
+      // ("Kürbissuppe (6 Portionen)"). The parser cannot supply the size any
+      // more for a short-link line — it lives in the link's target — and the
+      // chosen size is what the write promised. The exact line stays the
+      // undo's business.
+      const label = mealPlanEntryLabel(targetRecipe.title, planned);
       showSnackbar({
         text: `${label} zum Essensplan hinzugefügt. Die Einkaufsliste bleibt unverändert.`,
         action: {

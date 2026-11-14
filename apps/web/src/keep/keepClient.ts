@@ -79,6 +79,7 @@ export type KeepErrorCode =
   | 'shorten_failed'
   | 'unreachable'
   | 'invalid_response'
+  | 'resolve_failed'
   | 'http_error';
 
 /** A failed gateway call, carrying the branchable code and a German message. */
@@ -339,13 +340,13 @@ export async function sortShoppingList(
  * The meal-plan write uses this so the Keep line stays readable: the line carries the export
  * URL as raw text (Keep has no hyperlink-with-text), and the Apps Script host address plus the
  * Drive file id make it enormous. The promised size is already part of `target`, so the short
- * link's target opens the cooking view at the right size — the app writes the size as the
- * line's parenthetical label, because a short link does not show it, and drops the link's
- * "https://" (App's `mealPlanEntryTextWithShortLink`), because Keep links the bare host too.
- * The answer here stays the scheme-carrying URL the shortener returned.
+ * link's target opens the cooking view at the right size; the line itself carries only the
+ * dish and the bare link (`mealPlanEntryTextWithShortLink`), and the app reads the size back
+ * with `resolveShortUrl`. The answer here stays the scheme-carrying URL the shortener
+ * returned.
  *
  * A failure is not an error the caller has to handle: the long export URL still opens the
- * cooking view, so the caller catches this and composes the long line instead. The two new
+ * cooking view, so the caller catches this and composes the long line instead. The two error
  * codes (`shortening_disabled`, `shorten_failed`) exist so a caller that wants to distinguish
  * "not configured" from "TinyURL refused" can, without a second error channel.
  */
@@ -359,6 +360,30 @@ export async function shortenUrl(gatewayToken: string, target: string): Promise<
     throw new KeepClientError('invalid_response', 'Das Keep-Gateway hat unerwartet geantwortet.');
   }
   return shortUrl;
+}
+
+/**
+ * Asks the gateway for the target of one short meal-plan link (`POST /shorten/resolve`).
+ *
+ * This is how the size a meal-plan line no longer states is recovered: the write baked it
+ * into the link's target (`withPlanSize`), so the target is the only place it lives. The
+ * caller parses the size out of the answer with core's `plannedFromUrl`; this module only
+ * moves the URL.
+ *
+ * A failure is fail-soft: the caller catches it and treats the entry as one that states no
+ * size, which falls back to the recipe's written size — the same reading a hand-typed line
+ * without a size gets. Nothing here changes the connection status.
+ */
+export async function resolveShortUrl(gatewayToken: string, shortUrl: string): Promise<string> {
+  const body = await requestJson('/shorten/resolve', gatewayToken, {
+    method: 'POST',
+    body: { url: shortUrl },
+  });
+  const target = isRecord(body) && typeof body.target === 'string' ? body.target.trim() : null;
+  if (target === null || target === '') {
+    throw new KeepClientError('invalid_response', 'Das Keep-Gateway hat unerwartet geantwortet.');
+  }
+  return target;
 }
 
 /**

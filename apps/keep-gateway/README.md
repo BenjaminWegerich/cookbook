@@ -16,8 +16,10 @@ end. All four write actions are implemented — the plan write (`POST /keep/meal
 a dish off (`POST /keep/mealplan/check`), adding the planned ingredients to the shopping list
 (`POST /keep/shopping`) and sorting that list by aisle (`POST /keep/shopping/sort`). The
 meal-plan line links the cooking view through a short
-TinyURL when the deployment has a `TINYURL_API_TOKEN` (`POST /shorten`); without one the long
-export URL is written, so the shortener is optional. Deployment, the credential alert and the €1
+TinyURL when the deployment has a `TINYURL_API_TOKEN` (`POST /shorten`); the app reads the
+promised size back out of the link's target (`POST /shorten/resolve`, no token needed), so the
+line itself stays „Kürbissuppe: tinyurl.com/…“. Without a token the long export URL is written,
+so the shortener is optional. Deployment, the credential alert and the €1
 spend guardrail are all in place — see
 [`deploy/cloud-run/README.md`](deploy/cloud-run/README.md).
 
@@ -30,6 +32,7 @@ spend guardrail are all in place — see
 | `POST` | `/keep/mealplan`       | Add dish lines to "Essensplan".                       | works |
 | `POST` | `/keep/mealplan/check` | Tick meal-plan lines off / back on ("Abhaken"). | works |
 | `POST` | `/shorten`             | Shorten one export URL for a meal-plan line.         | works with a token, else `503` |
+| `POST` | `/shorten/resolve`     | Read a short meal-plan link's target.                | works |
 | `POST` | `/keep/shopping`       | Add a recipe's scaled ingredients to "Einkaufsliste". | works |
 | `POST` | `/keep/shopping/sort`  | Reorder the shopping list by category/aisle.          | works |
 
@@ -96,16 +99,30 @@ rejected. The answer is the changed list in the checklist shape of `GET /keep/st
 The answer is `{ "shortUrl": "https://tinyurl.com/k7f2qa" }` — the scheme-carrying URL; the app
 drops the `https://` when it writes the line. The meal-plan line carries its link as raw text
 (Keep has no hyperlink-with-text), and the Apps Script address plus the Drive file id make that
-line enormous; with a short link the line reads
-"Kürbissuppe (6 Portionen): tinyurl.com/k7f2qa" — Keep links the bare host too.
+line enormous; with a short link the line reads "Kürbissuppe: tinyurl.com/k7f2qa" — Keep links
+the bare host too, and the promised size is deliberately not repeated in the line.
 
 The app asks here at the moment a dish is planned, never in advance, because one link exists per
 (recipe, size): the promised size is baked into the link's *target*, since a redirect does not
-reliably forward an appended parameter — which is also why the size moves into the visible
-parenthetical label. Only `https://` targets up to 2000 characters are accepted, and the route
-sits behind the same Google sign-in as the Keep routes. Without a `TINYURL_API_TOKEN` it answers
-`shortening_disabled`; every failure there means the app writes the long export URL, so
-shortening never blocks a plan write.
+reliably forward an appended parameter. Only `https://` targets up to 2000 characters are
+accepted, and the route sits behind the same Google sign-in as the Keep routes. Without a
+`TINYURL_API_TOKEN` it answers `shortening_disabled`; every failure there means the app writes
+the long export URL, so shortening never blocks a plan write.
+
+`POST /shorten/resolve` reads that size back — it needs no TinyURL token, only a sign-in:
+
+```json
+{ "url": "https://tinyurl.com/k7f2qa" }
+```
+
+The answer is `{ "target": "https://<export-host>/exec?f=<id>&portionen=6" }`. A short link
+cannot show a size of its own and the app no longer writes one into the line, so this is how a
+planned dish's size is known. The route reads the redirect's `Location` header and **never
+follows it** — the export page is not fetched — and only a `tinyurl.com` link is accepted, so
+this cannot become a reader for arbitrary redirects on a public URL. The target must be a
+bounded http(s) URL. A dead link, an unusable target or a missing configuration means the app
+treats the entry as one that states no size and falls back to the recipe's written size, so a
+plan stays readable without it.
 
 `POST /keep/mealplan/check` ticks meal-plan lines off or back on, without deleting them — the
 recipe overview's "Abhaken" and its "Rückgängig":
@@ -165,9 +182,10 @@ branch on a stable code and switch Keep features off cleanly (N5):
 | `keep_list_missing` | 502 | A configured note is not visible to the throwaway account. | Check the note is still shared and its title. |
 | `keep_api_error` | 502 | Any other `gkeepapi` failure. | See the server log line. |
 | `not_implemented` | 501 | Reserved for a documented action that is not built yet. | No current route returns it. |
-| `bad_request` | 400 | Malformed body, a write body without a usable entry text, or a `/shorten` target that is not an `https://` URL. | Check the JSON body. |
+| `bad_request` | 400 | Malformed body, a write body without a usable entry text, a `/shorten` target that is not an `https://` URL, or a link that is not a `tinyurl.com` one. | Check the JSON body. |
 | `shortening_disabled` | 503 | No `TINYURL_API_TOKEN` is configured. | The app writes the long export URL; nothing to fix unless short links are wanted. |
 | `shorten_failed` | 502 | TinyURL refused, timed out, or answered unusably. | The app writes the long export URL; the diagnosis is in the server log line. |
+| `resolve_failed` | 502 | A short link's target could not be read, or is not an http(s) URL. | The app falls back to the recipe's written size; the diagnosis is in the server log line. |
 | `internal_error` | 500 | Unexpected failure. | The traceback is in the log, not the response. |
 
 ## Configuration

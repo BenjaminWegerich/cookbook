@@ -22,11 +22,21 @@
  * `plannedFromUrl` (planLink.ts). A link without a size (`Titel: <url>`) names
  * the dish without one, and the export opens at the recipe's written size.
  *
- * A *shortened* link carries no size (see `mealPlanEntryTextWithShortLink`), so
- * the size stands in the visible parenthetical and the link is written without
- * its scheme — Keep links the bare form anyway:
+ * A *shortened* link states no size of its own either: the promised size is
+ * baked into the link's target (a redirect cannot reliably carry an added
+ * parameter), and the link is written without its scheme — Keep links the bare
+ * form anyway:
  *
- *     Kürbissuppe (6 Portionen): tinyurl.com/k7f2qa
+ *     Kürbissuppe: tinyurl.com/k7f2qa
+ *
+ * That target is the only place the size lives, so this module reports
+ * `planned === null` for such a line and the app recovers it by resolving the
+ * link through the Keep gateway (`POST /shorten/resolve`) and parsing the target
+ * with `plannedFromUrl` — `withPlanSize` (planLink.ts) is what put it there.
+ * Legacy lines that still name the size in the visible parenthetical
+ * ("Kürbissuppe (6 Portionen): tinyurl.com/k7f2qa") keep working: the
+ * parenthetical is read when the URL states no size, and a hand-edited line
+ * therefore needs no resolution.
  *
  * **Without the link** — the shape written before the link existed, and still
  * used when a recipe has no export file:
@@ -129,7 +139,7 @@ const BARE_SHORT_LINK_HOST = 'tinyurl.com';
  * (`Titel: https://…`, `Titel https://…`), in either of the two written forms
  * (see the module docstring): a scheme-carrying URL on any host — the long
  * export link, the Drive fallback, a hand-written link — or a *bare* short
- * link (`Titel (6 Portionen): tinyurl.com/k7f2qa`).
+ * link (`Titel: tinyurl.com/k7f2qa`).
  *
  * The link must be the *last* token: an entry with text after it is not a
  * Cookbook link line and stays one whole title candidate. The title part is
@@ -180,7 +190,7 @@ function parseYieldSuffix(text: string): { title: string; planned: PlannedAmount
  * carried the bare short-link form ("tinyurl.com/k7f2qa").
  *
  * The scheme is what the rest of the app trades in — `plannedFromUrl` and the
- * reuse in `existingPlanLink` both read a URL — so the bare form is a display
+ * reuse in `planLinkCandidates` both read a URL — so the bare form is a display
  * choice of the Keep line, never a second link shape to handle downstream.
  */
 function withScheme(raw: string): string {
@@ -219,7 +229,8 @@ export function parseMealPlanText(text: string): ParsedMealPlanText {
     if (fromUrl !== null) {
       return { text: trimmed, title: head, planned: fromUrl, link };
     }
-    // A hand-written link may still carry the old parenthetical size.
+    // A link that states no size (a short link, or a hand-written one) may still
+    // name it in the parenthetical — the app's old line shape, or a hand edit.
     const suffix = parseYieldSuffix(head);
     return { text: trimmed, title: suffix.title, planned: suffix.planned, link };
   }
@@ -373,34 +384,34 @@ function withoutScheme(shortUrl: string): string {
 /**
  * The meal-plan entry for a dish at a chosen size, linking a *short* URL.
  *
- * A short link ("tinyurl.com/k7f2qa") shows no size of its own, so the size
- * moves back into the visible parenthetical label — "Kürbissuppe (6
- * Portionen): tinyurl.com/k7f2qa". The promised size still travels with the
- * link: it is baked into the short link's target before shortening
- * (`withPlanSize`), so tapping the line opens the cooking view at exactly that
- * size.
+ * The line is "<Titel>: tinyurl.com/k7f2qa". A short link states no size of its
+ * own, so the promised size travels only in the link's target: the caller bakes
+ * it in with `withPlanSize` *before* shortening, and the app reads it back by
+ * resolving the link through the Keep gateway (`POST /shorten/resolve`) and
+ * parsing the target with `plannedFromUrl`. Keeping the size out of the line is
+ * the point: the note reads "Kürbissuppe: tinyurl.com/k7f2qa" instead of naming
+ * a size the tap already carries (decided with the user).
  *
  * The link is written without its "https://" because Keep links a bare
  * `tinyurl.com/…` anyway and the scheme only lengthens the line. The scheme is
  * restored when the line is read back, so the value the parser reports — and
- * with it the reuse in `existingPlanLink` — is the shortener's own URL.
+ * with it the reuse in `planLinkCandidates` — is the shortener's own URL.
  *
- * `parseMealPlanText` reads this shape back — the URL states no size, so the
- * parser falls back to the parenthetical, exactly like a hand-written
- * "Titel (6 Portionen): <url>" — which keeps the app's plan recognition, its
- * "Geplant" value and the duplicate rule working unchanged. It is also why a
- * dead short link is recoverable: the line still names the dish and its size.
+ * `parseMealPlanText` reports `planned === null` for this shape, because the URL
+ * states no size. Resolution is the app's job (it owns the gateway), which is why
+ * this module stays synchronous. A legacy line that still names the size in its
+ * parenthetical ("Kürbissuppe (6 Portionen): tinyurl.com/k7f2qa") needs no
+ * resolution; the parser reads the size there.
  */
-export function mealPlanEntryTextWithShortLink(
-  title: string,
-  planned: PlannedAmount,
-  shortUrl: string,
-): string {
-  return `${mealPlanEntryLabel(title, planned)}: ${withoutScheme(shortUrl.trim())}`;
+export function mealPlanEntryTextWithShortLink(title: string, shortUrl: string): string {
+  return `${title}: ${withoutScheme(shortUrl.trim())}`;
 }
 
-/** True when two planned amounts name the same size in the same unit. */
-function samePlannedAmount(a: PlannedAmount, b: PlannedAmount): boolean {
+/**
+ * True when two planned amounts name the same size in the same unit — the rule
+ * that decides whether a link already opens the size a write is about to plan.
+ */
+export function plannedAmountMatches(a: PlannedAmount, b: PlannedAmount): boolean {
   if (a.kind === 'servings' && b.kind === 'servings') {
     return a.servings === b.servings;
   }
@@ -411,33 +422,47 @@ function samePlannedAmount(a: PlannedAmount, b: PlannedAmount): boolean {
 }
 
 /**
- * The link an existing meal-plan entry already carries for `title` at `planned`,
- * or null when none does — the app's free cache for a short link.
+ * True for a link the app can resolve: a `tinyurl.com` link, with or without the
+ * `www.` prefix, in either the scheme-carrying or the bare written form. The host
+ * must stay in step with the gateway's `TINYURL_HOSTS`
+ * (apps/keep-gateway/keep_gateway/short_links.py): only that link is one the app
+ * created and can read back.
  *
- * Before it asks the shortener for a link, the app looks at the plan lines it is
- * about to replace. Re-planning the same dish at the same size (moving it to the
- * top, or changing it back) then reuses the link instead of creating a second one
- * for the same target. A hand-written line that names the size in its
- * parenthetical keeps the link the user chose, which is the same courtesy.
- *
- * Deliberately narrow, so the long export URL is never mistaken for a reusable
- * one: the entry's link must state no size itself (`plannedFromUrl` — a long host
- * or Drive link the app wrote carries `portionen=` / `menge=`), while the
- * entry's *parenthetical* must state exactly the requested size.
+ * Exported because the web app asks the same question before it spends a gateway
+ * request on resolving a plan line: a long export link is not resolvable, and a
+ * hand-written one without a size must not turn into a failed call on every plan
+ * read.
  */
-export function existingPlanLink(
-  texts: readonly string[],
-  title: string,
-  planned: PlannedAmount,
-): string | null {
+export function isShortLink(url: string): boolean {
+  return /^https?:\/\/(?:www\.)?tinyurl\.com\/\S+$/i.test(url);
+}
+
+/**
+ * The short links the plan already carries for `title` — the app's free cache of
+ * links to reuse before it asks the shortener for a new one.
+ *
+ * Re-planning the same dish at the same size (moving it to the top, or changing
+ * it back) must not create a second permanent TinyURL. The plan lines about to be
+ * replaced are the cache, but their links no longer state the size: it sits in
+ * each link's target, so the caller resolves the candidates through the gateway
+ * and compares what the target promises with `plannedAmountMatches`. That split
+ * keeps this module free of network I/O.
+ *
+ * Deliberately narrow, so a long export URL is never mistaken for a reusable one:
+ * only a short link counts (`isShortLink`). A long host or Drive link either
+ * states its size in its own URL or would have to be re-shortened anyway, and the
+ * gateway only resolves the shortener's own links.
+ */
+export function planLinkCandidates(texts: readonly string[], title: string): string[] {
+  const links: string[] = [];
   for (const text of texts) {
     const parsed = parseMealPlanText(text);
     if (parsed.link === null || parsed.title !== title) continue;
     if (plannedFromUrl(parsed.link) !== null) continue;
-    if (parsed.planned === null || !samePlannedAmount(parsed.planned, planned)) continue;
-    return parsed.link;
+    if (!isShortLink(parsed.link)) continue;
+    links.push(parsed.link);
   }
-  return null;
+  return links;
 }
 
 /**

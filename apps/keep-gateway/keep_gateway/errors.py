@@ -124,6 +124,18 @@ class ShortenFailed(GatewayError):
     code = "shorten_failed"
 
 
+class ResolveFailed(GatewayError):
+    """A short link's target could not be read, or is not a usable URL.
+
+    The app asks for the target to recover the size a short meal-plan line promises, so this
+    is fail-soft like `ShortenFailed`: the size is then unknown and the app falls back to the
+    recipe's written size instead of blocking the plan.
+    """
+
+    status = HTTPStatus.BAD_GATEWAY
+    code = "resolve_failed"
+
+
 class NotImplementedYet(GatewayError):
     """A documented endpoint that the skeleton defines but does not implement yet.
 

@@ -13,6 +13,7 @@ Endpoints:
     POST /keep/shopping         add a recipe's ingredients to the list
     POST /keep/shopping/sort    reorder the list by category/aisle
     POST /shorten               shorten one export URL for a meal-plan line
+    POST /shorten/resolve       read back the target of one short meal-plan link
 
 Three cross-cutting rules live here rather than at the call sites:
 
@@ -54,7 +55,7 @@ from .errors import (
     Unauthorized,
 )
 from .identity import CallerVerifier, GoogleIdentityVerifier
-from .short_links import MAX_TARGET_LENGTH, TinyUrlShortener
+from .short_links import MAX_SHORT_URL_LENGTH, MAX_TARGET_LENGTH, TinyUrlShortener, is_tiny_url
 
 logger = logging.getLogger("keep_gateway")
 
@@ -448,8 +449,9 @@ def create_app(
         Why the meal plan needs this: the Keep line carries the export URL as raw text (Keep
         has no hyperlink-with-text), and the Apps Script address plus the Drive file id make
         the line enormous. The promised size is already part of `url`, so the short link's
-        target opens the right cooking view - the app writes the size as the line's
-        parenthetical label, because the short link itself no longer shows it.
+        target opens the right cooking view. The line itself stays the bare
+        `Kürbissuppe: tinyurl.com/<alias>`; the app recovers the size from the target through
+        `POST /shorten/resolve`, so the note does not carry it twice.
 
         Deliberately narrow: only `https://` targets, a bounded length, and the same Google
         sign-in as the Keep routes. A missing token is `shortening_disabled`; the app treats
@@ -472,6 +474,40 @@ def create_app(
         if not target.startswith("https://"):
             raise BadRequest("Only https:// URLs can be shortened.")
         return jsonify({"shortUrl": shortener.shorten(target)})
+
+    @app.post("/shorten/resolve")
+    def shorten_resolve() -> Response:
+        """Read back the target of one short meal-plan link.
+
+        Body: `{"url": "https://tinyurl.com/<alias>"}`. The answer is
+        `{"target": "https://<export-host>/exec?f=<id>&portionen=6"}`.
+
+        Why the meal plan needs this: the promised size lives in the short link's *target*
+        (a redirect cannot reliably carry an added parameter), and the Keep line names only
+        the dish and the link — "Kürbissuppe: tinyurl.com/<alias>". The app resolves the line
+        to know which size the dish is planned at. The redirect is read, never followed, so
+        this route never fetches an export page itself.
+
+        Only a `tinyurl.com` link is accepted (the app writes those, and anything else would
+        make this a general redirect reader on a public URL), and the target must be a
+        bounded http(s) URL. No TinyURL token is needed: reading a redirect is free, and a
+        plan written while shortening was configured must keep resolving after the token is
+        removed. It still sits behind the Google sign-in. Every failure is fail-soft at the
+        call site: the size is then unknown and the app falls back to the recipe's written
+        size.
+        """
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise BadRequest("A JSON object body is required.")
+        short_url = payload.get("url")
+        if not isinstance(short_url, str) or short_url.strip() == "":
+            raise BadRequest("The body needs a 'url' to resolve.")
+        short_url = short_url.strip()
+        if len(short_url) > MAX_SHORT_URL_LENGTH:
+            raise BadRequest("The link to resolve is too long.")
+        if not is_tiny_url(short_url):
+            raise BadRequest("Only tinyurl.com links can be resolved.")
+        return jsonify({"target": shortener.resolve(short_url)})
 
     # ----------------------------------------------------------------------------------
     # Error shape: one JSON contract for every failure
