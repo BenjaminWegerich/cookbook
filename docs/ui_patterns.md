@@ -134,9 +134,16 @@ deliberate addition to this table, not a colour chosen at the call site.
   that may still be holding an undo.
 - **Auto-dismiss after 6 s** (`SNACKBAR_DURATION_MS`). Every notice gets a fresh
   full countdown.
-- **Paused on interaction.** A pointer over the card, or keyboard focus inside
-  it, stops the countdown; leaving it starts a fresh 6 s. This is what makes the
-  action reachable: the card never vanishes while a finger or a Tab is on it.
+- **Paused by keyboard focus only.** Keyboard focus inside the card stops the
+  countdown; leaving it starts a fresh 6 s, so a Tab user can reach the action.
+  A pointer deliberately does **not** pause it: a card that appears under a
+  resting pointer — or that the pointer merely crosses on its way somewhere else
+  — would suspend the countdown indefinitely, and the notice would outlive its
+  six seconds and keep blocking the elements behind it.
+- **Clicks stop at the card.** The card is a surface, not a pass-through: a click
+  on it never reaches the element below, even when the card carries no action.
+  This is deliberate — the notice offers „Rückgängig", and a click aimed at it
+  must never also fire the list row or button it happens to cover.
 - **The action runs as a promise.** While it runs, the host is busy: the button
   is disabled, shows its busy label with `aria-busy="true"`, and the countdown is
   suspended. When the promise settles — success or failure — the notice closes.

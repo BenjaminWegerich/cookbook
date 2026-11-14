@@ -11,10 +11,14 @@
  *   undo).
  * - **Auto-dismiss after `SNACKBAR_DURATION_MS`.** A new message, a pause or a
  *   running action restarts the countdown; the message that is gone clears it.
- * - **Pause on interaction.** The component reports pointer/focus over the card
- *   as a pause, so a user reaching for the action does not have it vanish under
- *   the finger. The pause is keyed to the message id, so the next queued message
- *   starts unpaused even if the previous one was dismissed while hovered.
+ * - **Pause on keyboard focus.** The component reports focus inside the card as
+ *   a pause, so a keyboard user who Tabbed to the action does not have it
+ *   vanish under the caret. A pointer does *not* pause the countdown: a card
+ *   that appears under a resting pointer — or one the pointer merely crosses —
+ *   would suspend the countdown indefinitely, and the notice would sit over the
+ *   list instead of passing by (docs/ui_patterns.md §1.5). The pause is keyed
+ *   to the message id, so the next queued message starts unpaused even if the
+ *   previous one was dismissed while focused.
  * - **The action is a promise.** `runAction` marks the host busy (the component
  *   shows the busy label and blocks the countdown) and clears the notice when it
  *   settles. A failure is *not* swallowed into silence: the action's own `run`
@@ -76,7 +80,7 @@ export interface UseSnackbarResult {
   runAction: () => void;
   /** Closes the visible notice; the next queued one takes its place. */
   dismiss: () => void;
-  /** Pauses/resumes the countdown of one notice (pointer, hover, focus). */
+  /** Pauses/resumes the countdown of one notice (keyboard focus inside it). */
   setPaused: (id: number, paused: boolean) => void;
 }
 

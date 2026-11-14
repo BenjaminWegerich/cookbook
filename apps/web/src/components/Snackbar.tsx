@@ -6,7 +6,7 @@
  * carries the optional way back: the recipe-overview flow that added a dish to
  * the meal plan ends here with "<Titel> zum Essensplan hinzugefügt. Die
  * Einkaufsliste bleibt unverändert." plus "Rückgängig". The behaviour — queue,
- * 6 s countdown, pause on interaction, the action promise — lives in
+ * 6 s countdown, focus pause, the action promise — lives in
  * ../hooks/useSnackbar; this component is only its look and its accessibility.
  *
  * Rules it keeps from the shared conventions (docs/CODING_CONVENTIONS.md):
@@ -46,9 +46,12 @@ function Snackbar({ host }: SnackbarProps) {
       className={tone === 'error' ? 'snackbar snackbar-error' : 'snackbar'}
       // Success is a quiet report (polite); an error is a problem to notice now.
       role={tone === 'error' ? 'alert' : 'status'}
-      onPointerEnter={() => setPaused(message.id, true)}
-      onPointerLeave={() => setPaused(message.id, false)}
       // React's focus events bubble, so these cover the action button as well.
+      // Only focus pauses the countdown. A *pointer* deliberately does not: a
+      // card that appears under a resting pointer, or that the pointer merely
+      // crosses on its way somewhere else, would suspend the countdown for as
+      // long as the pointer stays there — the notice would outlive its six
+      // seconds and keep blocking the list behind it (docs/ui_patterns.md §1.5).
       onFocus={() => setPaused(message.id, true)}
       onBlur={() => setPaused(message.id, false)}
     >

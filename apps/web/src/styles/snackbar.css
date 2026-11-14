@@ -24,6 +24,11 @@
     var(--space-7) + var(--fab-size) + var(--space-5) + env(safe-area-inset-bottom, 0px)
   );
   z-index: 50;
+  /* The card takes the pointer over its whole area: no `pointer-events: none`
+     and no click-through. The notice can carry „Rückgängig", and a click aimed
+     at it must never also fire the list row or button it covers
+     (docs/ui_patterns.md §1.5). It still leaves on its own — only keyboard
+     focus pauses the countdown, never a resting pointer. */
   /* Content width like the sheets (32 rem is the app's established content
      width), centered on wide screens. */
   max-width: 32rem;

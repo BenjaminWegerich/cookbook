@@ -1113,7 +1113,9 @@ translucency, no close button, no countdown.
 
 - One at a time, in order: a FIFO queue, the head of the queue is on screen; notices never stack.
 - Auto-dismiss after 6 s; every notice gets a fresh, full countdown.
-- A pointer over the card or focus inside it pauses the countdown; leaving restarts a full 6 s.
+- Focus inside the card pauses the countdown; leaving restarts a full 6 s. A pointer does not:
+  a card under a resting pointer would otherwise never dismiss.
+- The card takes the click: nothing behind it is triggered, with or without an action.
 - The action runs as a promise: the host is busy, the button is disabled, shows its ellipsis
   label with `aria-busy="true"`, and the countdown is suspended.
 - A rejected action reports itself as an error notice; the success notice then closes.
