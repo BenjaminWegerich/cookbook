@@ -318,12 +318,14 @@ function toTextArtifact(value: SheetResult): TextArtifact {
         quantity: value.quantity,
         unit: value.unit ?? 'g',
         ...(value.precision !== undefined ? { precision: value.precision } : {}),
+        ...reference,
       }
     : {
         kind: 'quantity',
         quantity: value.quantity,
         ...(value.unit !== undefined ? { unit: value.unit } : {}),
         ...(value.precision !== undefined ? { precision: value.precision } : {}),
+        ...reference,
       };
 }
 
