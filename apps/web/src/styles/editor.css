@@ -425,6 +425,22 @@
   color: currentColor;
 }
 
+/* Reference chip in the artifact sheets — the inline counterpart of the master
+   list's star toggle (see .ref-toggle). Off is the default chip; on takes the
+   reference colour as an olive outline with an olive label, the "special
+   answer" chip state of DESIGN §5.2 (olive outline + symbol), never the clay
+   "selected value" fill: the role is a mode, not one value among alternatives. */
+.chip-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.chip-reference-on {
+  border-color: var(--color-olive);
+  color: var(--color-olive);
+}
+
 /* ---- QuantityPicker (suggested chips + stepper) ---------------------------- */
 
 .quantity-picker {

@@ -43,8 +43,10 @@
  *   "1,5 l Wasser", "½") via core renderAQS/formatBQ/formatAQValue; when the
  *   name is an ingredient recipe, the preview carries the clickable „Rezept"
  *   badge that opens that recipe;
- * - the reference role is set on the *master list* only — this sheet never
- *   offers it (recipe_structure.md §Reference).
+ * - the reference role is set on the *master list* for a counted ingredient —
+ *   this sheet never offers it for a row (recipe_structure.md §Reference). An
+ *   inline artifact is not part of the master list, so its own sheet carries
+ *   the role instead: a flagged artifact appears in the recipe's size readout.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -70,7 +72,7 @@ import ArrangementLine from './ArrangementLine';
 import InfoHint from './InfoHint';
 import PrecisionChips from './PrecisionChips';
 import QuantityInput, { type QuantityFamily } from './QuantityInput';
-import { LinkIcon, PencilIcon, PlusIcon, TrashIcon } from './icons';
+import { LinkIcon, PencilIcon, PlusIcon, StarFilledIcon, StarIcon, TrashIcon } from './icons';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /** One ingredient recipe of the collection, as the sheet needs it for the
@@ -101,9 +103,23 @@ export type FreeUnit = QuantityFamily | 'none';
 /** A confirmed row/artifact value. Rows always carry a name and a unit;
  *  quantity-only inline artifacts may omit the name and/or the unit. The
  *  precision is present only when the author pinned a level (it may equal the
- *  ingredient default); absent means the quantity follows that default. */
+ *  ingredient default); absent means the quantity follows that default. The
+ *  reference role exists only for inline artifacts. */
 export type SheetResult =
-  Ingredient | { quantity: number; unit?: Unit; precision?: PrecisionLevel };
+  | Ingredient
+  | {
+      name: string;
+      quantity: number;
+      unit: Unit;
+      precision?: PrecisionLevel;
+      reference?: boolean;
+    }
+  | {
+      quantity: number;
+      unit?: Unit;
+      precision?: PrecisionLevel;
+      reference?: boolean;
+    };
 
 interface IngredientSheetProps {
   mode: IngredientSheetMode;
@@ -186,6 +202,16 @@ function IngredientSheet({
    */
   const [precisionOverride, setPrecisionOverride] = useState<PrecisionLevel | undefined>(
     initial?.precision,
+  );
+  /**
+   * The reference role of an inline artifact. A row's reference lives on the
+   * master list and is never set here; the control is only rendered in inline
+   * modes. Editing an artifact restores its stored flag.
+   */
+  const [reference, setReference] = useState(
+    mode === 'inline-edit' && initial !== undefined && 'kind' in initial
+      ? initial.reference === true
+      : false,
   );
 
   /**
@@ -340,6 +366,9 @@ function IngredientSheet({
      * dropped the same way.
      */
     const savedPrecision = precisionOverride;
+    // Rows never carry the role: their master-list star sets it. An inline
+    // artifact carries it on itself, so the flag is written only in that mode.
+    const savedReference = inlineMode && reference ? { reference: true as const } : {};
     const value: SheetResult =
       trimmedName !== ''
         ? {
@@ -347,16 +376,19 @@ function IngredientSheet({
             quantity: quantity,
             unit: unit ?? 'g',
             ...(savedPrecision !== undefined ? { precision: savedPrecision } : {}),
+            ...savedReference,
           }
         : unit !== undefined
           ? {
               quantity: quantity,
               unit,
               ...(savedPrecision !== undefined ? { precision: savedPrecision } : {}),
+              ...savedReference,
             }
           : {
               quantity: quantity,
               ...(savedPrecision !== undefined ? { precision: savedPrecision } : {}),
+              ...savedReference,
             };
     onConfirm(value, mode === 'row-edit' || mode === 'inline-edit' ? 'update' : 'add');
   };
@@ -615,6 +647,37 @@ function IngredientSheet({
             )}
           </p>
         </div>
+
+        {inlineMode && (
+          <div className="field">
+            <span className="field-label">Referenz</span>
+            <div className="quantity-chips" role="group" aria-label="Referenz">
+              {/* An inline artifact is not part of the master list, so the
+                  recipe's size readout is where its reference role shows. The
+                  star mirrors the master list's reference toggle; the olive
+                  "on" state is the established reference colour. */}
+              <button
+                type="button"
+                className={
+                  reference ? 'chip chip-reference chip-reference-on' : 'chip chip-reference'
+                }
+                aria-pressed={reference}
+                aria-label={
+                  reference ? 'Nicht mehr als Referenz anzeigen' : 'Als Referenz anzeigen'
+                }
+                title={reference ? 'Nicht mehr als Referenz anzeigen' : 'Als Referenz anzeigen'}
+                onClick={() => setReference((current) => !current)}
+              >
+                {reference ? (
+                  <StarFilledIcon className="chip-icon" optical={20} />
+                ) : (
+                  <StarIcon className="chip-icon" optical={20} />
+                )}
+                <span>Referenz</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="sheet-actions">
           {mode === 'row-edit' && (

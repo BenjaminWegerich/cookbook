@@ -9,11 +9,16 @@
 
 import {
   NNBSP,
+  artifactDisplay,
+  masterUsesFor,
+  referenceUses,
   renderAQSDisplay,
   renderMasterAQSDisplay,
   type ArrangementDisplay,
   type MasterQuantityUse,
   type PrecisionContext,
+  type Recipe,
+  type TextArtifact,
   type Unit,
 } from '@cookbook/core';
 
@@ -61,4 +66,44 @@ export function safeRenderMasterAQSDisplay(
     const text = `${quantity}${NNBSP}${unit} ${name}`;
     return { text, parts: [{ kind: 'text', value: text }] };
   }
+}
+
+/**
+ * `artifactDisplay` with the same kind of defensive fallback: a flagged
+ * artifact whose display cannot be derived (e.g. the master data is not
+ * loaded) falls back to its scaled plain amount instead of breaking the
+ * reference readout. A size marker keeps its written text, which never
+ * consults the registry.
+ */
+export function safeArtifactDisplay(artifact: TextArtifact, factor: number): ArrangementDisplay {
+  try {
+    return artifactDisplay(artifact, factor);
+  } catch {
+    const text =
+      artifact.kind === 'size'
+        ? `${artifact.count} ${artifact.size} ${artifact.unit} ${artifact.marker}`
+        : artifact.unit === undefined
+          ? String(artifact.quantity * factor)
+          : `${artifact.quantity * factor}${NNBSP}${artifact.unit}`;
+    return { text, parts: [{ kind: 'text', value: text }] };
+  }
+}
+
+/**
+ * The reference readout of a recipe at one factor: reference ingredients
+ * (scaled through the master list) followed by flagged inline artifacts
+ * (scaled through the artifact display). `referenceUses` owns the order; the
+ * two overlays and the export therefore show the same lines in the same
+ * sequence.
+ */
+export function referenceReadoutItems(recipe: Recipe, factor: number): ArrangementDisplay[] {
+  return referenceUses(recipe).map((use) =>
+    use.kind === 'ingredient'
+      ? safeRenderMasterAQSDisplay(
+          use.ingredient.name,
+          masterUsesFor(recipe.steps, use.ingredient, factor),
+          use.ingredient.unit,
+        )
+      : safeArtifactDisplay(use.artifact, factor),
+  );
 }

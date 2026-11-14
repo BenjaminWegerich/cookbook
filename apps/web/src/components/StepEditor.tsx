@@ -24,15 +24,9 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 
 
 import { CLOSE_ICON_SVG } from './icons';
 import {
+  artifactDisplay,
   artifactToText,
-  formatAQValue,
-  formatBQ,
-  formatDecimal,
   insertArtifact,
-  optimizeUnitless,
-  renderAQSDisplay,
-  resolveSizeMarker,
-  sizeMarkerFallbackText,
   splitArtifacts,
   type ArrangementDisplay,
   type TextArtifact,
@@ -211,39 +205,10 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         // instead of becoming a flex item of its own.
         const content = document.createElement('span');
         content.className = 'step-artifact-content';
-        if (segment.artifact.kind === 'size') {
-          // The editor shows the written recipe, so the factor is 1 here; the
-          // sheet's preview and the export derive the other sizes.
-          const resolved = resolveSizeMarker(segment.artifact, 1);
-          content.textContent = resolved?.text ?? sizeMarkerFallbackText(segment.artifact);
-        } else {
-          const artifactContext = {
-            ...(segment.artifact.precision !== undefined
-              ? { quantity: segment.artifact.precision }
-              : {}),
-          };
-          if (segment.artifact.name === undefined) {
-            if (segment.artifact.unit === undefined) {
-              const unitless = optimizeUnitless(segment.artifact.quantity, artifactContext);
-              content.textContent =
-                unitless.notation === undefined
-                  ? formatDecimal(unitless.value)
-                  : formatAQValue(unitless.value);
-            } else {
-              content.textContent = formatBQ(segment.artifact.quantity, segment.artifact.unit);
-            }
-          } else {
-            appendArtifactDisplay(
-              content,
-              renderAQSDisplay(
-                segment.artifact.name,
-                segment.artifact.quantity,
-                segment.artifact.unit ?? 'g',
-                artifactContext,
-              ),
-            );
-          }
-        }
+        // The chip shows the written recipe (factor 1); the sheet's preview and
+        // the export derive the other sizes. `artifactDisplay` is the shared
+        // artifact renderer, so prose, chip and reference readout cannot drift.
+        appendArtifactDisplay(content, artifactDisplay(segment.artifact, 1));
         span.appendChild(content);
         const remove = document.createElement('button');
         remove.type = 'button';

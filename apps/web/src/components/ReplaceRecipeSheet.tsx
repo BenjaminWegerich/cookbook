@@ -31,7 +31,7 @@
  *   row exists) and are capped to the export's pre-baked yield views — starting
  *   on the size the recipe is written in, exactly like "Einplanen", so an
  *   untouched size replaces the entry with the dish as it stands;
- * - below the size input, the recipe's reference ingredients scaled to the
+ * - below the size input, the recipe's reference amounts scaled to the
  *   choice, one per line — the same readout the meal-plan overlay shows, and
  *   the sanity check described in docs/recipe_structure.md ("the reference
  *   ingredient's amount moves by the same steps");
@@ -53,7 +53,6 @@ import {
   SERVING_COUNTS,
   defaultYieldView,
   formatBQ,
-  masterUsesFor,
   writtenPlannedAmount,
   yieldViewQuantities,
   type PlannedAmount,
@@ -63,7 +62,7 @@ import {
 import { readRecipe, type StoredRecipe } from '../drive/recipeStorage';
 import ReferenceReadout from './ReferenceReadout';
 import ValueStepper from './ValueStepper';
-import { safeRenderMasterAQSDisplay } from './ingredientDisplay';
+import { referenceReadoutItems } from './ingredientDisplay';
 import { CloseIcon, SearchIcon } from './icons';
 
 /**
@@ -277,24 +276,14 @@ function ReplaceRecipeSheet({
         : { kind: 'yield', quantity: effectiveYield, baseUnit: family };
 
   /**
-   * The reference ingredients scaled by the same step as everything else
+   * The reference amounts scaled by the same step as everything else
    * (docs/recipe_structure.md): the display is the sanity check of the choice,
    * the same readout the meal-plan overlay shows below its size input.
+   * Ingredient references come first, then flagged inline artifacts.
    */
   const writtenSize = details === null ? undefined : isDish ? details.servings : details.yield;
   const factor = writtenSize === undefined ? 1 : (isDish ? servings : effectiveYield) / writtenSize;
-  const references =
-    details === null
-      ? []
-      : details.ingredients
-          .filter((ingredient) => ingredient.reference)
-          .map((ingredient) =>
-            safeRenderMasterAQSDisplay(
-              ingredient.name,
-              masterUsesFor(details.steps, ingredient, factor),
-              ingredient.unit,
-            ),
-          );
+  const references = details === null ? [] : referenceReadoutItems(details, factor);
 
   /**
    * "Eintrag ersetzen" is unavailable until a recipe is picked *and* its file is
@@ -477,7 +466,7 @@ function ReplaceRecipeSheet({
             </div>
           ))}
 
-        {/* The reference ingredients, scaled to the choice — the same readout
+        {/* The reference amounts, scaled to the choice — the same readout
             the meal-plan overlay shows, in the same shared style. Deliberately
             no caption: it is a readout of the amounts, not a form field. */}
         <ReferenceReadout items={references} />

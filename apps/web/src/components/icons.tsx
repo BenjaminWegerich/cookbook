@@ -571,9 +571,10 @@ export function StarFilledIcon({ className, optical }: IconProps) {
   return <Glyph name="star_fill1" className={className} optical={optical} />;
 }
 
-/** Star — the reference-quantity marker: the master list's toggle, the "Referenz"
- *  tag, and the "Referenz" tag's × all show the outline star; the active state is
- *  carried by the colour (olive), so only the big toggle swaps to the filled one. */
+/** Star — the reference-quantity marker. The artifact sheets' reference chip and
+ *  the master list's big toggle swap to the filled star when active; the
+ *  "Referenz" tag and its × keep the outline star and carry the active state by
+ *  colour (olive) alone, so the badge never grows a second filled symbol. */
 export function StarIcon({ className, optical }: IconProps) {
   return <Glyph name="star" className={className} optical={optical} />;
 }

@@ -32,7 +32,7 @@
  *   recipe: its adaptive chips use the same logic as the ingredient sheet,
  *   with the recipe's master data (AU links) when that row exists, but every
  *   chip is capped to the export's pre-baked yield views;
- * - below it a small muted readout lists the recipe's reference ingredients,
+ * - below it a small muted readout lists the recipe's reference amounts,
  *   one per line, scaled to the selected size: the sanity check described in
  *   docs/recipe_structure.md ("the reference ingredient's amount moves by the
  *   same steps"). It carries the amounts only, without a caption (decided with
@@ -86,7 +86,7 @@ import {
 import { CheckBoxIcon } from './icons';
 import ReferenceReadout from './ReferenceReadout';
 import ValueStepper from './ValueStepper';
-import { safeRenderMasterAQSDisplay } from './ingredientDisplay';
+import { referenceReadoutItems } from './ingredientDisplay';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 /**
@@ -228,19 +228,12 @@ function MealPlanSheet({
     ? { kind: 'servings', servings }
     : { kind: 'yield', quantity: effectiveYield, baseUnit: family };
 
-  // Reference ingredients scaled by the same factor as everything else
+  // Reference amounts scaled by the same factor as everything else
   // (docs/recipe_structure.md): the display is the sanity check of the choice.
   // The readout keeps an arrangement note's brackets, so it takes the display
-  // runs rather than one pre-joined string.
-  const references = recipe.ingredients
-    .filter((ingredient) => ingredient.reference)
-    .map((ingredient) =>
-      safeRenderMasterAQSDisplay(
-        ingredient.name,
-        masterUsesFor(recipe.steps, ingredient, factor),
-        ingredient.unit,
-      ),
-    );
+  // runs rather than one pre-joined string. Ingredient references come first,
+  // then flagged inline artifacts (e.g. a size marker for the chosen mold).
+  const references = referenceReadoutItems(recipe, factor);
 
   /**
    * Runs the confirmation: keeps the overlay open while the write runs, and on
@@ -333,7 +326,7 @@ function MealPlanSheet({
           </div>
         )}
 
-        {/* The reference ingredients, scaled to the choice, one per line.
+        {/* The reference amounts, scaled to the choice, one per line.
             Deliberately no caption: the readout holds amounts, not form
             fields, and a label would repeat what the recipe overview already
             said. */}

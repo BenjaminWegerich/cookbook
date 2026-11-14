@@ -78,7 +78,7 @@ Additional fields:
 
 | Field | Type | Allowed on | Notes |
 |---|---|---|---|
-| `reference` | list of strings | both types | Names of any number of ingredients anchored to the recipe's size — the portion size (`finished_dish`) or the yield (`ingredient_recipe`), §4. Names must occur in the recipe rows. |
+| `reference` | list of strings | both types | Names of any number of ingredients anchored to the recipe's size — the portion size (`finished_dish`) or the yield (`ingredient_recipe`), §4. Names must occur in the recipe rows. An inline artifact carries the same role on itself with a trailing `|reference` suffix instead of a list entry. |
 
 ### Theme (optional, both types)
 
@@ -170,6 +170,11 @@ layout). The rows are written in a natural, amount-first phrase:
     only an optional artifact override applies; without one the internal neutral
     `medium` is used (docs/quantity_scaling.md §8). An artifact may carry a
     precision suffix: `{{1/2|precision: high}}`.
+  - Any artifact may carry the **reference role** as its last suffix:
+    `{{1500 ml Wasser|reference}}`, `{{1/2|reference}}`,
+    `{{1 26 cm Backring|size|reference}}`, `{{1/2|precision: high|reference}}`.
+    The suffix order is fixed (`|size` / `|precision` first, `|reference` last);
+    a flag out of order or an unknown pipe suffix is a validation error.
   - An artifact that carries a unit is a base quantity: its `MENGE` is the
     unrounded target and its display uses the normal optimizer.
   - **Canonical values are g/ml with `.` decimals.** Hand-written files may use
@@ -197,12 +202,16 @@ layout). The rows are written in a natural, amount-first phrase:
   - A size marker is never counted toward an ingredient list, never enters the
     shopping list and never links a sub-recipe. It has **no precision**: an
     artifact carrying both `|size` and `|precision: …` is malformed.
-- **Reference role** (size anchor, both recipe types): stored as a front-matter
-  list of ingredient names, `reference: [Tortillas]` (any number of entries). It
-  anchors the portion size on a `finished_dish` and the yield on an
-  `ingredient_recipe`. It is a property of the *master* list — the editor shows
-  it only there; rows and artifacts never carry it. A name must match a merged
-  ingredient of the recipe.
+- **Reference role** (size anchor, both recipe types): a counted ingredient is
+  stored by name in the front-matter list, `reference: [Tortillas]` (any number
+  of entries); an inline artifact carries the role on itself with the trailing
+  `|reference` suffix. Both anchor the portion size on a `finished_dish` and the
+  yield on an `ingredient_recipe`. The size readout shows the ingredient
+  references first (master-list order), then the flagged artifacts in step order
+  (each flagged occurrence). A name must match a merged ingredient of the recipe;
+  an artifact flag needs no separate check — the artifact is the reference
+  itself. A step row never carries the role; the master-list star is the only
+  control for counted ingredients.
 - **Sub-recipe links are implicit**: an ingredient use — step row, master row or
   inline artifact — whose name equals the title of an `ingredient_recipe` in the
   collection *is* that sub-recipe (there is no link field; the editor picks the
@@ -285,6 +294,9 @@ the file. Two levels:
   quantity, a step whose prose is missing, and prose starting with `- ` are errors.
 - `reference` may list any number of names on both recipe types, and every name
   must occur among the recipe's merged ingredients.
+- A `|reference` suffix is valid on every artifact kind, including a size marker
+  (unlike `|precision`); it only adds the artifact to the size readout and
+  changes nothing about scaling or the ingredient lists.
 - `theme`, when present, is a mapping whose keys must be `font`/`accent`/`paper`/
   `ink`/`line` (unknown sub-fields are errors); `font` must be one of the export
   font shortlist and the colours canonical `#rrggbb`.

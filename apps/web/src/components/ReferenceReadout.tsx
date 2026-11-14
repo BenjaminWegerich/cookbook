@@ -1,12 +1,13 @@
 /**
- * ReferenceReadout — a recipe's reference ingredients below a size input.
+ * ReferenceReadout — a recipe's reference amounts below a size input.
  *
- * The reference ingredients are the sanity check of a chosen size: their
- * amounts move by the same exact factor as everything else
- * (docs/recipe_structure.md). The readout shows them small and muted, one
- * amount per line, with no caption and no comma between the lines — it is a
- * readout of amounts, not a form field and not a sentence (docs/DESIGN.md
- * §5.11).
+ * A reference amount is the sanity check of a chosen size: it moves with
+ * everything else and shows the result (docs/recipe_structure.md). Reference
+ * ingredients come from the master list; flagged inline artifacts (e.g. a size
+ * marker such as `1 22er Backring`) follow them. The readout shows the lines
+ * small and muted, one amount per line, with no caption and no comma between
+ * the lines — it is a readout of amounts, not a form field and not a sentence
+ * (docs/DESIGN.md §5.11).
  *
  * An arrangement note drops its brackets here and follows one en space in the
  * muted, italic `.arrangement-note` run, like every other list and readout
@@ -23,15 +24,16 @@ import ArrangementLine from './ArrangementLine';
 
 interface ReferenceReadoutProps {
   /**
-   * The reference ingredients' display runs, already scaled to the chosen
-   * size. The caller builds them with `safeRenderAQSDisplay`.
+   * The reference amounts' display runs, already scaled to the chosen size.
+   * The caller builds them with `referenceReadoutItems` (ingredient references
+   * first, then flagged inline artifacts).
    */
   readonly items: readonly ArrangementDisplay[];
 }
 
 /**
- * Renders one line per reference ingredient. An empty list renders nothing:
- * the readout is omitted when the recipe defines no reference ingredient.
+ * Renders one line per reference amount. An empty list renders nothing: the
+ * readout is omitted when the recipe defines no reference amount.
  */
 export default function ReferenceReadout({ items }: ReferenceReadoutProps) {
   if (items.length === 0) return null;

@@ -12,6 +12,11 @@
  * candidate to score. Its scaling law and allowed sizes come from the marker's
  * master data (`docs/size_markers.csv`).
  *
+ * It does offer the reference role: a flagged marker is shown in the recipe's
+ * size readout (e.g. "12 Portionen (1 22er Backring)"), because the equipment
+ * is often the best sanity check of a portion size and it never enters the
+ * ingredient list, where the reference star lives.
+ *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
@@ -26,6 +31,7 @@ import {
   type SizeArtifact,
 } from '@cookbook/core';
 
+import { StarFilledIcon, StarIcon } from './icons';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 interface SizeMarkerSheetProps {
@@ -64,6 +70,8 @@ function SizeMarkerSheet({
     }
     return openingMarker?.defaultSize ?? openingMarker?.sizes[0] ?? 0;
   });
+  /** The reference role; restored when editing and written on confirm. */
+  const [reference, setReference] = useState(initial?.reference === true);
   const [error, setError] = useState<string | null>(null);
 
   const count = /^\d+$/.test(countText.trim()) ? Number(countText.trim()) : NaN;
@@ -110,6 +118,7 @@ function SizeMarkerSheet({
         count,
         size,
         unit: definition.unit,
+        ...(reference ? { reference: true as const } : {}),
       },
       mode === 'edit' ? 'update' : 'add',
     );
@@ -196,6 +205,31 @@ function SizeMarkerSheet({
           <p className="aqs-preview" aria-live="polite">
             <span className="aqs-preview-value">{preview ?? 'Bitte Anzahl und Größe prüfen.'}</span>
           </p>
+        </div>
+
+        <div className="field">
+          <span className="field-label">Referenz</span>
+          <div className="quantity-chips" role="group" aria-label="Referenz">
+            {/* Equipment never enters the master list where the ingredient
+                reference star lives, so the size readout is where it shows. */}
+            <button
+              type="button"
+              className={
+                reference ? 'chip chip-reference chip-reference-on' : 'chip chip-reference'
+              }
+              aria-pressed={reference}
+              aria-label={reference ? 'Nicht mehr als Referenz anzeigen' : 'Als Referenz anzeigen'}
+              title={reference ? 'Nicht mehr als Referenz anzeigen' : 'Als Referenz anzeigen'}
+              onClick={() => setReference((current) => !current)}
+            >
+              {reference ? (
+                <StarFilledIcon className="chip-icon" optical={20} />
+              ) : (
+                <StarIcon className="chip-icon" optical={20} />
+              )}
+              <span>Referenz</span>
+            </button>
+          </div>
         </div>
 
         {error !== null && (

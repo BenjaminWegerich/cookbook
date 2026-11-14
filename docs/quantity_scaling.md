@@ -336,6 +336,12 @@ Size markers have **no precision**: there is no BQ/AQ candidate to score and no
 target amount to display differently. A `|precision` suffix on a size marker is
 a validation error, not a silent no-op.
 
+A size marker may carry the reference role (`{{1 26 cm Backring|size|reference}}`).
+The recipe's size readout then shows its derived equipment line beside the
+reference ingredients — the 8-serving/26er cake reads `1 26er Backring` in its
+written view and `2 22er Backringe` at 12 servings. The flag only places the line
+in the readout; it does not change the marker's scaling law.
+
 Example with the 8-serving/26er cake and the even sizes `16 … 30`:
 
 | Requested servings | `f` | Derived display |
@@ -399,6 +405,8 @@ the cleanup task in [ROADMAP.md](ROADMAP.md).
 | Serving counts | `packages/core/src/servingSizes.ts` |
 | Display arrangements | `packages/core/src/additionalUnits.ts` |
 | Size markers | `packages/core/src/sizeMarkers.ts` (generated data: `sizeMarkersData.ts`) |
+| Reference readout | `packages/core/src/recipe/reference.ts` |
+| Artifact display (prose, chip, readout) | `packages/core/src/recipe/artifactDisplay.ts` |
 | Shopping list arithmetic | `packages/core/src/shoppingList.ts` |
 | Sub-recipe cooking plan | `packages/core/src/subRecipePlan.ts` |
 | Export views | `packages/core/src/recipe/exportHtml.ts`, `yieldViews.ts` |

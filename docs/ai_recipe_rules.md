@@ -114,6 +114,8 @@ Schritte — sonst nichts:
   Zutatenliste zählen: `{{1500 ml Wasser}}`, `{{100 g}}`, `{{1/2}}` (Stückzahl). Eine
   Mengenangabe ohne Zutat (z. B. `{{1/2}}`) darf optional `|precision: high` tragen. Sparsam für
   Wasser/Salz/Stückzahlen; ein Name braucht immer eine Einheit.
+- Jeder Inline-`{{…}}` darf als letztes Suffix `|reference` tragen, wenn er die Portionsgröße
+  verankern soll (z. B. `{{1500 ml Wasser|reference}}`, `{{1 26 cm Backring|size|reference}}`).
 - Die Zutatenliste wird aus allen Zeilen abgeleitet (du schreibst sie nirgends): gleicher
   Name einmal mit Gesamtmenge an der ersten Fundstelle; gleicher Name mit verschiedener
   Einheit bleibt getrennt.
@@ -121,7 +123,8 @@ Schritte — sonst nichts:
   `ingredient_recipe` entspricht, ist die Verwendung dieses Rezepts (kein Linkfeld). Titel
   exakt und case-sensitiv übernehmen, nicht umbenennen oder abkürzen.
 - `reference` nennt die verankernden Zutaten (Portion bzw. Ergiebigkeit); jede muss in den
-  Zeilen vorkommen.
+  Zeilen vorkommen. Für Ausrüstung und display-only Mengen nutzt du `|reference` am
+  Inline-Baustein statt eines Eintrags in `reference`.
 - Prioritäten oder zusätzliche Einheiten an der Zeile gibt es nicht; die App wählt die
   Anzeige-Einheit selbst aus den Stammdaten.
 
@@ -136,6 +139,8 @@ Schritte — sonst nichts:
 - Die Größe skaliert mit der Gesamtmenge nach der Skalierung des Markers. `Backring` ist
   flächenskaliert: Der Durchmesser wächst mit der Quadratwurzel des Faktors, und oberhalb
   der größten Form teilt die App in mehrere Kuchen.
+- Ein Größenmarker, der die Portionsgröße am besten prüft, darf `|reference` tragen;
+  `|size` steht dabei vor `|reference`.
 - Keine Genauigkeit am Größenmarker: `|precision` ist dort ungültig.
 
 ## Sammlung

@@ -104,7 +104,10 @@
 - Recipe format parsing and validation
   (see [storage_format.md](storage_format.md)): it validates step rows, quantity
   artifacts and `|size` markers (marker key, unit and allowed size against
-  `docs/size_markers.csv`).
+  `docs/size_markers.csv`). `recipe/reference.ts` collects the size readout
+  (reference ingredients first, then flagged artifacts in step order) and
+  `recipe/artifactDisplay.ts` renders one artifact at a recipe factor for the
+  prose, the chip and that readout.
 - No React, no DOM — a plain TypeScript module, unit-tested with Vitest.
 - Consumed by the web app and by the export generator (which pre-computes the display values
   for the share file).

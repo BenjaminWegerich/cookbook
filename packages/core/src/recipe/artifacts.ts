@@ -10,6 +10,7 @@
  *   {{100 g}}                   quantity-only mention
  *   {{100}}                     quantity-only mention without a unit
  *   {{1 26 cm Backring|size}}   size marker (equipment, display-only)
+ *   {{1 26 cm Backring|size|reference}}   any artifact can be a size reference
  *
  * A name always requires a unit (so `{{100 Teig}}` is never ambiguous); a
  * quantity-only mention may omit it (unitless count).
@@ -28,9 +29,17 @@
  * (`count`, `size`, marker key) and is resolved by ../sizeMarkers.ts; it never
  * enters an ingredient list and deliberately has no precision.
  *
- * Artifacts never carry a reference flag and never link a sub-recipe
- * explicitly: when the name equals the title of an `ingredient_recipe` it *is*
- * that sub-recipe (implicit link, §4). An ingredient mention renders with the
+ * Any artifact may carry the **reference role** (`|reference`): a flagged
+ * artifact is shown in the recipe's size readout beside the reference
+ * ingredients, scaled with the same factor (a size marker through its own
+ * scaling law). The flag lives on the artifact itself, so prose edits, moving
+ * text and renames cannot orphan it; ingredient references stay the
+ * front-matter `reference` name list because a merged master row is the
+ * stable identity there.
+ *
+ * Artifacts never link a sub-recipe explicitly: when the name equals the title
+ * of an `ingredient_recipe` it *is* that sub-recipe (implicit link, §4). An
+ * ingredient mention renders with the
  * ingredient's display arrangement (renderAQS) and scales with the number of
  * servings; a quantity-only mention renders as the formatted base quantity
  * (formatBQ). Rows of the step lists (`- 250 g Tortillas`) use the exact same
@@ -65,6 +74,12 @@ export interface QuantityArtifact {
    * count has none and uses the internal neutral level.
    */
   precision?: PrecisionLevel;
+  /**
+   * The reference role (storage_format.md §4): when true, the artifact is
+   * shown in the recipe's size readout next to the reference ingredients.
+   * Stored as a trailing `|reference` suffix; absent = no reference role.
+   */
+  reference?: boolean;
 }
 
 /**
@@ -82,6 +97,12 @@ export interface SizeArtifact {
   size: number;
   /** Unit as written (e.g. `cm`); the marker definition owns the canonical unit. */
   unit: string;
+  /**
+   * The reference role (storage_format.md §4): when true, the marker's derived
+   * equipment line is shown in the recipe's size readout. Stored as a trailing
+   * `|reference` suffix; absent = no reference role.
+   */
+  reference?: boolean;
 }
 
 /** One parsed inline artifact: a quantity or a size marker. */
@@ -131,10 +152,11 @@ const CURLY_BLOCK_RE = /\{\{([^{}]*)\}\}/g;
  * plain display forms of the stored numeric value). The unit (g/kg/ml/l) is
  * optional — but only for a quantity-only phrase without a name (`{{100}}`); a
  * name requires a unit (otherwise `{{100 Teig}}` would be ambiguous). The name
- * is the trailing remainder (no `{`/`}`).
+ * is the trailing remainder (no `{`, `}` or `|` — the pipe is reserved for the
+ * artifact's own `|reference` / `|precision` / `|size` suffixes).
  */
 const PHRASE_RE =
-  /^\s*(\d+\s*\/\s*\d+|\d+(?:[.,]\d+)?(?:\s*\+\s*\d+\s*\/\s*\d+)?)\s*(kg|ml|l|g)?\s*([^{}]*)$/;
+  /^\s*(\d+\s*\/\s*\d+|\d+(?:[.,]\d+)?(?:\s*\+\s*\d+\s*\/\s*\d+)?)\s*(kg|ml|l|g)?\s*([^|{}]*)$/;
 
 /**
  * The size-marker grammar: `{{ COUNT SIZE UNIT MARKER|size }}`, e.g.
@@ -232,32 +254,53 @@ export function parseSizePhrase(phrase: string): SizeArtifact | null {
 /**
  * Parses one `{{ … }}` content into an artifact.
  *
- * Two suffix forms exist:
+ * Three suffix forms exist, always in this order when combined:
  * - `|size` marks a size marker (`{{1 26 cm Backring|size}}`), whose phrase is
  *   the count/size/unit/marker grammar above;
  * - `|precision: high` marks the optional quantity-level precision of a
- *   quantity artifact.
+ *   quantity artifact;
+ * - `|reference` marks the reference role (any artifact kind).
  *
- * Returns null when the phrase is invalid, the precision level is unknown, or
- * a size marker also carries a precision suffix (a size marker has no
- * precision). The caller reports it as a malformed artifact.
+ * The reference suffix is stripped first so the other suffixes stay
+ * end-anchored: the canonical combined forms are
+ * `{{1 26 cm Backring|size|reference}}` and
+ * `{{1/2|precision: high|reference}}`.
+ *
+ * Returns null when the phrase is invalid, a suffix is unknown or out of
+ * order, the precision level is unknown, or a size marker also carries a
+ * precision suffix (a size marker has no precision). The caller reports it as
+ * a malformed artifact.
  */
 export function parseArtifactContent(content: string): TextArtifact | null {
-  const sizeMatch = /\|\s*size\s*$/i.exec(content);
+  const referenceMatch = /\|\s*reference\s*$/i.exec(content);
+  const hasReference = referenceMatch !== null;
+  const body = referenceMatch === null ? content : content.slice(0, referenceMatch.index).trimEnd();
+
+  const sizeMatch = /\|\s*size\s*$/i.exec(body);
   if (sizeMatch !== null) {
-    const phrase = content.slice(0, sizeMatch.index).trimEnd();
-    return parseSizePhrase(phrase);
+    const phrase = body.slice(0, sizeMatch.index).trimEnd();
+    const size = parseSizePhrase(phrase);
+    if (size === null) return null;
+    return hasReference ? { ...size, reference: true } : size;
   }
 
-  const precisionMatch = /\|precision:\s*([^|}]*)\s*$/i.exec(content);
-  const phrase =
-    precisionMatch === null ? content : content.slice(0, precisionMatch.index).trimEnd();
+  const precisionMatch = /\|precision:\s*([^|}]*)\s*$/i.exec(body);
+  const phrase = precisionMatch === null ? body : body.slice(0, precisionMatch.index).trimEnd();
   const parsed = parseIngredientPhrase(phrase);
   if (parsed === null) return null;
-  if (precisionMatch === null) return { kind: 'quantity', ...parsed };
+  if (precisionMatch === null) {
+    return hasReference
+      ? { kind: 'quantity', ...parsed, reference: true }
+      : { kind: 'quantity', ...parsed };
+  }
   const precision = parsePrecisionLevel(precisionMatch[1]!);
   if (precision === undefined) return null;
-  return { kind: 'quantity', ...parsed, precision };
+  return {
+    kind: 'quantity',
+    ...parsed,
+    precision,
+    ...(hasReference ? { reference: true } : {}),
+  };
 }
 
 /**
@@ -272,13 +315,15 @@ export function parseArtifactContent(content: string): TextArtifact | null {
  * the family-unit decimal form (`{{1500 ml Wasser}}`).
  *
  * A size marker always writes its explicit count and the `|size` suffix:
- * `{{1 26 cm Backring|size}}`.
+ * `{{1 26 cm Backring|size}}`. The reference role, when set, is written last on
+ * every artifact kind (`{{…|size|reference}}`, `{{…|precision: high|reference}}`).
  */
 export function artifactToText(artifact: TextArtifact): string {
+  const reference = artifact.reference === true ? '|reference' : '';
   if (artifact.kind === 'size') {
     return (
       `{{${artifact.count} ${formatStoredNumber(artifact.size)} ` +
-      `${artifact.unit} ${artifact.marker}|size}}`
+      `${artifact.unit} ${artifact.marker}|size${reference}}}`
     );
   }
   const base =
@@ -289,8 +334,8 @@ export function artifactToText(artifact: TextArtifact): string {
       : `${formatStoredNumber(artifact.quantity)} ${artifact.unit}`;
   const precision = artifact.precision === undefined ? '' : `|precision: ${artifact.precision}`;
   return artifact.name === undefined
-    ? `{{${base}${precision}}}`
-    : `{{${base} ${artifact.name}${precision}}}`;
+    ? `{{${base}${precision}${reference}}}`
+    : `{{${base} ${artifact.name}${precision}${reference}}}`;
 }
 
 /**

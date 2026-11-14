@@ -194,6 +194,17 @@ describe('parseRecipe — happy paths', () => {
         '---\n## Zubereitung\n1. Den Teig für {{2 20,0 cm Backring|size}} ausrollen.\n',
     );
     expect(normalized.steps[0]!.text).toBe('Den Teig für {{2 20 cm Backring|size}} ausrollen.');
+
+    // The reference flag is an artifact suffix; it survives normalization in
+    // its canonical lowercase and last position.
+    const referenced = parseRecipe(
+      '---\ntitle: Backring\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Den Teig für {{1 26,0 cm Backring|size|Reference}} ausrollen.\n',
+    );
+    expect(referenced.steps[0]!.text).toBe(
+      'Den Teig für {{1 26 cm Backring|size|reference}} ausrollen.',
+    );
+    expect(referenced.ingredients).toEqual([]);
   });
 
   it('validates a size marker against the master data', () => {

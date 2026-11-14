@@ -522,6 +522,41 @@ prep_time: 10 min
     expect(cakeHtml).toContain('Den Teig für 1 16er Backring ausrollen.');
     expect(cakeHtml).not.toContain('{{');
   });
+
+  it('shows a flagged size marker in the reference readout of every view', () => {
+    // A size marker never enters the ingredient list, where the reference star
+    // lives; `|reference` makes it part of the size readout instead. The
+    // reference ingredient stays first, the equipment line follows.
+    const flagged = generateRecipeHtml(
+      parseRecipe(`---
+title: Backring mit Referenz
+type: finished_dish
+servings: 8
+reference:
+  - Quark
+prep_time: 10 min
+---
+## Zubereitung
+1. - 1000 g Quark
+   Den Teig in {{1 26 cm Backring|size|reference}} backen.
+`),
+    );
+
+    expect(flagged).toContain(
+      `<ul class="reference size-scoped" data-servings="8">\n` +
+        `    <li>${amountHtml('Quark', 1000, 'g')}</li>\n` +
+        `    <li>1 26er Backring</li>\n` +
+        `  </ul>`,
+    );
+    // The equipment line follows the chosen size: 12 servings need two 22 cm
+    // molds, exactly what the step prose shows.
+    expect(flagged).toContain(
+      `<ul class="reference size-scoped" data-servings="12">\n` +
+        `    <li>${amountHtml('Quark', 1500, 'g')}</li>\n` +
+        `    <li>2 22er Backringe</li>\n` +
+        `  </ul>`,
+    );
+  });
 });
 
 describe('generateRecipeHtml — unitless inline counts (AQ ladder)', () => {

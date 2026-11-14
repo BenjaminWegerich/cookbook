@@ -11,10 +11,13 @@
  *   Menge zum Text hinzufügen" / "Größe zum Text hinzufügen") scale with the
  *   serving count but are never counted;
  * - the master list (Zutaten section) is read-only except for the reference
- *   role, which can only be set there (both recipe types, no limit) — step rows
- *   do not show it. The role is stored as a name, so renaming the last row of a
- *   reference ingredient moves the role to the new name, and removing that row
- *   drops it (a reference without a matching row is invalid, §4);
+ *   role of a counted ingredient, which can only be set there (both recipe
+ *   types, no limit) — step rows do not show it. The role is stored as a name,
+ *   so renaming the last row of a reference ingredient moves the role to the
+ *   new name, and removing that row drops it (a reference without a matching
+ *   row is invalid, §4). An inline artifact is never part of the master list,
+ *   so its own sheet carries the reference role instead (stored on the
+ *   artifact as `|reference`);
  * - sub-recipes are implicit (name == ingredient-recipe title) and clickable
  *   wherever they appear (step rows, master list, text artifacts). Tapping the
  *   "REZEPT" badge opens the sub-recipe as a new level above the current one
@@ -48,7 +51,9 @@
  *   same way in both lists; every tag leads with its symbol (docs/
  *   CODING_CONVENTIONS.md, "inline badges"); only the master list carries the
  *   star toggle, and it is hidden while the reference role is active (the
- *   badge's × is the way to clear it then). When an entry carries more than one
+ *   badge's × is the way to clear it then). An inline artifact's reference
+ *   toggle is the olive "Referenz" chip in its edit sheet, not a row badge.
+ *   When an entry carries more than one
  *   tag, they stack on top of each other in that same order instead of sitting
  *   side by side (decided with the user; both lists).
  *
@@ -303,6 +308,9 @@ function baselineDraftFor(target: StoredRecipe | null, initialDraft?: Recipe): E
  *  an override the sheet chose (the sheet drops one that equals the ingredient
  *  default). */
 function toTextArtifact(value: SheetResult): TextArtifact {
+  // The reference role is only ever set for an inline artifact (rows carry it
+  // in the front-matter name list through the master-list star).
+  const reference = 'reference' in value && value.reference === true ? { reference: true } : {};
   return 'name' in value
     ? {
         kind: 'quantity',

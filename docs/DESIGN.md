@@ -705,8 +705,10 @@ the rest behind that slot. *decided with the user*
 | --- | --- | --- |
 | default | background fill, hairline border, ink label | an available value |
 | selected | accent fill, accent border, `--color-on-accent` label | the chosen value |
-| olive outline + check symbol | olive border and label | the special answer („Nichts zu kaufen") |
+| olive outline + symbol | olive border and label | the special answer or an active flag („Nichts zu kaufen", the artifact sheets' „Referenz" chip) |
 | dashed, muted, close symbol | dashed hairline, muted label, 14px symbol | clears an optional value |
+
+The reference chip is a mode, so it never takes the clay selected-value fill.
 
 **A note inside a selected chip also takes `--color-on-accent`; the italics carry the
 aside.** The clay fill has no room for a muted tint: `--color-ink-muted` on
@@ -1194,10 +1196,11 @@ and no personalisation.
 **Intro.** The first screen: the photo (§5.8), the title (`h1`), the description, the meta line
 — „Arbeitszeit …" and „Gesamtzeit …" as caption/value pairs in the recipe overview's look
 (all-caps muted captions, bold values) — the size picker under an all-caps „Portionen" /
-„Menge" caption (§5.2), and, when the recipe defines reference ingredients, a small muted
-readout of them below the picker (the Einplanen sheet's look). The readout stacks its amounts:
-one reference ingredient per line, with no comma between the lines. An arrangement note drops
-its brackets and follows one en space in the muted, italic run.
+„Menge" caption (§5.2), and, when the recipe defines reference amounts, a small muted
+readout below the picker (the Einplanen sheet's look). A reference amount is a reference
+ingredient or a flagged inline artifact (e.g. a size marker such as `2 22er Backringe`); the
+readout stacks its amounts: one per line, with no comma between the lines. An arrangement note
+drops its brackets and follows one en space in the muted, italic run.
 Scaling happens here and only here. A meal-plan link opens this screen with the promised size
 pre-selected.
 

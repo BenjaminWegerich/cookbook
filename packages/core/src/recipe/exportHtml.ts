@@ -88,7 +88,9 @@ import { resolveSizeMarker, sizeMarkerFallbackText } from '../sizeMarkers.js';
 import type { PrecisionContext } from '../precision.js';
 import { escapeHtml, renderArtifacts } from './artifacts.js';
 import type { QuantityArtifact, TextArtifact } from './artifacts.js';
+import { artifactDisplay } from './artifactDisplay.js';
 import { masterUsesFor } from './masterQuantity.js';
+import { referenceUses } from './reference.js';
 import {
   PLAN_FRAGMENT_SERVINGS,
   PLAN_FRAGMENT_YIELD,
@@ -582,14 +584,19 @@ function masterDisplay(
 }
 
 /**
- * The reference ingredients of one view, scaled by the view's factor, as HTML
- * lines. Like every other readout, the note drops its brackets and follows one
- * en space in the muted, italic run (DESIGN §5.4/§5.11).
+ * The reference amounts of one view, scaled by the view's factor, as HTML
+ * lines: the reference ingredients followed by the flagged inline artifacts
+ * (reference.ts defines the order). Like every other readout, the note drops
+ * its brackets and follows one en space in the muted, italic run (DESIGN
+ * §5.4/§5.11). A size marker renders its derived equipment line, so a cake
+ * shows the mold that belongs to the chosen serving count.
  */
 function referenceLines(recipe: Recipe, factor: number): string[] {
-  return recipe.ingredients
-    .filter((ingredient) => ingredient.reference)
-    .map((ingredient) => arrangementHtml(masterDisplay(recipe, ingredient, factor), 'bare'));
+  return referenceUses(recipe).map((use) =>
+    use.kind === 'ingredient'
+      ? arrangementHtml(masterDisplay(recipe, use.ingredient, factor), 'bare')
+      : arrangementHtml(artifactDisplay(use.artifact, factor), 'bare'),
+  );
 }
 
 /**

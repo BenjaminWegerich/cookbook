@@ -122,6 +122,77 @@ describe('artifact text helpers', () => {
     ).toBe('{{2 20 cm Backring|size}}');
   });
 
+  it('writes the reference flag last on every artifact kind', () => {
+    expect(
+      artifactToText({
+        kind: 'quantity',
+        quantity: 1500,
+        unit: 'ml',
+        name: 'Wasser',
+        reference: true,
+      }),
+    ).toBe('{{1500 ml Wasser|reference}}');
+    expect(artifactToText({ kind: 'quantity', quantity: 0.5, reference: true })).toBe(
+      '{{1/2|reference}}',
+    );
+    expect(
+      artifactToText({
+        kind: 'quantity',
+        quantity: 0.5,
+        precision: 'high',
+        reference: true,
+      }),
+    ).toBe('{{1/2|precision: high|reference}}');
+    expect(
+      artifactToText({
+        kind: 'size',
+        marker: 'Backring',
+        count: 1,
+        size: 26,
+        unit: 'cm',
+        reference: true,
+      }),
+    ).toBe('{{1 26 cm Backring|size|reference}}');
+  });
+
+  it('parses the reference flag on every artifact kind', () => {
+    expect(parseArtifactContent('1500 ml Wasser|reference')).toEqual({
+      kind: 'quantity',
+      quantity: 1500,
+      unit: 'ml',
+      name: 'Wasser',
+      reference: true,
+    });
+    expect(parseArtifactContent('1/2|Reference')).toEqual({
+      kind: 'quantity',
+      quantity: 0.5,
+      reference: true,
+    });
+    expect(parseArtifactContent('1/2|precision: high|reference')).toEqual({
+      kind: 'quantity',
+      quantity: 0.5,
+      precision: 'high',
+      reference: true,
+    });
+    expect(parseArtifactContent('1 26 cm Backring|size|reference')).toEqual({
+      kind: 'size',
+      marker: 'Backring',
+      count: 1,
+      size: 26,
+      unit: 'cm',
+      reference: true,
+    });
+  });
+
+  it('rejects a reference suffix out of order or without an artifact', () => {
+    // The canonical order is |size / |precision first, then |reference.
+    expect(parseArtifactContent('1 26 cm Backring|reference|size')).toBeNull();
+    expect(parseArtifactContent('1/2|reference|precision: high')).toBeNull();
+    expect(parseArtifactContent('|reference')).toBeNull();
+    // A pipe is reserved for suffixes, so it never becomes part of a name.
+    expect(parseArtifactContent('1500 ml Wasser|refrence')).toBeNull();
+  });
+
   it('splits a step text into prose segments and artifact spans', () => {
     const text = 'Nudeln in {{1500 ml Wasser}} kochen, dann {{100 g}} unterheben.';
     const { segments, spans } = splitArtifacts(text);
@@ -219,6 +290,10 @@ describe('artifact text helpers', () => {
     );
     expect(replaceArtifacts('Für {{1 26,0 cm Backring|size}} ausrollen.', (a) => a)).toBe(
       'Für {{1 26 cm Backring|size}} ausrollen.',
+    );
+    // The reference flag normalizes to its canonical lowercase, last suffix.
+    expect(replaceArtifacts('Für {{1 26,0 cm Backring|size|Reference}} ausrollen.', (a) => a)).toBe(
+      'Für {{1 26 cm Backring|size|reference}} ausrollen.',
     );
   });
 
