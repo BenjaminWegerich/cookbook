@@ -137,6 +137,7 @@ export const AQ_SCHEME_NAMES: readonly string[] = [
   'all_fractions_and_integers_up_to_30',
   'integers_up_to_30',
   'quarters_halves_and_integers_up_to_30',
+  'quarters_halves_and_integers_up_to_10',
 ];
 
 /** Allowed AQ values per number scheme, ascending. */
@@ -162,5 +163,9 @@ export const AQ_SCHEMES: Readonly<Record<string, readonly number[]>> = {
     0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75,
     5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 25, 28,
     30,
+  ],
+  quarters_halves_and_integers_up_to_10: [
+    0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75,
+    5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10,
   ],
 };

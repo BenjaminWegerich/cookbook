@@ -158,8 +158,8 @@ content (`(500 g)`), because the sentence's punctuation must stay visible.
   optimizer. It applies to exact and non-exact units.
 - Current schemes: `integers_up_to_10`, `halves_and_integers_up_to_10`,
   `halves_and_integers_up_to_30`, `all_fractions_and_integers_up_to_30`,
-  `integers_up_to_30`, `quarters_halves_and_integers_up_to_30`. No scheme allows
-  a count above 30.
+  `integers_up_to_30`, `quarters_halves_and_integers_up_to_30`,
+  `quarters_halves_and_integers_up_to_10`. No scheme allows a count above 30.
 - The scheme names are referenced by `Number Scheme` in
   [additional_units.csv](additional_units.csv); the generator fails on an
   unknown name or a scheme cell other than `1` / `0` / empty.

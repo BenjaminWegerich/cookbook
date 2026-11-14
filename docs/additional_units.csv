@@ -8,7 +8,7 @@ Packung (halbierbar);Packung;Packungen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);ha
 Packung (unteilbar);Packung;Packungen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);integers_up_to_30;yes
 Stück (ZE zuerst);Stück;Stück;<AQ><NNBSP><INF> (<BQ><NNBSP><BU>);quarters_halves_and_integers_up_to_30;no
 Teelöffel;TL;TL;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_10;no
-Zweig;Zweig;Zweige;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);quarters_halves_and_integers_up_to_30;no
+Zweig;Zweig;Zweige;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);quarters_halves_and_integers_up_to_10;no
 Topf;Topf;Töpfe;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);quarters_halves_and_integers_up_to_30;no
 Stück (BE zuerst);Stück;Stück;<BQ><NNBSP><BU> <IN> (<AQ><NNBSP><INF>);quarters_halves_and_integers_up_to_30;no
 Stück (BE zuerst, exakt);Stück;Stück;<BQ><NNBSP><BU> <IN> (<AQ><NNBSP><INF>);quarters_halves_and_integers_up_to_30;yes
@@ -21,3 +21,4 @@ Flasche;Flasche;Flaschen;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integ
 Becher;Becher;Becher;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes
 Glas;Glas;Gläser;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);halves_and_integers_up_to_30;yes
 Block;Block;Blöcke;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);all_fractions_and_integers_up_to_30;yes
+Tafel;Tafel;Tafeln;<AQ><NNBSP><AU> <IN> (<BQ><NNBSP><BU>);all_fractions_and_integers_up_to_30;yes

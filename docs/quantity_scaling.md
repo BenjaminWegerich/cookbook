@@ -108,6 +108,7 @@ The current schemes are:
 | `all_fractions_and_integers_up_to_30` | Every AQ value up to 30. |
 | `integers_up_to_30` | Whole AQ values up to 30 (as present in the table). |
 | `quarters_halves_and_integers_up_to_30` | Quarter, half and whole AQ values up to 30. |
+| `quarters_halves_and_integers_up_to_10` | Quarter, half and whole AQ values up to 10. |
 
 No scheme allows a count above `30`. The scheme matrix lives in `AQs.csv`, so a
 new AQ value and its memberships are one edit, not two files.
