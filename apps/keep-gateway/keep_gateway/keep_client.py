@@ -213,11 +213,12 @@ def verify_shopping_sort(shopping: dict[str, Any], order: Iterable[str]) -> None
     """Refuse a sort whose result is not exactly the order the app asked for.
 
     The app hands over the complete list of line texts in the desired reading
-    order (top first) — a permutation of the current list, with the ignored lines
-    at the top, then the assigned lines in walking order, then the checked-off
-    ones. The state read back after the sync must therefore be that exact
-    sequence; anything else (an indented sub-item that Keep keeps under its
-    parent, a concurrent edit) is a `KeepApiError`, never a silent "sorted".
+    order (top first) — a permutation of the current list, with the lines parked
+    at the top first, then the assigned lines in walking order, then the lines
+    parked at the bottom, then the checked-off ones. The state read back after the
+    sync must therefore be that exact sequence; anything else (an indented
+    sub-item that Keep keeps under its parent, a concurrent edit) is a
+    `KeepApiError`, never a silent "sorted".
     """
     expected = [text.strip() for text in order]
     texts = [item["text"].strip() for item in shopping["items"]]
@@ -622,9 +623,9 @@ class KeepClient:
 
         `order` is the complete list of line texts in the desired reading order
         (top first): a permutation of the current list. The app owns the derivation
-        (core's `shoppingSortOrder` — ignored lines at the top, assigned lines in
-        walking order, checked-off lines last); this gateway only applies the order
-        it is handed, exactly like the write actions.
+        (core's `shoppingSortOrder` — lines parked at the top first, assigned lines in
+        walking order, lines parked at the bottom, checked-off lines last); this
+        gateway only applies the order it is handed, exactly like the write actions.
 
         Non-destructive in the same way as the writes: nothing is added or deleted,
         every existing item just gets a fresh sort id that places it where the order

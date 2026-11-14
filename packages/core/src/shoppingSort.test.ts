@@ -222,35 +222,39 @@ describe('the built-in seed (no fixture)', () => {
 });
 
 describe('shoppingSortOrder', () => {
-  it('orders ignored, then assigned by route, then checked — stable within a stop', () => {
+  it('orders parked top, assigned by route, parked bottom, checked — stable', () => {
     setShoppingRoute(ROUTE);
     setShoppingItems(ITEMS);
 
     // Keep's own order is deliberately not the route order.
     const lines: ShoppingSortLine[] = [
-      { text: 'Wandfarbe', checked: false, item: null }, // ignored
+      { text: 'Wandfarbe', checked: false, item: null }, // parked top
       { text: '2 Becher Joghurt (800 g)', checked: false, item: 'Joghurt' }, // Lidl/Molkerei
       { text: '6 Stück Karotten (500 g)', checked: false, item: 'Karotten' }, // REWE/Obst
       { text: '1 Packung Mehl (1 kg)', checked: false, item: 'Mehl' }, // Lidl/Trocken
       { text: 'Klopapier', checked: true, item: 'Klopapier' }, // checked
       { text: '1 Handvoll Petersilie', checked: false, item: null }, // resolved to a stop
+      { text: 'Blumen', checked: false, item: null }, // parked bottom
     ];
 
-    const order = shoppingSortOrder(lines, (text) =>
-      text === 'Wandfarbe' ? 'ignore' : { store: 'Lidl', section: 'Trockensortiment' },
-    );
+    const order = shoppingSortOrder(lines, (text) => {
+      if (text === 'Wandfarbe') return 'top';
+      if (text === 'Blumen') return 'bottom';
+      return { store: 'Lidl', section: 'Trockensortiment' };
+    });
 
     expect(order).toEqual([
-      'Wandfarbe', // ignored, top
+      'Wandfarbe', // parked top
       '2 Becher Joghurt (800 g)', // Lidl/Molkerei
       '1 Packung Mehl (1 kg)', // Lidl/Trockensortiment (before the resolved one, stable)
       '1 Handvoll Petersilie', // Lidl/Trockensortiment (resolved)
       '6 Stück Karotten (500 g)', // REWE/Obst und Gemüse
-      'Klopapier', // checked, bottom
+      'Blumen', // parked bottom, above the checked-off lines
+      'Klopapier', // checked, very bottom
     ]);
   });
 
-  it('keeps ignored lines in Keep’s own order at the top', () => {
+  it('keeps lines parked at the top in Keep’s own order', () => {
     setShoppingRoute(ROUTE);
     setShoppingItems(ITEMS);
     const lines: ShoppingSortLine[] = [
@@ -258,7 +262,31 @@ describe('shoppingSortOrder', () => {
       { text: 'Blumen', checked: false, item: null },
       { text: '2 Becher Joghurt (800 g)', checked: false, item: 'Joghurt' },
     ];
-    const order = shoppingSortOrder(lines, () => 'ignore');
+    const order = shoppingSortOrder(lines, () => 'top');
     expect(order).toEqual(['Wandfarbe', 'Blumen', '2 Becher Joghurt (800 g)']);
+  });
+
+  it('keeps lines parked at the bottom in Keep’s own order', () => {
+    setShoppingRoute(ROUTE);
+    setShoppingItems(ITEMS);
+    const lines: ShoppingSortLine[] = [
+      { text: 'Wandfarbe', checked: false, item: null },
+      { text: 'Blumen', checked: false, item: null },
+      { text: '2 Becher Joghurt (800 g)', checked: false, item: 'Joghurt' },
+    ];
+    const order = shoppingSortOrder(lines, () => 'bottom');
+    expect(order).toEqual(['2 Becher Joghurt (800 g)', 'Wandfarbe', 'Blumen']);
+  });
+
+  it('places a bottom line above the checked-off block, never below it', () => {
+    setShoppingRoute(ROUTE);
+    setShoppingItems(ITEMS);
+    const lines: ShoppingSortLine[] = [
+      { text: '2 Becher Joghurt (800 g)', checked: false, item: 'Joghurt' },
+      { text: 'Klopapier', checked: true, item: 'Klopapier' },
+      { text: 'Blumen', checked: false, item: null },
+    ];
+    const order = shoppingSortOrder(lines, () => 'bottom');
+    expect(order).toEqual(['2 Becher Joghurt (800 g)', 'Blumen', 'Klopapier']);
   });
 });

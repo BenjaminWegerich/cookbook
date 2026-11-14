@@ -107,7 +107,10 @@ updated instead of duplicated (storage_format.md §10).
    Similar names are offered as suggestions (§4); the user either confirms one of
    them (which writes a synonym), assigns a stop under a new (or corrected) item
    name — which writes the item row and, when the name was edited, the line's own
-   name field as a synonym of it — or ignores the line.
+   name field as a synonym of it — or **parks** the line at one end of the list
+   (`„Oben einsortieren“` above the route-sorted lines, `„Unten einsortieren“`
+   after them and before the checked-off ones). Parking writes nothing and the
+   line is asked about again on the next run.
 
 Matching an item takes precedence over matching a variant. A variant equal to an
 item name is rejected at load (§5), so the two rules can never disagree about the

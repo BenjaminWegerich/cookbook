@@ -25,8 +25,9 @@
  *    similar item names, and the sort page asks the user (confirming a candidate
  *    appends a synonym, so the same variant is never asked twice).
  *
- * `shoppingSortOrder` then places the lines: ignored first in Keep's order, then
- * the assigned ones in walking order (stable within one stop), then the
+ * `shoppingSortOrder` then places the lines: the ones parked at the top first in
+ * Keep's order, then the assigned ones in walking order (stable within one
+ * stop), then the ones parked at the bottom in Keep's order, then the
  * checked-off ones last.
  *
  * Everything here is pure and framework-free; it reads the runtime registries
@@ -62,8 +63,14 @@ export interface ShoppingSortLine {
   readonly item: string | null;
 }
 
-/** How an unmatched line is resolved by the sort flow: a chosen stop or "ignore". */
-export type UnmatchedResolution = ShoppingStop | 'ignore';
+/**
+ * How an unmatched line is resolved by the sort flow: a chosen stop, or one of
+ * the two **placement** answers — `'top'` parks the line above every
+ * route-sorted line, `'bottom'` parks it at the end of the not-yet-bought lines
+ * (before the checked-off ones). A placement writes no master data; the line is
+ * asked about again on the next run.
+ */
+export type UnmatchedResolution = ShoppingStop | 'top' | 'bottom';
 
 /**
  * The quantity part of a line the app writes: digits, the German decimal comma,
@@ -251,10 +258,11 @@ function stopKey(stop: ShoppingStop): string {
 }
 
 /**
- * The target order of the whole list (top first): ignored lines first in Keep's
- * own order, then assigned lines in walking order (stable within one stop), then
+ * The target order of the whole list (top first): the lines parked at the top
+ * first in Keep's own order, then assigned lines in walking order (stable within
+ * one stop), then the lines parked at the bottom in Keep's own order, then the
  * checked-off lines last in Keep's own order. `resolveUnmatched` answers only
- * for lines whose item is null: a chosen stop, or 'ignore' (placed at the top).
+ * for lines whose item is null: a chosen stop, or 'top' / 'bottom'.
  */
 export function shoppingSortOrder(
   lines: readonly ShoppingSortLine[],
@@ -263,8 +271,9 @@ export function shoppingSortOrder(
   const route = allShoppingStops();
   const indexByStop = new Map(route.map((stop, index) => [stopKey(stop), index]));
 
-  const ignored: string[] = [];
+  const parkedTop: string[] = [];
   const assigned: { text: string; index: number }[] = [];
+  const parkedBottom: string[] = [];
   const checked: string[] = [];
 
   for (const line of lines) {
@@ -276,8 +285,12 @@ export function shoppingSortOrder(
       line.item !== null ? shoppingStopFor(line.item) : undefined;
     if (stop === undefined) {
       const decision = resolveUnmatched(line.text);
-      if (decision === 'ignore') {
-        ignored.push(line.text);
+      if (decision === 'top') {
+        parkedTop.push(line.text);
+        continue;
+      }
+      if (decision === 'bottom') {
+        parkedBottom.push(line.text);
         continue;
       }
       stop = decision;
@@ -291,5 +304,5 @@ export function shoppingSortOrder(
   // Array.prototype.sort is stable, so lines within one stop keep Keep's order.
   assigned.sort((a, b) => a.index - b.index);
 
-  return [...ignored, ...assigned.map((entry) => entry.text), ...checked];
+  return [...parkedTop, ...assigned.map((entry) => entry.text), ...parkedBottom, ...checked];
 }

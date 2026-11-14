@@ -420,10 +420,11 @@ def create_app(
         Body: `{"order": ["<line>", ...]}` — the complete list of line texts in the
         desired reading order (top first), a permutation of the current list. The app
         owns that derivation (core's `shoppingSortOrder`, on the shopping-route master
-        data, storage_format.md §10): ignored lines at the top, then the assigned lines
-        in walking order, then the checked-off lines. This boundary treats a line as
-        opaque text and only executes the order it is handed — the same division of
-        labour as the write actions.
+        data, storage_format.md §10): lines parked at the top first, then the assigned
+        lines in walking order, then the lines parked at the bottom, then the
+        checked-off lines. This boundary treats a line as opaque text and only
+        executes the order it is handed — the same division of labour as the write
+        actions.
 
         The answer is the shopping list after the sort, in the shape one checklist has
         in `GET /keep/state`, so the app can update it without a second request — and

@@ -312,8 +312,8 @@
   master token in the first place.
 - Sorting is applied server-side, never in the client: the core derives the target order from
   the shopping master data (docs/storage_format.md §10, docs/shopping_item_identity.md —
-  ignored lines first, then the lines with an item in walking order, then the checked-off
-  ones), and the gateway only applies it
+  lines parked at the top first, then the lines with an item in walking order, then the lines
+  parked at the bottom, then the checked-off ones), and the gateway only applies it
   (`KeepClient.sort_shopping_lines`: fresh sort ids above every item, the same non-destructive
   technique and verification as the writes, not `List.sort_items`).
 

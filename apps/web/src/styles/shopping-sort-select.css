@@ -5,9 +5,10 @@
  * (components/ShoppingSortSelect.tsx): one row per unchecked shopping-list line
  * that names no item. An unfolded row carries the editable „Artikel“ field, the
  * similar-item chips (the shared .suggestions row), the „Markt“ store chips +
- * „Bereich“ section chips and a quiet "Ignorieren" text action beside the store
- * chips. As soon as the line is decided it folds to one muted, small summary
- * line; tapping that line unfolds the row again. All pixel values come from the
+ * „Bereich“ section chips and the two quiet placement answers ("Oben
+ * einsortieren" / "Unten einsortieren") beside the store chips. As soon as the
+ * line is decided it folds to one muted, small summary line; tapping that line
+ * unfolds the row again. All pixel values come from the
  * design ladder (docs/CODING_CONVENTIONS.md); colors and sizes reference the
  * tokens in styles/tokens.css.
  */
@@ -50,7 +51,7 @@
 }
 
 /* One unfolded line: its text, the „Artikel“ field, the similar-item chips,
-   the stop fields and the ignore action. */
+   the stop fields and the placement answers. */
 .sort-entry {
   display: grid;
   gap: var(--space-3);
@@ -81,9 +82,9 @@
   text-align: start;
 }
 
-/* The „Markt“ store chips and the quiet ignore answer share one wrapping row:
-   the exception sits beside the store choices, not below the whole picker. The
-   gap is the established chip-row gap. */
+/* The „Markt“ store chips and the quiet placement answers share one wrapping
+   row: the exceptions sit beside the store choices, not below the whole picker.
+   The gap is the established chip-row gap. */
 .sort-market-row {
   display: flex;
   flex-wrap: wrap;
@@ -91,24 +92,33 @@
   gap: var(--space-4);
 }
 
-/* The ignore action is a quiet text button, never a chip: the store chips are
+/* The two placement answers stay one group, so they wrap together instead of
+   splitting across two lines (the store chips may wrap above them). */
+.sort-parking {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* A placement answer is a quiet text button, never a chip: the store chips are
    values of the stop, while this is the row's exception answer. It keeps the
    action height for its whole line, so the target stays thumb-reach tall
    without a visible box, and its label lines up with the field captions. */
-.sort-ignore {
+.sort-parking-action {
   justify-self: start;
   min-height: var(--control-height);
   padding-inline-start: 0;
 }
 
-/* Ignored (visible only after unfolding a folded ignore row): the label already
-   says the state; the accent colour borrows the established active colour
-   without turning the action back into a filled chip. */
-.sort-ignore[aria-pressed='true'] {
+/* Parked (visible only after unfolding a folded row): the label already says
+   the state; the accent colour borrows the established active colour without
+   turning the action back into a filled chip. */
+.sort-parking-action[aria-pressed='true'] {
   color: var(--color-accent);
 }
 
-/* A decided entry's note in place of the stop fields (ignored, or a known item
+/* A decided entry's note in place of the stop fields (parked, or a known item
    that becomes a synonym): quiet, so it explains the decision without competing
    with it. */
 .sort-note {

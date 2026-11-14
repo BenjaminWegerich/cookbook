@@ -125,8 +125,8 @@ screen, which return to the entry's overview). The shopping flow is built as wel
 Zutaten-Rezepte“ decides how much of each linked Zutaten-Rezept is made, the stock step „Teil 2:
 Zutaten“ sets each bottom-level ingredient's Vorrat, and the difference goes to
 „Einkaufsliste“). The aisle sort is built as well („Einkaufsliste sortieren“ resolves an
-unassigned item to an existing item as a synonym, assigns it a stop, or ignores it, then
-reorders the list).
+unassigned item to an existing item as a synonym, assigns it a stop, or parks it at the top or
+the bottom of the list, then reorders the list).
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -156,8 +156,9 @@ not where it is used.
 - [x] Sort the shopping list by category/aisle (built on the shopping-route master data,
       storage_format.md §10): „Einkaufsliste sortieren“ lists the unchecked entries that name no
       item, each of which is resolved to an existing item (saved as a synonym), assigned a store
-      + section (like „Neue Zutat anlegen“), or ignored (placed at the top); the gateway applies
-      the derived order and verifies it.
+      + section (like „Neue Zutat anlegen“), or parked at the top or the bottom of the list
+      (neither parking answer writes master data; both are asked about again on the next run);
+      the gateway applies the derived order and verifies it.
 - [x] Give the shopping list an item identity of its own (design in
       [shopping_item_identity.md](shopping_item_identity.md)): the assignment file
       is replaced by `einkaufs-artikel.csv` (`Item;Store;Section` — the identity of

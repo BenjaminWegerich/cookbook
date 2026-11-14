@@ -17,7 +17,10 @@
  * - **assigns a stop** with the „Markt“ store chips + „Bereich“ section chips —
  *   App then writes a new item row under the name in „Artikel“ and, when that
  *   name was changed, the line's own name as a **synonym** of it; or
- * - **ignores** the line, which the sort places at the top of the list.
+ * - **parks** the line at one end of the list: **„Oben einsortieren“** above
+ *   every route-sorted line, **„Unten einsortieren“** after them and before the
+ *   checked-off ones. A parked line writes no master data and is asked about
+ *   again on the next run — only its position differs between the two answers.
  *
  * **A decided line folds to one quiet summary line.** The folded line says what
  * was decided, so the page reads as a checklist of decisions once the work is
@@ -31,7 +34,7 @@
  *   name is saved as a synonym of it;
  * - „<line>“: <store> > <section> — the „Artikel“ name is unchanged and the stop
  *   is set, so the line becomes that item;
- * - „<line>“: ignoriert (oben einsortiert) — the line is ignored.
+ * - „<line>“: oben einsortiert / „<line>“: unten einsortiert — the line is parked.
  *
  * The original line always sits between „“ in the folded summary, so it stays
  * distinguishable from the item name it was mapped to.
@@ -39,7 +42,8 @@
  * The folded line is muted and one text step smaller, and tapping it unfolds the
  * row again so a decision can still be changed. Folding happens when the user
  * leaves the row after the exact name (never under the cursor while typing),
- * when a suggestion or a section is chosen, or on „Ignorieren“.
+ * when a suggestion or a section is chosen, or on one of the two placement
+ * actions.
  *
  * **The decisions are unsaved until „Liste sortieren“ is pressed, so leaving
  * asks first.** The page keeps one exit guard (useLeaveGuard, docs/DESIGN.md
@@ -80,7 +84,7 @@ import {
 import type { KeepItem } from '../keep/keepClient';
 import { useEscapeTrigger, useLeaveGuard } from '../hooks/useLeaveGuard';
 import LeaveConfirmSheet from './LeaveConfirmSheet';
-import { VisibilityOffIcon } from './icons';
+import { ArrowDownIcon, ArrowUpIcon } from './icons';
 
 /**
  * The browser-Back consumer of this page (see App's popstate handler). The
@@ -96,6 +100,13 @@ export interface ShoppingSortSelectHandle {
 }
 
 /**
+ * The two ends a parked line can be placed at: `top` above every route-sorted
+ * line and `bottom` after them, before the checked-off ones. Neither writes
+ * master data; the line is asked about again on the next run.
+ */
+export type SortPlacement = 'top' | 'bottom';
+
+/**
  * How one unresolved line was decided:
  * - `item` — a new (or corrected) item row under `name` at `stop`; when the
  *   line's own name differs from `name`, the line name is also stored as a
@@ -103,7 +114,7 @@ export interface ShoppingSortSelectHandle {
  * - `synonym` — `variant` (the line's name field) means the existing `item`,
  *   which resolves the line without touching the item table
  *   (docs/shopping_item_identity.md §4);
- * - `ignore` — placed at the top of the list.
+ * - a `SortPlacement` — parked at the top or at the bottom of the list.
  */
 export type SortResolution =
   | {
@@ -117,7 +128,7 @@ export type SortResolution =
       readonly variant?: string;
     }
   | { readonly kind: 'synonym'; readonly variant: string; readonly item: string }
-  | 'ignore';
+  | SortPlacement;
 
 interface ShoppingSortSelectProps {
   /** The shopping-list items in Keep's display order (top first) — a snapshot. */
@@ -182,8 +193,8 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
   const unresolved = useMemo(() => unresolvedEntries(items), [items]);
   /** The „Artikel“ text by line (the name field until the user edits it). */
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(() => new Map());
-  /** Ignored lines by text (placed at the top of the list). */
-  const [ignored, setIgnored] = useState<ReadonlySet<string>>(() => new Set<string>());
+  /** Parked lines by text, with the end each one was parked at. */
+  const [placements, setPlacements] = useState<ReadonlyMap<string, SortPlacement>>(() => new Map());
   /** Chosen store by text (level 1 of the „Markt“ field). */
   const [stores, setStores] = useState<ReadonlyMap<string, string>>(() => new Map());
   /** Chosen section by text (level 2 of the „Markt“ field). */
@@ -263,7 +274,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
 
   /** True when the line has one of the three decisions, so it can fold. */
   function isDecided(entry: UnresolvedEntry): boolean {
-    if (ignored.has(entry.text) || knownItemOf(entry) !== null) return true;
+    if (placements.has(entry.text) || knownItemOf(entry) !== null) return true;
     // A new item row needs a name; the derived one is prefilled, but the user
     // can clear the field, and an empty item name must not be written.
     if (draftOf(entry).trim() === '') return false;
@@ -338,7 +349,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
     });
   }
 
-  /** True when every unresolved line is decided (ignored, a known item or a stop). */
+  /** True when every unresolved line is decided (parked, a known item or a stop). */
   const complete = unresolved.every(isDecided);
 
   /** True while the snapshot holds at least one unchecked line to sort. */
@@ -350,7 +361,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
   /**
    * The decisions the user has really made, one canonical string each: a typed
    * „Artikel“ name that differs from its prefill, a picked store, a picked
-   * „Bereich“ chip and an ignored line. Values that end up at the prefill (typing
+   * „Bereich“ chip and a parked line. Values that end up at the prefill (typing
    * then reverting the name) are not decisions — leaving would lose nothing, so
    * they must not make the page ask.
    *
@@ -364,9 +375,11 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
     }
     for (const [text, value] of stores) decisions.push(`markt\u0000${text}\u0000${value}`);
     for (const [text, value] of sections) decisions.push(`bereich\u0000${text}\u0000${value}`);
-    for (const text of ignored) decisions.push(`ignoriert\u0000${text}`);
+    for (const [text, placement] of placements) {
+      decisions.push(`platzierung\u0000${text}\u0000${placement}`);
+    }
     return decisions.sort();
-  }, [drafts, stores, sections, ignored]);
+  }, [drafts, stores, sections, placements]);
 
   /** True while leaving would throw away at least one decision. */
   const hasUnsavedDecisions = decisionList.length > 0;
@@ -429,12 +442,12 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
    * Folds a line once focus leaves its whole row — but only when the line is
    * already decided. Folding is deliberately tied to leaving the row rather than
    * to every keystroke: a row must never disappear under the cursor while the
-   * user is still typing. Moving focus inside the row (onto a chip or the
-   * ignore action) is not leaving it; those controls fold
-   * explicitly when they complete the decision. The Tab path is covered too:
-   * tabbing through the row's controls and out of it folds the decided line.
-   * A native blur that a removed summary button produces on unfolding is not a
-   * decision to fold again, so it is ignored.
+   * user is still typing. Moving focus inside the row (onto a chip or a
+   * placement action) is not leaving it; those controls fold explicitly when
+   * they complete the decision. The Tab path is covered too: tabbing through the
+   * row's controls and out of it folds the decided line. A native blur that a
+   * removed summary button produces on unfolding is not a decision to fold
+   * again, so it is ignored.
    */
   function blurRow(entry: UnresolvedEntry, event: FocusEvent<HTMLLIElement>): void {
     if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
@@ -458,20 +471,21 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
   }
 
   /**
-   * Toggles "ignored" for one line. Ignoring clears any picked stop, so the
-   * line's one decision is the ignore; taking the ignore back leaves the row
-   * unfolded for a different decision.
+   * Parks a line at one end of the list — or takes that answer back when the
+   * same end is pressed again. Pressing the other end moves the line there.
+   * Parking clears any picked stop, so the line's one decision is its position;
+   * taking it back leaves the row unfolded for a different decision.
    */
-  function toggleIgnored(text: string): void {
-    if (ignored.has(text)) {
-      setIgnored((current) => {
-        const updated = new Set(current);
+  function togglePlacement(text: string, placement: SortPlacement): void {
+    if (placements.get(text) === placement) {
+      setPlacements((current) => {
+        const updated = new Map(current);
         updated.delete(text);
         return updated;
       });
       return;
     }
-    setIgnored((current) => new Set(current).add(text));
+    setPlacements((current) => new Map(current).set(text, placement));
     clearStop(text);
     fold(text);
   }
@@ -480,13 +494,13 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
    * Picks a store (level 1). A section belongs to exactly one store, so the
    * previous section is cleared when the store really changes (same rule as the
    * new-ingredient sheet). Picking a store is the other way to decide the line,
-   * so it takes an ignore back; the row stays unfolded until a section is
+   * so it takes a placement back; the row stays unfolded until a section is
    * chosen.
    */
   function chooseStore(text: string, store: string): void {
-    setIgnored((current) => {
+    setPlacements((current) => {
       if (!current.has(text)) return current;
-      const updated = new Set(current);
+      const updated = new Map(current);
       updated.delete(text);
       return updated;
     });
@@ -520,8 +534,9 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
     setError(null);
     const resolutions = new Map<string, SortResolution>();
     for (const entry of unresolved) {
-      if (ignored.has(entry.text)) {
-        resolutions.set(entry.text, 'ignore');
+      const placement = placements.get(entry.text);
+      if (placement !== undefined) {
+        resolutions.set(entry.text, placement);
         continue;
       }
       const item = knownItemOf(entry);
@@ -562,7 +577,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
    * this one"; the aria-label carries the meaning for screen readers.
    */
   function renderCandidates(entry: UnresolvedEntry): ReactNode {
-    if (ignored.has(entry.text) || knownItemOf(entry) !== null) {
+    if (placements.has(entry.text) || knownItemOf(entry) !== null) {
       return null;
     }
     const suggestions = shoppingItemSuggestions(draftOf(entry));
@@ -603,23 +618,36 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
   }
 
   /**
-   * The row's exception answer: a quiet text button, deliberately not a pill, so
-   * it can never be mistaken for one of the store chips. While the stop fields
-   * are shown it sits in the „Markt“ chips row; when that field is hidden (a
-   * known item, an ignored row or no route) it follows the note in the same slot.
+   * The row's two placement answers — quiet text buttons, deliberately not
+   * pills, so they can never be mistaken for one of the store chips. They sit
+   * together in one group: while the stop fields are shown the group shares the
+   * „Markt“ chips row; when that field is hidden (a known item, a parked row or
+   * no route) it follows the note in the same slot. The pressed answer names the
+   * state, and pressing the other end moves the line there.
    */
-  function renderIgnoreAction(entry: UnresolvedEntry): ReactNode {
-    const isIgnored = ignored.has(entry.text);
+  function renderPlacementActions(entry: UnresolvedEntry): ReactNode {
+    const placement = placements.get(entry.text);
     return (
-      <button
-        type="button"
-        className="text-button sort-ignore"
-        aria-pressed={isIgnored}
-        onClick={() => toggleIgnored(entry.text)}
-      >
-        <VisibilityOffIcon className="button-icon" optical={20} />
-        {isIgnored ? 'Ignoriert' : 'Ignorieren'}
-      </button>
+      <div className="sort-parking" role="group" aria-label={`Einsortieren für ${entry.text}`}>
+        <button
+          type="button"
+          className="text-button sort-parking-action"
+          aria-pressed={placement === 'top'}
+          onClick={() => togglePlacement(entry.text, 'top')}
+        >
+          <ArrowUpIcon className="button-icon" optical={20} />
+          {placement === 'top' ? 'Oben einsortiert' : 'Oben einsortieren'}
+        </button>
+        <button
+          type="button"
+          className="text-button sort-parking-action"
+          aria-pressed={placement === 'bottom'}
+          onClick={() => togglePlacement(entry.text, 'bottom')}
+        >
+          <ArrowDownIcon className="button-icon" optical={20} />
+          {placement === 'bottom' ? 'Unten einsortiert' : 'Unten einsortieren'}
+        </button>
+      </div>
     );
   }
 
@@ -627,18 +655,21 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
    * What replaces the stop fields once a line is decided without them — or the
    * „Markt“/„Bereich“ picker while it is not. A text that names an existing
    * item hides the stop fields entirely (the line becomes a synonym); the note
-   * names that consequence while the row is still unfolded. The ignore action
-   * keeps its place beside the store chips, so it stays reachable in every
-   * branch.
+   * names that consequence while the row is still unfolded. The placement
+   * answers keep their place beside the store chips, so they stay reachable in
+   * every branch.
    */
   function renderPicker(entry: UnresolvedEntry): ReactNode {
-    if (ignored.has(entry.text)) {
+    const placement = placements.get(entry.text);
+    if (placement !== undefined) {
       return (
         <>
           <p className="sort-note" role="status">
-            Wird oben in die Liste einsortiert.
+            {placement === 'top'
+              ? 'Wird oben einsortiert und beim nächsten Mal wieder abgefragt.'
+              : 'Wird unten einsortiert und beim nächsten Mal wieder abgefragt.'}
           </p>
-          {renderIgnoreAction(entry)}
+          {renderPlacementActions(entry)}
         </>
       );
     }
@@ -649,7 +680,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
           <p className="sort-note" role="status">
             {`Wird als Synonym für „${item}“ gemerkt.`}
           </p>
-          {renderIgnoreAction(entry)}
+          {renderPlacementActions(entry)}
         </>
       );
     }
@@ -657,10 +688,10 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
       return (
         <>
           <p className="field-hint">
-            Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — dieser Eintrag kann nur ignoriert
-            werden.
+            Kein Einkaufsweg hinterlegt (einkaufsweg.csv) — dieser Eintrag kann nur oben oder unten
+            einsortiert werden.
           </p>
-          {renderIgnoreAction(entry)}
+          {renderPlacementActions(entry)}
         </>
       );
     }
@@ -684,7 +715,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
               </button>
             ))}
           </div>
-          {renderIgnoreAction(entry)}
+          {renderPlacementActions(entry)}
         </div>
 
         {store !== undefined && (
@@ -710,16 +741,17 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
   }
 
   /**
-   * The one line a decided entry folds to (see the file header). Ignore wins
-   * over a known item and a known item over a stop, matching the order in which
-   * `handleSort` reads the decisions. A stop whose „Artikel“ name differs from
-   * the line's own name also writes the line name as a synonym; the summary
+   * The one line a decided entry folds to (see the file header). A placement
+   * wins over a known item and a known item over a stop, matching the order in
+   * which `handleSort` reads the decisions. A stop whose „Artikel“ name differs
+   * from the line's own name also writes the line name as a synonym; the summary
    * names that (`„<line>“ = <Artikel>: <Markt> > <Bereich>`). The line itself is
    * always quoted, the mapped item name never is.
    */
   function summaryOf(entry: UnresolvedEntry): string {
-    if (ignored.has(entry.text)) {
-      return `„${entry.text}“: ignoriert (oben einsortiert)`;
+    const placement = placements.get(entry.text);
+    if (placement !== undefined) {
+      return `„${entry.text}“: ${placement === 'top' ? 'oben' : 'unten'} einsortiert`;
     }
     const item = knownItemOf(entry);
     if (item !== null) {
@@ -739,8 +771,8 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
 
   /**
    * One unresolved line. While the entry is unfolded it carries the whole form
-   * (the name field, the similar-item chips, the stop fields and the quiet
-   * ignore action). As soon as it is decided it collapses to one muted, small
+   * (the name field, the similar-item chips, the stop fields and the two quiet
+   * placement actions). As soon as it is decided it collapses to one muted, small
    * line; a tap on that line unfolds it again (the pantry page's fold pattern).
    * The line itself stays the same button across both states, so the toggle
    * keeps the keyboard focus while it unfolds. A line that is not decided yet
@@ -821,8 +853,8 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
 
       <p className="sort-intro">
         Einträge ohne bekannten Einkaufsort werden angezeigt. Entweder einen bekannten Artikel als
-        Synonym zuordnen oder einen Einkaufsort auswählen. Ignorierte Einträge werden ganz oben
-        einsortiert und beim nächsten Mal wieder abgefragt.
+        Synonym zuordnen oder einen Einkaufsort auswählen. Einträge, die keins von beidem bekommen,
+        lassen sich oben oder unten einsortieren — sie werden beim nächsten Mal wieder abgefragt.
       </p>
 
       {renderList()}
@@ -846,7 +878,7 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
             className={error !== null ? 'sort-action-error' : 'sort-action-note'}
             role={error !== null ? 'alert' : 'status'}
           >
-            {error ?? 'Bitte jeden Eintrag zuordnen oder ignorieren.'}
+            {error ?? 'Bitte jeden Eintrag zuordnen, oben oder unten einsortieren.'}
           </p>
         )}
       </div>

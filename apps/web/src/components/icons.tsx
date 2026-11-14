@@ -584,10 +584,9 @@ export function EyeIcon({ className, optical }: IconProps) {
 }
 
 /**
- * Crossed-out eye — "ignore this shopping-list line". The sort page's quiet
- * „Ignorieren“ action: the slash says the line is put out of sight (sorted to
- * the top) rather than deleted. It is the eye's own counterpart, so it stays
- * clearly distinct from the store chips beside it.
+ * Crossed-out eye — "out of sight". The eye's own counterpart, for a control
+ * that hides something rather than deleting it. No control uses it at the
+ * moment.
  */
 export function VisibilityOffIcon({ className, optical }: IconProps) {
   return <Glyph name="visibility_off" className={className} optical={optical} />;

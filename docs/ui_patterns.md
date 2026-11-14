@@ -451,7 +451,7 @@ Do **not** use it for:
 - **a state, cause or validation message.** A missing shopping route, an empty list and
   a field error keep their place next to the control (§6.3, §5.3);
 - **a caption, empty-state sentence or status line.** „Singular", „Noch keine Synonyme."
-  and „Wird oben einsortiert." are not hints;
+  and „Wird unten einsortiert." are not hints;
 - **a group of unrelated fields.** One toggle explains one caption, not a whole form;
 - **a shortcut caption painted inside a field** (the composer's Ctrl+Enter line). It
   belongs to the control's own behaviour and already appears only while focused.

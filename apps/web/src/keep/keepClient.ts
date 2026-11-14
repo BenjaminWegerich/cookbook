@@ -309,10 +309,11 @@ export async function writeShoppingList(
  * master data (`POST /keep/shopping/sort`).
  *
  * `order` is the complete list of line texts in the desired reading order (top
- * first): a permutation of the current shopping list, with ignored lines at the
- * top, then the assigned lines in walking order, then the checked-off lines. The
- * app owns the derivation (core's `shoppingSortOrder`); the gateway only applies
- * the order it is handed — the same division of labour as the write actions.
+ * first): a permutation of the current shopping list, with lines parked at the
+ * top first, then the assigned lines in walking order, then the lines parked at
+ * the bottom, then the checked-off lines. The app owns the derivation (core's
+ * `shoppingSortOrder`); the gateway only applies the order it is handed — the
+ * same division of labour as the write actions.
  *
  * The answer is the shopping list after the sort, so the caller can adopt it
  * without a second request.

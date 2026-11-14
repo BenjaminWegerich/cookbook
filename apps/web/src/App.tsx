@@ -1931,10 +1931,10 @@ function App() {
 
   /**
    * Performs the shopping-list sort: the sort page hands over its decisions (per
-   * unresolved line a confirmed similar item, a new item with a stop, or
-   * 'ignore'), and this callback does the writes the sort needs — the new
-   * master-data rows, then the reorder — before it closes the flow back to the
-   * home screen.
+   * unresolved line a confirmed similar item, a new item with a stop, or a
+   * placement at the top or the bottom), and this callback does the writes the
+   * sort needs — the new master-data rows, then the reorder — before it closes
+   * the flow back to the home screen.
    *
    * Two kinds of decision write master data: a confirmed candidate appends a
    * **synonym** row (variant → item, docs/shopping_item_identity.md §4), a chosen
@@ -1945,12 +1945,13 @@ function App() {
    * reorder.
    *
    * The target order is derived from the *pre-persist* analysis plus the
-   * decisions: core's `shoppingSortOrder` places the ignored lines at the top,
-   * the lines with an item in walking order and the checked-off ones at the
-   * bottom. A synonym decision resolves to its item's stop, so it sorts like the
-   * item itself. Deriving from the pre-persist analysis keeps an ignored line
-   * that shares a name with a just-assigned one distinct — the decision is keyed
-   * by the exact line text, never by the item name the persist step writes.
+   * decisions: core's `shoppingSortOrder` places the lines parked at the top
+   * first, the lines with an item in walking order, the lines parked at the
+   * bottom after them and the checked-off ones very last. A synonym decision
+   * resolves to its item's stop, so it sorts like the item itself. Deriving from
+   * the pre-persist analysis keeps a parked line that shares a name with a
+   * just-assigned one distinct — the decision is keyed by the exact line text,
+   * never by the item name the persist step writes.
    *
    * The gateway applies the order and answers the sorted list; its identity is
    * kept as the "sortiert" marker, so the button reads "sortiert"
@@ -1975,13 +1976,13 @@ function App() {
         sortItems.map((item) => ({ text: item.text, checked: item.checked })),
       );
 
-      // Persist the decisions that write master data (ignored lines write
+      // Persist the decisions that write master data (a placement writes
       // nothing): new item rows, confirmed synonyms, and the synonym a renamed
       // stop assignment adds for the line's own name.
       const newItems: { item: string; stop: ShoppingStop }[] = [];
       const newSynonyms: { variant: string; item: string }[] = [];
       for (const resolution of resolutions.values()) {
-        if (resolution === 'ignore') continue;
+        if (resolution === 'top' || resolution === 'bottom') continue;
         if (resolution.kind === 'synonym') {
           newSynonyms.push({ variant: resolution.variant, item: resolution.item });
         } else {
@@ -2009,15 +2010,16 @@ function App() {
         await appendShoppingSynonyms(activeToken, newSynonyms, folder);
       }
 
-      // The target order, derived before the persist so an ignored line keeps its
+      // The target order, derived before the persist so a parked line keeps its
       // decision even when it shares a name with a just-assigned one. A synonym
       // decision sorts at its item's stop — the item row it names already exists.
       const order = shoppingSortOrder(analyzed, (text) => {
         const resolution = resolutions.get(text);
-        if (resolution === undefined || resolution === 'ignore') return 'ignore';
+        if (resolution === undefined) return 'top';
+        if (resolution === 'top' || resolution === 'bottom') return resolution;
         return resolution.kind === 'item'
           ? resolution.stop
-          : (shoppingStopFor(resolution.item) ?? 'ignore');
+          : (shoppingStopFor(resolution.item) ?? 'top');
       });
 
       let sorted: KeepChecklist;
@@ -2031,7 +2033,7 @@ function App() {
       setSortItems([]);
       setNav(null);
       // One snackbar for both kinds of master-data write, naming only what was
-      // actually written (an all-ignored sort says nothing extra).
+      // actually written (a sort that only parks lines says nothing extra).
       const written: string[] = [];
       if (newItems.length > 0) {
         written.push(
