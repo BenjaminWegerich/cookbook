@@ -21,13 +21,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { NNBSP } from './additionalUnits.js';
+import { ADDITIONAL_UNITS } from './additionalUnitsData.js';
 import { resetIngredientMappings, setIngredientMappings } from './ingredientRegistry.js';
 import type { PlannedAmount } from './planLink.js';
 import type { Ingredient, Recipe } from './recipe/types.js';
 import {
   buyAmount,
+  masterIngredientsAtFactor,
+  masterIngredientsForPlan,
   needText,
-  scaledIngredientsForPlan,
   shoppingNeeds,
   shoppingRow,
   shoppingUnitOf,
@@ -45,18 +47,42 @@ const NB = NNBSP;
 
 /** A recipe with only the fields these functions read. */
 function recipe(fields: Partial<Recipe> & Pick<Recipe, 'type'>): Recipe {
+  // A parsed recipe derives its master list from the step rows
+  // (storage_format.md §4), so a fixture that names only the list still gets
+  // the one step those rows stand for.
+  const ingredients = fields.ingredients ?? [];
+  const steps = fields.steps ?? (ingredients.length > 0 ? [{ ingredients, text: '' }] : []);
   return {
     title: 'Testrezept',
     prep_time: '25 min',
-    steps: [],
-    ingredients: [],
     ...fields,
+    steps,
+    ingredients,
   };
 }
 
 /** One ingredient use in the given family unit. */
 function use(name: string, quantity: number, unit: Ingredient['unit'] = 'g'): Ingredient {
   return { name, quantity, unit };
+}
+
+/** The shopping uses of one dish, merged as the bundle sums them. */
+function summed(...uses: Ingredient[]) {
+  return sumIngredientUses([uses]);
+}
+
+/** The three sum-only fields of a use, dropping its contributions and AQ. */
+function amounts(
+  uses: readonly Ingredient[],
+): Array<Pick<Ingredient, 'name' | 'quantity' | 'unit'>> {
+  return uses.map(({ name, quantity, unit }) => ({ name, quantity, unit }));
+}
+
+/** The master-data AU object by name, for hand-built contributions. */
+function au(name: string) {
+  const unit = ADDITIONAL_UNITS.find((entry) => entry.name === name);
+  if (unit === undefined) throw new Error(`unknown additional unit: ${name}`);
+  return unit;
 }
 
 /** A need as the sheet holds it (bypassing the registry look-up of `shoppingNeeds`). */
@@ -70,22 +96,24 @@ beforeEach(() => {
   resetIngredientMappings();
 });
 
-describe('scaledIngredientsForPlan', () => {
-  it('scales a dish by the exact serving factor', () => {
-    // Written for 4, planned for 6: every target moves by exactly 1.5.
+describe('masterIngredientsForPlan', () => {
+  it('uses the master quantity the recipe shows at the planned size', () => {
+    // Written for 4, planned for 6: the step use is 375 g, and the master row
+    // the cook reads names the near BQ table value — 400 g, not 250 × 1.5
+    // (docs/quantity_scaling.md §6).
     const dish = recipe({
       type: 'finished_dish',
       servings: 4,
       ingredients: [use('Mehl', 250)],
     });
-    expect(scaledIngredientsForPlan(dish, { kind: 'servings', servings: 6 })).toEqual([
-      use('Mehl', 375),
+    expect(masterIngredientsForPlan(dish, { kind: 'servings', servings: 6 })).toEqual([
+      use('Mehl', 400),
     ]);
   });
 
-  it('scales an ingredient recipe by the exact yield factor', () => {
+  it('scales an ingredient recipe by the yield factor', () => {
     // Béchamelsauce: written at 500 ml, needed at 750 ml — factor 1.5, so the
-    // 300 ml of milk become 450 ml (docs/recipe_structure.md).
+    // 300 ml of milk read 450 ml (docs/recipe_structure.md).
     const sauce = recipe({
       type: 'ingredient_recipe',
       yield: 500,
@@ -93,46 +121,78 @@ describe('scaledIngredientsForPlan', () => {
       ingredients: [use('Milch', 300, 'ml')],
     });
     expect(
-      scaledIngredientsForPlan(sauce, { kind: 'yield', quantity: 750, baseUnit: 'ml' }),
+      masterIngredientsForPlan(sauce, { kind: 'yield', quantity: 750, baseUnit: 'ml' }),
     ).toEqual([use('Milch', 450, 'ml')]);
   });
 
-  it('keeps a fractional target exact instead of snapping it to a table value', () => {
-    // 100 g for 3 servings, cooked for 5: 166.666… g — a value no BQ table has,
-    // and deliberately kept as the scaled target.
+  it('uses the displayed master amount, not the exact scaled target', () => {
+    // 100 g for 3 servings, cooked for 5: the exact target is 166,666… g, but
+    // the master row names the BQ table value 160 g. The shopping need follows
+    // what the recipe shows, never the hidden target.
     const dish = recipe({
       type: 'finished_dish',
       servings: 3,
       ingredients: [use('Mehl', 100)],
     });
-    const [scaled] = scaledIngredientsForPlan(dish, { kind: 'servings', servings: 5 });
-    expect(scaled!.quantity).toBe(166.666667);
+    expect(masterIngredientsForPlan(dish, { kind: 'servings', servings: 5 })).toEqual([
+      use('Mehl', 160),
+    ]);
   });
 
-  it('leaves the list unscaled when the entry states no size', () => {
+  it('keeps the written master amount when the entry states no size', () => {
     const dish = recipe({
       type: 'finished_dish',
       servings: 4,
       ingredients: [use('Mehl', 250)],
     });
-    expect(scaledIngredientsForPlan(dish, null)).toEqual([use('Mehl', 250)]);
+    expect(masterIngredientsForPlan(dish, null)).toEqual([use('Mehl', 250)]);
   });
 
   it('ignores a planned size of another kind or family unit', () => {
     const dish = recipe({ type: 'finished_dish', servings: 4, ingredients: [use('Mehl', 250)] });
     const foreign: PlannedAmount = { kind: 'yield', quantity: 1000, baseUnit: 'ml' };
-    expect(scaledIngredientsForPlan(dish, foreign)).toEqual([use('Mehl', 250)]);
+    expect(masterIngredientsForPlan(dish, foreign)).toEqual([use('Mehl', 250)]);
   });
 
-  it('normalizes a display unit (kg / l) to the family base unit', () => {
+  it('normalizes a display unit (kg / l) and carries the master line’s AQ', () => {
     const dish = recipe({
       type: 'finished_dish',
       servings: 4,
       ingredients: [use('Milch', 1, 'l')],
     });
-    expect(scaledIngredientsForPlan(dish, { kind: 'servings', servings: 4 })).toEqual([
-      use('Milch', 1000, 'ml'),
+    const [entry] = masterIngredientsForPlan(dish, { kind: 'servings', servings: 4 });
+    expect(entry).toMatchObject({ name: 'Milch', quantity: 1000, unit: 'ml' });
+    // 1 l of milk is exactly one 1000 ml pack, and the contribution carries
+    // that reading for the aggregate display.
+    expect(entry?.aq).toMatchObject({
+      value: 1,
+      factor: 1000,
+      au: { name: 'Packung (unteilbar)' },
+    });
+  });
+
+  it('falls back to the stored amount at the factor without step uses', () => {
+    // Only hand-edited data can leave a master row without step rows; the
+    // bundle must not fail on it (the parsed format derives the list from them).
+    const dish = recipe({
+      type: 'finished_dish',
+      servings: 4,
+      ingredients: [use('Mehl', 250)],
+      steps: [],
+    });
+    expect(masterIngredientsForPlan(dish, { kind: 'servings', servings: 6 })).toEqual([
+      use('Mehl', 375),
     ]);
+  });
+
+  it('derives the master list at a cook factor (sub-recipes)', () => {
+    const sauce = recipe({
+      type: 'ingredient_recipe',
+      yield: 500,
+      yield_unit: 'ml',
+      ingredients: [use('Milch', 300, 'ml')],
+    });
+    expect(masterIngredientsAtFactor(sauce, 1.5)).toEqual([use('Milch', 450, 'ml')]);
   });
 });
 
@@ -140,14 +200,26 @@ describe('sumIngredientUses', () => {
   it('sums one ingredient across the bundle and keeps the order of first use', () => {
     const first = [use('Tofu', 300), use('Mehl', 250)];
     const second = [use('Tofu', 300)];
-    expect(sumIngredientUses([first, second])).toEqual([use('Tofu', 600), use('Mehl', 250)]);
+    expect(amounts(sumIngredientUses([first, second]))).toEqual([
+      use('Tofu', 600),
+      use('Mehl', 250),
+    ]);
   });
 
   it('keeps a need that is no table value exactly (no rounding down)', () => {
     // 400 + 750 = 1150: the nearest BQ would be 1200, and rounding to the
     // nearer value could also round *down* — a shopping need must not.
-    expect(sumIngredientUses([[use('Mehl', 400)], [use('Mehl', 750)]])).toEqual([
+    expect(amounts(sumIngredientUses([[use('Mehl', 400)], [use('Mehl', 750)]]))).toEqual([
       use('Mehl', 1150),
+    ]);
+  });
+
+  it('keeps every constituent amount for the aggregate display', () => {
+    // The total's AQ may not repeat one dish's count, so the merge carries the
+    // individual master amounts along (docs/quantity_scaling.md §6).
+    const merged = sumIngredientUses([[use('Mehl', 400)], [use('Mehl', 750)]]);
+    expect(merged[0]!.contributions.map((contribution) => contribution.quantity)).toEqual([
+      400, 750,
     ]);
   });
 
@@ -156,30 +228,36 @@ describe('sumIngredientUses', () => {
   });
 
   it('does not sum the same name in different units', () => {
-    expect(sumIngredientUses([[use('Milch', 500, 'ml'), use('Milch', 200, 'g')]])).toEqual([
-      use('Milch', 500, 'ml'),
-      use('Milch', 200, 'g'),
-    ]);
+    expect(amounts(sumIngredientUses([[use('Milch', 500, 'ml'), use('Milch', 200, 'g')]]))).toEqual(
+      [use('Milch', 500, 'ml'), use('Milch', 200, 'g')],
+    );
   });
 });
 
 describe('shoppingNeeds', () => {
   it('carries the reorder point of the ingredient master data', () => {
-    expect(shoppingNeeds([use('Mehl', 800)])).toEqual([
+    expect(shoppingNeeds(summed(use('Mehl', 800)))).toMatchObject([
       { ingredient: 'Mehl', baseUnit: 'g', needed: 800, reorderPoint: 1000 },
     ]);
   });
 
   it('assumes no stock for an ingredient the master data does not know', () => {
-    expect(shoppingNeeds([use('Tofu', 600)])).toEqual([
+    expect(shoppingNeeds(summed(use('Tofu', 600)))).toMatchObject([
       { ingredient: 'Tofu', baseUnit: 'g', needed: 600, reorderPoint: 0 },
     ]);
   });
 
   it('assumes no stock when the master data knows another family unit', () => {
-    expect(shoppingNeeds([use('Mehl', 500, 'ml')])).toEqual([
+    expect(shoppingNeeds(summed(use('Mehl', 500, 'ml')))).toMatchObject([
       { ingredient: 'Mehl', baseUnit: 'ml', needed: 500, reorderPoint: 0 },
     ]);
+  });
+
+  it('carries the summed contributions into the row', () => {
+    // The sheet's need line needs the individual master amounts; the row is the
+    // only place that keeps them once the uses are merged.
+    const [row] = shoppingNeeds(summed(use('Mehl', 800)));
+    expect(row?.contributions?.map((contribution) => contribution.quantity)).toEqual([800]);
   });
 });
 
@@ -577,6 +655,95 @@ describe('needText', () => {
 
   it('falls back to the base form without an additional unit', () => {
     expect(needText(need({ ingredient: 'Cashews', needed: 60 }))).toBe(`60${NB}g Cashews`);
+  });
+});
+
+describe('needText with the dishes’ master lines', () => {
+  it('adds the counts when every dish shows the same unit', () => {
+    // Two dishes whose master lines read "1 Becher" and "½ Becher": the total
+    // is their exact count sum, "1 ½ Becher", with the summed amount.
+    const becher = au('Becher');
+    expect(
+      needText(
+        need({
+          ingredient: 'Joghurt',
+          needed: 750,
+          contributions: [
+            { quantity: 500, aq: { au: becher, value: 1, factor: 500 } },
+            { quantity: 250, aq: { au: becher, value: 0.5, factor: 500 } },
+          ],
+        }),
+      ),
+    ).toBe(`1${NB}½${NB}Becher Joghurt (750${NB}g)`);
+  });
+
+  it('renders a single dish’s need like its master line', () => {
+    // One dish: the aggregate is that masterpiece itself, arrangement and all.
+    const becher = au('Becher');
+    expect(
+      needText(
+        need({
+          ingredient: 'Joghurt',
+          needed: 500,
+          contributions: [{ quantity: 500, aq: { au: becher, value: 1, factor: 500 } }],
+        }),
+      ),
+    ).toBe(`1${NB}Becher Joghurt (500${NB}g)`);
+  });
+
+  it('never repeats one dish’s count in the total', () => {
+    // The user's case: one dish reads "1 Packung (1 kg)", another adds 20 g.
+    // "1 Packung (1,02 kg)" would look like the first dish alone, so the total
+    // stays metric (the exact pack count is not the total either).
+    const packung = au('Packung (unteilbar)');
+    expect(
+      needText(
+        need({
+          ingredient: 'Mehl',
+          needed: 1020,
+          contributions: [
+            { quantity: 1000, aq: { au: packung, value: 1, factor: 1000 } },
+            { quantity: 20 },
+          ],
+        }),
+      ),
+    ).toBe(`1,02${NB}kg Mehl`);
+  });
+
+  it('raises an approximate count above every dish’s count', () => {
+    // The carrot dish shows "7 Karotten"; the extra 50 g may not be folded into
+    // a repeated "7", so the total names the next count (8) beside the amount.
+    const stueck = au('Stück (ZE zuerst)');
+    expect(
+      needText(
+        need({
+          ingredient: 'Karotten',
+          needed: 550,
+          contributions: [
+            { quantity: 500, aq: { au: stueck, value: 7, factor: 70 } },
+            { quantity: 50 },
+          ],
+        }),
+      ),
+    ).toBe(`8${NB}Karotten (550${NB}g)`);
+  });
+
+  it('keeps the base form when no count restates the total', () => {
+    // 500 g reads "1 Becher", 400 g is metric: no exact count = 900 g, and an
+    // exact unit may not pair a count with a different amount.
+    const becher = au('Becher');
+    expect(
+      needText(
+        need({
+          ingredient: 'Joghurt',
+          needed: 900,
+          contributions: [
+            { quantity: 500, aq: { au: becher, value: 1, factor: 500 } },
+            { quantity: 400 },
+          ],
+        }),
+      ),
+    ).toBe(`900${NB}g Joghurt`);
   });
 });
 

@@ -19,18 +19,21 @@
  * The arithmetic, per sub-recipe X:
  *
  * ```
- *   required(X) = Σ over every parent P of  scale(amount of X in P, factor_P)
+ *   required(X) = Σ over every parent P of  masterBQ of X in P at P's size
  *   stock(X)    = min(required(X), reorder point(X))   // prefill, user-editable
  *   cook(X)     = required(X) − stock(X)               // 0 when covered
  *   factor_X    = cook(X) / yield(X)
  * ```
  *
- * **Everything is exact.** `required` is the unrounded sum over parents,
- * `cook` is the exact amount missing from the shelf — not a ladder rung — and
- * the sub-recipe's own ingredients are scaled by `cook / yield` (for example
- * 750 ml of a sauce written at 500 ml scales its milk by 1.5). The written
- * recipe is never rewritten; any positive target is a valid scaled size under
- * the new quantity model (docs/quantity_scaling.md §7).
+ * **The amounts are the recipes' master quantities** (decided with the user):
+ * a parent's use of X is the BQ its master line shows at the parent's planned
+ * size (./shoppingList `masterIngredientsAtFactor`), so `required` is the sum of
+ * what those lines display. `cook` is the exact amount missing from the shelf —
+ * not a ladder rung — and the sub-recipe's own master rows are re-derived from
+ * its step uses at `cook / yield` (750 ml of a sauce written at 500 ml scales
+ * its milk by 1.5 before the display optimizer picks its reading). The written
+ * recipe is never rewritten; any positive target is a valid scaled size
+ * (docs/quantity_scaling.md §6/§7).
  *
  * **`cook` is derived, `stock` is chosen.** The user's input is the shelf, not
  * the pot: a tap on a stock chip stores a stock, and a typed cooking amount is
@@ -47,14 +50,21 @@
  * reaches the bottom level unchanged.
  *
  * Everything here is pure and framework-free: the web app loads the recipes and
- * supplies the selected dishes' ingredient lists already scaled to the size the
- * plan cooks them at (./shoppingList `scaledIngredientsForPlan`), because
- * reading the recipe files is its job, not the core's.
+ * supplies the selected dishes' master ingredients at the size the plan cooks
+ * them at (./shoppingList `masterIngredientsForPlan`), because reading the
+ * recipe files is its job, not the core's.
  */
 
 import { mappingsFor } from './ingredientRegistry.js';
-import { familyUnitOf, toFamilyUnit, type FamilyUnit } from './shoppingList.js';
-import type { Ingredient, Recipe } from './recipe/types.js';
+import type { AggregateQuantityUse } from './quantityOptimizer.js';
+import {
+  familyUnitOf,
+  masterIngredientsAtFactor,
+  toFamilyUnit,
+  type FamilyUnit,
+  type ShoppingUse,
+} from './shoppingList.js';
+import type { Recipe } from './recipe/types.js';
 
 /** One millionth: the precision that only removes float noise from a sum. */
 const SUM_PRECISION = 1_000_000;
@@ -79,8 +89,8 @@ export interface SubRecipeNode {
   /** The recipe's written yield, converted into `baseUnit` (exact). */
   readonly yieldAmount: number;
   /**
-   * The amount every parent requires together, as the exact sum of their
-   * scaled uses — not rounded to a table value (see the file header).
+   * The amount every parent requires together: the sum of the parents' master
+   * BQs at their planned sizes (see the file header and ./shoppingList).
    */
   readonly required: number;
   /**
@@ -99,6 +109,13 @@ export interface SubRecipeNode {
    * value.
    */
   readonly cook: number;
+  /**
+   * The parents' master lines this requirement sums (each parent's BQ and AQ
+   * reading). The cooking step's requirement line uses them the way the bottom
+   * level uses its contributions (./shoppingList `needText`); a covered or
+   * unreached sub-recipe has none.
+   */
+  readonly contributions: readonly AggregateQuantityUse[];
 }
 
 /** The resolved plan of one shopping bundle (see the file header). */
@@ -115,7 +132,7 @@ export interface SubRecipePlan {
    * merged yet — ./shoppingList `sumIngredientUses` is the merge the sheet uses,
    * so the two levels share one bundling rule.
    */
-  readonly bottomUses: readonly Ingredient[];
+  readonly bottomUses: readonly ShoppingUse[];
 }
 
 /** The family base unit and amount of an ingredient recipe's yield. */
@@ -136,22 +153,10 @@ function yieldOf(recipe: Recipe): { baseUnit: FamilyUnit; amount: number } {
 }
 
 /**
- * Scales one ingredient list by the exact factor `cook / yield`. Quantities are
- * converted into their family base unit first, exactly like
- * `scaledIngredientsForPlan`; nothing is rounded to a table value.
- */
-function scaleList(ingredients: readonly Ingredient[], factor: number): Ingredient[] {
-  return ingredients.map((raw) => {
-    const use = toFamilyUnit(raw);
-    return { ...use, quantity: roundMillionths(use.quantity * factor) };
-  });
-}
-
-/**
  * The sub-recipe plan of a shopping bundle (see the file header).
  *
- * @param dishes the selected dishes' ingredient lists, each already scaled to
- *   the size the plan cooks it at (./shoppingList `scaledIngredientsForPlan`)
+ * @param dishes the selected dishes' master ingredient amounts, each already at
+ *   the size the plan cooks it at (./shoppingList `masterIngredientsForPlan`)
  * @param recipesByTitle the recipes of every sub-recipe that can be reached
  *   from those dishes, keyed by title. A title that is absent — or present as a
  *   finished dish — is not a link and stays a bottom-level ingredient.
@@ -162,7 +167,7 @@ function scaleList(ingredients: readonly Ingredient[], factor: number): Ingredie
  *   one in another family unit (g against ml), or when the links form a cycle
  */
 export function planSubRecipes(
-  dishes: readonly (readonly Ingredient[])[],
+  dishes: readonly (readonly ShoppingUse[])[],
   recipesByTitle: ReadonlyMap<string, Recipe>,
   decisions: ReadonlyMap<string, number> = new Map(),
 ): SubRecipePlan {
@@ -205,7 +210,7 @@ export function planSubRecipes(
    * for anything. The list itself need not be scaled here — scaling never
    * changes a name, and this pass only collects names.
    */
-  const scan = (list: readonly Ingredient[], owner: string | null): void => {
+  const scan = (list: readonly ShoppingUse[], owner: string | null): void => {
     for (const use of list) {
       if (!register(use.name) || owner === null) {
         continue;
@@ -257,12 +262,14 @@ export function planSubRecipes(
   // ── One pass over the graph ───────────────────────────────────────────────
   /** The required amount accumulated so far, per sub-recipe title. */
   const required = new Map<string, number>();
+  /** The parents' master amounts behind each requirement, per sub-recipe title. */
+  const requiredContributions = new Map<string, AggregateQuantityUse[]>();
   /** The family unit a sub-recipe was used in — every use must agree. */
   const usedIn = new Map<string, FamilyUnit>();
-  const bottomUses: Ingredient[] = [];
+  const bottomUses: ShoppingUse[] = [];
 
   /** Files one ingredient use: the requirement of a sub-recipe, or the bottom level. */
-  const addUse = (use: Ingredient): void => {
+  const addUse = (use: ShoppingUse): void => {
     if (!recipes.has(use.name)) {
       bottomUses.push(use);
       return;
@@ -279,6 +286,15 @@ export function planSubRecipes(
     }
     usedIn.set(use.name, unit);
     required.set(use.name, roundMillionths((required.get(use.name) ?? 0) + use.quantity));
+    // The contribution is what the parent's master line shows: the requirement
+    // display constrains the total's count against exactly these readings.
+    const contributions = requiredContributions.get(use.name) ?? [];
+    contributions.push({
+      quantity: use.quantity,
+      ...(use.aq !== undefined ? { aq: use.aq } : {}),
+      ...(use.precision !== undefined ? { precision: use.precision } : {}),
+    });
+    requiredContributions.set(use.name, contributions);
   };
 
   // The dishes first: their uses are the roots of the graph and are already
@@ -318,13 +334,16 @@ export function planSubRecipes(
       defaultStock,
       stock,
       cook,
+      contributions: requiredContributions.get(name) ?? [],
     });
 
     if (cook > 0) {
-      // Exact scaling: the recipe's own ingredients move by cook / yield, the
-      // same factor the cooking view applies (docs/quantity_scaling.md §7).
+      // The sub-recipe's own master list at its cooking size: its step uses
+      // move by cook / yield and its master rows are re-derived from them, the
+      // same rule the recipe view applies at a scaled size
+      // (docs/quantity_scaling.md §6/§7).
       const factor = cook / yieldAmount;
-      for (const scaled of scaleList(recipe.ingredients, factor)) {
+      for (const scaled of masterIngredientsAtFactor(recipe, factor)) {
         addUse(scaled);
       }
     }
@@ -377,7 +396,7 @@ export interface SubRecipeResolution {
  *   title that is absent was never confirmed and can never be invalidated
  */
 export function resolveSubRecipePlan(
-  dishes: readonly (readonly Ingredient[])[],
+  dishes: readonly (readonly ShoppingUse[])[],
   recipesByTitle: ReadonlyMap<string, Recipe>,
   decisions: ReadonlyMap<string, number> = new Map(),
   acknowledged: ReadonlyMap<string, number> = new Map(),

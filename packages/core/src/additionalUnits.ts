@@ -36,8 +36,10 @@ import {
 } from './additionalUnitsData.js';
 import { allIngredientMappings, mappingsFor } from './ingredientRegistry.js';
 import {
+  optimizeAggregateQuantity,
   optimizeMasterQuantity,
   optimizeQuantity,
+  type AggregateQuantityUse,
   type MasterQuantityUse,
   type OptimizedQuantity,
 } from './quantityOptimizer.js';
@@ -730,6 +732,48 @@ export function renderMasterAQSDisplay(
   bu: string,
 ): ArrangementDisplay {
   return renderMasterAQSWith(ingredient, uses, bu, formatAQ);
+}
+
+/**
+ * Renders an **aggregate need** — the shopping list's required quantity per
+ * ingredient — from the master lines of the selected dishes (decided with the
+ * user). The optimizer (`optimizeAggregateQuantity`) keeps the summed base
+ * quantity fixed and may add one additional unit, so the need always names the
+ * exact amount the dishes call for and never a different whole-package total.
+ *
+ * The line is the ingredient's master-row counterpart one level up: a total of
+ * two dish master lines that both read "1 Becher" renders as "2 Becher (1 kg)",
+ * and a total that no count restates stays in the base form ("1,02 kg Mehl").
+ * The arrangement's note keeps its brackets here: the shopping sheet shows the
+ * need as plain text and the Keep write never receives this line (the purchase
+ * side has its own reading).
+ *
+ * @param ingredient the canonical ingredient name (`<IN>` / `<INF>`)
+ * @param totalBq the aggregate need in the family base unit (the fixed BQ)
+ * @param bu the base unit family (g / ml)
+ * @param contributions the dishes' master lines, in the order they are summed
+ */
+export function renderAggregateNeed(
+  ingredient: string,
+  totalBq: number,
+  bu: string,
+  contributions: readonly AggregateQuantityUse[],
+): string {
+  const result = optimizeAggregateQuantity(totalBq, contributions, mappingsFor(ingredient), bu);
+  if (result.aq === undefined) {
+    const base = formatBQ(result.bq, bu);
+    // The base form carries the name after the amount; without one it is the
+    // amount alone (the sheet shows the name elsewhere on its row).
+    return ingredient === '' ? base : `${base} ${ingredient}`;
+  }
+  return renderSelectedAQ(
+    ingredient,
+    { aq: result.aq.notation, au: result.aq.au, factor: result.aq.factor },
+    bu,
+    result.bq,
+    formatAQ,
+    mappingsFor(ingredient),
+  ).text;
 }
 
 /**

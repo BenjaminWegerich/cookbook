@@ -364,6 +364,44 @@ export interface OptimizedMasterQuantity extends OptimizedQuantity {
   readonly precision: PrecisionLevel;
 }
 
+/**
+ * The additional-unit reading of one constituent of an aggregate need — the
+ * count a recipe's master line shows for its own ingredient total, together
+ * with the mapping's conversion factor.
+ */
+export interface AggregateAq {
+  /** The additional unit the constituent's master line names. */
+  readonly au: AdditionalUnit;
+  /**
+   * The count in that unit: an AQ table value, or the exact sum of the step
+   * counts when the master row shares one unit across all its uses.
+   */
+  readonly value: number;
+  /** Base-unit amount per one unit (the mapping's conversion factor). */
+  readonly factor: number;
+}
+
+/**
+ * One constituent of an aggregate need: a selected dish's master line for one
+ * ingredient. `quantity` is that master line's **displayed BQ**, never the
+ * stored target (see ./shoppingList `masterIngredientsForPlan`), and `aq` is
+ * the AQ reading the line shows, absent when it is metric only.
+ */
+export interface AggregateQuantityUse extends MasterQuantityUse {
+  /** The master line's AQ reading, absent when it is metric only. */
+  readonly aq?: AggregateAq;
+}
+
+/** The aggregate-need answer: the optimizer result plus the effective precision. */
+export interface OptimizedAggregateQuantity extends OptimizedQuantity {
+  /**
+   * The precision the aggregate was optimized with: the highest effective
+   * precision among its constituents (the same inheritance the recipe master
+   * row applies to its steps).
+   */
+  readonly precision: PrecisionLevel;
+}
+
 /** Rounds a derived sum to millionths, removing binary floating-point noise. */
 function roundSum(value: number): number {
   return Math.round(value * 1_000_000) / 1_000_000;
@@ -575,6 +613,163 @@ export function optimizeMasterQuantity(
       // does not bring exactly the BQ sum home would contradict the master line
       // ("2 Becher (900 g)"), so it is no candidate. The shared-AU sum above is
       // exempt: there the rounding of the step BQs is already in the rows.
+      if (au.exact && Math.abs(aqBase - masterBq) > 1e-6) continue;
+      addCandidate({
+        branch: 'non-exact',
+        bq: masterBq,
+        bqPenalty: 0,
+        aq,
+        aqBase,
+        au,
+        factor: mapping.factor,
+        score: 0,
+      });
+    }
+  }
+
+  const bestScore = Math.min(...candidates.map((candidate) => candidate.score));
+  const tied = candidates.filter((candidate) => candidate.score <= bestScore + TIE_EPSILON);
+  tied.sort(compareCandidates);
+  const winner = tied[0]!;
+
+  return {
+    bq: winner.bq,
+    ...(winner.aq !== undefined
+      ? {
+          aq: {
+            value: winner.aq.value,
+            notation: winner.aq.notation,
+            au: winner.au!,
+            factor: winner.factor!,
+          },
+        }
+      : {}),
+    score: winner.score,
+    branch: winner.branch,
+    fallback: false,
+    precision,
+  };
+}
+
+/**
+ * Optimizes the additional-unit reading of an **aggregate need** — the shopping
+ * list's required quantity per ingredient, summed over the selected dishes
+ * (decided with the user). The base quantity is fixed: it is the sum of the
+ * constituents' displayed master BQs, not a target the optimizer may move. Only
+ * the AQ is chosen, exactly as a recipe's master row treats the BQs of its step
+ * rows (`optimizeMasterQuantity`).
+ *
+ * The constituents are the dishes' master lines, so the master rule applies one
+ * level up:
+ *
+ * - **Same AU everywhere:** when every constituent's master line shows the same
+ *   AU and the total uses it too, the total AQ is the exact sum of their counts
+ *   and carries no clumsiness penalty. This keeps a two-dish total reading
+ *   "3 Becher (1,2 kg)" when the dishes read "1 Becher" and "2 Becher".
+ * - **Shared AU:** any other candidate in a unit that a constituent already uses
+ *   must be **strictly larger** than that constituent's count. Otherwise the
+ *   total could repeat a part's count and read like that dish's amount alone
+ *   ("1 Packung (1,02 kg)" above dishes that already use 1 Packung and 20 g).
+ *   The maximum is compared per unit; a metric-only constituent disables the
+ *   sum above but not this guard.
+ * - **Exact units:** outside the shared-AU sum, a count is only a candidate when
+ *   `count × factor` equals the fixed BQ, so the line cannot contradict itself
+ *   ("2 Becher (900 g)").
+ *
+ * The AQ is scored against the fixed BQ with the master-row weights (accuracy,
+ * conflict, roundness), and the optimizer's tie-break settles equal scores. The
+ * metric-only candidate is the fallback, so a unit whose count would pair badly
+ * with the total stays a plain base form.
+ *
+ * @param totalBq the aggregate need in the family base unit (the fixed BQ)
+ * @param contributions the dishes' master lines, in the order the sheet sums them
+ * @param entry the ingredient master data, or undefined for an unregistered name
+ * @param bu the base unit family the need is expressed in (g / ml)
+ */
+export function optimizeAggregateQuantity(
+  totalBq: number,
+  contributions: readonly AggregateQuantityUse[],
+  entry: OptimizableEntry | undefined,
+  bu: string,
+): OptimizedAggregateQuantity {
+  if (!(totalBq > 0) || !Number.isFinite(totalBq)) {
+    throw new Error(
+      `optimizeAggregateQuantity: the total must be a positive finite number, got ${totalBq}`,
+    );
+  }
+  if (contributions.length === 0) {
+    throw new Error('optimizeAggregateQuantity: at least one contribution is required');
+  }
+
+  const precision = highestUsePrecision(contributions, entry);
+  const weights = weightsFor(precision);
+  const masterBq = roundSum(totalBq);
+
+  // What the constituents contribute to the AQ constraints: the largest count
+  // per unit and, for the "every constituent shares one AU" case, the exact sum.
+  const aqMax = new Map<string, number>();
+  const aqSum = new Map<string, number>();
+  let firstAu: string | undefined;
+  let sharedByAll = true;
+  for (const contribution of contributions) {
+    if (contribution.aq === undefined) {
+      sharedByAll = false;
+      continue;
+    }
+    const name = contribution.aq.au.name;
+    aqMax.set(name, Math.max(aqMax.get(name) ?? 0, contribution.aq.value));
+    // Keep the raw sum: the notation helper reduces it to its canonical
+    // fraction (rounding to millionths first would destroy the 1/24 grid).
+    aqSum.set(name, (aqSum.get(name) ?? 0) + contribution.aq.value);
+    if (firstAu === undefined) firstAu = name;
+    else if (firstAu !== name) sharedByAll = false;
+  }
+  const sharedAu = sharedByAll ? firstAu : undefined;
+
+  const candidates: Candidate[] = [];
+  const addCandidate = (candidate: Candidate): void => {
+    candidates.push({ ...candidate, score: scoreMasterCandidate(candidate, masterBq, weights) });
+  };
+
+  // The metric-only candidate always exists: the fixed BQ is the fallback.
+  addCandidate({ branch: 'metric', bq: masterBq, bqPenalty: 0, score: 0 });
+
+  const mappings: readonly IngredientMapping[] = entryMatches(entry, bu) ? entry.entries : [];
+  for (const mapping of mappings) {
+    const au = AU_BY_NAME.get(mapping.au);
+    // Unreachable with generator-validated data; skip instead of failing.
+    if (au === undefined) continue;
+
+    if (sharedAu === au.name) {
+      // Every constituent uses this unit: the total AQ is their exact sum,
+      // outside the AQ table if need be, and carries no clumsiness penalty.
+      const sum = aqSum.get(au.name)!;
+      const aqBase = sum * mapping.factor;
+      if (!withinCandidateBand(aqBase, masterBq)) continue;
+      addCandidate({
+        branch: 'non-exact',
+        bq: masterBq,
+        bqPenalty: 0,
+        aq: { value: sum, notation: aqSumNotation(sum), penalty: 0 },
+        aqBase,
+        au,
+        factor: mapping.factor,
+        score: 0,
+      });
+      continue;
+    }
+
+    // Any other unit: a table count that is strictly larger than every count a
+    // constituent already shows in that unit (a total must not repeat a part's
+    // count) and fits the usual search window around the fixed BQ.
+    const contributionMax = aqMax.get(au.name);
+    for (const aq of schemeAqValues(au)) {
+      if (contributionMax !== undefined && aq.value <= contributionMax + 1e-9) continue;
+      const aqBase = aq.value * mapping.factor;
+      if (!withinCandidateBand(aqBase, masterBq)) continue;
+      // An exact unit promises that its count restates the amount; a count that
+      // does not bring exactly the fixed BQ home would contradict the line.
+      // The shared-AU sum above is exempt, like the master row's sum.
       if (au.exact && Math.abs(aqBase - masterBq) > 1e-6) continue;
       addCandidate({
         branch: 'non-exact',

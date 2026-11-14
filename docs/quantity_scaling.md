@@ -373,21 +373,28 @@ counts are stored as decimals.
 
 ## 9. Shopping list, cooking and stock (migrated)
 
-The shopping list, sub-recipe cooking and pantry/stock use the same exact model
-as the recipe paths (see `packages/core/src/shoppingList.ts` and
+The shopping list, sub-recipe cooking and pantry/stock use the same quantity
+model as the recipe paths (see `packages/core/src/shoppingList.ts` and
 `packages/core/src/subRecipePlan.ts`):
 
-- a planned recipe scales by the exact factor between the requested and written
-  size; a sub-recipe's ingredients scale by `cook / yield`;
-- a dish's need is the exact sum over its recipes, and a sub-recipe's
-  requirement is the exact sum over its parents — no ladder rung rounding;
+- a planned recipe's step uses scale by the exact factor between the requested
+  and written size; each ingredient's **use** is the master BQ the recipe shows
+  at that size (`masterIngredientsForPlan`), and a sub-recipe's master list is
+  re-derived at `cook / yield`;
+- a dish's need is the sum of those master BQs over the selected dishes, and a
+  sub-recipe's requirement is the sum over its parents' master lines — the sum
+  itself is not rounded to a table value;
+- the need's reading comes from `optimizeAggregateQuantity`: the summed BQ is
+  fixed and at most one additional unit is added; the same unit everywhere sums
+  the counts exactly, a total never repeats a single dish's count, and an exact
+  unit only shows a count that restates the total;
 - only the amount to **buy** is rounded up: to whole shopping units when the
   ingredient has one, otherwise to whole grams/millilitres;
 - an exact shopping unit offers the package thresholds as stock suggestions; an
   approximate unit or no unit offers clean **BQ table** values instead of old
   ladder rungs;
-- the need is shown as its exact amount in the ingredient's familiar reading,
-  while the shopping unit names the purchase side.
+- the need is shown as the summed master amount in the ingredient's familiar
+  reading, while the shopping unit names the purchase side.
 
 The legacy ladder modules (`ladder.ts`, `ladderData.ts`,
 `standard_numbers.csv`) are no longer imported by this code. Removing them is

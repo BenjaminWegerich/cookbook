@@ -19,12 +19,14 @@
  *    only `need − Vorrat` is bought; a reorder point that already covers the
  *    need buys nothing.
  *
- * **Scaling is exact.** A planned size names the factor between the requested
- * and the written recipe size (servings or yield), and every target moves by
- * that factor — `V0' = V0 × factor`. There is no ladder rung to round to
- * (docs/quantity_scaling.md §7), so a sum may be any positive number. The
- * millionth rounding below only removes binary floating-point noise; it never
- * moves a need to a table value.
+ * **A use is the recipe's master quantity.** A planned size names the factor
+ * between the requested and the written recipe size (servings or yield); at
+ * that factor the recipe's *master list* is derived from its step uses (the
+ * same `optimizeMasterQuantity` rule the recipe view and the export use), and
+ * the displayed BQ is the amount that one dish calls for. That is the amount
+ * the cook reads above the steps, so it is what the shopping need sums — not
+ * the stored targets scaled by an exact factor. The millionth rounding below
+ * then only removes binary floating-point noise.
  *
  * The amount that goes on the list is **rounded up**, not to the nearest table
  * value: a shopping amount is not a stored recipe quantity, so it may sit
@@ -34,12 +36,14 @@
  * (450 g)"); without one it is rounded up to a whole family unit ("850 g
  * Mehl").
  *
- * The need is named on the sheet as well (`needText`), in the ingredient's
- * familiar reading but never as a *different* amount: an exact unit is shown
- * only when its whole count really brings that amount home, while an
- * approximate unit names the need as a count ("8 Karotten (500 g)"). The
- * additional quantity names the *shopping* unit on the buy side; the need is
- * the authoritative amount.
+ * The need is named on the sheet as well (`needText`), through the aggregate
+ * optimizer (`renderAggregateNeed` / `optimizeAggregateQuantity`): the summed
+ * master BQs are the fixed base quantity and one additional unit may name
+ * them, with the master-row rules one level up — a total must not repeat a
+ * single dish's count, and an exact unit is only shown when its count really
+ * brings the total home ("3 Becher (1,2 kg)", never "1 Becher (1,2 kg)"). The
+ * additional quantity names the *shopping* unit on the buy side; the need
+ * stays the authoritative amount.
  *
  * Rounding up is also what makes the stock picker cheap: because a whole number
  * of shopping units is bought, whole ranges of stock produce the *same* list, so
@@ -59,6 +63,7 @@ import {
   formatBQ,
   formatDecimal,
   NNBSP,
+  renderAggregateNeed,
   renderQuantityText,
   renderUnitCount,
   shoppingUnitFor,
@@ -66,7 +71,13 @@ import {
 import type { AdditionalUnit, IngredientEntry } from './additionalUnitsData.js';
 import { mappingsFor } from './ingredientRegistry.js';
 import { convertYieldUnit, writtenPlannedAmount, type PlannedAmount } from './planLink.js';
+import {
+  optimizeMasterQuantity,
+  type AggregateAq,
+  type AggregateQuantityUse,
+} from './quantityOptimizer.js';
 import { allowedBQValuesInRange, isAQValue, schemeValues } from './quantityValues.js';
+import { masterUsesFor } from './recipe/masterQuantity.js';
 import type { Ingredient, Recipe } from './recipe/types.js';
 
 /** The two family base units a shopping need lives in (`kg`/`l` are display). */
@@ -145,35 +156,113 @@ function planScaleFactor(written: PlannedAmount, planned: PlannedAmount | null):
 }
 
 /**
- * The recipe's ingredient list scaled to the size the plan cooks it at.
+ * One ingredient use as a recipe's **master list** states it at the size the
+ * plan cooks the recipe at: `quantity` is the master row's displayed BQ (not the
+ * stored target), and `aq` is the additional-unit reading the row shows.
  *
- * The factor is exact (docs/quantity_scaling.md §7): a dish written for 4 and
- * planned for 6 scales every target by 1.5, and an ingredient recipe written at
- * 500 ml and cooked at 750 ml does the same. Nothing is rounded to a table
- * value. `planned` is the size the meal-plan entry states, or null for an entry
- * that states none — such an entry means the dish at its written size, which is
- * what its link opens, so nothing is scaled.
+ * This is the unit of the shopping need (decided with the user): the cook reads
+ * the master line above the steps, so the shopping list sums the amount that
+ * line names.
+ */
+export interface ShoppingUse extends Ingredient {
+  /** The master line's AQ reading, absent when it is metric only. */
+  readonly aq?: AggregateAq;
+}
+
+/**
+ * The recipe's master ingredients at the planned size — the amount each
+ * ingredient's master row displays when the dish is cooked at that size.
  *
- * The `reference` role is dropped (it only matters in the recipe view), and a
- * quantity the data cannot scale (a hand-written file in an unknown unit) stays
- * unscaled instead of failing the whole bundle.
+ * The factor is exact, but the amount is not scaled arithmetically: the recipe's
+ * step uses are scaled by the factor and the master row is re-derived from them
+ * with the same `optimizeMasterQuantity` rule the recipe view and the export use
+ * (docs/quantity_scaling.md §6). That is why a dish written for 4 and planned
+ * for 6 can call for "400 g Mehl" where 250 g × 1.5 would be 375 g: 375 g is not
+ * a BQ table value, and the row the cook reads names the table value.
  *
+ * A master row without step uses can only come from hand-edited data (a parsed
+ * recipe derives the master list from the steps, storage_format.md §4); it falls
+ * back to its stored amount at the factor instead of failing the whole bundle,
+ * and an optimizer failure keeps the exact target sum for the same reason.
+ *
+ * The `reference` role is dropped (it only matters in the recipe view).
  * Sub-recipe links are deliberately *not* resolved here: an ingredient named
  * after an `ingredient_recipe` stays one row (decided with the user for this
  * step; the resolution rule is in docs/recipe_structure.md).
  */
-export function scaledIngredientsForPlan(
+export function masterIngredientsAtFactor(recipe: Recipe, factor: number): ShoppingUse[] {
+  const scale = Number.isFinite(factor) && factor > 0 ? factor : 1;
+  return recipe.ingredients.map((entry) => {
+    const bu = familyUnitOf(entry);
+    /** The stored master amount at the factor, for data the optimizer cannot read. */
+    const base = toFamilyUnit(entry);
+    const fallback = (quantity = base.quantity * scale): ShoppingUse => ({
+      ...base,
+      quantity: roundMillionths(quantity),
+    });
+
+    // The step uses behind this master row, scaled and brought into the family
+    // base unit (hand-written kg / l rows are display forms).
+    const uses = masterUsesFor(recipe.steps, entry, scale).map((use) => {
+      const converted = toFamilyUnit({
+        name: entry.name,
+        quantity: use.quantity,
+        unit: entry.unit,
+      });
+      return {
+        quantity: converted.quantity,
+        ...(use.precision !== undefined ? { precision: use.precision } : {}),
+      };
+    });
+    if (uses.length === 0) {
+      return fallback();
+    }
+
+    try {
+      const result = optimizeMasterQuantity(uses, mappingsFor(entry.name), bu);
+      return {
+        name: entry.name,
+        quantity: result.bq,
+        unit: bu,
+        ...(result.aq !== undefined
+          ? {
+              aq: {
+                au: result.aq.au,
+                value: result.aq.value,
+                factor: result.aq.factor,
+              },
+            }
+          : {}),
+        // Only a row with its own precision override makes the inherited level
+        // worth carrying; otherwise the ingredient level is the same value.
+        ...(uses.some((use) => use.precision !== undefined) ? { precision: result.precision } : {}),
+      };
+    } catch {
+      // The optimizer never throws for a positive target; a malformed use must
+      // not take the whole sheet down. The exact target sum is the safe reading.
+      return fallback(uses.reduce((sum, use) => sum + use.quantity, 0));
+    }
+  });
+}
+
+/**
+ * The recipe's master ingredients at the size the plan cooks it at.
+ *
+ * `planned` is the size the meal-plan entry states, or null for an entry that
+ * states none — such an entry means the dish at its written size, which is what
+ * its link opens, so the factor is 1.
+ */
+export function masterIngredientsForPlan(
   recipe: Recipe,
   planned: PlannedAmount | null,
-): Ingredient[] {
-  const factor = planScaleFactor(writtenPlannedAmount(recipe), planned);
-  return recipe.ingredients.map((entry) => {
-    const ingredient = toFamilyUnit(entry);
-    if (factor === 1) {
-      return ingredient;
-    }
-    return { ...ingredient, quantity: roundMillionths(ingredient.quantity * factor) };
-  });
+): ShoppingUse[] {
+  return masterIngredientsAtFactor(recipe, planScaleFactor(writtenPlannedAmount(recipe), planned));
+}
+
+/** The summed use of one ingredient across all selected dishes. */
+export interface SummedUse extends Ingredient {
+  /** The constituent master amounts, in the order they were summed. */
+  readonly contributions: readonly AggregateQuantityUse[];
 }
 
 /**
@@ -181,30 +270,46 @@ export function scaledIngredientsForPlan(
  * the same name **within** a recipe are already merged by the recipe's master
  * list; across dishes they are summed here, in order of first appearance.
  *
+ * The sum keeps its **contributions** — each dish's master BQ and AQ reading —
+ * because the aggregate display must know what the individual dishes show: a
+ * total may not repeat a single dish's count (see `renderAggregateNeed` and
+ * `optimizeAggregateQuantity`).
+ *
  * The sum is deliberately *not* rounded to a table value — it is a shopping
- * need, not a stored recipe quantity, and rounding it to the nearer value could
- * round a need *down* and under-buy. The bought amount is rounded up later
- * (`shoppingRow`), which is the only rounding a shopping list needs. Only the
- * millionth rounding removes floating-point noise.
+ * need, and rounding it to the nearer value could round a need *down* and
+ * under-buy. The bought amount is rounded up later (`buyAmount`), which is the
+ * only rounding a shopping list needs. Only the millionth rounding removes
+ * floating-point noise.
  *
  * As in the recipe's own merge, entries of the same name are only summed when
  * they share a unit; a mismatched unit (g against ml for one name) stays a
  * separate row instead of being added meaninglessly.
  */
-export function sumIngredientUses(lists: readonly (readonly Ingredient[])[]): Ingredient[] {
-  const byNameAndUnit = new Map<string, Ingredient>();
+export function sumIngredientUses(lists: readonly (readonly ShoppingUse[])[]): SummedUse[] {
+  const byNameAndUnit = new Map<string, SummedUse>();
   for (const list of lists) {
     for (const raw of list) {
       const ingredient = toFamilyUnit(raw);
       const key = `${ingredient.name}\u0000${ingredient.unit}`;
+      const contribution: AggregateQuantityUse = {
+        quantity: ingredient.quantity,
+        ...(raw.aq !== undefined ? { aq: raw.aq } : {}),
+        ...(raw.precision !== undefined ? { precision: raw.precision } : {}),
+      };
       const existing = byNameAndUnit.get(key);
       byNameAndUnit.set(
         key,
         existing === undefined
-          ? { ...ingredient }
+          ? {
+              name: ingredient.name,
+              quantity: ingredient.quantity,
+              unit: ingredient.unit,
+              contributions: [contribution],
+            }
           : {
               ...existing,
               quantity: roundMillionths(existing.quantity + ingredient.quantity),
+              contributions: [...existing.contributions, contribution],
             },
       );
     }
@@ -218,7 +323,10 @@ export interface ShoppingNeed {
   readonly ingredient: string;
   /** Family base unit of `needed` and of the reorder point. */
   readonly baseUnit: FamilyUnit;
-  /** The amount all selected dishes need together, in `baseUnit` (exact sum). */
+  /**
+   * The amount all selected dishes need together, in `baseUnit`: the sum of
+   * their master BQs (see `masterIngredientsAtFactor`).
+   */
   readonly needed: number;
   /**
    * The reorder point from the ingredient master data (docs/storage_format.md
@@ -228,6 +336,12 @@ export interface ShoppingNeed {
    * stock then.
    */
   readonly reorderPoint: number;
+  /**
+   * The master amounts this need sums (each dish's BQ and AQ reading). The
+   * aggregate display constrains the total's AQ against them; absent for a need
+   * built without contributions (the plain base form is the fallback then).
+   */
+  readonly contributions?: readonly AggregateQuantityUse[];
 }
 
 /**
@@ -235,7 +349,7 @@ export interface ShoppingNeed {
  * data of each ingredient (the runtime registry, so the user's own
  * `zutaten.csv` is what counts).
  */
-export function shoppingNeeds(uses: readonly Ingredient[]): ShoppingNeed[] {
+export function shoppingNeeds(uses: readonly SummedUse[]): ShoppingNeed[] {
   return uses.map((use) => {
     const baseUnit = familyUnitOf(use);
     const entry = mappingsFor(use.name);
@@ -245,6 +359,7 @@ export function shoppingNeeds(uses: readonly Ingredient[]): ShoppingNeed[] {
       baseUnit,
       needed: use.quantity,
       reorderPoint: known ? entry.reorderPoint : 0,
+      contributions: use.contributions,
     };
   });
 }
@@ -613,13 +728,27 @@ function nearestCount(au: AdditionalUnit, raw: number): number {
 /**
  * The need of one row as a line of its own: what the selected dishes need
  * together, in the ingredient's familiar reading but always naming that exact
- * amount — an exact unit only when its whole count really brings it home, an
- * approximate unit as its count plus the authoritative base amount ("8 Karotten
- * (500 g)"), or the plain base form ("600 g Joghurt"). The shopping unit on the
- * buy side may name a *different* amount (it is rounded up to whole packages),
- * so the need keeps its own reading.
+ * amount — an exact unit only when its whole count really brings the total home,
+ * an approximate unit as its count plus the authoritative base amount, or the
+ * plain base form ("1,02 kg Mehl"). The shopping unit on the buy side may name a
+ * *different* amount (it is rounded up to whole packages), so the need keeps its
+ * own reading.
+ *
+ * With the dishes' master lines (`contributions`) the line goes through the
+ * aggregate optimizer, so a total cannot repeat a single dish's count and two
+ * dishes that both read "1 Becher" add up to "2 Becher". A need built without
+ * them — a caller that only has an amount — keeps the plain display; a malformed
+ * contribution set falls back to it instead of breaking the sheet.
  */
 export function needText(need: ShoppingNeed): string {
+  if (need.contributions !== undefined && need.contributions.length > 0) {
+    try {
+      return renderAggregateNeed(need.ingredient, need.needed, need.baseUnit, need.contributions);
+    } catch {
+      // A hand-edited master-data state must not take the sheet down; the plain
+      // reading of the fixed amount is always available.
+    }
+  }
   return renderQuantityText(need.ingredient, need.needed, need.baseUnit);
 }
 

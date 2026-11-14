@@ -5,13 +5,18 @@
  * The step exists only when the selection reaches at least one sub-recipe. It
  * asks one question per sub-recipe — *how much of it is already made?* — and
  * derives the amount to cook from the answer. The rows are core's
- * `planSubRecipes` (through ../keep/shoppingBundle), the arithmetic is exact:
+ * `planSubRecipes` (through ../keep/shoppingBundle), and the amounts are the
+ * master quantities the recipes show at their planned sizes:
  *
  * ```
- *   required = Σ over every parent of its scaled use      (core: `required`)
+ *   required = Σ over every parent of its master BQ       (core: `required`)
  *   stock    = min(required, reorder point)               (core: `defaultStock`)
  *   cook     = required − stock                           (core: `cook`)
  * ```
+ *
+ * The requirement line is rendered through core's `needText`, the same aggregate
+ * reader step 2 uses: it may add an additional unit ("2 Becher Pesto (1 kg)")
+ * but never repeats a single parent's count, and it never moves the base amount.
  *
  * **The stock is the input, the cooking amount is the result.** The row reads
  * exactly like step 2's: left the requirement, right the amount to cook behind a
@@ -57,6 +62,7 @@ import type { ReactNode } from 'react';
 
 import {
   formatBQ,
+  needText,
   suggestedSubRecipeStocks,
   type FamilyUnit,
   type ShoppingNeed,
@@ -108,6 +114,7 @@ function needOf(node: SubRecipeNode): ShoppingNeed {
     baseUnit: node.baseUnit,
     needed: node.required,
     reorderPoint: node.reorderPoint,
+    contributions: node.contributions,
   };
 }
 
@@ -116,9 +123,15 @@ function baseLabel(value: number, unit: FamilyUnit): string {
   return value > 0 ? formatBQ(value, unit) : '0';
 }
 
-/** The requirement of a sub-recipe as its line: amount and name ("600 g Pesto"). */
+/**
+ * The requirement of a sub-recipe as its line: the summed master amount the
+ * parents call for, through the same aggregate reader the bottom level uses
+ * (core's `needText`). It may add an additional unit ("2 Becher Pesto (1 kg)")
+ * but never changes the base amount; a total whose count would repeat one
+ * parent's count stays metric.
+ */
 function requirementText(node: SubRecipeNode): string {
-  return `${formatBQ(node.required, node.baseUnit)} ${node.name}`;
+  return needText(needOf(node));
 }
 
 /**

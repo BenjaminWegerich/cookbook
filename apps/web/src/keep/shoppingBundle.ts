@@ -1,7 +1,7 @@
 /**
  * Resolves the *selected* meal-plan cards into the two things the shopping flow
- * needs: the selected dishes' scaled ingredient lists, and the recipes of every
- * sub-recipe those dishes reach — at any depth.
+ * needs: the selected dishes' master ingredient amounts at their planned size,
+ * and the recipes of every sub-recipe those dishes reach — at any depth.
  *
  * The counterpart of ./mealPlanCards for the shopping flow: there the entry's
  * size is resolved onto a card, here the card's recipe is loaded, scaled and
@@ -10,8 +10,8 @@
  *
  * 1. the recipe file is read (the same cached read the resolution used, so
  *    repeated dishes and the earlier step cost no second Drive request);
- * 2. its ingredient list is scaled to the size the plan cooks it at (core's
- *    `scaledIngredientsForPlan`: the entry's stated size, or its written size
+ * 2. its master ingredients are derived at the size the plan cooks it at (core's
+ *    `masterIngredientsForPlan`: the entry's stated size, or its written size
  *    when the entry states none — the same fallback the card carries);
  * 3. every ingredient name that is an `ingredient_recipe` of the collection is
  *    followed: its file is read and its own ingredient list is scanned in turn.
@@ -33,14 +33,14 @@
  */
 
 import {
+  masterIngredientsForPlan,
   planSubRecipes,
   resolveSubRecipePlan,
-  scaledIngredientsForPlan,
   shoppingNeeds,
   sumIngredientUses,
-  type Ingredient,
   type Recipe,
   type ShoppingNeed,
+  type ShoppingUse,
   type SubRecipePlan,
   type SubRecipeResolution,
 } from '@cookbook/core';
@@ -56,10 +56,10 @@ import type { MealPlanCard } from './mealPlanCards';
  */
 export interface ShoppingInputs {
   /**
-   * The selected dishes' ingredient lists, in the selection's order, each
-   * scaled to the size the plan cooks it at.
+   * The selected dishes' master ingredients, in the selection's order, each at
+   * the size the plan cooks it at (the amount the recipe's master rows show).
    */
-  readonly dishLists: readonly (readonly Ingredient[])[];
+  readonly dishLists: readonly (readonly ShoppingUse[])[];
   /**
    * Every ingredient recipe reachable from the selected dishes, keyed by the
    * name the dishes use for it (an implicit link is a name, see the file
@@ -88,8 +88,8 @@ export async function resolveShoppingBundle(
   /** Candidates already examined: the ingredient recipe, or null (no link). */
   const links = new Map<string, Recipe | null>();
   /** The ingredient lists still to be scanned for further sub-recipe uses. */
-  const pending: Array<readonly Ingredient[]> = [];
-  const dishLists: Ingredient[][] = [];
+  const pending: Array<readonly ShoppingUse[]> = [];
+  const dishLists: ShoppingUse[][] = [];
 
   for (const card of cards) {
     if (card.recipe === null) continue;
@@ -98,7 +98,9 @@ export async function resolveShoppingBundle(
     // the Keep entry states, or — when it states none — the size the recipe is
     // written in.
     const planned = card.planned ?? card.writtenPlanned;
-    const list = scaledIngredientsForPlan(recipe, planned);
+    // The master amounts the recipe shows at that size, not its stored targets
+    // scaled by a factor: the shopping need sums what the cook reads.
+    const list = masterIngredientsForPlan(recipe, planned);
     dishLists.push(list);
     pending.push(list);
   }

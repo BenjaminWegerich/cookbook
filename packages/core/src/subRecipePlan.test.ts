@@ -48,6 +48,9 @@ function subRecipe(title: string, ingredients: Ingredient[], yieldAmount = 100):
     yield: yieldAmount,
     yield_unit: 'g',
     ingredients,
+    // A parsed recipe derives its master list from the step rows (§4); the
+    // fixture names the rows directly, so they become one step.
+    steps: [{ ingredients, text: '' }],
   });
 }
 
@@ -154,10 +157,10 @@ describe('planSubRecipes', () => {
     expect(byName(plan.nodes)['C']!.required).toBe(200);
   });
 
-  it('keeps the cooking amount exact (no ladder rounding)', () => {
+  it('cooks the exact rest and names its master amount', () => {
     // 200 g on the shelf of a 321 g requirement leaves exactly 121 g to cook.
-    // The new quantity model scales by the exact factor cook / yield (1.21), so
-    // 10 g Salz becomes 12.1 g — the former ladder rounded 121 g to 120 g.
+    // The cooking factor is cook / yield = 1.21, so 10 g Salz become 12.1 g —
+    // and the master row the cook reads names the near BQ value, 12 g.
     const recipes = new Map<string, Recipe>([['B', subRecipe('B', [use('Salz', 10)])]]);
     const plan = planSubRecipes([[use('B', 321)]], recipes, new Map([['B', 200]]));
 
@@ -165,7 +168,7 @@ describe('planSubRecipes', () => {
     expect(node.required).toBe(321);
     expect(node.stock).toBe(200);
     expect(node.cook).toBe(121);
-    expect(plan.bottomUses).toEqual([use('Salz', 12.1)]);
+    expect(plan.bottomUses).toEqual([use('Salz', 12)]);
   });
 
   it('scales a sub-recipe by a fractional cooking factor', () => {
