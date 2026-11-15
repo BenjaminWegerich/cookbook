@@ -52,14 +52,19 @@
  *    brings the need home, an approximate unit as its count plus the
  *    authoritative base amount, otherwise the plain base form); right, smaller,
  *    the amount to buy behind a shopping-cart symbol — the amount in the
- *    ingredient's shopping unit with its count rounded to the nearest AQ table
- *    value regardless of the unit's number scheme (core's `pantryReading`);
+ *    ingredient's shopping unit while the unit can honestly name it (the number
+ *    scheme allows the count, and an exact unit's count restates the amount),
+ *    otherwise in the plain base form (core's `pantryReading`; an approximate
+ *    unit's count is rounded **up** to whole pieces, because the amount is a
+ *    purchase — the same rule the Keep line follows);
  * 2. the *stock chips*: one row of the stock values where the bought amount
  *    changes — the package thresholds for an exact shopping unit, clean BQ
  *    values otherwise (core's `suggestedStocks`) — labelled with both units
  *    (core's `renderPantryChip`), led by a shelf symbol and shown in increasing
  *    order. The chip that covers the whole need carries a leading check and
- *    reads olive. Only as many
+ *    reads olive; its count is the need line's own count (core's `needAq`), so
+ *    a 1 kg need of aubergines reads "3 Auberginen" here and not the nearest
+ *    quarter "2¾" of a plain re-reading. Only as many
  *    chips as fit on one row are shown; the rest hide behind the "andere" chip,
  *    which opens the keyboard on the Vorrat's base-quantity field. A typed
  *    value that is no suggestion then shows as an additional chip with an edit
@@ -101,9 +106,11 @@
  * always starts from the data.
  *
  * "Liste schreiben" writes one line per row that currently has something
- * to buy, exactly as displayed (with the name, via core's `renderPantryLine`),
- * through App (which owns the Keep write, the closing of the flow and the
- * success notice with its undo). A failure is shown next to the button and
+ * to buy, with the amount the row displays and the ingredient's name (core's
+ * `renderPantryLine`: the sheet shows the unit in a count-form arrangement's
+ * count position — "3 Stück (1 kg)" — and the written line names the ingredient
+ * there — "3 Auberginen (1 kg)"), through App (which owns the Keep write, the
+ * closing of the flow and the success notice with its undo). A failure is shown next to the button and
  * leaves the page as it is, so the work is not lost.
  *
  * **"Zurück" asks before discarding** — but only when step 1 exists, since that
@@ -124,6 +131,8 @@ import {
   EN_SPACE,
   formatBQ,
   formatPantryAq,
+  ingredientDisplayName,
+  needAq,
   needText,
   NNBSP,
   pantryReading,
@@ -262,7 +271,8 @@ interface PantryState {
  * carry the ingredient name elsewhere). The arrangement template is split on its
  * placeholders; `<BQ><NNBSP><BU>` is grouped into one node so the number and its
  * unit stay inside a single tap target. `unitLabel` is the unit's singular or
- * plural display form for the shown count (`auDisplayName`).
+ * plural display form for the shown count (`auDisplayName`); `infLabel` stands
+ * where the arrangement's count-form placeholder `<INF>` sits.
  *
  * The arrangement's parenthesized note is split out exactly like the recipe
  * rows do (only the written shopping list keeps the brackets): it follows one en
@@ -272,6 +282,7 @@ interface PantryState {
 function renderArrangement(
   au: AdditionalUnit,
   unitLabel: string,
+  infLabel: string,
   aqNode: ReactNode,
   bqNode: ReactNode,
   bu: string,
@@ -281,9 +292,10 @@ function renderArrangement(
     const template = part.template
       .replaceAll('<BQ><NNBSP><BU>', '<BQBU>')
       .replaceAll('<BQ> <BU>', '<BQBU>')
-      // The pantry shows the ingredient name elsewhere on the row, so both name
-      // placeholders drop out: <IN> (canonical) and <INF> (count form).
-      .replaceAll('<INF>', '')
+      // The pantry shows the ingredient name elsewhere on the row, so the
+      // canonical <IN> drops out; <INF> keeps its place and is rendered as
+      // `infLabel` (the unit's form for a count-form arrangement, the
+      // ingredient's count form inside a bracket that names the item).
       .replaceAll('<IN>', '')
       // A name-less arrangement drops the name placeholder and its leading space,
       // leaving a double space before the base quantity's parenthesis — collapse
@@ -292,7 +304,7 @@ function renderArrangement(
     // The space before the bracket gives way to the display's en space.
     const next = templateParts[partIndex + 1];
     const pieces = (next?.kind === 'note' ? template.replace(/\s+$/, '') : template).split(
-      /(<AQ>|<AU>|<BQBU>|<BQ>|<BU>|<NNBSP>)/g,
+      /(<AQ>|<AU>|<INF>|<BQBU>|<BQ>|<BU>|<NNBSP>)/g,
     );
     const nodes = pieces.map((piece, index) => {
       switch (piece) {
@@ -300,6 +312,8 @@ function renderArrangement(
           return <Fragment key={index}>{aqNode}</Fragment>;
         case '<AU>':
           return <Fragment key={index}>{unitLabel}</Fragment>;
+        case '<INF>':
+          return <Fragment key={index}>{infLabel}</Fragment>;
         case '<BQBU>':
         case '<BQ>':
           return <Fragment key={index}>{bqNode}</Fragment>;
@@ -327,6 +341,8 @@ function renderArrangement(
 }
 
 interface TappableAmountProps {
+  /** The ingredient the amount belongs to (the `<INF>` count form). */
+  ingredient: string;
   /** The shopping unit the amount is named in, or null (the base form). */
   au: AdditionalUnit | null;
   /** Family base unit (g / ml): the unit of the base amount and of its input. */
@@ -352,6 +368,7 @@ interface TappableAmountProps {
  * and the base amount), or one tappable base amount without a shopping unit.
  */
 function TappableAmount({
+  ingredient,
   au,
   baseUnit,
   aqDisplay,
@@ -394,9 +411,17 @@ function TappableAmount({
       label={label}
     />
   );
+  const unitLabel = auDisplayName(au, aqEdit);
+  // A count-form arrangement uses <INF> as its count marker ("3 Auberginen
+  // (1 kg)"); the sheet shows the unit's own form instead ("3 Stück"), unless
+  // the template names the ingredient elsewhere with <IN> — then <INF>
+  // identifies the item ("1 Dose Kichererbsen") and keeps that form.
+  const infLabel = au.arrangement.includes('<IN>')
+    ? ingredientDisplayName(ingredient, aqEdit)
+    : unitLabel;
   return (
     <span className="pantry-amount">
-      {renderArrangement(au, auDisplayName(au, aqEdit), aqNode, bqNode, baseUnit)}
+      {renderArrangement(au, unitLabel, infLabel, aqNode, bqNode, baseUnit)}
     </span>
   );
 }
@@ -623,7 +648,16 @@ function PantrySelect({
    *  chips below (only while the row is unfolded). */
   function renderRow(entry: PantryEntry): ReactNode {
     const { need, stock, buy } = entry;
-    const kaufen = pantryReading(need.ingredient, buy, need.baseUnit);
+    // The purchase reading rounds an approximate unit's count up to whole
+    // pieces — the same count the Keep line carries (`renderPantryLine`).
+    const kaufen = pantryReading(need.ingredient, buy, need.baseUnit, { roundUp: true });
+    // The count the need line itself names (`needText`), used for the chip that
+    // completes the need: the aggregate reads "3 Auberginen (1 kg)", so the chip
+    // at 1 kg must not re-read the grams as "2¾".
+    const needCount = needAq(need);
+    const needed = roundThousandths(need.needed);
+    const chipCountOf = (value: number) =>
+      value === needed && needCount !== null ? { aq: needCount } : undefined;
     const key = rowKey(need.ingredient, need.baseUnit);
     const place = storagePlaceOf(need.ingredient);
     const ignored = places.ignored.has(need.ingredient);
@@ -663,7 +697,12 @@ function PantrySelect({
             value: customValue,
             label: (
               <ArrangementLine
-                display={renderPantryChipDisplay(need.ingredient, customValue, need.baseUnit)}
+                display={renderPantryChipDisplay(
+                  need.ingredient,
+                  customValue,
+                  need.baseUnit,
+                  chipCountOf(customValue),
+                )}
               />
             ),
           };
@@ -675,14 +714,19 @@ function PantrySelect({
         value,
         label: (
           <ArrangementLine
-            display={renderPantryChipDisplay(need.ingredient, value, need.baseUnit)}
+            display={renderPantryChipDisplay(
+              need.ingredient,
+              value,
+              need.baseUnit,
+              chipCountOf(value),
+            )}
           />
         ),
         // The largest suggestion (core rounds the need to the thousandth) means
         // "I have the whole quantity on stock" — mark it complete so StockChips
         // leads that chip with a check. `value > 0` keeps the degenerate
         // zero-need row (whose only chip is "0") from reading as complete.
-        complete: value === roundThousandths(need.needed) && value > 0,
+        complete: value === needed && value > 0,
       }));
 
     // The "kaufen" side: the tappable amount while there is something to buy,
@@ -691,6 +735,7 @@ function PantrySelect({
     const buyContent =
       buy > 0 ? (
         <TappableAmount
+          ingredient={need.ingredient}
           au={kaufen.au}
           baseUnit={need.baseUnit}
           aqDisplay={kaufen.aq === null ? null : formatPantryAq(kaufen.aq)}

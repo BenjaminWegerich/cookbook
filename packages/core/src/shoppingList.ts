@@ -58,6 +58,7 @@
  */
 
 import {
+  aggregateNeedCount,
   auDisplayName,
   formatAQValue,
   formatBQ,
@@ -750,6 +751,24 @@ export function needText(need: ShoppingNeed): string {
     }
   }
   return renderQuantityText(need.ingredient, need.needed, need.baseUnit);
+}
+
+/**
+ * The count the need line names (`needText`) as a number, or null when the
+ * aggregate uses no additional unit or another unit than the shopping unit.
+ *
+ * The pantry sheet labels the chip that completes the need with this count, so
+ * the stock chip and the need line cannot disagree: three dishes whose master
+ * lines each read "1 Aubergine (333 g)" need "3 Auberginen (1 kg)", while a
+ * plain nearest-quarter re-reading of the 1 kg says "2¾". The purchase side
+ * rounds up from the amount (`renderPantryLine`), so the same 3 goes on the
+ * list.
+ */
+export function needAq(need: ShoppingNeed): number | null {
+  if (need.contributions === undefined || need.contributions.length === 0) {
+    return null;
+  }
+  return aggregateNeedCount(need.ingredient, need.needed, need.baseUnit, need.contributions);
 }
 
 /**

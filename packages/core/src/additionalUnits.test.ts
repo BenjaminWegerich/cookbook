@@ -20,7 +20,9 @@ import {
   renderAQS,
   renderAQSDisplay,
   renderMasterAQSDisplay,
+  renderPantryChip,
   renderPantryChipDisplay,
+  renderPantryLine,
   selectAQ,
   splitArrangementNotes,
 } from './additionalUnits.js';
@@ -174,12 +176,59 @@ describe('arrangement notes', () => {
   });
 
   it('splits the pantry chip’s note although the chip hides the name', () => {
-    const display = renderPantryChipDisplay('Joghurt', 400, 'g');
-    expect(display.text).toBe(`⅚${NB}Becher (400${NB}g)`);
+    // A Becher is exact (500 g, halves scheme): ½ restates 250 g exactly.
+    const display = renderPantryChipDisplay('Joghurt', 250, 'g');
+    expect(display.text).toBe(`½${NB}Becher (250${NB}g)`);
     expect(display.parts).toEqual([
-      { kind: 'text', value: `⅚${NB}Becher` },
-      { kind: 'note', value: `400${NB}g` },
+      { kind: 'text', value: `½${NB}Becher` },
+      { kind: 'note', value: `250${NB}g` },
     ]);
+  });
+
+  it('reads a pantry chip in the base form when no honest count exists', () => {
+    // 400 g is no honest count of a 500 g Becher: ⅚ is forbidden by the halves
+    // scheme and ⅚ × 500 g is 416,67 g, not 400 g (docs/quantity_scaling.md §4/§6.1).
+    expect(renderPantryChipDisplay('Joghurt', 400, 'g')).toEqual({
+      text: `400${NB}g`,
+      parts: [{ kind: 'text', value: `400${NB}g` }],
+    });
+    // An unteilbar pack (integers only) never shows a fraction of a pack.
+    expect(renderPantryChipDisplay('Zucker', 500, 'g')).toEqual({
+      text: `500${NB}g`,
+      parts: [{ kind: 'text', value: `500${NB}g` }],
+    });
+    // An approximate unit keeps its count: 7 carrots are 490 g (70 g average).
+    // A name-less count-form arrangement shows the unit ("Stück"), not the
+    // ingredient the row already names.
+    expect(renderPantryChipDisplay('Karotten', 490, 'g').text).toBe(`7${NB}Stück (490${NB}g)`);
+  });
+
+  it('writes a whole pack, but never a package threshold as a fraction of a pack', () => {
+    // The purchase is a whole number of packs, and the count restates it.
+    expect(renderPantryLine('Zucker', 1000, 'g')).toBe(`1${NB}Packung Zucker (1${NB}kg)`);
+    // 200 g is a stock threshold of a 1,2 kg need, but no fraction of an
+    // unteilbar pack names it: 0,2 rounds to ⅙ = 166,67 g, which is no pack.
+    expect(renderPantryChip('Zucker', 200, 'g')).toBe(`200${NB}g`);
+  });
+
+  it('rounds a purchase count up, never down', () => {
+    // 1 kg of aubergines is 2,857 pieces: the purchase names 3 pieces, the
+    // bracket the amount either way. A nearest reading would offer "2¾", which
+    // is fewer than three pieces. The Keep line keeps the ingredient form.
+    expect(renderPantryLine('Auberginen', 1000, 'g')).toBe(`3${NB}Auberginen (1${NB}kg)`);
+    // The sheet's name-less readings show the unit: the stock stays the nearest
+    // quarter (a lower-bound reading), "2¾ Stück (1 kg)".
+    expect(renderPantryChip('Auberginen', 1000, 'g')).toBe(`2${NB}¾${NB}Stück (1${NB}kg)`);
+    // A count the caller already knows (the aggregate need's) wins when the
+    // unit's scheme allows it and an exact unit would still restate the amount.
+    expect(renderPantryChip('Auberginen', 1000, 'g', { aq: 3 })).toBe(`3${NB}Stück (1${NB}kg)`);
+  });
+
+  it('keeps the ingredient form of a BE-first arrangement in its bracket', () => {
+    // Aquafaba's shopping unit is "Stück (BE zuerst, exakt)": the template names
+    // the ingredient with <IN> and puts the count form in the bracket, so the
+    // name-less line keeps it ("1 Dose Kichererbsen") instead of "1 Stück".
+    expect(renderPantryChip('Aquafaba', 180, 'ml')).toBe(`180${NB}ml (1${NB}Dose Kichererbsen)`);
   });
 });
 

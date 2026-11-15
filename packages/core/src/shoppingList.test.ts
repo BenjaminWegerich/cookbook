@@ -29,6 +29,7 @@ import {
   buyAmount,
   masterIngredientsAtFactor,
   masterIngredientsForPlan,
+  needAq,
   needText,
   shoppingNeeds,
   shoppingRow,
@@ -655,6 +656,31 @@ describe('needText', () => {
 
   it('falls back to the base form without an additional unit', () => {
     expect(needText(need({ ingredient: 'Cashews', needed: 60 }))).toBe(`60${NB}g Cashews`);
+  });
+});
+
+describe('needAq', () => {
+  it('names the count the need line shows, not a re-reading of the grams', () => {
+    // Three dishes whose master lines each read "1 Aubergine (333 g)": the need
+    // line says "3 Auberginen (1 kg)", and the chip that completes the need must
+    // say the same. A nearest-quarter re-reading of 1 kg would say "2¾".
+    const stueck = au('Stück (ZE zuerst)');
+    const auberginen = need({
+      ingredient: 'Auberginen',
+      needed: 1000,
+      contributions: [
+        { quantity: 333, aq: { au: stueck, value: 1, factor: 350 } },
+        { quantity: 333, aq: { au: stueck, value: 1, factor: 350 } },
+        { quantity: 334, aq: { au: stueck, value: 1, factor: 350 } },
+      ],
+    });
+    expect(needText(auberginen)).toBe(`3${NB}Auberginen (1${NB}kg)`);
+    expect(needAq(auberginen)).toBe(3);
+  });
+
+  it('answers null without contributions or for a metric-only need', () => {
+    expect(needAq(need({ ingredient: 'Auberginen', needed: 1000 }))).toBeNull();
+    expect(needAq(need({ ingredient: 'Cashews', needed: 60 }))).toBeNull();
   });
 });
 
