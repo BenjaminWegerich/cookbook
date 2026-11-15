@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   analyzeShoppingList,
+  mappingsFor,
   mealPlanEntriesForTitle,
   mealPlanEntryLabel,
   mealPlanEntryText,
@@ -49,7 +50,10 @@ import { TIKTOK_EXTRACTOR_URL } from './config';
 import { isDriveAuthError, setDriveUnauthorizedHandler } from './drive/driveClient';
 import { listCookbookFolder } from './drive/cookbookFolder';
 import { listDrafts } from './drive/draftStorage';
-import { loadIngredientMasterData } from './drive/ingredientMasterData';
+import {
+  backfillIngredientRecipeMasterData,
+  loadIngredientMasterData,
+} from './drive/ingredientMasterData';
 import {
   appendShoppingItems,
   appendShoppingSynonyms,
@@ -307,6 +311,13 @@ function App() {
   /** Non-fatal warning when the Drive master data could not be loaded; the
    *  built-in seed keeps the app functional (see ingredientMasterData.ts). */
   const [masterDataWarning, setMasterDataWarning] = useState<string | null>(null);
+  /**
+   * The token whose master-data load has completed. A write that depends on the
+   * loaded registry (the ingredient-recipe row backfill) compares against it,
+   * so it never runs on a stale token or before the Drive files replaced the
+   * seed. A failed load leaves it mismatched and the backfill stays off.
+   */
+  const [masterDataLoadedFor, setMasterDataLoadedFor] = useState<string | null>(null);
   /**
    * Collection files that still lie directly in the Cookbook root instead of in
    * one of the five subfolders. The app cannot read them there, so the list is
@@ -800,7 +811,10 @@ function App() {
     // the pair: whichever load fails, the built-in data stays active.
     void Promise.all([loadIngredientMasterData(token), loadShoppingRouteMasterData(token)])
       .then(() => {
-        if (!cancelled) setMasterDataWarning(null);
+        if (!cancelled) {
+          setMasterDataWarning(null);
+          setMasterDataLoadedFor(token);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -1311,9 +1325,11 @@ function App() {
 
   /**
    * The collection's ingredient recipes by title, with the base-unit family
-   * their yield declares. Their ingredient-master rows exist (auto-created on
-   * save) but must not offer „Einkauf“ or „Synonyme“; and a create form for
-   * the same title locks its base unit to the recipe's yield unit.
+   * their yield declares. Their ingredient-master rows are auto-created on save
+   * (`ensureIngredientRecipeMasterData`); the backfill below repairs collections
+   * that predate that rule. The rows must not offer „Einkauf“ or „Synonyme“; a
+   * create form for the same title locks its base unit to the recipe's yield
+   * unit.
    */
   const ingredientRecipes = useMemo(
     () =>
@@ -1324,6 +1340,37 @@ function App() {
       ),
     [recipes],
   );
+
+  /**
+   * Repairs old collections: an ingredient recipe saved before the auto-create
+   * rule has no ingredient-master row. Such a title still works as a sub-recipe
+   * (the link is the title), but it is missing from „Zutaten“, cannot be edited
+   * there and cannot take a „Lagerort“. Once the recipe list and the Drive
+   * master data are both loaded, one batch write adds the missing rows — the
+   * registry then holds them for every screen. The effect starts once per
+   * session; the „Zutaten“ screen repeats the batch on open as a fallback.
+   */
+  const masterRowBackfillStartedRef = useRef(false);
+  useEffect(() => {
+    if (masterRowBackfillStartedRef.current) return;
+    if (!token || masterDataLoadedFor !== token || recipes === null) return;
+    const missing = [...ingredientRecipes]
+      .filter(([title]) => mappingsFor(title) === undefined)
+      .map(([title, bu]) => ({ title, bu }));
+    if (missing.length === 0) return;
+    masterRowBackfillStartedRef.current = true;
+    // A silent repair: the rows are the expected invariant, and the next render
+    // of any screen reads them from the registry. A real failure is reported.
+    void backfillIngredientRecipeMasterData(token, missing).catch((err) => {
+      if (isDriveAuthError(err)) return;
+      showSnackbar({
+        tone: 'error',
+        text: `Die Zutaten-Rezepte konnten nicht in den Stammdaten ergänzt werden: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      });
+    });
+  }, [token, masterDataLoadedFor, recipes, ingredientRecipes, showSnackbar]);
 
   /**
    * The open overview's *live* plan state, derived from the current resolution,
@@ -2447,6 +2494,7 @@ function App() {
       {pantryOpen && pantryInputs !== null && (
         <PantrySelect
           ref={pantryHandleRef}
+          token={token ?? ''}
           inputs={pantryInputs}
           decisions={pantryDecisions}
           hasSubRecipes={pantryInputs.recipesByTitle.size > 0}

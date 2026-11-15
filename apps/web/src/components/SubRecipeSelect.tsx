@@ -34,6 +34,15 @@
  * can be scaled down into the sub-recipe's own ingredients by `cook / yield`
  * (docs/quantity_scaling.md §7). There is no ladder rung to snap to any more.
  *
+ * **Rows are filed by the kitchen storage place** (the same `Storage Place`
+ * master data as step 2, e.g. a sauce in the freezer). The sort is stable, so a
+ * place's rows keep the plan's own (topological) order — the invalidation rule
+ * below stays exactly as it was. A **missing** place is entered inline on this
+ * page too, with the same caption/chips/„Ignorieren“ picker as step 2; an
+ * existing place is not edited here. A row folds only when its amount is
+ * acknowledged **and** its place is decided (existing, chosen, or ignored) — so
+ * a missing place keeps the row open and blocks „Weiter“ until it is resolved.
+ *
  * **A row whose requirement moves is invalidated** (decided with the user): the
  * rows below it need something else now, so the amount the user chose no longer
  * answers the question. Such a row
@@ -50,9 +59,10 @@
  * no further row drops out (at most one round per sub-recipe — see `view`).
  *
  * **"Weiter" opens only when every row is folded**, so the amounts are decided
- * deliberately and none is left half-answered. It hands the resolved bundle and
- * the cooking decisions to App, which opens step 2 ("Teil 2: Zutaten", the
- * bottom level, and the only step that buys).
+ * deliberately and none is left half-answered; a row held open by a missing
+ * storage place counts too. It hands the resolved bundle and the cooking
+ * decisions to App, which opens step 2 ("Teil 2: Zutaten", the bottom level, and
+ * the only step that buys).
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
@@ -63,6 +73,8 @@ import type { ReactNode } from 'react';
 import {
   formatBQ,
   needText,
+  storagePlaceOf,
+  storagePlaceRank,
   suggestedSubRecipeStocks,
   type FamilyUnit,
   type ShoppingNeed,
@@ -77,6 +89,8 @@ import {
 } from '../keep/shoppingBundle';
 import type { MealPlanCard } from '../keep/mealPlanCards';
 import type { StoredRecipe } from '../drive/recipeStorage';
+import { useStoragePlaceAssignment } from '../hooks/useStoragePlaceAssignment';
+import StoragePlacePicker from './StoragePlacePicker';
 import { CheckIcon, ShelfIcon, SkilletIcon } from './icons';
 import StockChips, { type StockChip } from './StockChips';
 import TappableQuantity from './TappableQuantity';
@@ -167,6 +181,11 @@ interface CookRow {
 function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipeSelectProps) {
   /** The resolved bundle, or null while it loads. */
   const [inputs, setInputs] = useState<ShoppingInputs | null>(null);
+  /**
+   * The shared „Lagerort“ state of this step: a sub-recipe without a place must
+   * decide one (or „Ignorieren“) before its row can fold, exactly like step 2.
+   */
+  const places = useStoragePlaceAssignment(token);
   /** Why the bundle could not be built (a recipe file was unreadable). */
   const [loadError, setLoadError] = useState<string | null>(null);
   /**
@@ -332,6 +351,13 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
   function renderRow(row: CookRow): ReactNode {
     const { node, stale, expanded } = row;
     const key = node.name;
+    // A missing place is the step's second decision: the row is forced open
+    // until a place is chosen or „Ignorieren“ is tapped. Only a missing place
+    // shows the inline picker; an existing one is never edited here.
+    const missingPlace = storagePlaceOf(key) === null;
+    const ignored = places.ignored.has(key);
+    const mustDecidePlace = missingPlace && !ignored;
+    const rowExpanded = expanded || mustDecidePlace;
     // The value the user typed through "andere", or a prefill that is no
     // suggestion at all (null = the row needs no custom chip). A stale row shows
     // neither: its decision fell back to the prefill, so a chip standing for the
@@ -373,7 +399,7 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
 
     return (
       <div
-        className={`pantry-row${expanded ? '' : ' pantry-row--collapsed'}${
+        className={`pantry-row${rowExpanded ? '' : ' pantry-row--collapsed'}${
           stale ? ' pantry-row--attention' : ''
         }`}
         key={key}
@@ -385,7 +411,7 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
           // folds only when the tap did not land on an input field or a chip.
           const target = event.target;
           const isControl = target instanceof Element && target.closest('button, input') !== null;
-          if (!expanded) {
+          if (!rowExpanded) {
             openRow(key);
           } else if (!isControl) {
             acknowledge(key, node.required, stale);
@@ -405,10 +431,10 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
           <button
             type="button"
             className="pantry-need"
-            aria-expanded={expanded}
+            aria-expanded={rowExpanded}
             onClick={(event) => {
               event.stopPropagation();
-              if (expanded) {
+              if (rowExpanded) {
                 acknowledge(key, node.required, stale);
               } else {
                 openRow(key);
@@ -417,7 +443,7 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
           >
             {requirementText(node)}
           </button>
-          {!expanded && (
+          {!rowExpanded && (
             <span className="pantry-stock">
               <ShelfIcon className="pantry-stock-icon" optical={20} />
               {node.cook === 0 ? (
@@ -435,7 +461,7 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
           )}
           {/* The folded summary separates the Vorrat from the cooking amount with
               an em space (matching the intro's legend separators). */}
-          {!expanded && '\u2003'}
+          {!rowExpanded && '\u2003'}
           <span className="pantry-buy">
             <SkilletIcon className="pantry-buy-icon" optical={20} />
             {cookContent}
@@ -446,7 +472,7 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
         {stale && <p className="pantry-attention-note">Menge hat sich geändert – Vorrat prüfen.</p>}
         {/* Line 2: the stock chips (suggestions + the custom/“andere” entry), led
             by the shelf symbol, only while the row is unfolded. */}
-        {expanded && (
+        {rowExpanded && (
           <div className="pantry-stock-line">
             <ShelfIcon className="pantry-stock-icon" optical={20} />
             <StockChips
@@ -463,12 +489,35 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
             />
           </div>
         )}
+        {/* The missing place is entered inline, never in a sheet; an existing
+            place is not edited on this page (decided with the user). */}
+        {rowExpanded && missingPlace && (
+          <StoragePlacePicker
+            ingredient={node.name}
+            ignored={ignored}
+            saving={places.saving.has(node.name)}
+            error={places.errors.get(node.name) ?? null}
+            onAssign={(place) => void places.assign(node.name, place)}
+            onToggleIgnore={() => places.toggleIgnore(node.name)}
+          />
+        )}
       </div>
     );
   }
 
-  /** True when every row is folded, i.e. acknowledged and not invalidated. */
-  const ready = view !== null && view.rows.every((row) => !row.expanded);
+  /** True while some row is still open, i.e. unacknowledged or invalidated. */
+  const hasOpenRows = view !== null && view.rows.some((row) => row.expanded);
+  /**
+   * True while a row has no place and was not skipped. Such a row is forced
+   * open (see `renderRow`), so the page needs the same decision as step 2.
+   */
+  const hasUndecidedPlaces =
+    view !== null &&
+    view.rows.some(
+      (row) => storagePlaceOf(row.node.name) === null && !places.ignored.has(row.node.name),
+    );
+  /** „Weiter“ opens only when every row is folded and every missing place is decided. */
+  const ready = view !== null && !hasOpenRows && !hasUndecidedPlaces;
 
   return (
     <main className="app app-narrow pantry-select">
@@ -520,7 +569,17 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
         </p>
       ) : (
         <div className="pantry-table" role="group" aria-label="Zutaten-Rezepte und Vorräte">
-          {view.rows.map(renderRow)}
+          {/* The kitchen walk also files this step (the same `Storage Place`
+              master data as step 2: a cooked sauce lives in the freezer). The
+              sort is deliberately stable — rows within one place keep the plan's
+              own order, so a parent/child relation the plan established is never
+              reversed. It runs in render, not in `view`, so an assignment made
+              on this page re-files the list at once. */}
+          {[...view.rows]
+            .sort(
+              (left, right) => storagePlaceRank(left.node.name) - storagePlaceRank(right.node.name),
+            )
+            .map(renderRow)}
         </div>
       )}
 
@@ -540,7 +599,9 @@ function SubRecipeSelect({ cards, token, collection, onBack, onNext }: SubRecipe
           </button>
           {!ready && (
             <p className="pantry-action-note" role="status">
-              Klappe jede Zeile ein, um sie zu bestätigen.
+              {hasUndecidedPlaces
+                ? 'Wähle für jede Zeile einen Lagerort oder ignoriere sie.'
+                : 'Klappe jede Zeile ein, um sie zu bestätigen.'}
             </p>
           )}
         </div>

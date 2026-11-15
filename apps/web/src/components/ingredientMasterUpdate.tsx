@@ -66,6 +66,7 @@ export function isIngredientUnchanged(
   if ((entry.plural ?? null) !== update.plural) return false;
   if (entry.reorderPoint !== update.reorderPoint) return false;
   if (entry.precision !== update.precision) return false;
+  if ((entry.storagePlace ?? null) !== update.storagePlace) return false;
   if (entry.entries.length !== update.entries.length) return false;
   return entry.entries.every((mapping, index) => {
     const next = update.entries[index];
@@ -84,6 +85,7 @@ export function toIngredientInput(entry: IngredientEntry): IngredientMasterEntry
     singular: entry.singular ?? null,
     plural: entry.plural ?? null,
     reorderPoint: entry.reorderPoint,
+    storagePlace: entry.storagePlace ?? null,
     entries: entry.entries,
     precision: entry.precision,
   };

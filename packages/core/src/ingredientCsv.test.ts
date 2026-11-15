@@ -14,17 +14,32 @@ import {
 
 /** The canonical ingredient list (docs format) as a fixture. */
 const LIST_TEXT = [
-  'Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point',
-  'Joghurt;;;g;medium;0',
-  'Zucker;;;g;high;1000',
-  'Milch;;;ml;very low;0',
-  'Cashews;Cashew;Cashews;g;low;inf',
+  'Ingredient;Singular;Plural;Base Unit;Precision;Storage Place;Reorder Point',
+  'Joghurt;;;g;medium;Kühlschrank;0',
+  'Zucker;;;g;high;Schublade 2;1000',
+  'Milch;;;ml;very low;Kühlschrank;0',
+  'Cashews;Cashew;Cashews;g;low;;inf',
 ].join('\n');
 
 const LIST: IngredientList = {
-  Joghurt: { bu: 'g', precision: 'medium', reorderPoint: 0 },
-  Zucker: { bu: 'g', precision: 'high', reorderPoint: 1000 },
-  Milch: { bu: 'ml', precision: 'very low', reorderPoint: 0 },
+  Joghurt: {
+    bu: 'g',
+    precision: 'medium',
+    reorderPoint: 0,
+    storagePlace: 'Kühlschrank',
+  },
+  Zucker: {
+    bu: 'g',
+    precision: 'high',
+    reorderPoint: 1000,
+    storagePlace: 'Schublade 2',
+  },
+  Milch: {
+    bu: 'ml',
+    precision: 'very low',
+    reorderPoint: 0,
+    storagePlace: 'Kühlschrank',
+  },
   Cashews: {
     bu: 'g',
     precision: 'low',
@@ -60,6 +75,7 @@ const MERGED: IngredientMappings = {
     bu: 'g',
     precision: 'medium',
     reorderPoint: 0,
+    storagePlace: 'Kühlschrank',
     entries: [
       { au: 'Becher', factor: 500, shoppingUnit: true },
       { au: 'Esslöffel', factor: 23.71373706, shoppingUnit: false },
@@ -69,12 +85,19 @@ const MERGED: IngredientMappings = {
     bu: 'g',
     precision: 'high',
     reorderPoint: 1000,
+    storagePlace: 'Schublade 2',
     entries: [
       { au: 'Esslöffel', factor: 13.33521432, shoppingUnit: false },
       { au: 'Teelöffel', factor: 4.216965034, shoppingUnit: false },
     ],
   },
-  Milch: { bu: 'ml', precision: 'very low', reorderPoint: 0, entries: [] },
+  Milch: {
+    bu: 'ml',
+    precision: 'very low',
+    reorderPoint: 0,
+    storagePlace: 'Kühlschrank',
+    entries: [],
+  },
   Cashews: {
     bu: 'g',
     precision: 'low',
@@ -107,15 +130,44 @@ describe('parseIngredientListCsv', () => {
     expect(parseIngredientListCsv(LIST_TEXT).Zucker).not.toHaveProperty('plural');
   });
 
+  it('parses the optional storage place; an empty cell means unsorted', () => {
+    expect(parseIngredientListCsv(LIST_TEXT).Joghurt?.storagePlace).toBe('Kühlschrank');
+    expect(parseIngredientListCsv(LIST_TEXT).Cashews).not.toHaveProperty('storagePlace');
+  });
+
+  it('rejects a storage place that is not in the built-in kitchen order', () => {
+    expect(() =>
+      parseIngredientListCsv(
+        LIST_TEXT.replace('Joghurt;;;g;medium;Kühlschrank;0', 'Joghurt;;;g;medium;Dachboden;0'),
+      ),
+    ).toThrow(/unbekannter Lagerort "Dachboden"/);
+  });
+
+  it('accepts the header from before the storage place and upgrades it on write', () => {
+    const legacy = [
+      'Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point',
+      'Joghurt;;;g;medium;0',
+    ].join('\n');
+    const parsed = parseIngredientListCsv(legacy);
+    expect(parsed.Joghurt).toEqual({ bu: 'g', precision: 'medium', reorderPoint: 0 });
+    expect(serializeIngredientListCsv(parsed)).toBe(
+      [
+        'Ingredient;Singular;Plural;Base Unit;Precision;Storage Place;Reorder Point',
+        'Joghurt;;;g;medium;;0',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('rejects a half-filled Singular/Plural pair', () => {
     expect(() =>
       parseIngredientListCsv(
-        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;low;inf', 'Cashews;Cashew;;g;low;inf'),
+        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;low;;inf', 'Cashews;Cashew;;g;low;;inf'),
       ),
     ).toThrow(/unvollständiges Singular\/Plural-Paar/);
     expect(() =>
       parseIngredientListCsv(
-        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;low;inf', 'Cashews;;Cashews;g;low;inf'),
+        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;low;;inf', 'Cashews;;Cashews;g;low;;inf'),
       ),
     ).toThrow(/unvollständiges Singular\/Plural-Paar/);
   });
@@ -130,37 +182,50 @@ describe('parseIngredientListCsv', () => {
   it('parses the infinity token case-insensitively', () => {
     expect(
       parseIngredientListCsv(
-        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;low;inf', 'Cashews;Cashew;Cashews;g;low;INF'),
+        LIST_TEXT.replace('Cashews;Cashew;Cashews;g;low;;inf', 'Cashews;Cashew;Cashews;g;low;;INF'),
       ),
     ).toEqual(LIST);
   });
 
   it('rejects an empty or invalid precision', () => {
     expect(() =>
-      parseIngredientListCsv(LIST_TEXT.replace('Zucker;;;g;high;1000', 'Zucker;;;g;;1000')),
+      parseIngredientListCsv(
+        LIST_TEXT.replace('Zucker;;;g;high;Schublade 2;1000', 'Zucker;;;g;;Schublade 2;1000'),
+      ),
     ).toThrow(/leerer Precision-Wert/);
     expect(() =>
-      parseIngredientListCsv(LIST_TEXT.replace('Zucker;;;g;high;1000', 'Zucker;;;g;0.5;1000')),
+      parseIngredientListCsv(
+        LIST_TEXT.replace('Zucker;;;g;high;Schublade 2;1000', 'Zucker;;;g;0.5;Schublade 2;1000'),
+      ),
     ).toThrow(/ungültiger Precision-Wert/);
   });
 
   it('rejects an empty reorder point (the field is mandatory)', () => {
     expect(() =>
-      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;;;g;medium;0', 'Joghurt;;;g;medium;')),
+      parseIngredientListCsv(
+        LIST_TEXT.replace('Joghurt;;;g;medium;Kühlschrank;0', 'Joghurt;;;g;medium;Kühlschrank;'),
+      ),
     ).toThrow(/leerer Meldebestand/);
   });
 
   it('rejects a negative or non-numeric reorder point', () => {
     expect(() =>
-      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;;;g;medium;0', 'Joghurt;;;g;medium;-5')),
+      parseIngredientListCsv(
+        LIST_TEXT.replace('Joghurt;;;g;medium;Kühlschrank;0', 'Joghurt;;;g;medium;Kühlschrank;-5'),
+      ),
     ).toThrow(/ungültiger Meldebestand/);
     expect(() =>
-      parseIngredientListCsv(LIST_TEXT.replace('Joghurt;;;g;medium;0', 'Joghurt;;;g;medium;viel')),
+      parseIngredientListCsv(
+        LIST_TEXT.replace(
+          'Joghurt;;;g;medium;Kühlschrank;0',
+          'Joghurt;;;g;medium;Kühlschrank;viel',
+        ),
+      ),
     ).toThrow(/ungültiger Meldebestand/);
   });
 
   it('throws on a row with too many columns', () => {
-    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nCashews;;;g;low;0;extra`)).toThrow(
+    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nCashews;;;g;low;;0;extra`)).toThrow(
       /unerwartete Spaltenzahl/,
     );
   });
@@ -171,10 +236,10 @@ describe('parseIngredientListCsv', () => {
   });
 
   it('throws on an unknown base unit or a duplicate ingredient', () => {
-    expect(() => parseIngredientListCsv(LIST_TEXT.replace(';g;low;inf', ';kg;low;inf'))).toThrow(
+    expect(() => parseIngredientListCsv(LIST_TEXT.replace(';g;low;;inf', ';kg;low;;inf'))).toThrow(
       /unbekannte Basis-Einheit "kg"/,
     );
-    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nJoghurt;;;ml;medium;0`)).toThrow(
+    expect(() => parseIngredientListCsv(`${LIST_TEXT}\nJoghurt;;;ml;medium;;0`)).toThrow(
       /doppelte Zutat/,
     );
   });
@@ -337,7 +402,13 @@ describe('mergeIngredientMasterData', () => {
 
   it('keeps ingredients from the list without mappings as bare entries', () => {
     const merged = mergeIngredientMasterData(LIST, MAPPINGS);
-    expect(merged.Milch).toEqual({ bu: 'ml', precision: 'very low', reorderPoint: 0, entries: [] });
+    expect(merged.Milch).toEqual({
+      bu: 'ml',
+      precision: 'very low',
+      reorderPoint: 0,
+      storagePlace: 'Kühlschrank',
+      entries: [],
+    });
     expect(merged.Cashews).toEqual({
       bu: 'g',
       precision: 'low',
@@ -372,12 +443,12 @@ describe('serializeIngredientListCsv and serializeIngredientMappingsCsv', () => 
   });
 
   it('writes the canonical inf token for an infinite reorder point', () => {
-    expect(serializeIngredientListCsv(LIST)).toContain('Cashews;Cashew;Cashews;g;low;inf');
+    expect(serializeIngredientListCsv(LIST)).toContain('Cashews;Cashew;Cashews;g;low;;inf');
     expect(() =>
       parseIngredientListCsv(
         LIST_TEXT.replace(
-          'Cashews;Cashew;Cashews;g;low;inf',
-          'Cashews;Cashew;Cashews;g;low;Infinity',
+          'Cashews;Cashew;Cashews;g;low;;inf',
+          'Cashews;Cashew;Cashews;g;low;;Infinity',
         ),
       ),
     ).toThrow(/ungültiger Meldebestand/);

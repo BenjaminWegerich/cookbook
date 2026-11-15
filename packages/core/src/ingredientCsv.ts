@@ -5,25 +5,31 @@
  * folder (zutaten.csv + zutaten-umrechnungen.csv).
  *
  * The master data is split into two files:
- * - the **ingredient list** (`Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point`,
+ * - the **ingredient list** (`Ingredient;Singular;Plural;Base Unit;Precision;Storage Place;Reorder Point`,
  *   one row per ingredient): the source of ingredient names, their display
- *   forms, their fixed base unit, their mandatory precision and their reorder
- *   point. `Precision` is one of the five stored levels (`very low` … `very
- *   high`); it is the mandatory ingredient level of the display preference
- *   (docs/recipe_scaling_algorithm.md §4.1). The reorder point is
+ *   forms, their fixed base unit, their mandatory precision, their kitchen
+ *   storage place and their reorder point. `Precision` is one of the five
+ *   stored levels (`very low` … `very high`); it is the mandatory ingredient
+ *   level of the display preference (docs/recipe_scaling_algorithm.md §4.1).
+ *   `Storage Place` is optional and names one of the built-in places
+ *   (docs/storage_places.csv, `STORAGE_PLACES`); empty = not sorted into the
+ *   kitchen. An unknown place is rejected — the pantry page's order is only
+ *   meaningful while every named place exists. The reorder point is
  *   the base-unit quantity definitely on stock directly after a shopping trip,
  *   independent of the meal plan (0 = only ever bought for a recipe; `inf` =
  *   always in stock, e.g. water). It is a mandatory cell, need not be a ladder
  *   value, and stays the last column so a spreadsheet round-trip never drops a
- *   meaningful cell. `Singular` / `Plural` (columns B and C, directly after the
- *   name) are the forms used when the ingredient is named with a count („1
- *   Karotte“ / „2 Karotten“); both cells are empty for an invariant name
- *   (Zucker, Milch, Butter — the `Ingredient` cell then serves for every count)
- *   and a half-filled pair is rejected. `Ingredient` stays the canonical key:
- *   recipes and the mappings file use it, never a display form. Ingredient-level
- *   fields (e.g. a category) can be added as further columns later without
- *   touching the mapping file. Older headers are rejected: every ingredient
- *   must state its precision;
+ *   meaningful cell; the optional storage column therefore sits before it.
+ *   `Singular` / `Plural` (columns B and C, directly after the name) are the
+ *   forms used when the ingredient is named with a count („1 Karotte“ / „2
+ *   Karotten“); both cells are empty for an invariant name (Zucker, Milch, Butter
+ *   — the `Ingredient` cell then serves for every count) and a half-filled pair
+ *   is rejected. `Ingredient` stays the canonical key: recipes and the mappings
+ *   file use it, never a display form. Ingredient-level fields (e.g. a category)
+ *   can be added as further columns later without touching the mapping file.
+ *   The header from before the storage place still parses (its rows carry no
+ *   place); an older header without `Precision` is rejected, because every
+ *   ingredient must state its precision;
  * - the **AU mappings** (`Ingredient;Additional Unit;Conversion Factor;Shopping Unit`,
  *   one row per ingredient–additional-unit mapping): a pure overlay on the
  *   list — an ingredient without additional units simply has no rows here.
@@ -53,6 +59,11 @@
  * flag that governed those files (LEGACY_SHOPPING_UNITS) — the behaviour of an
  * existing Drive file does not change under the user's feet.
  *
+ * The ingredient list also accepts the header from before the storage place
+ * existed (`…;Precision;Reorder Point`, six cells): its rows simply carry no
+ * storage place, so an existing Drive file keeps loading unreordered and is
+ * upgraded to the current header on the next write.
+ *
  * The Drive files are authoritative once they exist: parse errors throw (the
  * caller decides how to surface them), and serialize never silently drops
  * data. mergeIngredientMasterData combines both parsed shapes into the
@@ -68,6 +79,7 @@ import {
 import { parseCsvRows } from './csv.js';
 import type { IngredientMappings } from './ingredientRegistry.js';
 import { parsePrecisionLevel, PRECISION_LEVELS, type PrecisionLevel } from './precision.js';
+import { STORAGE_PLACES } from './storagePlacesData.js';
 
 /** One ingredient-list row: the fixed base unit plus the ingredient's reorder point. */
 export interface IngredientListEntry {
@@ -95,6 +107,13 @@ export interface IngredientListEntry {
    * override it; there is no recipe-level or global default.
    */
   readonly precision: PrecisionLevel;
+  /**
+   * Kitchen storage place of the ingredient, one of {@link STORAGE_PLACES}; or
+   * undefined when the ingredient is not sorted into the kitchen. The pantry
+   * page files its rows by this place in walking order
+   * (docs/storage_places.csv, src/pantrySort.ts).
+   */
+  readonly storagePlace?: string;
 }
 
 /** The ingredient list: ingredient name → base unit + reorder point. */
@@ -103,8 +122,16 @@ export type IngredientList = Readonly<Record<string, IngredientListEntry>>;
 /** AU mappings keyed by ingredient name (file order; no priority). */
 export type IngredientMappingsByIngredient = Readonly<Record<string, readonly IngredientMapping[]>>;
 
-/** Exact header of the ingredient list CSV. Older headers are rejected. */
-const LIST_HEADER = 'Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point';
+/** Exact header of the ingredient list CSV. */
+const LIST_HEADER = 'Ingredient;Singular;Plural;Base Unit;Precision;Storage Place;Reorder Point';
+
+/**
+ * Header of the ingredient list before the storage place existed. Such files
+ * still parse — their rows have no storage place — and are upgraded to the
+ * current header on the next write. The column count distinguishes the two
+ * shapes (six vs seven cells); the reorder point stays the last cell in both.
+ */
+const LEGACY_LIST_HEADER = 'Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point';
 
 /** Exact header of the AU mappings CSV. */
 const MAPPINGS_HEADER = 'Ingredient;Additional Unit;Conversion Factor;Shopping Unit';
@@ -243,20 +270,50 @@ function parsePrecisionCell(cell: string | undefined, ingredient: string): Preci
 }
 
 /**
+ * Parses the optional Storage Place cell: empty means "not sorted into the
+ * kitchen", otherwise the value must be one of the built-in places
+ * ({@link STORAGE_PLACES}). An unknown place fails loudly — the pantry order
+ * would otherwise silently treat the ingredient as unsorted, hiding the typo.
+ */
+function parseStoragePlaceCell(cell: string | undefined, ingredient: string): string | undefined {
+  if (cell === undefined || cell === '') {
+    return undefined;
+  }
+  if (!STORAGE_PLACES.includes(cell)) {
+    throw new Error(
+      `Zutaten-Liste: unbekannter Lagerort "${cell}" für "${ingredient}" ` +
+        `(erlaubt: ${STORAGE_PLACES.join(', ')}).`,
+    );
+  }
+  return cell;
+}
+
+/**
  * Parses the ingredient list CSV
- * (`Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point`) into name →
- * base unit + mandatory precision + reorder point + display forms. Throws on
- * malformed input (empty or duplicate names, unknown base unit, missing or
- * invalid precision, missing or invalid reorder point, half-filled display-form
- * pair); the returned record preserves the file order. Older headers are
- * rejected — precision is mandatory, so a file without the column must be
- * migrated.
+ * (`Ingredient;Singular;Plural;Base Unit;Precision;Storage Place;Reorder Point`)
+ * into name → base unit + mandatory precision + optional storage place +
+ * reorder point + display forms. Throws on malformed input (empty or duplicate
+ * names, unknown base unit, missing or invalid precision, unknown storage
+ * place, missing or invalid reorder point, half-filled display-form pair); the
+ * returned record preserves the file order.
+ *
+ * The header from before the storage place existed (six cells, no
+ * `Storage Place`) is accepted too: its rows carry no place. Precision was
+ * already mandatory then, so the parser does not fall further back — an older
+ * header without precision is still rejected.
  */
 export function parseIngredientListCsv(text: string): IngredientList {
-  const { rows } = parseCsvRows(text, [LIST_HEADER]);
+  const { rows } = parseCsvRows(text, [LIST_HEADER, LEGACY_LIST_HEADER]);
   const result: Record<string, IngredientListEntry> = {};
   for (const row of rows) {
-    const [ingredient, singular, plural, bu, precision, reorderPoint] = row;
+    const [ingredient, singular, plural, bu, precision] = row;
+    // The two shapes differ only in the optional storage cell: seven cells put
+    // storage at index 5 and the reorder point at 6, six cells put the reorder
+    // point at 5. The parser's accepted header decides the row width, so this is
+    // the row's shape, not a guess.
+    const hasStorageCell = row.length === 7;
+    const storageCell = hasStorageCell ? row[5] : undefined;
+    const reorderPoint = hasStorageCell ? row[6] : row[5];
     if (ingredient === undefined || ingredient === '' || bu === undefined || bu === '') {
       throw new Error(`Zutaten-Liste: leere Zutat oder Basis-Einheit in Zeile "${row.join(';')}".`);
     }
@@ -266,12 +323,14 @@ export function parseIngredientListCsv(text: string): IngredientList {
     if (result[ingredient] !== undefined) {
       throw new Error(`Zutaten-Liste: doppelte Zutat "${ingredient}".`);
     }
+    const storagePlace = parseStoragePlaceCell(storageCell, ingredient);
     result[ingredient] = {
       bu,
       precision: parsePrecisionCell(precision, ingredient),
       reorderPoint:
         reorderPoint === undefined ? 0 : parseReorderPointCell(reorderPoint, ingredient),
       ...parseDisplayForms(singular, plural, ingredient),
+      ...(storagePlace === undefined ? {} : { storagePlace }),
     };
   }
   return result;
@@ -279,18 +338,18 @@ export function parseIngredientListCsv(text: string): IngredientList {
 
 /**
  * Serializes the ingredient list to canonical CSV text (header + rows, LF
- * line endings). Invariant ingredients get two empty cells, so the column
- * count is the same in every row and the mandatory reorder point stays the
- * last cell (a spreadsheet round-trip never drops a meaningful cell). Row
- * order follows the record's key order, so a parsed file round-trips
- * byte-stable.
+ * line endings). Invariant ingredients get two empty cells and an unsorted
+ * ingredient gets an empty storage cell, so the column count is the same in
+ * every row and the mandatory reorder point stays the last cell (a spreadsheet
+ * round-trip never drops a meaningful cell). Row order follows the record's key
+ * order, so a parsed file round-trips byte-stable.
  */
 export function serializeIngredientListCsv(list: IngredientList): string {
   const lines = [LIST_HEADER];
   for (const [ingredient, entry] of Object.entries(list)) {
     lines.push(
       `${ingredient};${entry.singular ?? ''};${entry.plural ?? ''};${entry.bu};` +
-        `${entry.precision};` +
+        `${entry.precision};${entry.storagePlace ?? ''};` +
         `${formatReorderPointCell(entry.reorderPoint)}`,
     );
   }
@@ -421,6 +480,15 @@ function displayFormFields(entry: { singular?: string; plural?: string }): {
 }
 
 /**
+ * The optional storage-place key of a registry entry, in the shape the
+ * `exactOptionalPropertyTypes` compiler setting expects: the key is absent when
+ * the ingredient is not sorted into the kitchen, never present with undefined.
+ */
+function storagePlaceFields(entry: { storagePlace?: string }): { storagePlace?: string } {
+  return entry.storagePlace !== undefined ? { storagePlace: entry.storagePlace } : {};
+}
+
+/**
  * Combines the parsed ingredient list and AU mappings into the runtime
  * registry shape. The list is the authoritative source of ingredient names,
  * base units, reorder points and display forms: an ingredient in the list
@@ -448,6 +516,8 @@ export function mergeIngredientMasterData(
       // The display forms travel into the registry unchanged; an invariant
       // name gets neither key (see displayFormFields).
       ...displayFormFields(entry),
+      // Likewise the optional kitchen place: absent when unsorted.
+      ...storagePlaceFields(entry),
       entries: mappings[ingredient] ?? [],
     };
   }
@@ -471,6 +541,7 @@ export function splitIngredientMasterData(mappings: IngredientMappings): {
       reorderPoint: entry.reorderPoint,
       precision: entry.precision,
       ...displayFormFields(entry),
+      ...storagePlaceFields(entry),
     };
     // Bare ingredients have no rows in the mappings file — they live in the
     // list only, mirroring what the parser produces.

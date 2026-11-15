@@ -1,5 +1,5 @@
 /**
- * Pantry sheet, step 2 of the bundled shopping flow: the full-screen page
+ * Pantry page, step 2 of the bundled shopping flow: the full-screen page
  * "Vorräte auswählen — Teil 2: Zutaten" (App's `pantry` layer).
  *
  * It closes the bundled shopping write. The previous steps chose *which dishes*
@@ -24,13 +24,27 @@
  *   **up** to whole shopping units, or to whole grams/millilitres without one),
  *   but a value typed into the "kaufen" side is used **exactly** — never
  *   rounded, and allowed to exceed the need (the Vorrat then reads zero);
- * - the rows are filed by the *pre-filled* Vorrat, the ones that still need a
- *   purchase first. That filing is stable — picking a chip updates its row's
- *   amounts in place instead of moving it under the user's finger — while the
- *   amounts and the write always follow the *current* values: a row with nothing
- *   to buy is not written, wherever it stands.
+ * - the rows are filed by the **kitchen storage place** (decided with the user):
+ *   core's `sortPantryNeeds` walks the built-in places (docs/storage_places.csv)
+ *   and, inside each place, puts the rows that still need a purchase before the
+ *   covered ones, then sorts by name. An ingredient without a place sorts behind
+ *   every sorted one. The page writes **no group headings** (decided with the
+ *   user): the walk is implicit in the row order. Within a place the filing uses
+ *   the *pre-filled* Vorrat only, so picking a chip updates its row's amounts in
+ *   place instead of moving it under the user's finger; the amounts and the
+ *   write always follow the *current* values — a row with nothing to buy is not
+ *   written, wherever it stands.
  *
- * **One ingredient is two lines** (decided with the user):
+ * **A missing „Lagerort“ is entered here** (decided with the user): the row of
+ * an ingredient with no place carries the same inline picker as „Einkaufsliste
+ * sortieren“ — a „Lagerort“ caption, the built-in place chips below it, and a
+ * quiet „Ignorieren“ beside them. Choosing a chip writes the ingredient master
+ * data immediately (the shared `useStoragePlaceAssignment`); an **existing**
+ * place is deliberately not editable here — the ingredient master-data sheet is
+ * the place for that. „Ignorieren“ writes nothing and is remembered for this
+ * visit only, so the same ingredient is asked about again next time.
+ *
+ * **One ingredient is three lines** (decided with the user):
  *
  * 1. the *need and the purchase*, side by side: left what the selected dishes
  *    need together, in the ingredient's familiar reading but always naming that
@@ -49,7 +63,10 @@
  *    chips as fit on one row are shown; the rest hide behind the "andere" chip,
  *    which opens the keyboard on the Vorrat's base-quantity field. A typed
  *    value that is no suggestion then shows as an additional chip with an edit
- *    symbol (components/StockChips).
+ *    symbol (components/StockChips);
+ * 3. the *storage-place picker*: the quiet „Lagerort“ caption, the place chips
+ *    and the „Ignorieren“ action. It exists only while the ingredient has no
+ *    place; an ingredient that is already sorted shows no picker at all.
  *
  * **Both quantities of the purchase line are tappable** (the count and the
  * grams/millilitres): each opens a keyboard, written as plain text rather than
@@ -62,18 +79,26 @@
  * **Rows fold and unfold** (decided with the user): an ingredient whose
  * pre-filled Vorrat already covers the need starts folded to its first line,
  * shown entirely at the purchase's smaller step; one that still needs a
- * purchase starts unfolded with its chips. A folded row's first line reads the
- * on-stock amount behind a shelf symbol and the bought amount behind the cart
- * symbol (a zero on either side reads as an em dash); when everything is on
- * stock, the on-stock amount gives way to an olive check badge. A tap on a
- * folded row's non-interactive area opens it (a tap on its buy quantity also
- * opens that
- * quantity's keyboard); a tap on an unfolded row's non-interactive area folds
- * it again; a tap outside a row does nothing. A committed change — a chip, an
- * "andere" value, or a buy quantity — folds its row too. Only the user's own
- * moves are stored (which rows they folded, which they opened, which value they
- * typed); the starting shape is derived from the prefill, so the page holds no
- * remembered defaults at all and a fresh visit always starts from the data.
+ * purchase starts unfolded with its chips. A row **without a place** starts
+ * unfolded and stays open until a place is chosen or „Ignorieren“ is tapped.
+ * A row folds only when **both** conditions hold: its stock is confirmed (a
+ * chip, a typed amount, the covering pre-fill, or a manual fold that accepts the
+ * pre-fill) **and** its place is decided (an existing place, a chosen place, or
+ * „Ignorieren“). Choosing a place therefore does not close a row whose stock is
+ * still the unconfirmed pre-fill, and picking a stock does not close a row whose
+ * place is still open. A folded row's first line reads the on-stock amount
+ * behind a shelf symbol and the bought amount behind the cart symbol (a zero on
+ * either side reads as an em dash); when everything is on stock, the on-stock
+ * amount gives way to an olive check badge. A tap on a folded row's
+ * non-interactive area opens it (a tap on its buy quantity also opens that
+ * quantity's keyboard); a tap on an unfolded row's non-interactive area folds it
+ * — confirming the pre-fill first when it is not confirmed yet, and only once
+ * the place is decided; a tap outside a row does nothing. A committed change — a
+ * chip, an "andere" value, or a buy quantity — folds its row too, under the same
+ * two conditions. Only the user's own moves are stored (which rows they opened,
+ * which they confirmed, which value they typed); the starting shape is derived
+ * from the data, so the page holds no remembered defaults and a fresh visit
+ * always starts from the data.
  *
  * "Liste schreiben" writes one line per row that currently has something
  * to buy, exactly as displayed (with the name, via core's `renderPantryLine`),
@@ -106,15 +131,19 @@ import {
   renderPantryLine,
   shoppingUnitOf,
   splitArrangementNotes,
+  sortPantryNeeds,
   stockPrefill,
+  storagePlaceOf,
   suggestedStocks,
   type AdditionalUnit,
   type ShoppingNeed,
 } from '@cookbook/core';
 
+import { useStoragePlaceAssignment } from '../hooks/useStoragePlaceAssignment';
 import { bottomLevelNeedsFor, type ShoppingInputs } from '../keep/shoppingBundle';
 import ArrangementLine from './ArrangementLine';
 import LeaveConfirmSheet from './LeaveConfirmSheet';
+import StoragePlacePicker from './StoragePlacePicker';
 import { CheckIcon, ShelfIcon, ShoppingCartIcon } from './icons';
 import StockChips, { type StockChip } from './StockChips';
 import TappableQuantity from './TappableQuantity';
@@ -134,6 +163,11 @@ export interface PantrySelectHandle {
 }
 
 interface PantrySelectProps {
+  /**
+   * Drive access token, needed by the inline „Lagerort“ picker: assigning a
+   * kitchen place writes the ingredient master data immediately.
+   */
+  token: string;
   /**
    * The resolved bundle: the selected dishes' ingredient lists scaled to the
    * size each is cooked at, plus the recipes of every sub-recipe they reach
@@ -373,6 +407,7 @@ function TappableAmount({
  * and the flow itself belong to App.
  */
 function PantrySelect({
+  token,
   inputs,
   decisions,
   hasSubRecipes,
@@ -410,15 +445,26 @@ function PantrySelect({
   /** Reason the write failed, shown next to the button (null = no failure). */
   const [writeError, setWriteError] = useState<string | null>(null);
   /**
-   * The two sets that decide a row's shape, and they only ever hold rows the
-   * *user* moved: `folded` are the rows they closed, `opened` the ones they
-   * opened. A row nobody touched follows its prefill — one that still needs a
-   * purchase is unfolded, one whose pre-filled Vorrat already covers the need is
-   * folded to its first line. Deriving that instead of snapshotting it when the
-   * page opens is what lets the page own no remembered defaults at all.
+   * The rows the *user* opened. A row nobody touched follows the data — one
+   * that still needs a purchase is unfolded, one whose pre-filled Vorrat already
+   * covers the need is folded — plus the two new conditions below: a missing
+   * „Lagerort“ keeps a row open, and a row can only be folded back when both its
+   * stock and its place decision are settled.
    */
-  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  /**
+   * The rows whose stock the user confirmed by folding them without touching a
+   * chip — the tap accepts the pre-filled amount. Chips and typed amounts are
+   * confirmed through `stocks`; a pre-fill that covers the need is confirmed by
+   * the data itself (see `stockConfirmedOf`).
+   */
+  const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(() => new Set());
+  /**
+   * The shared „Lagerort“ state of the page: missing places are entered inline
+   * (chips + „Ignorieren“), immediately written as ingredient master data, and
+   * skipped rows are remembered for this visit only.
+   */
+  const places = useStoragePlaceAssignment(token);
 
   // Browser Back is a decision here, not a silent discard (see PantrySelectHandle):
   // the popstate listener asks this page first, and only a `false` lets it leave.
@@ -451,22 +497,10 @@ function PantrySelect({
       updated.add(key);
       return updated;
     });
-    setFolded((current) => {
-      if (!current.has(key)) return current;
-      const updated = new Set(current);
-      updated.delete(key);
-      return updated;
-    });
   }, []);
 
   /** Folds one row back to its first line (idempotent). */
   const fold = useCallback((key: string): void => {
-    setFolded((current) => {
-      if (current.has(key)) return current;
-      const updated = new Set(current);
-      updated.add(key);
-      return updated;
-    });
     setOpened((current) => {
       if (!current.has(key)) return current;
       const updated = new Set(current);
@@ -476,22 +510,21 @@ function PantrySelect({
   }, []);
 
   /**
-   * The rows in the order they keep for the page's lifetime: first the
-   * ingredients whose *pre-filled* Vorrat does not cover the need, then the ones
-   * it does (decided with the user: the filing is a snapshot, so no row moves
-   * while its value is being used). Only the pre-fill decides that — it depends
-   * on the need and the reorder point, never on the chosen stock — so the order
-   * is stable across renders.
+   * The rows in the pantry order (core's `sortPantryNeeds`): the kitchen walk
+   * from the storage-place master data, the rows that still need a purchase
+   * first *inside each place*, then German alphabetical. The order is implicit —
+   * the page writes no group headings (decided with the user). It is derived on
+   * every render: the place is registry state read through `storagePlaceOf`, so
+   * a successful assignment re-files the page. Within a place the order uses the
+   * *pre-filled* Vorrat only, so choosing a stock chip never moves a row under
+   * the finger.
    */
-  const orderedNeeds = [
-    ...needs.filter((need) => stockPrefill(need) < need.needed),
-    ...needs.filter((need) => stockPrefill(need) >= need.needed),
-  ];
+  const orderedNeeds = sortPantryNeeds(needs);
 
   /**
-   * The rows with the chosen stock and buy amount. The stock is rounded to the
-   * thousandth so the chip comparison and the tappable fields never see the
-   * float noise a summed need can carry.
+   * The rows with the chosen stock and buy amount, in the displayed order. The
+   * stock is rounded to the thousandth so the chip comparison and the tappable
+   * fields never see the float noise a summed need can carry.
    */
   const entries: PantryEntry[] = orderedNeeds.map((need) => {
     const saved = stocks.get(rowKey(need.ingredient, need.baseUnit));
@@ -592,12 +625,32 @@ function PantrySelect({
     const { need, stock, buy } = entry;
     const kaufen = pantryReading(need.ingredient, buy, need.baseUnit);
     const key = rowKey(need.ingredient, need.baseUnit);
-    // Whether the row is folded to its first line: the user's own last move
-    // wins, and a row nobody touched follows its prefill — one that still needs
-    // a purchase is unfolded, one whose pre-filled Vorrat already covers the
-    // need is folded. That derivation is why the page needs no snapshot of the
-    // filing when it opens.
-    const collapsed = !opened.has(key) && (folded.has(key) || stockPrefill(need) >= need.needed);
+    const place = storagePlaceOf(need.ingredient);
+    const ignored = places.ignored.has(need.ingredient);
+    // A missing place keeps the row open (the inline picker is the decision);
+    // „Ignorieren“ settles it for this visit without writing master data.
+    const placeDecided = place !== null || ignored;
+    // The first collapse condition: the stock is confirmed. A chip or a typed
+    // amount confirms it through `stocks`; a manual fold confirms the pre-fill
+    // through `confirmed`; a pre-fill that covers the need is confirmed by the
+    // data itself.
+    const stockConfirmed =
+      stocks.has(key) || confirmed.has(key) || stockPrefill(need) >= need.needed;
+    // Both conditions (plus the user's own open state) decide the first line.
+    const collapsed = placeDecided && stockConfirmed && !opened.has(key);
+
+    /**
+     * A tap on the row's non-interactive area (or its need) confirms the
+     * pre-filled stock and folds the row — but the fold waits until the place is
+     * decided too. A row without a place therefore stays open with its picker,
+     * even though the tap already settled the stock half.
+     */
+    function confirmAndFold(): void {
+      if (!stockConfirmed) {
+        setConfirmed((current) => new Set(current).add(key));
+      }
+      if (placeDecided) fold(key);
+    }
     // The value the user typed through the "andere" keyboard, or a prefill that
     // is no suggestion at all (null = the row's custom chip is not needed).
     const customValue = customStockOf(need, typedStocks.get(key));
@@ -646,11 +699,11 @@ function PantrySelect({
           bqEdit={buy}
           onCommitAq={(count) => {
             setBuy(need, count * kaufen.factor);
-            fold(key);
+            if (placeDecided) fold(key);
           }}
           onCommitBq={(amount) => {
             setBuy(need, amount);
-            fold(key);
+            if (placeDecided) fold(key);
           }}
           label={`Kaufen für ${need.ingredient}`}
         />
@@ -674,7 +727,7 @@ function PantrySelect({
           if (collapsed) {
             unfold(key);
           } else if (!isControl) {
-            fold(key);
+            confirmAndFold();
           }
         }}
       >
@@ -696,7 +749,7 @@ function PantrySelect({
               if (collapsed) {
                 unfold(key);
               } else {
-                fold(key);
+                confirmAndFold();
               }
             }}
           >
@@ -747,15 +800,29 @@ function PantrySelect({
               alwaysShowAndere={kaufen.au === null}
               onChange={(next) => {
                 setStock(need, next);
-                fold(key);
+                if (placeDecided) fold(key);
               }}
               onCommitCustom={(value) => {
                 commitCustom(need, value);
-                fold(key);
+                if (placeDecided) fold(key);
               }}
               label={`Vorrat für ${need.ingredient}`}
             />
           </div>
+        )}
+        {/* Line 3: the „Lagerort“ decision, inline like the shopping-sort
+            page's „Markt“ chips — only for an ingredient that has no place yet.
+            Existing places are not edited here (decided with the user); the
+            master-data sheet is the place for that. */}
+        {!collapsed && place === null && (
+          <StoragePlacePicker
+            ingredient={need.ingredient}
+            ignored={ignored}
+            saving={places.saving.has(need.ingredient)}
+            error={places.errors.get(need.ingredient) ?? null}
+            onAssign={(zone) => void places.assign(need.ingredient, zone)}
+            onToggleIgnore={() => places.toggleIgnore(need.ingredient)}
+          />
         )}
       </div>
     );

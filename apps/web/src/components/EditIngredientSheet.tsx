@@ -72,6 +72,7 @@ function EditIngredientSheet({
             singular: result.singular,
             plural: result.plural,
             reorderPoint: result.reorderPoint,
+            storagePlace: result.storagePlace,
             entries: result.entries,
             precision: result.precision,
           },

@@ -13,8 +13,11 @@
  * field, the „Einkauf“ field, the synonym editor, the disabled-field look and
  * the validation messages are one implementation. The two kinds differ only in
  * which sections they show: an ingredient carries the display forms, the base
- * unit, the additional-unit mappings, the precision and the reorder point in
- * addition to the shopping data.
+ * unit, the additional-unit mappings, the precision, the reorder point and the
+ * optional kitchen „Lagerort“ in addition to the shopping data. The Lagerort
+ * sits directly above „Einkauf“ and names one of the built-in places
+ * (docs/storage_places.csv); the pantry pages file their rows by it and enter a
+ * missing one inline, while this sheet is where an existing one is corrected.
  *
  * A third, narrower variant edits the ingredient row of an **ingredient
  * recipe** (a sub-recipe): it shows the same ingredient fields but no
@@ -55,6 +58,7 @@ import {
   shoppingSections,
   shoppingStores,
   shoppingVariantsFor,
+  STORAGE_PLACES,
   validateShoppingVariant,
   type IngredientEntry,
   type IngredientMapping,
@@ -91,6 +95,11 @@ export interface IngredientSheetResult {
   readonly reorderPoint: number;
   readonly entries: readonly IngredientMapping[];
   readonly precision: PrecisionLevel;
+  /**
+   * The chosen kitchen storage place, or null when the ingredient is not sorted
+   * into the kitchen (see docs/storage_places.csv).
+   */
+  readonly storagePlace: string | null;
   /** The chosen shopping stop, or null when the ingredient is not bought. */
   readonly stop: ShoppingStop | null;
   /** The complete synonym list the item should carry. */
@@ -230,6 +239,12 @@ function MasterDataSheet({
     entry === undefined ? null : mappingFormFromEntry(entry).shoppingUnit,
   );
   const [precision, setPrecision] = useState<PrecisionLevel>(entry?.precision ?? 'medium');
+  /**
+   * The chosen kitchen storage place, or null for "not sorted". The list is the
+   * built-in walking order (docs/storage_places.csv); no place editor exists in
+   * the app, so a chip only assigns, never renames or reorders a zone.
+   */
+  const [storagePlace, setStoragePlace] = useState<string | null>(entry?.storagePlace ?? null);
   /** The chosen store — level 1 of the shopping route; null = nothing picked. */
   const [store, setStore] = useState<string | null>(initialItem?.stop.store ?? null);
   /** The chosen section — level 2 of the route ('' while none is picked). */
@@ -553,6 +568,7 @@ function MasterDataSheet({
       reorderPoint,
       entries,
       precision,
+      storagePlace: creating ? null : storagePlace,
       stop: chosenStop,
       variants,
     });
@@ -859,6 +875,52 @@ function MasterDataSheet({
               />
             </InfoHint>
           </>
+        )}
+
+        {/* The kitchen storage place, directly above „Einkauf“ (decided with the
+            user): a chip row of the built-in walking order
+            (docs/storage_places.csv). It is the per-ingredient master data
+            behind the pantry page's filing; assigning or clearing it here is the
+            way to correct an existing place, which the pantry page deliberately
+            does not offer. Only an existing entry offers the field — a new
+            ingredient is sorted when it first meets the pantry page. */}
+        {ingredientMode && !creating && (
+          <div className="field">
+            <span className="field-label">
+              Lagerort<span className="optional-mark">optional</span>
+            </span>
+            <div className="store-chips" role="group" aria-label="Lagerort">
+              {STORAGE_PLACES.map((candidate) => (
+                <button
+                  key={candidate}
+                  type="button"
+                  className={storagePlace === candidate ? 'chip chip-active' : 'chip'}
+                  aria-pressed={storagePlace === candidate}
+                  onClick={() => {
+                    setStoragePlace(candidate);
+                    markEdited();
+                  }}
+                >
+                  {candidate}
+                </button>
+              ))}
+              {storagePlace !== null && (
+                <button
+                  type="button"
+                  className="chip chip-clear"
+                  onClick={() => {
+                    setStoragePlace(null);
+                    markEdited();
+                  }}
+                  title="Lagerort entfernen"
+                  disabled={busy !== null}
+                >
+                  <CloseIcon className="chip-icon" optical={20} />
+                  <span>Entfernen</span>
+                </button>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Where the record is bought (docs/storage_format.md §10): level 1 the

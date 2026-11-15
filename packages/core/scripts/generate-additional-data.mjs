@@ -4,6 +4,7 @@
  *   - docs/AQs.csv                       (AQ values, penalties and the scheme columns)
  *   - docs/additional_units.csv          (units: name, arrangement, scheme, exactness, shopping flag)
  *   - docs/ingredients.csv               (ingredient list: name, base unit, precision, reorder point, display forms)
+ *   - docs/storage_places.csv            (kitchen storage places: one place per row, row order = walking order)
  *   - docs/ingredient_unit_mappings.csv  (ingredient → AU: factor; no priority)
  *
  * The `Singular` / `Plural` columns of docs/ingredients.csv (columns B and C,
@@ -88,6 +89,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const AQ_CSV = resolve(ROOT, 'docs/AQs.csv');
 const UNITS_CSV = resolve(ROOT, 'docs/additional_units.csv');
 const INGREDIENTS_CSV = resolve(ROOT, 'docs/ingredients.csv');
+const PLACES_CSV = resolve(ROOT, 'docs/storage_places.csv');
 const MAPPINGS_CSV = resolve(ROOT, 'docs/ingredient_unit_mappings.csv');
 const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/additionalUnitsData.ts');
 
@@ -103,7 +105,11 @@ const ARRANGEMENT_TOKENS = new Set(['<AQ>', '<AU>', '<IN>', '<INF>', '<BQ>', '<B
 const UNITS_HEADER = 'Additional Unit;Singular;Plural;Arrangement;Number Scheme;Unit Exact';
 
 /** Exact header of the ingredient list (docs/ingredients.csv). */
-const INGREDIENTS_HEADER = 'Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point';
+const INGREDIENTS_HEADER =
+  'Ingredient;Singular;Plural;Base Unit;Precision;Storage Place;Reorder Point';
+
+/** Exact header of the kitchen storage-place table (docs/storage_places.csv). */
+const PLACES_HEADER = 'Place';
 
 /** The five stored precision levels, from practical to exact. */
 const PRECISION_LEVELS = ['very low', 'low', 'medium', 'high', 'very high'];
@@ -393,15 +399,49 @@ function buildUnits(schemeNames) {
   return units;
 }
 
-/** Parses the ingredient list; validates base units, reorder points, display forms and unique names. */
-function buildIngredientList() {
+/**
+ * Reads docs/storage_places.csv: the kitchen zones in walking order. The
+ * ingredient list references a place by name, so the generator is the cross-file
+ * drift guard — an unknown or duplicated place fails the build instead of
+ * reaching the app as an unreachable storage cell.
+ */
+function buildStoragePlaces() {
+  const { header, rows } = parseCsv(PLACES_CSV);
+  if (header.join(';') !== PLACES_HEADER) {
+    throw new Error(`${PLACES_CSV}: unexpected header ${JSON.stringify(header)}`);
+  }
+  const seen = new Set();
+  const places = [];
+  for (const row of rows) {
+    const place = row[0] ?? '';
+    if (place === '') {
+      throw new Error(`${PLACES_CSV}: empty place in line: ${row.join(';')}`);
+    }
+    if (seen.has(place)) {
+      throw new Error(`${PLACES_CSV}: duplicate place '${place}'`);
+    }
+    seen.add(place);
+    places.push(place);
+  }
+  if (places.length === 0) {
+    throw new Error(`${PLACES_CSV}: no places defined`);
+  }
+  return places;
+}
+
+/**
+ * Parses the ingredient list; validates base units, reorder points, display
+ * forms, kitchen storage places and unique names.
+ */
+function buildIngredientList(places) {
   const { header, rows } = parseCsv(INGREDIENTS_CSV);
   if (header.join(';') !== INGREDIENTS_HEADER) {
     throw new Error(`${INGREDIENTS_CSV}: unexpected header ${JSON.stringify(header)}`);
   }
+  const knownPlaces = new Set(places);
   const byName = new Map();
   for (const row of rows) {
-    const [ingredient, singularCell, pluralCell, bu, precisionCell, reorderCell] = row;
+    const [ingredient, singularCell, pluralCell, bu, precisionCell, storageCell, reorderCell] = row;
     if (ingredient === '' || bu === '') {
       throw new Error(
         `${INGREDIENTS_CSV}: empty ingredient or base unit in line: ${row.join(';')}`,
@@ -415,11 +455,19 @@ function buildIngredientList() {
     if (byName.has(ingredient)) {
       throw new Error(`${INGREDIENTS_CSV}: duplicate ingredient '${ingredient}'`);
     }
+    if (storageCell !== '' && !knownPlaces.has(storageCell)) {
+      throw new Error(
+        `${INGREDIENTS_CSV}: unknown storage place '${storageCell}' for '${ingredient}' ` +
+          `(allowed: ${places.join(', ')})`,
+      );
+    }
     byName.set(ingredient, {
       bu,
       precision: parsePrecisionCell(precisionCell, ingredient),
       reorderPoint: parseReorderPoint(reorderCell, ingredient),
       ...parseDisplayForms(singularCell, pluralCell, ingredient, INGREDIENTS_CSV),
+      // Empty = the ingredient is not sorted into the kitchen.
+      ...(storageCell === '' ? {} : { storagePlace: storageCell }),
     });
   }
   if (byName.size === 0) {
@@ -509,8 +557,8 @@ function render(units, schemes, ingredientList, mappings) {
   const lines = [];
   lines.push('/**');
   lines.push(' * AUTO-GENERATED from docs/AQs.csv, docs/additional_units.csv,');
-  lines.push(' * docs/ingredients.csv and docs/ingredient_unit_mappings.csv by');
-  lines.push(' * scripts/generate-additional-data.mjs.');
+  lines.push(' * docs/ingredients.csv, docs/storage_places.csv and');
+  lines.push(' * docs/ingredient_unit_mappings.csv by scripts/generate-additional-data.mjs.');
   lines.push(
     " * Do not edit by hand — re-run 'npm run generate:additional' (packages/core) after a CSV change.",
   );
@@ -575,6 +623,10 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push('  readonly precision: PrecisionLevel;');
   lines.push(
+    '  /** Kitchen storage place (one of STORAGE_PLACES, docs/storage_places.csv): the order the pantry page files its rows in. Absent = the ingredient is not sorted into the kitchen. */',
+  );
+  lines.push('  readonly storagePlace?: string;');
+  lines.push(
     '  /** Singular display form of the name (count 1 or a unit fraction such as ½), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */',
   );
   lines.push('  readonly singular?: string;');
@@ -620,6 +672,11 @@ function render(units, schemes, ingredientList, mappings) {
     lines.push(`    bu: ${JSON.stringify(entry.bu)},`);
     lines.push(`    reorderPoint: ${formatReorderPoint(entry.reorderPoint)},`);
     lines.push(`    precision: ${JSON.stringify(entry.precision)},`);
+    // The optional storage place is emitted only when the row names one, so an
+    // unsorted ingredient keeps the lean entry shape (no empty string).
+    if (entry.storagePlace !== undefined) {
+      lines.push(`    storagePlace: ${JSON.stringify(entry.storagePlace)},`);
+    }
     // The display forms are emitted only when the name has them, so an
     // invariant ingredient keeps the lean entry shape (no empty strings).
     if (entry.singular !== undefined) {
@@ -643,7 +700,8 @@ function render(units, schemes, ingredientList, mappings) {
 
 const { aqValues, schemes } = buildAqSchemes();
 const units = buildUnits(schemes.map((scheme) => scheme.name));
-const ingredientList = buildIngredientList();
+const storagePlaces = buildStoragePlaces();
+const ingredientList = buildIngredientList(storagePlaces);
 const mappings = buildMappings(units, ingredientList);
 let output = render(units, schemes, ingredientList, mappings);
 try {

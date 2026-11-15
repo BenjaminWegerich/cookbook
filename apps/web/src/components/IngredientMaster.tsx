@@ -9,6 +9,11 @@
  * edited in the sheet behind the row, and repeating them here would turn a
  * quiet reference list into a data table.
  *
+ * An **ingredient recipe** (a sub-recipe) is an ingredient here too. A
+ * collection that predates the auto-create rule can hold one without a master
+ * row; this screen repairs that when it opens (one batch write that adds only
+ * missing rows), so the title appears and its „Lagerort“ becomes editable.
+ *
  * Tapping a row opens the shared master-data sheet (`MasterDataSheet`) in its
  * ingredient-edit mode. The sheet now also edits the same name's shopping data
  * („Einkauf“ + „Synonyme“), because the ingredient and the shopping item are two
@@ -57,6 +62,7 @@ import {
 import { CloseIcon, PlusIcon, SearchIcon } from './icons';
 import {
   appendIngredientMasterData,
+  backfillIngredientRecipeMasterData,
   loadIngredientMasterData,
   type IngredientMasterEntryInput,
 } from '../drive/ingredientMasterData';
@@ -155,9 +161,25 @@ function IngredientMaster({
   useEffect(() => {
     mountedRef.current = true;
     void Promise.all([loadIngredientMasterData(token), loadShoppingRouteMasterData(token)])
-      .then(() => {
+      .then(async () => {
         if (!mountedRef.current) return;
-        setLoadWarning(null);
+        // Old collections can hold ingredient recipes without a master row
+        // (saved before auto-create). The screen is where the user looks for
+        // them, so it repeats the batch repair on open as a fallback to the
+        // startup backfill. Existing rows are never touched.
+        let warning: string | null = null;
+        if (subRecipes.size > 0) {
+          try {
+            await backfillIngredientRecipeMasterData(
+              token,
+              [...subRecipes].map(([title, bu]) => ({ title, bu })),
+            );
+          } catch (err) {
+            warning = reasonOf(err);
+          }
+        }
+        if (!mountedRef.current) return;
+        setLoadWarning(warning);
         setRevision((current) => current + 1);
       })
       .catch((err: unknown) => {
@@ -167,7 +189,7 @@ function IngredientMaster({
     return () => {
       mountedRef.current = false;
     };
-  }, [token]);
+  }, [token, subRecipes]);
 
   // Browser Back: close the sheet first, leave the screen on the next Back. A
   // running write keeps the sheet open, so a Back cannot discard an in-flight

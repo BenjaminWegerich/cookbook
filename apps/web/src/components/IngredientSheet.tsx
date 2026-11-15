@@ -510,9 +510,12 @@ function IngredientSheet({
             the shared master sheet over this one; the
             quantity form stays mounted underneath, so its name, amount,
             precision and unit choice survive the round trip. A sub-recipe has
-            an ingredient record too (auto-created on save), but its sheet hides
-            the shopping fields — it is cooked, never bought. */}
-        {isMasterName && onEditIngredient !== undefined && (
+            an ingredient record too (auto-created on save, or on demand if the
+            collection predates that rule), but its sheet hides the shopping
+            fields — it is cooked, never bought. The action is therefore offered
+            for a recipe title even while the registry has no row yet; the
+            editor creates the row before opening the sheet. */}
+        {validName && onEditIngredient !== undefined && (
           <div className="master-edit-action">
             <button
               type="button"

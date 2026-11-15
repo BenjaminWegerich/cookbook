@@ -4,10 +4,12 @@
  * The user's authoritative ingredient master data lives in two CSV files
  * inside the `Stammdaten` subfolder of the Cookbook folder:
  * - `zutaten.csv` — the ingredient list: one row per ingredient
- *   (`Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point`), where the
- *   two cells after the name are the optional display forms for a count
- *   („1 Karotte“ / „2 Karotten“; empty for an invariant name) and the
- *   `Precision` cell is the mandatory ingredient-level value;
+ *   (`Ingredient;Singular;Plural;Base Unit;Precision;Storage Place;Reorder Point`),
+ *   where the two cells after the name are the optional display forms for a
+ *   count („1 Karotte“ / „2 Karotten“; empty for an invariant name), the
+ *   `Precision` cell is the mandatory ingredient-level value and `Storage Place`
+ *   is the optional kitchen zone (docs/storage_places.csv); the header from
+ *   before `Storage Place` still loads and is upgraded on the next write;
  * - `zutaten-umrechnungen.csv` — the AU mappings: one row per
  *   ingredient–additional-unit mapping (`Ingredient;Additional Unit;
  *   Conversion Factor;Shopping Unit`); an ingredient without additional units
@@ -38,6 +40,7 @@ import {
   serializeIngredientMappingsCsv,
   setIngredientMappings,
   splitIngredientMasterData,
+  STORAGE_PLACES,
   type IngredientEntry,
   type IngredientMapping,
   type IngredientMappings,
@@ -299,6 +302,12 @@ export interface IngredientMasterEntryInput {
   plural: string | null;
   /** Base-unit quantity on stock after a shopping trip: 0, a positive value, or Infinity. */
   reorderPoint: number;
+  /**
+   * Kitchen storage place (one of STORAGE_PLACES), or null when the ingredient
+   * is not sorted into the kitchen. The pantry page files its rows by this place
+   * (docs/storage_places.csv, src/pantrySort.ts).
+   */
+  storagePlace: string | null;
   /** The AU mappings, each with its per-ingredient shopping flag. */
   entries: ReadonlyArray<IngredientMapping>;
   /** Mandatory ingredient-level precision. */
@@ -371,6 +380,14 @@ export async function updateIngredientMasterData(
   if (!isPrecisionLevel(update.precision)) {
     throw new Error('Zutaten-Stammdaten: Die Genauigkeit muss eine der fünf Stufen sein.');
   }
+  // The storage place is one of the built-in kitchen zones; a stale form value
+  // (a zone that no longer exists) fails loudly instead of writing an
+  // unreachable cell.
+  if (update.storagePlace !== null && !STORAGE_PLACES.includes(update.storagePlace)) {
+    throw new Error(
+      `Zutaten-Stammdaten: unbekannter Lagerort "${update.storagePlace}" für „${name}“.`,
+    );
+  }
 
   const folder = await listCookbookFolder(token);
   const { listFile, mappingsFile } = findMasterDataFiles(folder);
@@ -388,6 +405,9 @@ export async function updateIngredientMasterData(
     ...(update.singular !== null && update.plural !== null
       ? { singular: update.singular, plural: update.plural }
       : {}),
+    // The key is absent for an unsorted ingredient (exactOptionalPropertyTypes),
+    // never present with undefined.
+    ...(update.storagePlace === null ? {} : { storagePlace: update.storagePlace }),
     entries: update.entries,
   };
   const next: IngredientMappings = { ...current, [name]: nextEntry };
@@ -398,6 +418,170 @@ export async function updateIngredientMasterData(
   writtenSinceLoad = true;
   setIngredientMappings(next);
   return { previous };
+}
+
+/**
+ * Sets or clears one ingredient's kitchen storage place and writes the
+ * master-data pair to Drive.
+ *
+ * This is the write behind the pantry page's „Lagerort“ sheet: assigning a zone
+ * is master data, so it is persisted immediately (not with the shopping list)
+ * and published to the registry, where the page's sort
+ * (core's `sortPantryNeeds`) reads it. The same read-before-write transaction
+ * as the other master-data writes is used: the authoritative pair is read
+ * first, so a spreadsheet edit made meanwhile survives, and a missing pair is
+ * materialized from the built-in seed.
+ *
+ * Clearing the assignment removes the key rather than writing an empty cell
+ * (`exactOptionalPropertyTypes`), which serializes to an empty `Storage Place`
+ * cell and puts the ingredient back into the "Nicht einsortiert" group.
+ *
+ * @param token the Drive access token
+ * @param name the canonical ingredient name (the entry's key)
+ * @param storagePlace one of STORAGE_PLACES, or null to clear the assignment
+ * @returns the place the entry had before this write, for the caller's undo
+ * @throws {Error} when the place is unknown, the ingredient is not registered,
+ *   or Drive rejects the write
+ */
+export async function updateIngredientStoragePlace(
+  token: string,
+  name: string,
+  storagePlace: string | null,
+): Promise<{ previous: string | null }> {
+  if (storagePlace !== null && !STORAGE_PLACES.includes(storagePlace)) {
+    throw new Error(`Zutaten-Stammdaten: unbekannter Lagerort "${storagePlace}" für „${name}“.`);
+  }
+
+  const folder = await listCookbookFolder(token);
+  const { listFile, mappingsFile } = findMasterDataFiles(folder);
+  const current = await readAuthoritativeMasterData(token, listFile, mappingsFile);
+  const previous = current[name];
+  if (previous === undefined) {
+    // The pantry can list a name the master data does not know. A place needs a
+    // row to live on, so the user adds the ingredient first.
+    throw new Error(
+      `Die Zutat „${name}“ steht nicht in den Stammdaten — lege sie zuerst unter „Zutaten“ an.`,
+    );
+  }
+  const previousPlace = previous.storagePlace ?? null;
+  if (previousPlace === storagePlace) {
+    // No change: no write and no undo entry. Publishing what was read is still
+    // useful — the Drive pair can be newer than this session's registry.
+    setIngredientMappings(current);
+    return { previous: previousPlace };
+  }
+
+  // Clearing the place rebuilds the entry without that key (an optional
+  // property must be absent, not undefined); setting it only adds the key.
+  const nextEntry: IngredientEntry =
+    storagePlace === null
+      ? {
+          bu: previous.bu,
+          reorderPoint: previous.reorderPoint,
+          precision: previous.precision,
+          ...(previous.singular !== undefined
+            ? { singular: previous.singular, plural: previous.plural }
+            : {}),
+          entries: previous.entries,
+        }
+      : { ...previous, storagePlace };
+  const next: IngredientMappings = { ...current, [name]: nextEntry };
+  const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+  await writeMasterDataFiles(token, dataFolderId, listFile, mappingsFile, next);
+  writtenSinceLoad = true;
+  setIngredientMappings(next);
+  return { previous: previousPlace };
+}
+
+/**
+ * One ingredient recipe that should have a master-data row.
+ *
+ * The title is the ingredient name and the base unit is the recipe's yield
+ * family; both are all a neutral auto-created row needs.
+ */
+export interface IngredientRecipeRegistration {
+  readonly title: string;
+  readonly bu: 'g' | 'ml';
+}
+
+/**
+ * Ensures that every ingredient recipe of the collection has its ingredient
+ * row, in **one** read-modify-write of the master-data pair.
+ *
+ * The normal path registers a sub-recipe when its recipe is saved
+ * (`ensureIngredientRecipeMasterData`, called by recipeStorage). A collection
+ * that predates that rule can hold ingredient recipes without a row: they work
+ * as sub-recipes (the link is the title, docs/storage_format.md §4) but do not
+ * appear in „Zutaten“, cannot be edited there, and cannot take a „Lagerort“.
+ * This backfill repairs exactly those rows on startup / when „Zutaten“ opens.
+ *
+ * Only **missing** rows are added, with the neutral auto-created defaults
+ * (reorder point 0, the auto-created precision, no mappings, no display forms,
+ * no place). An existing row is never touched — not even its base unit — so a
+ * backfill cannot overwrite the user's settings or fail on an old AU conflict;
+ * the single-save path keeps that stricter rule.
+ *
+ * A missing Drive pair is materialized from the built-in seed plus the new
+ * rows, exactly like the other writes. The registry is published only after the
+ * files were written.
+ *
+ * @param token the Drive access token
+ * @param recipes the collection's ingredient recipes (title + yield family)
+ * @returns how many rows were created (0 = nothing to do, no write)
+ * @throws {Error} when the master data is corrupt or Drive rejects the write
+ */
+export async function backfillIngredientRecipeMasterData(
+  token: string,
+  recipes: readonly IngredientRecipeRegistration[],
+): Promise<number> {
+  if (recipes.length === 0) {
+    return 0;
+  }
+
+  const folder = await listCookbookFolder(token);
+  const { listFile, mappingsFile } = findMasterDataFiles(folder);
+  // A partial pair is the one state a silent backfill must not write: the read
+  // path treats it as "not created yet" and would materialize both files from
+  // the built-in seed, silently replacing the surviving file's user data. The
+  // explicit write paths accept that trade-off because the user asked for the
+  // write; a startup repair must leave the partial pair alone.
+  if ((listFile === undefined) !== (mappingsFile === undefined)) {
+    return 0;
+  }
+  const current = await readAuthoritativeMasterData(token, listFile, mappingsFile);
+
+  let next: IngredientMappings = current;
+  let created = 0;
+  for (const { title, bu } of recipes) {
+    if (title.trim() === '' || next[title] !== undefined) continue;
+    if (bu !== 'g' && bu !== 'ml') {
+      throw new Error(
+        `Zutaten-Stammdaten: ungültige Basis-Einheit "${bu}" für das Zutaten-Rezept „${title}“.`,
+      );
+    }
+    next = {
+      ...next,
+      [title]: {
+        bu,
+        reorderPoint: 0,
+        precision: AUTO_CREATED_PRECISION,
+        entries: [],
+      },
+    };
+    created += 1;
+  }
+  if (created === 0) {
+    // Publish what was read even without a write: the screen that called this
+    // backfill reads the registry afterwards.
+    setIngredientMappings(current);
+    return 0;
+  }
+
+  const dataFolderId = await ensureCookbookArea(token, 'data', folder);
+  await writeMasterDataFiles(token, dataFolderId, listFile, mappingsFile, next);
+  writtenSinceLoad = true;
+  setIngredientMappings(next);
+  return created;
 }
 
 /**

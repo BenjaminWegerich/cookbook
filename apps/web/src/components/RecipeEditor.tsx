@@ -134,7 +134,10 @@ import {
 } from '../drive/draftStorage';
 import { isDriveAuthError } from '../drive/driveClient';
 import { listCookbookFolder } from '../drive/cookbookFolder';
-import { appendIngredientMasterData } from '../drive/ingredientMasterData';
+import {
+  appendIngredientMasterData,
+  ensureIngredientRecipeMasterData,
+} from '../drive/ingredientMasterData';
 import { createShoppingItem, saveShoppingItem } from '../drive/shoppingRouteMasterData';
 import { loadRecipePhoto } from '../drive/recipePhoto';
 import { useEscapeTrigger, useLeaveGuard, type LeaveReason } from '../hooks/useLeaveGuard';
@@ -1444,6 +1447,12 @@ function RecipeEditor({
   const [masterEditSaving, setMasterEditSaving] = useState(false);
   /** Synchronous mirror of masterEditSaving, for the Back/Escape guard. */
   const masterEditSavingRef = useRef(false);
+  /**
+   * True while a missing ingredient-recipe row is being created before its
+   * master sheet opens. A second tap in that window must not start a second
+   * create; the row is the same title.
+   */
+  const masterEditPreparingRef = useRef(false);
   const [masterEditError, setMasterEditError] = useState<string | null>(null);
   /**
    * The recipe whose successful save is waiting behind the automatically
@@ -2754,7 +2763,45 @@ function RecipeEditor({
    */
   const handleEditIngredient = (name: string): void => {
     setMasterEditError(null);
-    setMasterEditName(name);
+    if (mappingsFor(name) !== undefined) {
+      setMasterEditName(name);
+      return;
+    }
+    // An old collection can hold an ingredient recipe without a master row.
+    // Create it through the same auto-create path before opening the sheet; the
+    // master sheet needs the entry, and the row is what carries the Lagerort.
+    const bu = subRecipeUnits.get(name);
+    if (bu === undefined) {
+      showSnackbar({
+        tone: 'error',
+        text: `Für „${name}“ fehlt ein Stammdaten-Eintrag, und die Zutat ist kein Zutaten-Rezept.`,
+      });
+      return;
+    }
+    if (token === '') {
+      showSnackbar({
+        tone: 'error',
+        text: 'Nicht mit Google Drive verbunden — die Stammdaten können nicht angelegt werden.',
+      });
+      return;
+    }
+    if (masterEditPreparingRef.current) return;
+    masterEditPreparingRef.current = true;
+    void ensureIngredientRecipeMasterData(token, name, bu)
+      .then(() => {
+        setMasterEditName(name);
+      })
+      .catch((err) => {
+        showSnackbar({
+          tone: 'error',
+          text: `Die Stammdaten für „${name}“ konnten nicht angelegt werden: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        });
+      })
+      .finally(() => {
+        masterEditPreparingRef.current = false;
+      });
   };
 
   /**
@@ -3507,9 +3554,7 @@ function RecipeEditor({
                   sourceFieldRef.current?.blur();
                 }
               }}
-              aria-describedby={
-                fieldIssue('source').length > 0 ? 'editor-error-source' : undefined
-              }
+              aria-describedby={fieldIssue('source').length > 0 ? 'editor-error-source' : undefined}
               aria-invalid={fieldIssue('source').length > 0}
             />
           </div>

@@ -494,3 +494,45 @@
   line-height: var(--leading-sm);
   text-align: end;
 }
+
+/* ---- The inline „Lagerort“ picker --------------------------------------- */
+
+/* The picker of a row whose ingredient has no place yet. It is not a sheet: it
+   stands inline like the stock chips above it, with the shared `.field` caption
+   rhythm („Lagerort“ is a field-label, exactly like „Markt“ on the shopping-sort
+   page). The rows carry no group headings; the picker is the only place-related
+   UI element. */
+.pantry-place-picker {
+  /* The row's own gap already separates it from the stock chips; the field's
+     caption gap stays as it is. */
+  min-width: 0;
+}
+
+/* The place chips and the quiet „Ignorieren“ share one wrapping row, the same
+   arrangement the shopping-sort page gives its store chips and parking action:
+   the exception sits beside the values, never below the whole picker. */
+.pantry-place-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* The chip group takes the free width so the ignore action can sit at the end
+   when both fit on one line; once they wrap, the action stands alone. */
+.pantry-place-row .store-chips {
+  flex: 1 1 auto;
+}
+
+/* „Ignorieren“ is a quiet text button, never a chip: a place is a value, the
+   skip is the row's other answer. The pressed state only changes the colour and
+   the label („Ignoriert“), like the shopping-sort parking actions. */
+.pantry-ignore {
+  justify-self: start;
+  min-height: var(--control-height);
+  padding-inline-start: 0;
+}
+
+.pantry-ignore[aria-pressed='true'] {
+  color: var(--color-accent);
+}
