@@ -3490,9 +3490,6 @@ function RecipeEditor({
             <label className="field-label" htmlFor="editor-field-source">
               Quelle<span className="optional-mark">optional</span>
             </label>
-            <span className="field-hint" id="editor-hint-source">
-              Link zum Originalrezept oder zur Inspiration (vollständige URL)
-            </span>
             <input
               ref={sourceFieldRef}
               id="editor-field-source"
@@ -3511,9 +3508,7 @@ function RecipeEditor({
                 }
               }}
               aria-describedby={
-                fieldIssue('source').length > 0
-                  ? 'editor-hint-source editor-error-source'
-                  : 'editor-hint-source'
+                fieldIssue('source').length > 0 ? 'editor-error-source' : undefined
               }
               aria-invalid={fieldIssue('source').length > 0}
             />

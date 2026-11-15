@@ -1679,7 +1679,7 @@ const STYLES = `
 
   /* ---- Zutaten ---- */
   .screen-caption { font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600;
-                    text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 var(--space-2);
+                    text-transform: uppercase; color: var(--muted); margin: 0 0 var(--space-2);
                     overflow-wrap: anywhere; }
   .screen-title { font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; margin: 0 0 var(--space-2); }
   /* The theme's decorative divider below „Zutaten" and the step title (§5.5). */
