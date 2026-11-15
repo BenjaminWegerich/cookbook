@@ -818,9 +818,10 @@ toggle is the only way a hint may be hidden — optional explanation is not a st
 
 **Long optional text opens in place.** The recipe-level tips at the bottom of the Kopfdaten
 card and each step's tips are one quiet disclosure row: `+ Tipps` when empty, `Tipps · <first
-line>` when filled, `Tipps` plus a growing textarea and `Entfernen` when open. The row is
+line>` when filled, `Tipps` plus a paragraph editor and `Entfernen` when open. The row is
 always visible; the field is only on request, and adding a new block focuses it. Enter inserts
-a paragraph. The same row shape appears in the cooking view.
+a paragraph; paragraphs read as blocks with an 18 px gap. The same row shape appears in the
+cooking view.
 
 *Cooking view: not applicable* (no text entry). The one input is the check-list checkbox (§5.11).
 

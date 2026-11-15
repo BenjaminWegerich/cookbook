@@ -1643,7 +1643,7 @@ const STYLES = `
   .tips-body { margin: var(--space-2) 0 0; color: var(--ink);
                font-size: var(--text-md); line-height: var(--leading-md);
                overflow-wrap: anywhere; }
-  .tips-body p { margin: 0 0 var(--space-3); }
+  .tips-body p { margin: 0 0 var(--space-6); }
   .tips-body p:last-child { margin-bottom: 0; }
 
   /* Ingredient-recipe stepper (§5.2 "exactly as today"). Each button is the

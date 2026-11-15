@@ -1,14 +1,14 @@
 /**
  * AutoGrowTextarea — a wrapping text field that grows to fit its content.
  *
- * Used for the Kopf data text fields (Titel, Beschreibung) and the multi-line
- * tips fields: the field starts one line tall (three with `tall`, matching the
- * step text) and grows so the whole text stays visible — no vertical or
- * horizontal scrolling. With `multiline` a line break *is* data: Enter inserts
- * one and pasted line breaks stay. Without it, the text wraps across visual
- * lines but stays one logical line — Enter acts as the "next" key (see
- * enterKeyHint) and pasted line breaks are flattened to single spaces, so the
- * description remains "A single paragraph" (docs/storage_format.md §2).
+ * Used for the Kopf data text fields (Titel, Beschreibung): the
+ * field starts one line tall (three with `tall`, matching the step text) and
+ * grows so the whole text stays visible — no vertical or horizontal scrolling.
+ * The text may wrap across visual lines, but a line break is never *data*:
+ * Enter never inserts a newline (the phone keyboard's return acts as a
+ * "next" key, see enterKeyHint) and pasted line breaks are flattened to
+ * single spaces. The stored string therefore stays a single logical line
+ * (docs/storage_format.md §2 — description is "A single paragraph").
  */
 
 import { forwardRef, useCallback, useLayoutEffect, useRef } from 'react';
@@ -24,15 +24,8 @@ interface AutoGrowTextareaProps {
   onEnter?: () => void;
   /** Starts three lines tall instead of one (Beschreibung). */
   tall?: boolean;
-  /** Keeps line breaks as data (Tipps): Enter inserts a newline and a paste is
-   *  not flattened. */
-  multiline?: boolean;
-  /** Extra class on the <textarea> (e.g. a field-specific width). */
-  className?: string;
-  /** Accessible name when the field has no visible <label>. */
-  ariaLabel?: string;
-  /** Mobile keyboard key label (default "next"; "enter" with `multiline`). */
-  enterKeyHint?: 'next' | 'done' | 'enter';
+  /** Mobile keyboard key label (default "next"). */
+  enterKeyHint?: 'next' | 'done';
   /** Wired to the <textarea> (validation scroll/focus targets). */
   id?: string;
   /**
@@ -51,19 +44,7 @@ interface AutoGrowTextareaProps {
  */
 const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
   function AutoGrowTextarea(
-    {
-      value,
-      onChange,
-      onEnter,
-      tall = false,
-      multiline = false,
-      className,
-      ariaLabel,
-      enterKeyHint = 'next',
-      id,
-      describedBy,
-      invalid,
-    },
+    { value, onChange, onEnter, tall = false, enterKeyHint = 'next', id, describedBy, invalid },
     ref,
   ) {
     const nodeRef = useRef<HTMLTextAreaElement | null>(null);
@@ -113,17 +94,15 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
     }, [fitToContent]);
 
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-      // A multiline field keeps Enter as a line break. Elsewhere a line break
-      // is not data: Enter acts as the "next" key and hands over to the next
-      // text field.
-      if (!multiline && event.key === 'Enter') {
+      // Line breaks are not data here: Enter never inserts one; it acts as
+      // the "next" key and hands over to the next text field.
+      if (event.key === 'Enter') {
         event.preventDefault();
         onEnter?.();
       }
     };
 
     const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
-      if (multiline) return;
       // Flatten pasted line breaks to single spaces (single logical line).
       event.preventDefault();
       const text = event.clipboardData.getData('text/plain');
@@ -141,15 +120,10 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
         id={id}
         aria-describedby={describedBy}
         aria-invalid={invalid}
-        aria-label={ariaLabel}
-        className={
-          [tall || multiline ? 'grow-tall' : undefined, className]
-            .filter((entry) => entry !== undefined && entry !== '')
-            .join(' ') || undefined
-        }
+        className={tall ? 'grow-tall' : undefined}
         value={value}
-        enterKeyHint={multiline ? 'enter' : enterKeyHint}
-        rows={tall || multiline ? 3 : 1}
+        enterKeyHint={enterKeyHint}
+        rows={tall ? 3 : 1}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}

@@ -251,7 +251,8 @@
    and make the slot's hidden width probe disagree with the rendered value. */
 .field input[type='text']:not(.quantity-input),
 .field input[type='url'],
-.field textarea {
+.field textarea,
+.tips-editor {
   width: 100%;
   padding: var(--space-3) var(--space-4);
   background: var(--color-bg);
@@ -953,10 +954,28 @@
   gap: var(--space-2);
 }
 
-/* The textarea fills the panel; the field wrapper only lends it the shared
-   input look. */
-.tips-panel .field {
-  gap: 0;
+/* The contenteditable field borrows the shared text-field look; it grows with
+   its content like the auto-growing textareas. */
+.tips-editor {
+  min-height: 74px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.tips-editor:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* Real paragraph blocks: 18 px between them, none after the last one. */
+.tips-editor p,
+.tips-editor > div {
+  margin: 0 0 var(--space-6);
+}
+
+.tips-editor p:last-child,
+.tips-editor > div:last-child {
+  margin-bottom: 0;
 }
 
 .tips-remove {
