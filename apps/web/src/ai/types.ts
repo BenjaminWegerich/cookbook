@@ -41,6 +41,28 @@ export interface AiMessage {
 }
 
 /**
+ * The failure of one provider request (transport, HTTP status, provider
+ * answer).
+ *
+ * Adapters throw this instead of a plain `Error` when it matters whether the
+ * *same* request may be repeated. `retryable` is true for conditions that pass
+ * on their own — Gemini's 503 "model is overloaded", a 429, other 5xx, a
+ * timeout, a network failure — and false for everything the provider will
+ * reject again identically (bad key, malformed request, blocked prompt). The
+ * UI uses the flag to offer "Erneut versuchen" only when it can actually help.
+ */
+export class AiRequestError extends Error {
+  /** Whether repeating the identical request may succeed. */
+  readonly retryable: boolean;
+
+  constructor(message: string, retryable: boolean) {
+    super(message);
+    this.name = 'AiRequestError';
+    this.retryable = retryable;
+  }
+}
+
+/**
  * A provider-agnostic text-generation client.
  *
  * Implementations translate {@link AiMessage}s into the provider's wire

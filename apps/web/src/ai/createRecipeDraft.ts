@@ -39,6 +39,7 @@ import { parseRecipe } from '@cookbook/core';
 import type { Recipe, RecipeParseError, Unit } from '@cookbook/core';
 
 import { AI_RULES_TEXT } from './recipeRules';
+import { AiRequestError } from './types';
 import type { AiClient, AiMessage } from './types';
 
 /** Maximum consecutive repair rounds after a failed parse (per user turn). */
@@ -105,7 +106,16 @@ export type AiCreateStepResult =
       /** Ingredient names of the draft not yet in the master data (info). */
       newIngredients: NewIngredientProposal[];
     }
-  | { kind: 'error'; message: string };
+  | {
+      kind: 'error';
+      message: string;
+      /**
+       * Whether the failure was transient (overload, timeout, network) and the
+       * identical turn may be repeated via {@link AiCreateSession.retryLastTurn}.
+       * False for bad prompts, blocked answers and exhausted repair rounds.
+       */
+      retryable: boolean;
+    };
 
 /**
  * One AI-create session: keeps the message history and the repair-loop state.
@@ -114,7 +124,11 @@ export type AiCreateStepResult =
  * resolves to `draft` or `error`.
  */
 export interface AiCreateSession {
-  /** Sends the user's next text and advances the conversation. */
+  /**
+   * Sends the user's next text and advances the conversation. A failed provider
+   * call leaves the turn unanswered in the history; see
+   * {@link retryLastTurn}.
+   */
   send(userText: string): Promise<AiCreateStepResult>;
 
   /**
@@ -122,6 +136,15 @@ export interface AiCreateSession {
    * (Task A4). Only meaningful once a draft exists — the caller decides that.
    */
   sendRevision(userText: string): Promise<AiCreateStepResult>;
+
+  /**
+   * Repeats the last turn after a transient provider failure — the user's text
+   * is still the tail of the history, so nothing is appended and the model sees
+   * exactly the request it could not answer. Only do this when the previous
+   * result was `{ kind: 'error', retryable: true }`; in every other state it
+   * returns an error instead of sending.
+   */
+  retryLastTurn(): Promise<AiCreateStepResult>;
 
   /**
    * Replaces the „Vorgaben“ block of the system instruction (see
@@ -196,6 +219,13 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
   const knownSourceUrl = options.sourceUrl;
   const messages: AiMessage[] = [{ role: 'system', content: '' }];
   let repairRounds = 0;
+  /**
+   * True while the tail of `messages` is an unanswered user turn whose provider
+   * call failed transiently. {@link retryLastTurn} may then re-run that turn;
+   * a new `send`/`sendRevision` clears the flag (the retry no longer matches
+   * the newest turn).
+   */
+  let pendingRetry = false;
 
   /**
    * Rebuilds the head of the history (the only system message): static rules,
@@ -285,6 +315,7 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
         message:
           'Der Entwurf konnte nach mehreren Versuchen nicht in das gültige Rezeptformat gebracht werden. ' +
           'Bitte formuliere die Beschreibung neu oder erstelle das Rezept manuell.',
+        retryable: false,
       };
     }
     repairRounds += 1;
@@ -297,13 +328,26 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
     try {
       reply = await options.client.complete(messages);
     } catch (err) {
-      return { kind: 'error', message: err instanceof Error ? err.message : String(err) };
+      // A provider-level failure (Gemini 503, timeout, network) leaves the
+      // unanswered user turn as the tail of `messages`. Remember that: the
+      // caller may repeat exactly that turn instead of retyping it.
+      pendingRetry = true;
+      return {
+        kind: 'error',
+        message: err instanceof Error ? err.message : String(err),
+        retryable: err instanceof AiRequestError && err.retryable,
+      };
     }
+    pendingRetry = false;
     const raw = reply.trim();
     // Tolerate a markdown code fence around the file (models often wrap).
     const stripped = stripCodeFence(raw).trim();
     if (stripped === '') {
-      return { kind: 'error', message: 'Der KI-Assistent hat eine leere Antwort geliefert.' };
+      return {
+        kind: 'error',
+        message: 'Der KI-Assistent hat eine leere Antwort geliefert.',
+        retryable: false,
+      };
     }
     // A finished recipe file starts with the front-matter delimiter (Task A3).
     // A reply that leads with prose but still contains a `---`…`## Zubereitung`
@@ -365,6 +409,7 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
       // The repair budget belongs to one user turn — a long conversation with
       // several drafts must not accumulate it across turns.
       repairRounds = 0;
+      pendingRetry = false;
       // In an edit session the first turn already revises the transferred
       // original, so it carries the same change-request label as a later
       // revision (a clarifying answer keeps it, which is harmless).
@@ -375,7 +420,23 @@ export function createAiCreateSession(options: AiCreateSessionOptions): AiCreate
 
     async sendRevision(userText: string): Promise<AiCreateStepResult> {
       repairRounds = 0;
+      pendingRetry = false;
       messages.push({ role: 'user', content: `${CHANGE_PREFIX}\n${userText}` });
+      return runTurn();
+    },
+
+    async retryLastTurn(): Promise<AiCreateStepResult> {
+      if (!pendingRetry) {
+        return {
+          kind: 'error',
+          message: 'Es liegt keine fehlgeschlagene Anfrage vor, die wiederholt werden könnte.',
+          retryable: false,
+        };
+      }
+      // Nothing is appended: the failed user turn already sits at the end of
+      // the history, and runTurn sends the history as it is. The repair budget
+      // is untouched (a transport failure never consumed a round).
+      pendingRetry = false;
       return runTurn();
     },
 

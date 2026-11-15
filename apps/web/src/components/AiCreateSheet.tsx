@@ -84,7 +84,7 @@ import {
 } from '../ai/aiContext';
 import type { RecipeSpecifications } from '../ai/aiContext';
 import { createAiCreateSession } from '../ai/createRecipeDraft';
-import type { AiCreateSession } from '../ai/createRecipeDraft';
+import type { AiCreateSession, AiCreateStepResult } from '../ai/createRecipeDraft';
 import { createAiClient } from '../ai/client';
 import { draftToEditText, readDraft } from '../drive/draftStorage';
 import {
@@ -525,7 +525,17 @@ export default function AiCreateSheet({
   /** „KI-Verhalten“: ask for clarification by default (current behaviour). */
   const [replyMode, setReplyMode] = useState<ReplyMode>('clarify');
   const [busy, setBusy] = useState(false);
+  /** True while the running request is a repeat of a failed turn (label of the
+   *  submit button); only meaningful together with {@link busy}. */
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * True when the last AI call failed transiently (Gemini 503, timeout, a
+   * network drop) and the unanswered turn can be repeated. The submit button
+   * becomes „Erneut versuchen“ while this is set *and* the composer is empty;
+   * typing a new prompt returns it to „Senden“ and clears the flag.
+   */
+  const [retryPending, setRetryPending] = useState(false);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   /** The validated draft the conversation is currently working on. It is the
    *  newest draft card in the transcript, so the card's position and the
@@ -690,11 +700,47 @@ export default function AiCreateSheet({
     setKeyRemembered(false);
   };
 
+  /**
+   * Applies one step result to the transcript and the error area — shared by a
+   * fresh turn and by a repeat of a failed one, which must look identical.
+   */
+  const applyResult = (result: AiCreateStepResult): void => {
+    if (result.kind === 'question') {
+      setEntries((current) => [
+        ...current,
+        { kind: 'message', role: 'assistant', content: result.text },
+      ]);
+      setRetryPending(false);
+      return;
+    }
+    if (result.kind === 'draft') {
+      // The AI's own prose before the file (rule A2) belongs in the transcript;
+      // on a revision it is what explains the change. The card then follows
+      // that prose at the point of this turn.
+      setEntries((current) => {
+        const next: ChatEntry[] = [...current];
+        if (result.preamble !== '') {
+          next.push({ kind: 'message', role: 'assistant', content: result.preamble });
+        }
+        return appendDraft(next, result.recipe);
+      });
+      setRetryPending(false);
+      return;
+    }
+    setError(result.message);
+    // Only a transient provider failure earns the „Erneut versuchen“ button; a
+    // malformed request or a blocked answer would fail again identically.
+    setRetryPending(result.retryable);
+  };
+
   /** Sends the description / source text / answer and advances the conversation. */
   const handleSend = async (): Promise<void> => {
     if (session === null || busy || refreshing) return;
     if (description.trim() === '' && source.trim() === '') return;
     setError(null);
+    // A new prompt supersedes a pending repeat: the failed turn is no longer
+    // the tail of the history once this one is appended.
+    setRetryPending(false);
     // The source field belongs to the first turn only; once a conversation is
     // running it is empty (the reply field replaces both create fields).
     const userText = composeUserMessage(description, source);
@@ -706,29 +752,34 @@ export default function AiCreateSheet({
     setBusy(true);
     try {
       const result = revise ? await session.sendRevision(userText) : await session.send(userText);
-      if (result.kind === 'question') {
-        setEntries((current) => [
-          ...current,
-          { kind: 'message', role: 'assistant', content: result.text },
-        ]);
-      } else if (result.kind === 'draft') {
-        // The AI's own prose before the file (rule A2) belongs in the
-        // transcript; on a revision it is what explains the change. The card
-        // then follows that prose at the point of this turn.
-        setEntries((current) => {
-          const next: ChatEntry[] = [...current];
-          if (result.preamble !== '') {
-            next.push({ kind: 'message', role: 'assistant', content: result.preamble });
-          }
-          return appendDraft(next, result.recipe);
-        });
-      } else {
-        setError(result.message);
-      }
+      applyResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  /**
+   * Repeats the last turn after a transient failure (Gemini overload, timeout,
+   * network drop). The session kept the unanswered turn in its history, so this
+   * sends the identical request — no second user bubble appears in the
+   * transcript, and the user does not have to retype anything.
+   */
+  const handleRetry = async (): Promise<void> => {
+    if (session === null || busy || refreshing || !retryPending) return;
+    setError(null);
+    setRetryPending(false);
+    setRetrying(true);
+    setBusy(true);
+    try {
+      const result = await session.retryLastTurn();
+      applyResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      setRetrying(false);
     }
   };
 
@@ -752,7 +803,9 @@ export default function AiCreateSheet({
     if (event.key !== 'Enter' || !event.ctrlKey) return;
     if (!isTextEntryField(event.target)) return;
     event.preventDefault();
-    void handleSend();
+    // Same decision as the submit button: repeat a failed turn when nothing new
+    // was typed, send the prompt otherwise.
+    handleSubmit();
   };
 
   /** True once the user sent the first prompt — from then on only a single
@@ -764,6 +817,34 @@ export default function AiCreateSheet({
    *  handoff signal, which is cleared when the refresh finished). */
   const refreshing = handoff !== null && session !== null;
   const canSend = !busy && !refreshing && (description.trim() !== '' || source.trim() !== '');
+
+  /**
+   * True when the submit button repeats the failed turn instead of sending: the
+   * failure was transient and the composer holds no new prompt. Typing a new
+   * prompt gives the send path priority (and clears the pending repeat).
+   */
+  const canRetry =
+    retryPending && !busy && !refreshing && description.trim() === '' && source.trim() === '';
+
+  /** Single entry point for the submit button and the Ctrl+Enter shortcut. */
+  const handleSubmit = (): void => {
+    if (canRetry) {
+      void handleRetry();
+      return;
+    }
+    void handleSend();
+  };
+
+  /** Label of the submit button, which doubles as the repeat action. */
+  const submitLabel = busy
+    ? retrying
+      ? 'Erneut versuchen …'
+      : 'Senden …'
+    : refreshing
+      ? 'Kontext wird aktualisiert …'
+      : canRetry
+        ? 'Erneut versuchen'
+        : 'Senden';
 
   /**
    * Placeholder of the shared prompt field. Before the first turn an edit
@@ -1003,7 +1084,7 @@ export default function AiCreateSheet({
                 onKeyDown={handleComposerKeyDown}
                 onSubmit={(event) => {
                   event.preventDefault();
-                  void handleSend();
+                  handleSubmit();
                 }}
               >
                 {conversationStarted || isEdit ? (
@@ -1199,10 +1280,10 @@ export default function AiCreateSheet({
                   <button
                     type="submit"
                     className="primary-button"
-                    disabled={!canSend}
+                    disabled={!canSend && !canRetry}
                     aria-busy={busy || refreshing}
                   >
-                    {busy ? 'Senden …' : refreshing ? 'Kontext wird aktualisiert …' : 'Senden'}
+                    {submitLabel}
                   </button>
                 </div>
 
