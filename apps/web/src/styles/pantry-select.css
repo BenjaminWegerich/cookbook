@@ -508,9 +508,9 @@
   min-width: 0;
 }
 
-/* The place chips and the quiet „Ignorieren“ share one wrapping row, the same
-   arrangement the shopping-sort page gives its store chips and parking action:
-   the exception sits beside the values, never below the whole picker. */
+/* The place chips and the dashed „Ignorieren“ chip share one wrapping row, the
+   same arrangement the shopping-sort page gives its store chips and parking
+   actions: the exception sits beside the values, never below the whole picker. */
 .pantry-place-row {
   display: flex;
   flex-wrap: wrap;
@@ -524,13 +524,13 @@
   flex: 1 1 auto;
 }
 
-/* „Ignorieren“ is a quiet text button, never a chip: a place is a value, the
-   skip is the row's other answer. The pressed state only changes the colour and
-   the label („Ignoriert“), like the shopping-sort parking actions. */
+/* „Ignorieren“ wears the dashed clear-chip shape of „Entfernen“ (leading
+   symbol + label): a place is a value, the skip is the row's other answer. Its
+   hit area comes from the shared chip ring, so no extra height or padding. The
+   pressed state only changes the colour and the label („Ignoriert“), like the
+   shopping-sort parking actions. */
 .pantry-ignore {
   justify-self: start;
-  min-height: var(--control-height);
-  padding-inline-start: 0;
 }
 
 .pantry-ignore[aria-pressed='true'] {

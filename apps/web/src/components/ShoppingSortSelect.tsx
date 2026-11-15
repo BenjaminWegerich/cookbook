@@ -618,12 +618,13 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
   }
 
   /**
-   * The row's two placement answers — quiet text buttons, deliberately not
-   * pills, so they can never be mistaken for one of the store chips. They sit
-   * together in one group: while the stop fields are shown the group shares the
-   * „Markt“ chips row; when that field is hidden (a known item, a parked row or
-   * no route) it follows the note in the same slot. The pressed answer names the
-   * state, and pressing the other end moves the line there.
+   * The row's two placement answers — dashed clear chips with a leading symbol,
+   * the same shape as the „Entfernen“ chips, so they read as the row's "none of
+   * these" answers rather than as values of the stop. They sit together in one
+   * group: while the stop fields are shown the group shares the „Markt“ chips
+   * row; when that field is hidden (a known item, a parked row or no route) it
+   * follows the note in the same slot. The pressed answer names the state, and
+   * pressing the other end moves the line there.
    */
   function renderPlacementActions(entry: UnresolvedEntry): ReactNode {
     const placement = placements.get(entry.text);
@@ -631,20 +632,20 @@ function ShoppingSortSelect({ items, onClose, onSort, ref }: ShoppingSortSelectP
       <div className="sort-parking" role="group" aria-label={`Einsortieren für ${entry.text}`}>
         <button
           type="button"
-          className="text-button sort-parking-action"
+          className="chip chip-clear sort-parking-action"
           aria-pressed={placement === 'top'}
           onClick={() => togglePlacement(entry.text, 'top')}
         >
-          <ArrowUpIcon className="button-icon" optical={20} />
+          <ArrowUpIcon className="chip-icon" optical={20} />
           {placement === 'top' ? 'Oben einsortiert' : 'Oben einsortieren'}
         </button>
         <button
           type="button"
-          className="text-button sort-parking-action"
+          className="chip chip-clear sort-parking-action"
           aria-pressed={placement === 'bottom'}
           onClick={() => togglePlacement(entry.text, 'bottom')}
         >
-          <ArrowDownIcon className="button-icon" optical={20} />
+          <ArrowDownIcon className="chip-icon" optical={20} />
           {placement === 'bottom' ? 'Unten einsortiert' : 'Unten einsortieren'}
         </button>
       </div>

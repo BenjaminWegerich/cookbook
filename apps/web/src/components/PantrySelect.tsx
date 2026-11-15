@@ -37,8 +37,8 @@
  *
  * **A missing „Lagerort“ is entered here** (decided with the user): the row of
  * an ingredient with no place carries the same inline picker as „Einkaufsliste
- * sortieren“ — a „Lagerort“ caption, the built-in place chips below it, and a
- * quiet „Ignorieren“ beside them. Choosing a chip writes the ingredient master
+ * sortieren“ — a „Lagerort“ caption, the built-in place chips below it, and the
+ * dashed „Ignorieren“ chip beside them. Choosing a chip writes the master
  * data immediately (the shared `useStoragePlaceAssignment`); an **existing**
  * place is deliberately not editable here — the ingredient master-data sheet is
  * the place for that. „Ignorieren“ writes nothing and is remembered for this

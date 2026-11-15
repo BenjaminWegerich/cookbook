@@ -101,14 +101,12 @@
   gap: var(--space-4);
 }
 
-/* A placement answer is a quiet text button, never a chip: the store chips are
-   values of the stop, while this is the row's exception answer. It keeps the
-   action height for its whole line, so the target stays thumb-reach tall
-   without a visible box, and its label lines up with the field captions. */
+/* A placement answer wears the dashed clear-chip shape of „Entfernen“ (leading
+   symbol + label): the store chips are values of the stop, while this is the
+   row's exception answer. The shared chip ring gives it the thumb-reach target,
+   so no extra height or padding is needed. */
 .sort-parking-action {
   justify-self: start;
-  min-height: var(--control-height);
-  padding-inline-start: 0;
 }
 
 /* Parked (visible only after unfolding a folded row): the label already says

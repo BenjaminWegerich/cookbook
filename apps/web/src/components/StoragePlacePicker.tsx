@@ -7,7 +7,9 @@
  * the user: the pantry enters missing places, it does not edit existing ones).
  * Picking a chip writes the place immediately (see
  * ../hooks/useStoragePlaceAssignment); „Ignorieren“ writes nothing and only lets
- * this visit collapse the row without a place.
+ * this visit collapse the row without a place. It carries the same dashed
+ * clear-chip shape as the „Entfernen“ chips (leading symbol + label), so both
+ * rows' "none of these" answers look alike.
  *
  * The picker does not own the row's collapse: the page decides whether the stock
  * is confirmed too (see PantrySelect / SubRecipeSelect).
@@ -16,6 +18,8 @@
  */
 
 import { STORAGE_PLACES } from '@cookbook/core';
+
+import { VisibilityOffIcon } from './icons';
 
 interface StoragePlacePickerProps {
   /** The ingredient the place belongs to (the caption's accessible context). */
@@ -67,17 +71,19 @@ function StoragePlacePicker({
             </button>
           ))}
         </div>
-        {/* The exception action is a quiet text button, never a chip: a place is
-            a value, skipping is the row's other answer (the same distinction the
-            shopping sort page draws between its store chips and parking). */}
+        {/* The exception action wears the dashed clear-chip shape of „Entfernen“
+            — leading symbol + label — so "none of these" reads as the row's
+            other answer without competing with the place chips. The pressed
+            state only changes colour and label („Ignoriert“). */}
         <button
           type="button"
-          className="text-button pantry-ignore"
+          className="chip chip-clear pantry-ignore"
           aria-pressed={ignored}
           disabled={saving}
           onClick={onToggleIgnore}
         >
-          {ignored ? 'Ignoriert' : 'Ignorieren'}
+          <VisibilityOffIcon className="chip-icon" optical={20} />
+          <span>{ignored ? 'Ignoriert' : 'Ignorieren'}</span>
         </button>
       </div>
       {saving && (
