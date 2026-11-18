@@ -390,10 +390,18 @@
 /* The visible chip row: one line, no wrap, no scroll. Chips that no longer fit
    are hidden (components/StockChips measures how many do), and the "andere"
    chip takes the last visible slot. `position: relative` anchors the off-screen
-   measurement strip (below) to the wrapper. */
+   measurement strip (below) to the wrapper.
+   The strip's inline axis is clipped here, for the reason the suggestion row
+   documents in editor.css: an out-of-flow strip still adds to its scroll
+   container's scrollable overflow, and at `width: max-content` it is wider than
+   a phone — inside the pantry page that would make the page pan sideways into
+   blank surface. Only the inline axis is clipped (`clip`, with the block axis
+   visible), so hit-area rings above and below the chips stay intact. */
 .stock-chips-wrap {
   position: relative;
   min-width: 0;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .stock-chips {

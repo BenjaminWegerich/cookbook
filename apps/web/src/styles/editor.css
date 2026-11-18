@@ -461,10 +461,20 @@
 /* Adaptive suggestion row (components/SuggestionChips): exactly one measured
    line. Chips that do not fit are hidden — no wrap, no scroll and no "andere"
    chip (decided with the user). The wrapper anchors the off-screen measurement
-   strip that supplies the chip widths. */
+   strip that supplies the chip widths.
+   The strip is out of flow but still counts toward the scrollable overflow of
+   its nearest scroll container: a sheet is one (`.sheet` scrolls vertically,
+   which makes its horizontal axis clip/scroll too). At `width: max-content` the
+   strip is wider than a phone, so without a guard the sheet could be panned
+   sideways into nothing but blank surface — the "hidden whitespace on the
+   right" bug. Clipping the strip's inline axis at the wrapper ends that at the
+   source. The block axis stays visible (`clip`, not `hidden`), so the chips'
+   hit-area rings and focus outlines are not cut. */
 .suggestion-chips-wrap {
   position: relative;
   min-width: 0;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .suggested-chips.suggested-chips-one-line {
