@@ -1575,8 +1575,10 @@ const STYLES = `
      other text — the captions included — stays in the theme's body face
      (§4.8). */
   h1, .screen-title, .step-title { font-family: var(--font-heading); }
+  /* The title hyphenates like the app's cards; overflow-wrap remains the
+     last-resort break for an unbreakable string. */
   h1 { font-size: var(--text-xl); line-height: var(--leading-xl); font-weight: 600; margin: var(--space-5) 0 var(--space-2);
-       overflow-wrap: anywhere; }
+       overflow-wrap: anywhere; hyphens: auto; hyphenate-limit-chars: 6 3 3; }
   .screen.intro.no-photo h1 { margin-top: 0; }
   .description { margin: var(--space-3) 0 0; overflow-wrap: anywhere; }
   /* Times and the Cookbook brand share the recipe overview's caption/value look:

@@ -466,6 +466,12 @@
   min-width: 0;
   overflow: hidden;
   overflow-wrap: anywhere;
+  /* German compound titles ("Schupfnudelpfanne") get a visible hyphen at the
+     line end. The line is filled greedily, so a compound title normally breaks
+     at its seam ("Schupfnudel-" / "pfanne") rather than one syllable earlier.
+     The limit keeps two-letter fragments off both sides of the hyphen. */
+  hyphens: auto;
+  hyphenate-limit-chars: 6 3 3;
 }
 
 /* Without a photo the title is the card's only content, so it may use the room
