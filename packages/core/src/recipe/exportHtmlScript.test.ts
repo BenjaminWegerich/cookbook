@@ -171,10 +171,62 @@ const HISTORY = {
   },
 };
 
+/**
+ * The Screen Wake Lock API as the script meets it, with a record of the
+ * requests. `drop()` is the browser taking the lock away (a hidden tab, a
+ * locked phone): it deactivates the sentinel and fires its `release` listener,
+ * which is the only signal the script gets.
+ */
+interface WakeLockStub {
+  /** What the page asked for, one entry per request ("screen"). */
+  requests: string[];
+  /** True while a lock the page took is still active. */
+  held: () => boolean;
+  /** Drops the held lock, as the browser does when the tab is hidden. */
+  drop: () => void;
+  /** The `navigator` the script runs against. */
+  navigator: unknown;
+}
+
+/** Builds a wake-lock stub whose requests a test can count and drop. */
+function createWakeLockStub(): WakeLockStub {
+  const requests: string[] = [];
+  let release: (() => void) | null = null;
+  let held = false;
+  const navigator = {
+    wakeLock: {
+      request: (type: string): Promise<unknown> => {
+        requests.push(type);
+        held = true;
+        return Promise.resolve({
+          addEventListener: (event: string, handler: () => void): void => {
+            if (event === 'release') release = handler;
+          },
+        });
+      },
+    },
+  };
+  return {
+    requests,
+    navigator,
+    held: () => held,
+    drop: () => {
+      held = false;
+      release?.();
+    },
+  };
+}
+
 /** The parsed generated page with the elements the script queries. */
 interface Page {
   document: unknown;
   window: unknown;
+  /** The wake-lock stub, so a test can count the page's requests. */
+  wakeLock: WakeLockStub;
+  /** Fires the document's click listeners, as a tap anywhere on the page. */
+  click: (event?: unknown) => void;
+  /** Changes the document's visibility and fires `visibilitychange`. */
+  visibility: (hidden: boolean) => void;
   /** The size-scoped check lists, in document order. */
   checkLists: ElementStub[];
   /** The size chips, so a test can press one. */
@@ -255,10 +307,16 @@ function buildPage(html: string, hash: string, injected?: string): Page {
   // Every check list's boxes, so the size-change reset can be observed.
   const allBoxes = checkLists.flatMap((list) => (list.boxes = [new ElementStub()]));
   const popstate: ((event: unknown) => void)[] = [];
-  // The script binds its touch listeners on the document; keep them so a test
-  // can drive a finger across the page.
+  // The wake lock is a document-level behaviour of the script (§5.11): the
+  // first tap asks for it, so the stub records the requests.
+  const wakeLock = createWakeLockStub();
+  // The script binds its touch and click listeners on the document; keep them
+  // so a test can drive a finger (or a tap) across the page.
   const documentListeners: Record<string, ((event: unknown) => void)[]> = {};
   const document = {
+    // The page starts visible, as a freshly opened tab does; a test can hide it
+    // to model the phone going away and coming back.
+    hidden: false,
     querySelectorAll: (selector: string): ElementStub[] => {
       switch (selector) {
         case '.size-scoped':
@@ -337,6 +395,7 @@ function buildPage(html: string, hash: string, injected?: string): Page {
   return {
     document,
     window,
+    wakeLock,
     checkLists,
     chips: [...servingChips, ...yieldChips],
     stepDown,
@@ -348,6 +407,13 @@ function buildPage(html: string, hash: string, injected?: string): Page {
     stepTitle,
     counter,
     popstate,
+    click: (event = {}) => {
+      for (const handler of documentListeners.click ?? []) handler(event);
+    },
+    visibility: (hidden) => {
+      document.hidden = hidden;
+      for (const handler of documentListeners.visibilitychange ?? []) handler({});
+    },
     touch: (type, event) => {
       for (const handler of documentListeners[type] ?? []) handler(event);
     },
@@ -378,8 +444,18 @@ function runPage(
   HISTORY.stack = [{ state: restored }];
   HISTORY.pointer = 0;
   HISTORY.page = page;
-  new Function('document', 'window', 'history', script)(page.document, page.window, HISTORY);
+  new Function('document', 'window', 'history', 'navigator', script)(
+    page.document,
+    page.window,
+    HISTORY,
+    page.wakeLock.navigator,
+  );
   return page;
+}
+
+/** Lets the wake lock's promise callbacks run before a test reads the stub. */
+function flush(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function visibleSizes(recipe: Recipe, hash: string, injected?: string): (string | null)[] {
@@ -566,6 +642,59 @@ describe('embedded script — swipe navigation (§6.6)', () => {
     page.touch('touchcancel', {});
     page.touch('touchend', { changedTouches: [{ clientX: 80, clientY: 300 }] });
     expect(page.screens.intro.hasClass('active')).toBe(true);
+  });
+});
+
+describe('embedded script — the screen wake lock (§5.11)', () => {
+  it('asks for the lock on the first tap, not on load', async () => {
+    const page = runPage(DISH, '');
+    // Opening the link and reading the intro must not hold the display on; the
+    // first tap (in practice the bar's first "Weiter", which leads to Zutaten)
+    // is what arms the lock.
+    expect(page.wakeLock.requests).toEqual([]);
+    page.visibility(false);
+    expect(page.wakeLock.requests).toEqual([]);
+    page.click();
+    await flush();
+    expect(page.wakeLock.requests).toEqual(['screen']);
+  });
+
+  it('holds one lock through the first "Weiter" and the later taps', async () => {
+    const page = runPage(DISH, '');
+    page.click();
+    await flush();
+    page.forwardButton.fire('click'); // intro → Zutaten
+    page.forwardButton.fire('click'); // Zutaten → step 1 (cooking)
+    page.click(); // a check row
+    await flush();
+    // A second request while the lock is held would be a second system lock;
+    // the flow's moves must not take one.
+    expect(page.wakeLock.requests).toEqual(['screen']);
+    expect(page.wakeLock.held()).toBe(true);
+  });
+
+  it('asks again after the browser dropped the lock', async () => {
+    // The browser drops the lock when the tab is hidden (a locked phone, an
+    // app switch). The next tap must take it again — on iOS the tap is the only
+    // gesture that can.
+    const page = runPage(DISH, '');
+    page.click();
+    await flush();
+    page.wakeLock.drop();
+    page.click();
+    await flush();
+    expect(page.wakeLock.requests).toEqual(['screen', 'screen']);
+  });
+
+  it('re-takes the lock when the tab comes back to the foreground', async () => {
+    const page = runPage(DISH, '');
+    page.click();
+    await flush();
+    page.visibility(true);
+    page.wakeLock.drop();
+    page.visibility(false);
+    await flush();
+    expect(page.wakeLock.requests).toEqual(['screen', 'screen']);
   });
 });
 

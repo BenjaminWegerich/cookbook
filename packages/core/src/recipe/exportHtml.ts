@@ -1489,6 +1489,47 @@ const NAVIGATION_SCRIPT = `
   }, { passive: true });
   document.addEventListener('touchcancel', function () { touchStart = null; }, { passive: true });
 
+  // ---- Screen wake lock: the phone must not dim or lock while cooking ----
+  // The cooking view is read at the stove, often with wet hands, and the bar's
+  // first "Weiter" leads to the Zutaten screen — the step whose work (collecting
+  // the ingredients) needs the screen to stay on. So the lock is taken on the
+  // first tap and kept for the rest of the visit: no screen or step change
+  // releases it, only the browser (a hidden tab, a locked phone) or the power
+  // button. There is deliberately no control in the page — the power button is
+  // the switch (§5.11).
+  //
+  // The first tap, not the load, is the trigger for two reasons: Safari grants a
+  // wake lock only from a user gesture, and a page the cook merely glanced at
+  // should not hold the display on. A browser without the API simply keeps its
+  // own timeout — the export is otherwise unchanged.
+  //
+  // A release by the system is not final: the return to the tab asks again (no
+  // gesture needed on Android), and on iOS, which needs one, the next tap does.
+  var wakeWanted = false;
+  var wakeLock = null;
+  function acquireWakeLock() {
+    if (!wakeWanted || wakeLock !== null) { return; }
+    if (!navigator.wakeLock || typeof navigator.wakeLock.request !== 'function') { return; }
+    navigator.wakeLock.request('screen').then(function (sentinel) {
+      wakeLock = sentinel;
+      sentinel.addEventListener('release', function () { wakeLock = null; });
+    }).catch(function () {
+      // A refusal (power saver, unsupported) is nothing the cook can fix; the
+      // next tap tries again and the device's own timeout stays in charge.
+      wakeLock = null;
+    });
+  }
+  // Any tap arms it, in the capture phase so the request lands in the same
+  // gesture as the tap whatever element the finger hit (the bar's button, a
+  // size chip, a check row). The first tap in the flow is the first "Weiter".
+  document.addEventListener('click', function () {
+    wakeWanted = true;
+    acquireWakeLock();
+  }, true);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) { acquireWakeLock(); }
+  });
+
   // A check-list row is tappable as a whole to toggle the check; the sub-recipe
   // name link is the one exception (it opens the ingredient recipe, it never
   // toggles). The checkbox toggles natively.

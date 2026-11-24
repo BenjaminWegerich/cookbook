@@ -1263,6 +1263,12 @@ left goes forward and a swipe right goes back on every screen; the Escape key an
 Back button go to the previous step, and from step 1 to the Zutaten screen (browser Forward
 returns to the next step). Tapping the step text does not advance.
 
+**The screen stays on.** The first tap on the page takes a Screen Wake Lock, so the display
+neither dims nor locks while the ingredients are collected and the steps are cooked; no screen
+or step change releases it, and the page carries no control — the power button is the switch.
+A page that was only opened and read takes no lock, and a browser without the API keeps its own
+timeout.
+
 **Going back.** Every back action moves one node at a time: from a step to the previous step,
 from step 1 to Zutaten, from Zutaten to the intro. Changing the size on the intro discards the
 checkmarks.
