@@ -97,12 +97,12 @@ export interface IngredientSheetResult {
   readonly entries: readonly IngredientMapping[];
   readonly precision: PrecisionLevel;
   /**
-   * The chosen kitchen storage place, or null when the ingredient is not sorted
+   * The kitchen storage place, or null when the ingredient is not sorted
    * into the kitchen (see docs/storage_places.csv).
    */
   readonly storagePlace: string | null;
-  /** The chosen shopping stop, or null when the ingredient is not bought. */
-  readonly stop: ShoppingStop | null;
+  /** The chosen shopping locations, empty when the ingredient is not bought. */
+  readonly stops: readonly ShoppingStop[];
   /** The complete synonym list the item should carry. */
   readonly variants: readonly string[];
 }
