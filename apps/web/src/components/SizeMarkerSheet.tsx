@@ -2,19 +2,21 @@
  * Size-marker sheet (bottom sheet) for the recipe editor.
  *
  * A size marker is display-only equipment in a step's prose
- * (`{{1 26 cm Backring|size}}`): it scales with the recipe's size but never
- * enters the ingredient list. This sheet edits the *written* arrangement — the
- * number of molds and the nominal size of one mold. The recipe renderer derives
- * the arrangement for every other serving count (e.g. 8 → 12 servings turns
- * `1 26er Backring` into `2 22er Backringe`).
+ * (`{{1 26 cm Backring|size|case:akk}}`): it scales with the recipe's size but
+ * never enters the ingredient list. This sheet edits the *written* arrangement —
+ * the number of molds, the nominal size of one mold and the grammatical case
+ * of the sentence slot. The recipe renderer derives the arrangement for every
+ * other serving count (e.g. 8 → 12 servings turns `einen 26er Backring` into
+ * `zwei 22er Backringe`); the reference readout shows the bare label (`26er
+ * Backring`, `2 22er Backringe`).
  *
  * The form deliberately offers no precision: a size marker has no BQ/AQ
- * candidate to score. Its scaling law and allowed sizes come from the marker's
- * master data (`docs/size_markers.csv`).
+ * candidate to score. Its scaling law, allowed sizes and grammatical gender
+ * come from the marker's master data (`docs/size_markers.csv`).
  *
  * It does offer the reference role: a flagged marker is shown in the recipe's
- * size readout (e.g. "12 Portionen (1 22er Backring)"), because the equipment
- * is often the best sanity check of a portion size and it never enters the
+ * size readout (e.g. "12 Portionen (26er Backring)"), because the equipment is
+ * often the best sanity check of a portion size and it never enters the
  * ingredient list, where the reference star lives.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
@@ -29,8 +31,10 @@ import {
   sizeMarkerFallbackText,
   sizeMarkerFor,
   type SizeArtifact,
+  type SizeMarkerCase,
 } from '@cookbook/core';
 
+import InfoHint from './InfoHint';
 import { StarFilledIcon, StarIcon } from './icons';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
@@ -70,6 +74,14 @@ function SizeMarkerSheet({
     }
     return openingMarker?.defaultSize ?? openingMarker?.sizes[0] ?? 0;
   });
+  /**
+   * The grammatical case of the prose slot. A fresh marker starts in the
+   * accusative (the common "für einen / in einen" recipe phrasing); a legacy
+   * artifact without a case also starts there and is upgraded on confirm.
+   */
+  const [grammaticalCase, setGrammaticalCase] = useState<SizeMarkerCase>(
+    initial?.grammaticalCase ?? 'akk',
+  );
   /** The reference role; restored when editing and written on confirm. */
   const [reference, setReference] = useState(initial?.reference === true);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +92,9 @@ function SizeMarkerSheet({
   const preview =
     definition === undefined || !countValid || !sizeValid
       ? null
-      : (resolveSizeMarker({ marker: definition.marker, count, size }, 1)?.text ??
+      : (resolveSizeMarker({ marker: definition.marker, count, size, grammaticalCase }, 1, {
+          surface: 'prose',
+        })?.text ??
         sizeMarkerFallbackText({
           marker: definition.marker,
           count,
@@ -118,6 +132,7 @@ function SizeMarkerSheet({
         count,
         size,
         unit: definition.unit,
+        grammaticalCase,
         ...(reference ? { reference: true as const } : {}),
       },
       mode === 'edit' ? 'update' : 'add',
@@ -199,6 +214,39 @@ function SizeMarkerSheet({
             </div>
           )}
         </div>
+
+        {/* The case rule is read once and would cost a line on every visit;
+            the caption's (i) toggle keeps it available without pushing the
+            preview down (docs/ui_patterns.md §3). */}
+        <InfoHint
+          className="field"
+          label="Fall"
+          hintLabel="Hinweis zum grammatischen Fall"
+          hint={<>Der Fall folgt dem Satz: „in einen“ (Akkusativ) oder „in einem“ (Dativ).</>}
+        >
+          <div className="quantity-chips" role="group" aria-label="Grammatischen Fall wählen">
+            {(
+              [
+                ['nom', 'Nominativ'],
+                ['akk', 'Akkusativ'],
+                ['dat', 'Dativ'],
+              ] as const
+            ).map(([candidate, label]) => (
+              <button
+                key={candidate}
+                type="button"
+                className={candidate === grammaticalCase ? 'chip chip-active' : 'chip'}
+                aria-pressed={candidate === grammaticalCase}
+                onClick={() => {
+                  setGrammaticalCase(candidate);
+                  setError(null);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </InfoHint>
 
         <div className="field">
           <span className="field-label">Vorschau</span>

@@ -250,7 +250,7 @@ the user), so an exact unit never changes what is stored.
   step rows' displayed values, not an independent optimization. A unitless
   artifact uses only the BQ-only branch (no ingredient, no AU); see
   [quantity_scaling.md](quantity_scaling.md) §8.
-- Size markers (`{{1 26 cm Backring|size}}`) are **not** additional quantities:
+- Size markers (`{{1 26 cm Backring|size|case:akk}}`) are **not** additional quantities:
   they are display-only equipment whose scale follows the recipe factor, have
   their own master data ([size_markers.csv](size_markers.csv)) and never carry a
   precision. See [quantity_scaling.md](quantity_scaling.md) §7, “Size markers”.

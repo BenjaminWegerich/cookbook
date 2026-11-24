@@ -23,7 +23,7 @@ prep_time: 20 min
 ---
 ## Zubereitung
 1. - 1000 g Quark
-   Den Teig in {{1 26 cm Backring|size|reference}} backen und mit {{1/2|reference}} Zitrone mischen.
+   Den Teig in {{1 26 cm Backring|size|case:dat|reference}} backen und mit {{1/2|reference}} Zitrone mischen.
 2. - 200 g Butter
    Butter in {{2 20 cm Backring|size}} schmelzen.
 `);
@@ -41,6 +41,7 @@ prep_time: 20 min
           count: 1,
           size: 26,
           unit: 'cm',
+          grammaticalCase: 'dat',
           reference: true,
         },
       },
@@ -75,15 +76,33 @@ describe('artifactDisplay', () => {
   });
 
   it('applies the size marker scaling law instead of the linear factor', () => {
-    // The written arrangement at factor 1 keeps its identity.
-    expect(
-      artifactDisplay({ kind: 'size', marker: 'Backring', count: 1, size: 26, unit: 'cm' }, 1).text,
-    ).toBe('1 26er Backring');
+    const written = {
+      kind: 'size',
+      marker: 'Backring',
+      count: 1,
+      size: 26,
+      unit: 'cm',
+      grammaticalCase: 'akk',
+    } as const;
+    // The written arrangement at factor 1 keeps its identity; the prose
+    // surface inflects the article from the stored case.
+    expect(artifactDisplay(written, 1, 'prose').text).toBe('einen 26er Backring');
     // 8 → 12 servings (factor 1.5) splits into two 22 cm molds, not 1.5 × 26.
-    expect(
-      artifactDisplay({ kind: 'size', marker: 'Backring', count: 1, size: 26, unit: 'cm' }, 1.5)
-        .text,
-    ).toBe('2 22er Backringe');
+    expect(artifactDisplay(written, 1.5, 'prose').text).toBe('zwei 22er Backringe');
+  });
+
+  it('renders the reference readout as the bare nominative label', () => {
+    const written = {
+      kind: 'size',
+      marker: 'Backring',
+      count: 1,
+      size: 26,
+      unit: 'cm',
+      grammaticalCase: 'dat',
+    } as const;
+    // The readout ignores the prose case and omits a count of 1.
+    expect(artifactDisplay(written, 1, 'readout').text).toBe('26er Backring');
+    expect(artifactDisplay(written, 1.5, 'readout').text).toBe('2 22er Backringe');
   });
 
   it('keeps a unitless count a count', () => {

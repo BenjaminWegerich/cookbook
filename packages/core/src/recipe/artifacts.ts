@@ -9,8 +9,8 @@
  *   {{1500 ml Wasser}}          ingredient mention (name after the unit)
  *   {{100 g}}                   quantity-only mention
  *   {{100}}                     quantity-only mention without a unit
- *   {{1 26 cm Backring|size}}   size marker (equipment, display-only)
- *   {{1 26 cm Backring|size|reference}}   any artifact can be a size reference
+ *   {{1 26 cm Backring|size|case:akk}}   size marker (equipment, display-only)
+ *   {{1 26 cm Backring|size|case:akk|reference}}   any artifact can be a size reference
  *
  * A name always requires a unit (so `{{100 Teig}}` is never ambiguous); a
  * quantity-only mention may omit it (unitless count).
@@ -26,8 +26,13 @@
  *
  * A size marker is the third artifact kind: display-only equipment whose
  * nominal size follows the recipe quantity. It stores the written arrangement
- * (`count`, `size`, marker key) and is resolved by ../sizeMarkers.ts; it never
- * enters an ingredient list and deliberately has no precision.
+ * (`count`, `size`, marker key), the grammatical case of its prose slot and is
+ * resolved by ../sizeMarkers.ts; it never enters an ingredient list and
+ * deliberately has no precision. The case is a `|case:` suffix on the size
+ * artifact (`|size|case:akk`), because the same equipment can appear in
+ * different cases and only the sentence author knows which one applies. A
+ * legacy artifact without `|case:` remains valid and renders the old numeral
+ * prose; the editor writes the suffix from now on.
  *
  * Any artifact may carry the **reference role** (`|reference`): a flagged
  * artifact is shown in the recipe's size readout beside the reference
@@ -49,6 +54,7 @@
 import { aqNotation, isAQValue } from '../aqLadder.js';
 import { formatStoredNumber } from '../quantityValues.js';
 import { parsePrecisionLevel, type PrecisionLevel } from '../precision.js';
+import type { SizeMarkerCase } from '../sizeMarkers.js';
 import type { Unit } from './types.js';
 
 /**
@@ -83,9 +89,9 @@ export interface QuantityArtifact {
 }
 
 /**
- * A size marker (`{{1 26 cm Backring|size}}`) — display-only equipment whose
- * nominal size follows the recipe quantity with the marker's own scaling law.
- * It carries no precision: there is no BQ/AQ candidate to score.
+ * A size marker (`{{1 26 cm Backring|size|case:akk}}`) — display-only equipment
+ * whose nominal size follows the recipe quantity with the marker's own scaling
+ * law. It carries no precision: there is no BQ/AQ candidate to score.
  */
 export interface SizeArtifact {
   kind: 'size';
@@ -97,6 +103,12 @@ export interface SizeArtifact {
   size: number;
   /** Unit as written (e.g. `cm`); the marker definition owns the canonical unit. */
   unit: string;
+  /**
+   * Grammatical case of the prose slot, stored as `|case:akk`. Absent on a
+   * legacy artifact, whose prose keeps the old numeral form. The reference
+   * readout ignores the case (it is a nominative, article-less label).
+   */
+  grammaticalCase?: SizeMarkerCase;
   /**
    * The reference role (storage_format.md §4): when true, the marker's derived
    * equipment line is shown in the recipe's size readout. Stored as a trailing
@@ -252,37 +264,66 @@ export function parseSizePhrase(phrase: string): SizeArtifact | null {
 }
 
 /**
+ * Parses a `|case:` value (nom/akk/dat); case-insensitive, whitespace
+ * tolerated. An unknown value is a malformed artifact, not a silent fallback:
+ * a wrong case would put the wrong article into the prose.
+ */
+function parseSizeMarkerCase(raw: string): SizeMarkerCase | undefined {
+  const value = raw.trim().toLowerCase();
+  return value === 'nom' || value === 'akk' || value === 'dat' ? value : undefined;
+}
+
+/**
  * Parses one `{{ … }}` content into an artifact.
  *
- * Three suffix forms exist, always in this order when combined:
+ * The suffixes exist in this canonical order when combined:
  * - `|size` marks a size marker (`{{1 26 cm Backring|size}}`), whose phrase is
  *   the count/size/unit/marker grammar above;
+ * - `|case:akk` (also nom/dat) is the size marker's grammatical case for the
+ *   prose sentence; it is only valid together with `|size`;
  * - `|precision: high` marks the optional quantity-level precision of a
  *   quantity artifact;
  * - `|reference` marks the reference role (any artifact kind).
  *
- * The reference suffix is stripped first so the other suffixes stay
- * end-anchored: the canonical combined forms are
- * `{{1 26 cm Backring|size|reference}}` and
- * `{{1/2|precision: high|reference}}`.
+ * The reference suffix is stripped first, then the case, so the kind suffix
+ * stays end-anchored: the canonical combined forms are
+ * `{{1 26 cm Backring|size|case:akk|reference}}` and
+ * `{{1/2|precision: high|reference}}`. A legacy `|size` without a case is still
+ * valid and renders the old numeral prose.
  *
  * Returns null when the phrase is invalid, a suffix is unknown or out of
- * order, the precision level is unknown, or a size marker also carries a
- * precision suffix (a size marker has no precision). The caller reports it as
- * a malformed artifact.
+ * order, the case is unknown or appears without a size marker, the precision
+ * level is unknown, or a size marker also carries a precision suffix (a size
+ * marker has no precision). The caller reports it as a malformed artifact.
  */
 export function parseArtifactContent(content: string): TextArtifact | null {
   const referenceMatch = /\|\s*reference\s*$/i.exec(content);
   const hasReference = referenceMatch !== null;
-  const body = referenceMatch === null ? content : content.slice(0, referenceMatch.index).trimEnd();
+  let body = referenceMatch === null ? content : content.slice(0, referenceMatch.index).trimEnd();
+
+  // The case is a parameter of the size artifact, so it is stripped before the
+  // kind suffix and rejected when no `|size` follows.
+  const caseMatch = /\|\s*case:\s*([^|}]*)\s*$/i.exec(body);
+  let grammaticalCase: SizeMarkerCase | undefined;
+  if (caseMatch !== null) {
+    grammaticalCase = parseSizeMarkerCase(caseMatch[1]!);
+    if (grammaticalCase === undefined) return null;
+    body = body.slice(0, caseMatch.index).trimEnd();
+  }
 
   const sizeMatch = /\|\s*size\s*$/i.exec(body);
   if (sizeMatch !== null) {
     const phrase = body.slice(0, sizeMatch.index).trimEnd();
     const size = parseSizePhrase(phrase);
     if (size === null) return null;
-    return hasReference ? { ...size, reference: true } : size;
+    const parsed: SizeArtifact =
+      grammaticalCase === undefined ? size : { ...size, grammaticalCase };
+    return hasReference ? { ...parsed, reference: true } : parsed;
   }
+
+  // `|case:` has no meaning on a quantity artifact: its name is a bare
+  // ingredient mention, not a noun phrase the renderer inflects.
+  if (grammaticalCase !== undefined) return null;
 
   const precisionMatch = /\|precision:\s*([^|}]*)\s*$/i.exec(body);
   const phrase = precisionMatch === null ? body : body.slice(0, precisionMatch.index).trimEnd();
@@ -314,16 +355,19 @@ export function parseArtifactContent(content: string): TextArtifact | null {
  * reports the value as invalid separately. Weighted and named artifacts keep
  * the family-unit decimal form (`{{1500 ml Wasser}}`).
  *
- * A size marker always writes its explicit count and the `|size` suffix:
- * `{{1 26 cm Backring|size}}`. The reference role, when set, is written last on
- * every artifact kind (`{{…|size|reference}}`, `{{…|precision: high|reference}}`).
+ * A size marker writes its explicit count, the `|size` suffix and, when set,
+ * its `|case:akk` suffix: `{{1 26 cm Backring|size|case:akk}}`. The reference
+ * role, when set, is written last on every artifact kind
+ * (`{{…|size|case:akk|reference}}`, `{{…|precision: high|reference}}`).
  */
 export function artifactToText(artifact: TextArtifact): string {
   const reference = artifact.reference === true ? '|reference' : '';
   if (artifact.kind === 'size') {
+    const grammaticalCase =
+      artifact.grammaticalCase === undefined ? '' : `|case:${artifact.grammaticalCase}`;
     return (
       `{{${artifact.count} ${formatStoredNumber(artifact.size)} ` +
-      `${artifact.unit} ${artifact.marker}|size${reference}}}`
+      `${artifact.unit} ${artifact.marker}|size${grammaticalCase}${reference}}}`
     );
   }
   const base =
@@ -341,9 +385,9 @@ export function artifactToText(artifact: TextArtifact): string {
 /**
  * Splits a step text into prose segments and validated artifact spans (in
  * order). Every `{{ … }}` block is classified: a block whose content parses as
- * a quantity phrase or a `|size` marker becomes an artifact; anything else is
- * kept as prose text — the validator (./parse.ts) rejects such blocks before
- * they reach the editor, so a block is never silently dropped here.
+ * a quantity phrase or a size marker (`|size`) becomes an artifact; anything
+ * else is kept as prose text — the validator (./parse.ts) rejects such blocks
+ * before they reach the editor, so a block is never silently dropped here.
  */
 export function splitArtifacts(text: string): { segments: TextSegment[]; spans: ArtifactSpan[] } {
   const segments: TextSegment[] = [];

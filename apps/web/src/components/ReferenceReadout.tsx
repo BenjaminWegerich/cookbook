@@ -4,7 +4,7 @@
  * A reference amount is the sanity check of a chosen size: it moves with
  * everything else and shows the result (docs/recipe_structure.md). Reference
  * ingredients come from the master list; flagged inline artifacts (e.g. a size
- * marker such as `1 22er Backring`) follow them. The readout shows the lines
+ * marker such as `26er Backring`) follow them. The readout shows the lines
  * small and muted, one amount per line, with no caption and no comma between
  * the lines — it is a readout of amounts, not a form field and not a sentence
  * (docs/DESIGN.md §5.11).

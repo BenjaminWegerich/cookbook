@@ -187,8 +187,10 @@ layout). The rows are written in a natural, amount-first phrase:
     precision suffix: `{{1/2|precision: high}}`.
   - Any artifact may carry the **reference role** as its last suffix:
     `{{1500 ml Wasser|reference}}`, `{{1/2|reference}}`,
-    `{{1 26 cm Backring|size|reference}}`, `{{1/2|precision: high|reference}}`.
-    The suffix order is fixed (`|size` / `|precision` first, `|reference` last);
+    `{{1 26 cm Backring|size|case:akk|reference}}`,
+    `{{1/2|precision: high|reference}}`.
+    The suffix order is fixed
+    (`|size` / `|size|case:…` / `|precision` first, `|reference` last);
     a flag out of order or an unknown pipe suffix is a validation error.
   - An artifact that carries a unit is a base quantity: its `MENGE` is the
     unrounded target and its display uses the normal optimizer.
@@ -199,12 +201,21 @@ layout). The rows are written in a natural, amount-first phrase:
   - A malformed `{{…}}` block is a validation error — never silently treated as prose.
 - **Size markers** are display-only equipment mentions inside the step prose:
   ```
-  Den Teig für {{1 26 cm Backring|size}} ausrollen.
+  Den Teig für {{1 26 cm Backring|size|case:akk}} ausrollen.
   ```
-  - Grammar: `{{ COUNT SIZE UNIT MARKER|size }}`, e.g. `{{1 26 cm Backring|size}}`
-    or `{{2 20 cm Backring|size}}`. The count is a positive integer and is
-    **mandatory**; the display always prints it, including 1 (`1 26er Backring`).
+  - Grammar: `{{ COUNT SIZE UNIT MARKER|size|case:CASE }}`, e.g.
+    `{{1 26 cm Backring|size|case:akk}}` or
+    `{{2 20 cm Backring|size|case:dat}}`. The count is a positive integer and is
+    **mandatory**. `CASE` is `nom`, `akk` or `dat` and describes the grammatical
+    case of the sentence slot; it is optional only on a legacy artifact, whose
+    prose keeps the old numeral form. The editor writes it from now on.
     The size uses a decimal with `.` or German `,`.
+  - Display: prose inflects the phrase — a count of 1 becomes the indefinite
+    article (`einen 26er Backring`), 2–12 are written out (`zwei … zwölf`),
+    13+ stay numerals, and the noun follows the case (dative plural
+    `Backringen`). The reference readout is a bare nominative label: it omits a
+    count of 1 (`26er Backring`) and keeps numerals from 2
+    (`2 22er Backringe`).
   - The marker key, unit and nominal size are validated against
     [size_markers.csv](size_markers.csv): the marker must exist, its written unit
     must equal the master unit, and its written size must be one of the allowed
@@ -314,8 +325,9 @@ the file. Two levels:
   `very low`, `low`, `medium`, `high`, `very high`. A front-matter `tolerance`
   field is an unknown field and is rejected.
 - A size marker's count must be a positive integer; its marker key, unit and
-  nominal size must match `size_markers.csv` (§4). A size marker with a
-  precision suffix is rejected.
+  nominal size must match `size_markers.csv` (§4), and its optional case must be
+  one of `nom`, `akk`, `dat`. A `|case` suffix on a quantity artifact is
+  rejected, as is a `|precision` suffix on a size marker.
 - Row syntax, step structure and the artifacts of each step are validated (issue
   paths `steps[i].ingredients[j]…` and `steps[i].text`). A row without a name or
   quantity, a step whose prose is missing, and prose starting with `- ` are errors.

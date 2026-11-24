@@ -16,6 +16,9 @@ export type SizeMarkerScale =
    *  geometrically similar 3-D mold. */
   | 'volume';
 
+/** Grammatical gender of the marker's noun, needed to inflect the article. */
+export type SizeMarkerGender = 'm' | 'f' | 'n';
+
 /** One size-marked piece of equipment from the master data. */
 export interface SizeMarkerDefinition {
   /** Canonical key, used in the stored artifact ('… Backring|size'). */
@@ -24,6 +27,8 @@ export interface SizeMarkerDefinition {
   readonly singular: string;
   /** Plural display form, used when the derived count is above 1. */
   readonly plural: string;
+  /** Grammatical gender of the display noun. */
+  readonly gender: SizeMarkerGender;
   /** Canonical unit of the nominal sizes (e.g. 'cm'). */
   readonly unit: string;
   /** Scaling law between the recipe quantity and the marker's size. */
@@ -32,7 +37,10 @@ export interface SizeMarkerDefinition {
   readonly sizes: readonly number[];
   /** Size a fresh marker starts with; always one of 'sizes'. */
   readonly defaultSize: number;
-  /** Display template; placeholders <N> <SIZE> <UNIT> <INF>. Always renders <N>. */
+  /**
+   * Display template; placeholders <DET> (article / number word / numeral /
+   * empty) <SIZE> <UNIT> <INF>. The renderer fills <DET> per surface.
+   */
   readonly pattern: string;
 }
 
@@ -42,10 +50,11 @@ export const SIZE_MARKERS: readonly SizeMarkerDefinition[] = [
     marker: 'Backring',
     singular: 'Backring',
     plural: 'Backringe',
+    gender: 'm',
     unit: 'cm',
     scale: 'area',
     sizes: [16, 18, 20, 22, 24, 26, 28, 30],
     defaultSize: 26,
-    pattern: '<N> <SIZE>er <INF>',
+    pattern: '<DET> <SIZE>er <INF>',
   },
 ];

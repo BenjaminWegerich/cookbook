@@ -292,14 +292,24 @@ prep_time: 5 min
     );
     expect(normalized.steps[0]!.text).toBe('Den Teig für {{2 20 cm Backring|size}} ausrollen.');
 
+    // The case is part of the size artifact; it normalizes to lowercase and
+    // stays between |size and |reference.
+    const grammatical = parseRecipe(
+      '---\ntitle: Backring\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Den Teig für {{1 26,0 cm Backring|size|Case:Akk}} ausrollen.\n',
+    );
+    expect(grammatical.steps[0]!.text).toBe(
+      'Den Teig für {{1 26 cm Backring|size|case:akk}} ausrollen.',
+    );
+
     // The reference flag is an artifact suffix; it survives normalization in
     // its canonical lowercase and last position.
     const referenced = parseRecipe(
       '---\ntitle: Backring\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
-        '---\n## Zubereitung\n1. Den Teig für {{1 26,0 cm Backring|size|Reference}} ausrollen.\n',
+        '---\n## Zubereitung\n1. Den Teig für {{1 26,0 cm Backring|size|Case:Akk|Reference}} ausrollen.\n',
     );
     expect(referenced.steps[0]!.text).toBe(
-      'Den Teig für {{1 26 cm Backring|size|reference}} ausrollen.',
+      'Den Teig für {{1 26 cm Backring|size|case:akk|reference}} ausrollen.',
     );
     expect(referenced.ingredients).toEqual([]);
   });
@@ -307,19 +317,19 @@ prep_time: 5 min
   it('validates a size marker against the master data', () => {
     const unknown = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
-        '---\n## Zubereitung\n1. Mit {{1 26 cm Springform|size}} backen.\n',
+        '---\n## Zubereitung\n1. Mit {{1 26 cm Springform|size|case:akk}} backen.\n',
     );
     expectIssueAt(unknown, 'steps[0].text', 'Unbekannter Größenmarker');
 
     const badSize = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
-        '---\n## Zubereitung\n1. Mit {{1 25 cm Backring|size}} backen.\n',
+        '---\n## Zubereitung\n1. Mit {{1 25 cm Backring|size|case:akk}} backen.\n',
     );
     expectIssueAt(badSize, 'steps[0].text', 'nicht zulässig');
 
     const badUnit = parseIssues(
       '---\ntitle: X\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
-        '---\n## Zubereitung\n1. Mit {{1 26 mm Backring|size}} backen.\n',
+        '---\n## Zubereitung\n1. Mit {{1 26 mm Backring|size|case:akk}} backen.\n',
     );
     expectIssueAt(badUnit, 'steps[0].text', 'erwartet die Einheit "cm"');
 
@@ -330,6 +340,19 @@ prep_time: 5 min
         '---\n## Zubereitung\n1. Mit {{1 26 cm Backring|precision: high|size}} backen.\n',
     );
     expectIssueAt(precision, 'steps[0].text', 'Ungültiger Mengen-Baustein');
+
+    // A case only makes sense on a size marker, and its value is a closed set.
+    const caseWithoutSize = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{1 26 cm Backring|case:akk}} backen.\n',
+    );
+    expectIssueAt(caseWithoutSize, 'steps[0].text', 'Ungültiger Mengen-Baustein');
+
+    const unknownCase = parseIssues(
+      '---\ntitle: X\ntype: finished_dish\nservings: 8\nprep_time: 10 min\n' +
+        '---\n## Zubereitung\n1. Mit {{1 26 cm Backring|size|case:gen}} backen.\n',
+    );
+    expectIssueAt(unknownCase, 'steps[0].text', 'Ungültiger Mengen-Baustein');
   });
 
   it('allows unitless quantity-only artifacts and stores them as AQ fractions', () => {

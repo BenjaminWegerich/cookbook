@@ -502,25 +502,58 @@ servings: 8
 prep_time: 10 min
 ---
 ## Zubereitung
-1. Den Teig für {{1 26 cm Backring|size}} ausrollen.
+1. Den Teig für {{1 26 cm Backring|size|case:akk}} ausrollen.
 `);
 
   const cakeHtml = generateRecipeHtml(cake);
 
   it('bakes the derived arrangement for every serving view', () => {
-    // 8 is the written size; the count is always rendered, including 1.
-    expect(cakeHtml).toContain('Den Teig für 1 26er Backring ausrollen.');
+    // 8 is the written size; count 1 becomes the indefinite article in the
+    // stored accusative.
+    expect(cakeHtml).toContain('Den Teig für einen 26er Backring ausrollen.');
     // 10 servings: 29.07 cm ideal, nearest even 30.
-    expect(cakeHtml).toContain('Den Teig für 1 30er Backring ausrollen.');
+    expect(cakeHtml).toContain('Den Teig für einen 30er Backring ausrollen.');
     // 12 servings: 31.84 cm ideal → two molds of 22.52 cm; nearest even 22.
-    expect(cakeHtml).toContain('Den Teig für 2 22er Backringe ausrollen.');
+    expect(cakeHtml).toContain('Den Teig für zwei 22er Backringe ausrollen.');
     // 16 servings: two 26er molds exactly.
-    expect(cakeHtml).toContain('Den Teig für 2 26er Backringe ausrollen.');
+    expect(cakeHtml).toContain('Den Teig für zwei 26er Backringe ausrollen.');
     // 4 servings: 18.38 cm ideal; nearest even 18.
-    expect(cakeHtml).toContain('Den Teig für 1 18er Backring ausrollen.');
+    expect(cakeHtml).toContain('Den Teig für einen 18er Backring ausrollen.');
     // 2 servings: below the smallest mold, clamped to 16.
-    expect(cakeHtml).toContain('Den Teig für 1 16er Backring ausrollen.');
+    expect(cakeHtml).toContain('Den Teig für einen 16er Backring ausrollen.');
     expect(cakeHtml).not.toContain('{{');
+  });
+
+  it('renders the dative prose form, including the dative plural', () => {
+    const dative = generateRecipeHtml(
+      parseRecipe(`---
+title: Backring dativ
+type: finished_dish
+servings: 8
+prep_time: 10 min
+---
+## Zubereitung
+1. Den Teig in {{1 26 cm Backring|size|case:dat}} backen.
+`),
+    );
+    expect(dative).toContain('Den Teig in einem 26er Backring backen.');
+    // 12 servings: two 22 cm molds, dative plural "Backringen".
+    expect(dative).toContain('Den Teig in zwei 22er Backringen backen.');
+  });
+
+  it('keeps the legacy numeral prose for an artifact without a case', () => {
+    const legacy = generateRecipeHtml(
+      parseRecipe(`---
+title: Backring legacy
+type: finished_dish
+servings: 8
+prep_time: 10 min
+---
+## Zubereitung
+1. Den Teig für {{1 26 cm Backring|size}} ausrollen.
+`),
+    );
+    expect(legacy).toContain('Den Teig für 1 26er Backring ausrollen.');
   });
 
   it('shows a flagged size marker in the reference readout of every view', () => {
@@ -538,14 +571,14 @@ prep_time: 10 min
 ---
 ## Zubereitung
 1. - 1000 g Quark
-   Den Teig in {{1 26 cm Backring|size|reference}} backen.
+   Den Teig in {{1 26 cm Backring|size|case:dat|reference}} backen.
 `),
     );
 
     expect(flagged).toContain(
       `<ul class="reference size-scoped" data-servings="8">\n` +
         `    <li>${amountHtml('Quark', 1000, 'g')}</li>\n` +
-        `    <li>1 26er Backring</li>\n` +
+        `    <li>26er Backring</li>\n` +
         `  </ul>`,
     );
     // The equipment line follows the chosen size: 12 servings need two 22 cm

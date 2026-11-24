@@ -661,7 +661,7 @@ function validateAndNormalizeText(text: string, path: string, issues: Validation
     if (parsed === null) {
       issues.push({
         path,
-        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}}, {{1/2}} oder {{1 26 cm Backring|size}}).`,
+        message: `Ungültiger Mengen-Baustein ${JSON.stringify(match[0])} (erwartet z. B. {{1500 ml Wasser}}, {{100 g}}, {{1/2}} oder {{1 26 cm Backring|size|case:akk}}).`,
       });
       continue;
     }

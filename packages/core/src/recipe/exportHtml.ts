@@ -616,7 +616,9 @@ function referenceLines(recipe: Recipe, factor: number): string[] {
   return referenceUses(recipe).map((use) =>
     use.kind === 'ingredient'
       ? arrangementHtml(masterDisplay(recipe, use.ingredient, factor), 'bare')
-      : arrangementHtml(artifactDisplay(use.artifact, factor), 'bare'),
+      : // The readout is an amount label, not a sentence: a size marker drops
+        // its article and a count of 1, independent of the prose case.
+        arrangementHtml(artifactDisplay(use.artifact, factor, 'readout'), 'bare'),
   );
 }
 
@@ -746,8 +748,11 @@ function renderStep(
   const text = renderArtifacts(step.text, (artifact: TextArtifact) => {
     if (artifact.kind === 'size') {
       // The marker's own written arrangement is the fallback for a draft whose
-      // master data is missing; a parsed canonical recipe always resolves.
-      const resolved = resolveSizeMarker(artifact, factor);
+      // master data is missing; a parsed canonical recipe always resolves. The
+      // prose surface inflects the article, number word and noun from the
+      // artifact's stored case; a legacy artifact without one keeps the old
+      // numeral form.
+      const resolved = resolveSizeMarker(artifact, factor, { surface: 'prose' });
       return escapeHtml(resolved === undefined ? sizeMarkerFallbackText(artifact) : resolved.text);
     }
     return artifactHtml(

@@ -113,13 +113,30 @@ describe('artifact text helpers', () => {
     expect(artifactToText(quantity(3))).toBe('{{3}}');
   });
 
-  it('writes a size marker with its explicit count and |size suffix', () => {
+  it('writes a size marker with its count, |size and optional |case suffix', () => {
     expect(
       artifactToText({ kind: 'size', marker: 'Backring', count: 1, size: 26, unit: 'cm' }),
     ).toBe('{{1 26 cm Backring|size}}');
     expect(
-      artifactToText({ kind: 'size', marker: 'Backring', count: 2, size: 20, unit: 'cm' }),
-    ).toBe('{{2 20 cm Backring|size}}');
+      artifactToText({
+        kind: 'size',
+        marker: 'Backring',
+        count: 1,
+        size: 26,
+        unit: 'cm',
+        grammaticalCase: 'akk',
+      }),
+    ).toBe('{{1 26 cm Backring|size|case:akk}}');
+    expect(
+      artifactToText({
+        kind: 'size',
+        marker: 'Backring',
+        count: 2,
+        size: 20,
+        unit: 'cm',
+        grammaticalCase: 'dat',
+      }),
+    ).toBe('{{2 20 cm Backring|size|case:dat}}');
   });
 
   it('writes the reference flag last on every artifact kind', () => {
@@ -150,9 +167,10 @@ describe('artifact text helpers', () => {
         count: 1,
         size: 26,
         unit: 'cm',
+        grammaticalCase: 'akk',
         reference: true,
       }),
-    ).toBe('{{1 26 cm Backring|size|reference}}');
+    ).toBe('{{1 26 cm Backring|size|case:akk|reference}}');
   });
 
   it('parses the reference flag on every artifact kind', () => {
@@ -182,6 +200,17 @@ describe('artifact text helpers', () => {
       unit: 'cm',
       reference: true,
     });
+    // The case is a size parameter; it sits before the reference role and
+    // normalizes to lowercase.
+    expect(parseArtifactContent('1 26 cm Backring|size|case:AKK|Reference')).toEqual({
+      kind: 'size',
+      marker: 'Backring',
+      count: 1,
+      size: 26,
+      unit: 'cm',
+      grammaticalCase: 'akk',
+      reference: true,
+    });
   });
 
   it('rejects a reference suffix out of order or without an artifact', () => {
@@ -189,6 +218,11 @@ describe('artifact text helpers', () => {
     expect(parseArtifactContent('1 26 cm Backring|reference|size')).toBeNull();
     expect(parseArtifactContent('1/2|reference|precision: high')).toBeNull();
     expect(parseArtifactContent('|reference')).toBeNull();
+    // The case is a size parameter, not a standalone kind tag: it must follow
+    // |size and precede |reference.
+    expect(parseArtifactContent('1 26 cm Backring|case:akk|size')).toBeNull();
+    expect(parseArtifactContent('1 26 cm Backring|size|reference|case:akk')).toBeNull();
+    expect(parseArtifactContent('1500 ml Wasser|case:akk')).toBeNull();
     // A pipe is reserved for suffixes, so it never becomes part of a name.
     expect(parseArtifactContent('1500 ml Wasser|refrence')).toBeNull();
   });
@@ -214,7 +248,7 @@ describe('artifact text helpers', () => {
   });
 
   it('classifies a size marker as a size artifact, not an ingredient mention', () => {
-    const text = 'Für {{1 26 cm Backring|size}} ausrollen.';
+    const text = 'Für {{1 26 cm Backring|size|case:akk}} ausrollen.';
     const { segments, spans } = splitArtifacts(text);
     expect(spans).toHaveLength(1);
     expect(spans[0]!.artifact).toEqual({
@@ -223,6 +257,7 @@ describe('artifact text helpers', () => {
       count: 1,
       size: 26,
       unit: 'cm',
+      grammaticalCase: 'akk',
     });
     expect(isSizeArtifact(spans[0]!.artifact)).toBe(true);
     expect(isQuantityArtifact(spans[0]!.artifact)).toBe(false);
@@ -230,7 +265,14 @@ describe('artifact text helpers', () => {
       { type: 'text', value: 'Für ' },
       {
         type: 'artifact',
-        artifact: { kind: 'size', marker: 'Backring', count: 1, size: 26, unit: 'cm' },
+        artifact: {
+          kind: 'size',
+          marker: 'Backring',
+          count: 1,
+          size: 26,
+          unit: 'cm',
+          grammaticalCase: 'akk',
+        },
       },
       { type: 'text', value: ' ausrollen.' },
     ]);
@@ -261,6 +303,27 @@ describe('artifact text helpers', () => {
       size: 20,
       unit: 'cm',
     });
+    // The optional case is part of the size artifact and normalizes to
+    // lowercase; an unknown or empty value is malformed.
+    expect(parseArtifactContent('1 26 cm Backring|size|case:AKK')).toEqual({
+      kind: 'size',
+      marker: 'Backring',
+      count: 1,
+      size: 26,
+      unit: 'cm',
+      grammaticalCase: 'akk',
+    });
+    expect(parseArtifactContent('1 26 cm Backring|size|case: akk')).toEqual({
+      kind: 'size',
+      marker: 'Backring',
+      count: 1,
+      size: 26,
+      unit: 'cm',
+      grammaticalCase: 'akk',
+    });
+    expect(parseArtifactContent('1 26 cm Backring|size|case:')).toBeNull();
+    expect(parseArtifactContent('1 26 cm Backring|size|case:gen')).toBeNull();
+    expect(parseArtifactContent('1 26 cm Backring|size|case:akk|precision: high')).toBeNull();
     // The count is mandatory, even for one mold.
     expect(parseArtifactContent('26 cm Backring|size')).toBeNull();
     // A size marker has no precision.
@@ -291,10 +354,14 @@ describe('artifact text helpers', () => {
     expect(replaceArtifacts('Für {{1 26,0 cm Backring|size}} ausrollen.', (a) => a)).toBe(
       'Für {{1 26 cm Backring|size}} ausrollen.',
     );
-    // The reference flag normalizes to its canonical lowercase, last suffix.
-    expect(replaceArtifacts('Für {{1 26,0 cm Backring|size|Reference}} ausrollen.', (a) => a)).toBe(
-      'Für {{1 26 cm Backring|size|reference}} ausrollen.',
+    // The case normalizes to its canonical lowercase and stays before the
+    // reference role.
+    expect(replaceArtifacts('Für {{1 26,0 cm Backring|size|Case:Akk}} ausrollen.', (a) => a)).toBe(
+      'Für {{1 26 cm Backring|size|case:akk}} ausrollen.',
     );
+    expect(
+      replaceArtifacts('Für {{1 26,0 cm Backring|size|Case:Akk|Reference}} ausrollen.', (a) => a),
+    ).toBe('Für {{1 26 cm Backring|size|case:akk|reference}} ausrollen.');
   });
 
   it('inserts and deletes artifacts via replaceArtifacts', () => {
@@ -310,6 +377,16 @@ describe('artifact text helpers', () => {
         unit: 'cm',
       }),
     ).toBe('Butter {{1 26 cm Backring|size}}schmelzen.');
+    expect(
+      insertArtifact('Butter schmelzen.', 7, {
+        kind: 'size',
+        marker: 'Backring',
+        count: 1,
+        size: 26,
+        unit: 'cm',
+        grammaticalCase: 'akk',
+      }),
+    ).toBe('Butter {{1 26 cm Backring|size|case:akk}}schmelzen.');
     expect(replaceArtifacts('A {{100 g}} B', () => null)).toBe('A  B');
   });
 

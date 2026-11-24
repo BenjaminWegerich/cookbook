@@ -46,10 +46,12 @@ Support for entering, capturing, supplementing, and revising recipes through AI.
   step's arrangement; repeated uses add up their displayed BQs exactly and, when all use
   the same additional unit, their AQs exactly; the master row takes the highest precision
   of its uses. See [quantity_scaling.md](docs/quantity_scaling.md) §6.
-- Display-only equipment sizes scale with the same recipe factor: `{{1 26 cm Backring|size}}`
-  becomes `2 22er Backringe` at 12 servings. The marker's `Scale` decides the law
-  (`area` for a cake ring: diameter × √factor); above the largest available size the display
-  splits into multiple cakes. The count is always shown, including at 1. See
+- Display-only equipment sizes scale with the same recipe factor:
+  `{{1 26 cm Backring|size|case:akk}}` becomes `zwei 22er Backringe` at 12
+  servings (readout: `26er Backring` / `2 22er Backringe`). The marker's `Scale`
+  decides the law (`area` for a cake ring: diameter × √factor); above the largest
+  available size the display splits into multiple cakes. Prose writes 1 as the
+  article, 2–12 as words, 13+ as numerals; the reference readout omits 1. See
   [size_markers.csv](docs/size_markers.csv) and
   [quantity_scaling.md](docs/quantity_scaling.md) §7, “Size markers”.
 

@@ -73,15 +73,15 @@ export function safeRenderMasterAQSDisplay(
  * artifact whose display cannot be derived (e.g. the master data is not
  * loaded) falls back to its scaled plain amount instead of breaking the
  * reference readout. A size marker keeps its written text, which never
- * consults the registry.
+ * consults the registry. The readout surface drops a count of 1.
  */
 export function safeArtifactDisplay(artifact: TextArtifact, factor: number): ArrangementDisplay {
   try {
-    return artifactDisplay(artifact, factor);
+    return artifactDisplay(artifact, factor, 'readout');
   } catch {
     const text =
       artifact.kind === 'size'
-        ? `${artifact.count} ${artifact.size} ${artifact.unit} ${artifact.marker}`
+        ? `${artifact.count === 1 ? '' : `${artifact.count} `}${artifact.size} ${artifact.unit} ${artifact.marker}`
         : artifact.unit === undefined
           ? String(artifact.quantity * factor)
           : `${artifact.quantity * factor}${NNBSP}${artifact.unit}`;

@@ -3,18 +3,22 @@
  * Generates `src/sizeMarkersData.ts` from `docs/size_markers.csv`.
  *
  * A size marker is a display-only piece of equipment in a step's prose
- * (`{{1 26 cm Backring|size}}`): the recipe stores the written arrangement (one
- * or more molds of a nominal size), and the renderer derives the arrangement
- * for any requested recipe size. The marker definition owns the geometry — the
- * scale (`linear`, `area`, `volume`), the physically available nominal sizes and
- * the display pattern — so adding another round mold is one CSV row and adding
- * a new scaling law is one enum value plus a resolver branch.
+ * (`{{1 26 cm Backring|size|case:akk}}`): the recipe stores the written
+ * arrangement (one or more molds of a nominal size), and the renderer derives
+ * the arrangement for any requested recipe size. The marker definition owns the
+ * geometry — the scale (`linear`, `area`, `volume`), the physically available
+ * nominal sizes, the grammatical gender and the display pattern — so adding
+ * another round mold is one CSV row and adding a new scaling law is one enum
+ * value plus a resolver branch.
  *
  * Canonical CSV format: semicolon-separated, dot decimals, header row, CRLF
  * tolerated. `Sizes` is a space-separated ascending list of positive numbers;
- * `Pattern` uses the placeholders `<N>` (count), `<SIZE>`, `<UNIT>` and `<INF>`
- * (singular/plural form). The pattern always renders `<N>`, including 1 — the
- * recipe text reads “1 26er Backring” / “2 20er Backringe”.
+ * `Gender` is `m`, `f` or `n` (needed for the prose article); `Pattern` uses
+ * the placeholders `<DET>` (article / number word / numeral / empty),
+ * `<SIZE>`, `<UNIT>` and `<INF>` (case- and number-inflected noun form). The
+ * renderer decides what `<DET>` contains per surface, so the pattern only
+ * controls where it sits: prose reads “einen 26er Backring”, the reference
+ * readout “26er Backring”.
  *
  * Usage:
  *   npm run generate:size-markers   (from packages/core)
@@ -32,13 +36,16 @@ const CSV_PATH = resolve(ROOT, 'docs/size_markers.csv');
 const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/sizeMarkersData.ts');
 
 /** Exact header of the size-marker table (docs/size_markers.csv). */
-const HEADER = 'Marker;Singular;Plural;Unit;Scale;Sizes;Default;Pattern';
+const HEADER = 'Marker;Singular;Plural;Gender;Unit;Scale;Sizes;Default;Pattern';
 
 /** The supported scaling laws. */
 const SCALES = ['linear', 'area', 'volume'];
 
+/** The grammatical genders used to inflect the prose article. */
+const GENDERS = ['m', 'f', 'n'];
+
 /** Placeholders allowed in a display pattern. */
-const PATTERN_TOKENS = new Set(['<N>', '<SIZE>', '<UNIT>', '<INF>']);
+const PATTERN_TOKENS = new Set(['<DET>', '<SIZE>', '<UNIT>', '<INF>']);
 
 /**
  * Splits one CSV line on semicolons. The table has no quoted cells: every
@@ -78,7 +85,7 @@ function parseSizes(cell, marker) {
 }
 
 /**
- * Validates a display pattern. `<N>` and `<SIZE>` are mandatory; `<UNIT>` and
+ * Validates a display pattern. `<DET>` and `<SIZE>` are mandatory; `<UNIT>` and
  * `<INF>` are optional. A typo in a placeholder is rejected instead of being
  * rendered literally.
  */
@@ -86,8 +93,8 @@ function parsePattern(cell, marker) {
   if (cell === '') {
     throw new Error(`${CSV_PATH}: empty Pattern for '${marker}'`);
   }
-  if (!cell.includes('<N>')) {
-    throw new Error(`${CSV_PATH}: Pattern for '${marker}' must contain <N>`);
+  if (!cell.includes('<DET>')) {
+    throw new Error(`${CSV_PATH}: Pattern for '${marker}' must contain <DET>`);
   }
   if (!cell.includes('<SIZE>')) {
     throw new Error(`${CSV_PATH}: Pattern for '${marker}' must contain <SIZE>`);
@@ -112,10 +119,11 @@ function readRows() {
   const seen = new Set();
   for (const line of lines.slice(1)) {
     const cells = splitLine(line);
-    if (cells.length !== 8) {
-      throw new Error(`${CSV_PATH}: expected 8 cells in '${line}' (found ${cells.length})`);
+    if (cells.length !== 9) {
+      throw new Error(`${CSV_PATH}: expected 9 cells in '${line}' (found ${cells.length})`);
     }
-    const [marker, singular, plural, unit, scale, sizesCell, defaultCell, patternCell] = cells;
+    const [marker, singular, plural, gender, unit, scale, sizesCell, defaultCell, patternCell] =
+      cells;
     if (marker === '') {
       throw new Error(`${CSV_PATH}: empty Marker in '${line}'`);
     }
@@ -126,6 +134,11 @@ function readRows() {
     if (!SCALES.includes(scale)) {
       throw new Error(
         `${CSV_PATH}: invalid Scale '${scale}' for '${marker}' (use ${SCALES.join(', ')})`,
+      );
+    }
+    if (!GENDERS.includes(gender)) {
+      throw new Error(
+        `${CSV_PATH}: invalid Gender '${gender}' for '${marker}' (use ${GENDERS.join(', ')})`,
       );
     }
     if (unit === '') {
@@ -149,6 +162,7 @@ function readRows() {
       marker,
       singular: singular === '' ? marker : singular,
       plural: plural === '' ? marker : plural,
+      gender,
       unit,
       scale,
       sizes,
@@ -170,6 +184,7 @@ function entrySource(row) {
     `    marker: ${quote(row.marker)},\n` +
     `    singular: ${quote(row.singular)},\n` +
     `    plural: ${quote(row.plural)},\n` +
+    `    gender: ${quote(row.gender)},\n` +
     `    unit: ${quote(row.unit)},\n` +
     `    scale: ${quote(row.scale)},\n` +
     `    sizes: [${sizes}],\n` +
@@ -203,6 +218,9 @@ export type SizeMarkerScale =
    *  geometrically similar 3-D mold. */
   | 'volume';
 
+/** Grammatical gender of the marker's noun, needed to inflect the article. */
+export type SizeMarkerGender = 'm' | 'f' | 'n';
+
 /** One size-marked piece of equipment from the master data. */
 export interface SizeMarkerDefinition {
   /** Canonical key, used in the stored artifact ('… Backring|size'). */
@@ -211,6 +229,8 @@ export interface SizeMarkerDefinition {
   readonly singular: string;
   /** Plural display form, used when the derived count is above 1. */
   readonly plural: string;
+  /** Grammatical gender of the display noun. */
+  readonly gender: SizeMarkerGender;
   /** Canonical unit of the nominal sizes (e.g. 'cm'). */
   readonly unit: string;
   /** Scaling law between the recipe quantity and the marker's size. */
@@ -219,7 +239,10 @@ export interface SizeMarkerDefinition {
   readonly sizes: readonly number[];
   /** Size a fresh marker starts with; always one of 'sizes'. */
   readonly defaultSize: number;
-  /** Display template; placeholders <N> <SIZE> <UNIT> <INF>. Always renders <N>. */
+  /**
+   * Display template; placeholders <DET> (article / number word / numeral /
+   * empty) <SIZE> <UNIT> <INF>. The renderer fills <DET> per surface.
+   */
   readonly pattern: string;
 }
 

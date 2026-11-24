@@ -285,16 +285,18 @@ so its link can always open exactly the size it promised.
 ### Size markers
 
 A size marker is display-only equipment inside a step's prose, written as
-`{{ COUNT SIZE UNIT MARKER|size }}`:
+`{{ COUNT SIZE UNIT MARKER|size|case:CASE }}`:
 
 ```
-{{1 26 cm Backring|size}}      one 26 cm ring
-{{2 20 cm Backring|size}}      the written recipe already uses two
+{{1 26 cm Backring|size|case:akk}}   prose: „einen 26er Backring“
+{{2 20 cm Backring|size|case:akk}}   prose: „zwei 20er Backringe“
 ```
 
-The count is mandatory and always appears in the display, including 1: the
-renderer shows `1 26er Backring`, `2 22er Backringe`. The stored arrangement is
-the recipe's own equipment; every other serving count is derived.
+The count and case are stored; every other serving count is derived. A legacy
+artifact without a `|case:` keeps the old numeral prose. Prose inflects the
+phrase: 1 becomes the indefinite article, 2–12 are written out, 13+ stay
+numerals, and the noun follows the case. The reference readout is a bare
+nominative label: it omits a count of 1 and keeps numerals from 2.
 
 The master data lives in [size_markers.csv](size_markers.csv):
 
@@ -302,11 +304,12 @@ The master data lives in [size_markers.csv](size_markers.csv):
 |---|---|
 | `Marker` | Canonical key used in the artifact, e.g. `Backring`. |
 | `Singular` / `Plural` | Display noun for a count of 1 / above 1. |
+| `Gender` | Grammatical gender (`m`, `f`, `n`) for the prose article. |
 | `Unit` | Canonical size unit, e.g. `cm`. |
 | `Scale` | How the size follows the quantity: `linear` (exponent 1), `area` (2), `volume` (3). |
 | `Sizes` | Physically available nominal sizes, ascending. The first and last entry bound the display. |
 | `Default` | Size a fresh marker starts with; must be one of `Sizes`. |
-| `Pattern` | Display template with `<N>`, `<SIZE>`, `<UNIT>` and `<INF>`. |
+| `Pattern` | Display template with `<DET>`, `<SIZE>`, `<UNIT>` and `<INF>`. |
 
 `Backring` uses `Scale=area`: the batter quantity is proportional to the mold
 area, so a recipe scaled by `f` needs a diameter multiplied by `√f`, not by `f`.
@@ -329,29 +332,31 @@ D      = nearest(Sizes, Dideal)      // relative distance; tie → larger
   the batter is simply shallower.
 - The nominal size is the nearest allowed one by relative distance; a tie goes
   to the larger size, mirroring the optimizer's higher-BQ tie-break.
-- The display always prints the count; `<INF>` selects the singular or plural
-  noun.
+- The display fills `<DET>` per surface: prose uses the article / written number
+  / numeral, the readout omits 1 and uses numerals from 2; `<INF>` selects the
+  case- and number-inflected noun.
 
 Size markers have **no precision**: there is no BQ/AQ candidate to score and no
 target amount to display differently. A `|precision` suffix on a size marker is
 a validation error, not a silent no-op.
 
-A size marker may carry the reference role (`{{1 26 cm Backring|size|reference}}`).
-The recipe's size readout then shows its derived equipment line beside the
-reference ingredients — the 8-serving/26er cake reads `1 26er Backring` in its
-written view and `2 22er Backringe` at 12 servings. The flag only places the line
-in the readout; it does not change the marker's scaling law.
+A size marker may carry the reference role
+(`{{1 26 cm Backring|size|case:akk|reference}}`). The recipe's size readout then
+shows its derived equipment line beside the reference ingredients — the
+8-serving/26er cake reads `26er Backring` in its written view and
+`2 22er Backringe` at 12 servings. The readout ignores the stored case; the flag
+only places the line in the readout and does not change the marker's scaling law.
 
 Example with the 8-serving/26er cake and the even sizes `16 … 30`:
 
-| Requested servings | `f` | Derived display |
+| Requested servings | `f` | Derived prose display (accusative) |
 |---|---:|---|
-| 8 (written) | 1 | `1 26er Backring` |
-| 10 | 1.25 | `1 30er Backring` |
-| 12 | 1.5 | `2 22er Backringe` |
-| 16 | 2 | `2 26er Backringe` |
-| 4 | 0.5 | `1 18er Backring` |
-| 2 | 0.25 | `1 16er Backring` (clamped) |
+| 8 (written) | 1 | `einen 26er Backring` |
+| 10 | 1.25 | `einen 30er Backring` |
+| 12 | 1.5 | `zwei 22er Backringe` |
+| 16 | 2 | `zwei 26er Backringe` |
+| 4 | 0.5 | `einen 18er Backring` |
+| 2 | 0.25 | `einen 16er Backring` (clamped) |
 
 A size marker never enters the ingredient list, the shopping list or the
 sub-recipe graph. Adding another marker with the same geometry is one row in

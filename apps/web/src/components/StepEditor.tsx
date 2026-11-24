@@ -2,8 +2,8 @@
  * StepEditor — a contenteditable step field for the step *prose*.
  *
  * The prose may contain inline display-only artifacts ({{100 g}} /
- * {{1500 ml Wasser}} / {{1 26 cm Backring|size}}, storage_format.md §4).
- * Artifacts render as non-editable code-like chips ("wie ein Inline-Code-
+ * {{1500 ml Wasser}} / {{1 26 cm Backring|size|case:akk}},
+ * storage_format.md §4). Artifacts render as non-editable code-like chips ("wie ein Inline-Code-
  * Schnipsel", decided with the user); they are inserted at the caret from the
  * ingredient sheet or the size-marker sheet, carry a small "×" to remove them,
  * and tapping a chip opens the matching sheet prefilled to edit the element in
@@ -207,8 +207,10 @@ const StepEditor = forwardRef<StepEditorHandle, StepEditorProps>(function StepEd
         content.className = 'step-artifact-content';
         // The chip shows the written recipe (factor 1); the sheet's preview and
         // the export derive the other sizes. `artifactDisplay` is the shared
-        // artifact renderer, so prose, chip and reference readout cannot drift.
-        appendArtifactDisplay(content, artifactDisplay(segment.artifact, 1));
+        // artifact renderer; the chip uses the prose surface, so its size
+        // marker shows the inflected phrase, while the reference readout uses
+        // the bare nominative label.
+        appendArtifactDisplay(content, artifactDisplay(segment.artifact, 1, 'prose'));
         span.appendChild(content);
         const remove = document.createElement('button');
         remove.type = 'button';

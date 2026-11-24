@@ -132,7 +132,7 @@ Schritte — sonst nichts:
   Mengenangabe ohne Zutat (z. B. `{{1/2}}`) darf optional `|precision: high` tragen. Sparsam für
   Wasser/Salz/Stückzahlen; ein Name braucht immer eine Einheit.
 - Jeder Inline-`{{…}}` darf als letztes Suffix `|reference` tragen, wenn er die Portionsgröße
-  verankern soll (z. B. `{{1500 ml Wasser|reference}}`, `{{1 26 cm Backring|size|reference}}`).
+  verankern soll (z. B. `{{1500 ml Wasser|reference}}`, `{{1 26 cm Backring|size|case:akk|reference}}`).
 - Die Zutatenliste wird aus allen Zeilen abgeleitet (du schreibst sie nirgends): gleicher
   Name einmal mit Gesamtmenge an der ersten Fundstelle; gleicher Name mit verschiedener
   Einheit bleibt getrennt.
@@ -146,18 +146,20 @@ Schritte — sonst nichts:
   Anzeige-Einheit selbst aus den Stammdaten.
 
 ## Größenmarker
-- Ausrüstungsgrößen in der Schritt-Prosa: `{{1 26 cm Backring|size}}` oder
-  `{{2 20 cm Backring|size}}`. Sie zählen nicht als Zutaten und erscheinen nie in der
+- Ausrüstungsgrößen in der Schritt-Prosa: `{{1 26 cm Backring|size|case:akk}}` oder
+  `{{2 20 cm Backring|size|case:akk}}`. Sie zählen nicht als Zutaten und erscheinen nie in der
   Zutatenliste.
-- Grammatik: `{{ ANZAHL GRÖSSE EINHEIT MARKER|size }}`. Die Anzahl ist eine ganze Zahl ab 1
-  und wird immer angezeigt, auch bei 1 (`1 26er Backring`).
+- Grammatik: `{{ ANZAHL GRÖSSE EINHEIT MARKER|size|case:FALL }}`. Die Anzahl ist eine ganze
+  Zahl ab 1; `FALL` ist `nom`, `akk` oder `dat` und richtet sich nach dem Satz
+  („in einen“ = Akkusativ, „in einem“ = Dativ). In der Prosa wird 1 zum Artikel, 2–12
+  ausgeschrieben, ab 13 als Ziffer; im Referenz-Readout entfällt die 1.
 - Nur Marker aus den Stammdaten verwenden. Für `Backring` sind die Größen
   `16, 18, 20, 22, 24, 26, 28, 30` zulässig; keine erfundenen Marker oder Größen.
 - Die Größe skaliert mit der Gesamtmenge nach der Skalierung des Markers. `Backring` ist
   flächenskaliert: Der Durchmesser wächst mit der Quadratwurzel des Faktors, und oberhalb
   der größten Form teilt die App in mehrere Kuchen.
 - Ein Größenmarker, der die Portionsgröße am besten prüft, darf `|reference` tragen;
-  `|size` steht dabei vor `|reference`.
+  `|size` (ggf. mit `|case:…`) steht dabei vor `|reference`.
 - Keine Genauigkeit am Größenmarker: `|precision` ist dort ungültig.
 
 ## Sammlung

@@ -14,9 +14,29 @@ import {
   sizeMarkerFallbackText,
   sizeMarkerFor,
 } from './sizeMarkers.js';
-import { SIZE_MARKERS as SEED_MARKERS } from './sizeMarkersData.js';
+import { SIZE_MARKERS as SEED_MARKERS, type SizeMarkerDefinition } from './sizeMarkersData.js';
 
 const backring = SEED_MARKERS[0]!;
+
+/**
+ * Feminine and neuter markers are synthetic: the seed table has only Backring,
+ * but a later master-data row must work without a code change. The gender is
+ * the only per-marker grammar input.
+ */
+const springform: SizeMarkerDefinition = {
+  ...backring,
+  marker: 'Springform',
+  singular: 'Springform',
+  plural: 'Springformen',
+  gender: 'f',
+};
+const blech: SizeMarkerDefinition = {
+  ...backring,
+  marker: 'Blech',
+  singular: 'Blech',
+  plural: 'Bleche',
+  gender: 'n',
+};
 
 describe('sizeMarkerFor', () => {
   it('finds the registered marker and rejects unknown keys', () => {
@@ -103,6 +123,44 @@ describe('resolveSizeMarker', () => {
     });
   });
 
+  it('inflects the prose phrase from the stored case', () => {
+    expect(
+      resolveSizeMarker({ marker: 'Backring', count: 1, size: 26, grammaticalCase: 'akk' }, 1)
+        ?.text,
+    ).toBe('einen 26er Backring');
+    expect(
+      resolveSizeMarker({ marker: 'Backring', count: 1, size: 26, grammaticalCase: 'dat' }, 1)
+        ?.text,
+    ).toBe('einem 26er Backring');
+    expect(
+      resolveSizeMarker({ marker: 'Backring', count: 1, size: 26, grammaticalCase: 'nom' }, 1)
+        ?.text,
+    ).toBe('ein 26er Backring');
+    // Scaling keeps the case; the derived count turns the article into a word.
+    expect(
+      resolveSizeMarker({ marker: 'Backring', count: 1, size: 26, grammaticalCase: 'akk' }, 1.5)
+        ?.text,
+    ).toBe('zwei 22er Backringe');
+    // The dative plural takes its -n.
+    expect(
+      resolveSizeMarker({ marker: 'Backring', count: 2, size: 20, grammaticalCase: 'dat' }, 1)
+        ?.text,
+    ).toBe('zwei 20er Backringen');
+  });
+
+  it('renders the reference readout without a count of 1 and with numerals from 2', () => {
+    expect(
+      resolveSizeMarker({ marker: 'Backring', count: 1, size: 26, grammaticalCase: 'akk' }, 1, {
+        surface: 'readout',
+      })?.text,
+    ).toBe('26er Backring');
+    expect(
+      resolveSizeMarker({ marker: 'Backring', count: 1, size: 26 }, 1.5, {
+        surface: 'readout',
+      })?.text,
+    ).toBe('2 22er Backringe');
+  });
+
   it('returns undefined for unknown markers or invalid inputs', () => {
     expect(resolveSizeMarker({ marker: 'Springform', count: 1, size: 26 }, 1)).toBeUndefined();
     expect(resolveSizeMarker({ marker: 'Backring', count: 0, size: 26 }, 1)).toBeUndefined();
@@ -116,10 +174,42 @@ describe('resolveSizeMarker', () => {
 });
 
 describe('formatSizeMarker', () => {
-  it('always renders the count and selects the noun form', () => {
+  it('keeps the legacy numeral form when no case is stored', () => {
     expect(formatSizeMarker(backring, 1, 26)).toBe('1 26er Backring');
     expect(formatSizeMarker(backring, 2, 20)).toBe('2 20er Backringe');
     expect(formatSizeMarker(backring, 10, 18)).toBe('10 18er Backringe');
+  });
+
+  it('writes counts 2–12 out and keeps 13+ as numerals', () => {
+    const akk = { surface: 'prose', grammaticalCase: 'akk' } as const;
+    expect(formatSizeMarker(backring, 2, 20, akk)).toBe('zwei 20er Backringe');
+    expect(formatSizeMarker(backring, 12, 20, akk)).toBe('zwölf 20er Backringe');
+    expect(formatSizeMarker(backring, 13, 20, akk)).toBe('13 20er Backringe');
+  });
+
+  it('inflects the article for the marker gender and the stored case', () => {
+    const akk = { surface: 'prose', grammaticalCase: 'akk' } as const;
+    const dat = { surface: 'prose', grammaticalCase: 'dat' } as const;
+    expect(formatSizeMarker(backring, 1, 26, akk)).toBe('einen 26er Backring');
+    expect(formatSizeMarker(backring, 1, 26, dat)).toBe('einem 26er Backring');
+    expect(formatSizeMarker(springform, 1, 26, akk)).toBe('eine 26er Springform');
+    expect(formatSizeMarker(springform, 1, 26, dat)).toBe('einer 26er Springform');
+    expect(formatSizeMarker(blech, 1, 30, akk)).toBe('ein 30er Blech');
+    expect(formatSizeMarker(blech, 1, 30, dat)).toBe('einem 30er Blech');
+  });
+
+  it('adds the dative plural -n unless the plural already ends in n or s', () => {
+    const dat = { surface: 'prose', grammaticalCase: 'dat' } as const;
+    expect(formatSizeMarker(backring, 2, 20, dat)).toBe('zwei 20er Backringen');
+    expect(formatSizeMarker(springform, 2, 26, dat)).toBe('zwei 26er Springformen');
+    expect(formatSizeMarker(blech, 2, 30, dat)).toBe('zwei 30er Blechen');
+  });
+
+  it('renders the readout without a count of 1 and with numerals from 2', () => {
+    const readout = { surface: 'readout' } as const;
+    expect(formatSizeMarker(backring, 1, 26, readout)).toBe('26er Backring');
+    expect(formatSizeMarker(backring, 2, 20, readout)).toBe('2 20er Backringe');
+    expect(formatSizeMarker(backring, 12, 20, readout)).toBe('12 20er Backringe');
   });
 
   it('supports a pattern with an explicit unit', () => {
@@ -128,12 +218,13 @@ describe('formatSizeMarker', () => {
         {
           ...backring,
           unit: 'cm',
-          pattern: '<N>× <SIZE> <UNIT> <INF>',
+          pattern: '<DET> <SIZE> <UNIT> <INF>',
         },
         2,
         24,
+        { surface: 'prose', grammaticalCase: 'akk' },
       ),
-    ).toBe('2× 24 cm Backringe');
+    ).toBe('zwei 24 cm Backringe');
   });
 });
 
