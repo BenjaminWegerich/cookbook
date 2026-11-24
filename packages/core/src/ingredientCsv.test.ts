@@ -11,6 +11,7 @@ import {
   type IngredientList,
   type IngredientMappingsByIngredient,
 } from './ingredientCsv.js';
+import { resetStoragePlaces, setStoragePlaces } from './storagePlacesRegistry.js';
 
 /** The canonical ingredient list (docs format) as a fixture. */
 const LIST_TEXT = [
@@ -133,6 +134,17 @@ describe('parseIngredientListCsv', () => {
   it('parses the optional storage place; an empty cell means unsorted', () => {
     expect(parseIngredientListCsv(LIST_TEXT).Joghurt?.storagePlace).toBe('Kühlschrank');
     expect(parseIngredientListCsv(LIST_TEXT).Cashews).not.toHaveProperty('storagePlace');
+  });
+
+  it('validates the storage place against the loaded kitchen zones', () => {
+    setStoragePlaces(['Dachboden', 'Schublade 2']);
+    try {
+      const list = parseIngredientListCsv(LIST_TEXT.replaceAll('Kühlschrank', 'Dachboden'));
+      expect(list.Milch?.storagePlace).toBe('Dachboden');
+      expect(() => parseIngredientListCsv(LIST_TEXT)).toThrow(/unbekannter Lagerort "Kühlschrank"/);
+    } finally {
+      resetStoragePlaces();
+    }
   });
 
   it('rejects a storage place that is not in the built-in kitchen order', () => {

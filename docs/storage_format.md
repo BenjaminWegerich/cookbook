@@ -403,31 +403,52 @@ prep_time: 15 min
 ## 9. Ingredient Master Data Files
 
 The collection's ingredient master data (name → display forms → base unit → reorder point →
-additional units with factors and the per-mapping shopping flag) lives in two CSV files inside
-the `Stammdaten` subfolder of the collection folder, in the same canonical formats as the repo
-seeds (`docs/ingredients.csv` + `docs/ingredient_unit_mappings.csv`):
+additional units with factors and the per-mapping shopping flag) lives in three CSV files
+inside the `Stammdaten` subfolder of the collection folder, in the same canonical formats as
+the repo seeds (`docs/storage_places.csv` + `docs/ingredients.csv` +
+`docs/ingredient_unit_mappings.csv`):
+
+    lagerorte.csv                (kitchen storage places, in walking order)
+    Place
+    Kühlschrank
+    Gefrierschrank
+    Schublade 1
 
     zutaten.csv                  (ingredient list)
-    Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point
-    Joghurt;;;g;medium;0
-    Cashews;Cashew;Cashews;g;medium;0
+    Ingredient;Singular;Plural;Base Unit;Precision;Storage Place;Reorder Point
+    Joghurt;;;g;medium;Kühlschrank;0
+    Cashews;Cashew;Cashews;g;medium;;0
 
     zutaten-umrechnungen.csv     (AU mappings; an ingredient without additional
     Ingredient;Additional Unit;Conversion Factor;Shopping Unit   units has no rows here)
     Joghurt;Becher;500;yes
 
+`lagerorte.csv` is the list of kitchen zones `zutaten.csv` may name: one `Place` per row,
+and the row order is the kitchen walk the pantry pages file their ingredient rows in
+(„Vorräte auswählen“). The list has no editor in the web app — it is edited in the
+spreadsheet — so the app creates it on the first load, seeded with the built-in
+`docs/storage_places.csv`; from then on the Drive file is authoritative and is re-read on
+startup and when „Zutaten“ opens. Adding a zone is a new row, reordering the rows changes
+the pantry order, and renaming or removing a zone requires the affected `zutaten.csv` cells
+to be updated in the same edit: an unknown place is rejected with a German error that lists
+the allowed places. Two rows that differ only in case or spacing are rejected as the same
+place, and an empty list is rejected — otherwise every ingredient would fall outside the
+kitchen walk.
+
 The ingredient list is the authoritative source of ingredient names, their fixed base
-unit, their mandatory precision, their reorder point and their display forms — one row per
-ingredient, so further ingredient-level fields can be added as columns later. Where an
-item is bought on the route is deliberately not such a column: it is the separate
-shopping-route pair of §10, whose name set also covers items that are not ingredients at
-all. The unit an ingredient is *bought in* is the `Shopping Unit` flag on its mappings row
+unit, their mandatory precision, their reorder point, their display forms and their storage
+place — one row per ingredient, so further ingredient-level fields can be added as columns
+later. Where an item is bought on the route is deliberately not such a column: it is the
+separate shopping-route pair of §10, whose name set also covers items that are not ingredients
+at all. The unit an ingredient is *bought in* is the `Shopping Unit` flag on its mappings row
 (see below), not a route.
 
 The `Precision` cell is **mandatory**: one of `very low`, `low`, `medium`, `high`,
 `very high`. It is the ingredient level of the display preference
 (docs/recipe_scaling_algorithm.md §4.1). A file under an older header (without the
-`Precision` column) is rejected instead of silently inventing a value.
+`Precision` column) is rejected instead of silently inventing a value. The header from before
+`Storage Place` existed (`Ingredient;Singular;Plural;Base Unit;Precision;Reorder Point`) still
+parses — its rows are unsorted — and is upgraded to the current header on the next write.
 
 The reorder point is the base-unit (g/ml) quantity that is definitely on stock directly
 after a shopping trip, independent of the meal plan. It is a mandatory cell and need not
@@ -484,13 +505,13 @@ The additional **units** themselves — display arrangement, number scheme, the
 `Unit Exact` flag (see additional_quantity_specifications.md §6.3) and the
 `Singular`/`Plural` display forms (see additional_quantity_specifications.md §3.2) —
 are not part of the user's Drive files: they are built-in definitions compiled from
-`docs/additional_units.csv` into the core package. Only the ingredient list and the
-mappings are user data; the mappings carry the shopping flag.
+`docs/additional_units.csv` into the core package. Only the storage-place list, the
+ingredient list and the mappings are user data; the mappings carry the shopping flag.
 
-The files are created on the first user addition („Neue Zutat anlegen“ in the recipe
-editor or on the „Zutaten“ screen), seeded with the built-in repo data, and are the
-authoritative master data once they exist: the app loads both into the runtime registry at
-startup and renders/exports
+The ingredient files are created on the first user addition („Neue Zutat anlegen“ in the
+recipe editor or on the „Zutaten“ screen), seeded with the built-in repo data; `lagerorte.csv`
+is already created on the first load (see above). All three are the authoritative master data
+once they exist: the app loads them into the runtime registries at startup and renders/exports
 every ingredient through them. Dot decimals; the parser tolerates German commas from
 spreadsheet edits. The canonical delimiter is `;`; a file exported comma-separated
 (spreadsheet apps do that in an English locale) still loads — the header row decides the

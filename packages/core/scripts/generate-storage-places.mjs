@@ -9,11 +9,13 @@
  * a one-column table: a place is a name, and its position in the file is its
  * only other property.
  *
- * The list is **built-in** master data, not user Drive data (decided with the
- * user): the zones do not need an editor in the web app, and no Drive file
- * overrides them. Changing a zone (or inserting one) therefore means editing
- * `docs/storage_places.csv`, re-running this generator and redeploying — the
- * same path the app's other compiled master tables take.
+ * The list is the built-in **seed**, like the other master-data tables: the web
+ * app loads the user's authoritative `lagerorte.csv` from the Drive
+ * `Stammdaten` folder at startup and the Drive file wins once it exists. The
+ * seed keeps the app functional while that file is missing (it is created from
+ * this list on the first load). Editing the default zones therefore means
+ * editing `docs/storage_places.csv` here and re-running this generator — the
+ * user edits their own copy in Drive.
  *
  * The generator is the seed's guard: it rejects an empty file, a wrong header,
  * an empty place or a duplicated place (case-folded like the ingredient names,
@@ -102,9 +104,9 @@ function render(places) {
   lines.push(' */');
   lines.push('');
   lines.push(
-    '/** The kitchen storage places in walking order (docs/storage_places.csv): the pantry page files its ingredient rows in this order. */',
+    '/** The built-in kitchen storage places in walking order (docs/storage_places.csv): the seed of the Drive `lagerorte.csv`, and the fallback while it is missing. */',
   );
-  lines.push('export const STORAGE_PLACES: readonly string[] = [');
+  lines.push('export const SEED_STORAGE_PLACES: readonly string[] = [');
   for (const place of places) {
     lines.push(`  ${JSON.stringify(place)},`);
   }

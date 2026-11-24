@@ -9,7 +9,8 @@ import {
   storagePlaceRank,
 } from './pantrySort.js';
 import type { ShoppingNeed } from './shoppingList.js';
-import { STORAGE_PLACES } from './storagePlacesData.js';
+import { SEED_STORAGE_PLACES } from './storagePlacesData.js';
+import { resetStoragePlaces, setStoragePlaces } from './storagePlacesRegistry.js';
 
 /** One need with the amount/reorder pair the ordering reads. */
 function need(
@@ -69,6 +70,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetIngredientMappings();
+  resetStoragePlaces();
 });
 
 describe('storagePlaceOf', () => {
@@ -83,11 +85,20 @@ describe('storagePlaceOf', () => {
     expect(storagePlaceOf('Fremd')).toBeNull();
   });
 
+  it('follows the loaded list when the Drive file changed the zones', () => {
+    setStoragePlaces(['Schublade 2', 'Kühlschrank']);
+    expect(storagePlaceRank('Mehl')).toBe(0);
+    expect(storagePlaceRank('Milch')).toBe(1);
+    // A zone the loaded list does not know is unsorted, like a hand-edited
+    // zutaten.csv whose zone was removed from lagerorte.csv.
+    expect(storagePlaceOf('Erbsen')).toBeNull();
+  });
+
   it('ranks the places in the walking order and the unsorted group last', () => {
     expect(storagePlaceRank('Milch')).toBe(0);
     expect(storagePlaceRank('Erbsen')).toBe(1);
     expect(storagePlaceRank('Mehl')).toBe(3); // after Schublade 1 (index 2)
-    expect(storagePlaceRank('Salz')).toBe(STORAGE_PLACES.length);
+    expect(storagePlaceRank('Salz')).toBe(SEED_STORAGE_PLACES.length);
   });
 });
 

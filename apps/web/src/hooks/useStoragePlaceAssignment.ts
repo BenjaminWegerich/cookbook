@@ -17,7 +17,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 
-import { STORAGE_PLACES } from '@cookbook/core';
+import { isStoragePlace } from '@cookbook/core';
 
 import { updateIngredientStoragePlace } from '../drive/ingredientMasterData';
 
@@ -62,7 +62,7 @@ export function useStoragePlaceAssignment(token: string): StoragePlaceAssignment
 
   const assign = useCallback(
     async (ingredient: string, place: string): Promise<boolean> => {
-      if (!STORAGE_PLACES.includes(place)) {
+      if (!isStoragePlace(place)) {
         setErrors((current) => new Map(current).set(ingredient, 'Unbekannter Lagerort.'));
         return false;
       }

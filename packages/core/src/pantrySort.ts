@@ -10,10 +10,11 @@
  *
  * The order is a three-level key (decided with the user):
  *
- * 1. **Storage place**, in the walking order of `STORAGE_PLACES`
- *    (docs/storage_places.csv). An ingredient without a place — or with a place
- *    the built-in list does not know, which only a hand-edited file can produce
- *    because the CSV parser rejects it — sorts behind every sorted ingredient.
+ * 1. **Storage place**, in the walking order of `allStoragePlaces()`
+ *    (the Drive `lagerorte.csv`, seeded by docs/storage_places.csv). An
+ *    ingredient without a place — or with a place the current list does not
+ *    know, which only a hand-edited file can produce because the CSV parser
+ *    rejects it — sorts behind every sorted ingredient.
  *    The page shows no group headings (decided with the user): the walk is
  *    implicit in the row order.
  * 2. **Purchase first**: within one place, a row whose pre-filled Vorrat does
@@ -32,7 +33,7 @@
 
 import { mappingsFor } from './ingredientRegistry.js';
 import { stockPrefill, type ShoppingNeed } from './shoppingList.js';
-import { STORAGE_PLACES } from './storagePlacesData.js';
+import { allStoragePlaces } from './storagePlacesRegistry.js';
 
 /**
  * The storage place of one ingredient name, or null when it is unsorted.
@@ -44,7 +45,7 @@ import { STORAGE_PLACES } from './storagePlacesData.js';
  */
 export function storagePlaceOf(ingredient: string): string | null {
   const place = mappingsFor(ingredient)?.storagePlace;
-  if (place === undefined || !STORAGE_PLACES.includes(place)) {
+  if (place === undefined || !allStoragePlaces().includes(place)) {
     return null;
   }
   return place;
@@ -55,8 +56,9 @@ export function storagePlaceOf(ingredient: string): string | null {
  * Used by the comparator here and by the cooking step's stable row sort.
  */
 export function storagePlaceRank(ingredient: string): number {
+  const places = allStoragePlaces();
   const place = storagePlaceOf(ingredient);
-  return place === null ? STORAGE_PLACES.length : STORAGE_PLACES.indexOf(place);
+  return place === null ? places.length : places.indexOf(place);
 }
 
 /**

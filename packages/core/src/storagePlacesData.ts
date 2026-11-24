@@ -4,8 +4,8 @@
  * Do not edit by hand — re-run 'npm run generate:storage-places' (packages/core) after a CSV change.
  */
 
-/** The kitchen storage places in walking order (docs/storage_places.csv): the pantry page files its ingredient rows in this order. */
-export const STORAGE_PLACES: readonly string[] = [
+/** The built-in kitchen storage places in walking order (docs/storage_places.csv): the seed of the Drive `lagerorte.csv`, and the fallback while it is missing. */
+export const SEED_STORAGE_PLACES: readonly string[] = [
   'Kühlschrank',
   'Gefrierschrank',
   'Schublade 1',

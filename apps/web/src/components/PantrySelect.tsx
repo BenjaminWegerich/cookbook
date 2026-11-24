@@ -25,7 +25,8 @@
  *   but a value typed into the "kaufen" side is used **exactly** — never
  *   rounded, and allowed to exceed the need (the Vorrat then reads zero);
  * - the rows are filed by the **kitchen storage place** (decided with the user):
- *   core's `sortPantryNeeds` walks the built-in places (docs/storage_places.csv)
+ *   core's `sortPantryNeeds` walks the current places (the Drive
+ *   `lagerorte.csv`, seeded by docs/storage_places.csv)
  *   and, inside each place, puts the rows that still need a purchase before the
  *   covered ones, then sorts by name. An ingredient without a place sorts behind
  *   every sorted one. The page writes **no group headings** (decided with the
@@ -37,7 +38,7 @@
  *
  * **A missing „Lagerort“ is entered here** (decided with the user): the row of
  * an ingredient with no place carries the same inline picker as „Einkaufsliste
- * sortieren“ — a „Lagerort“ caption, the built-in place chips below it, and the
+ * sortieren“ — a „Lagerort“ caption, the current place chips below it, and the
  * dashed „Ignorieren“ chip beside them. Choosing a chip writes the master
  * data immediately (the shared `useStoragePlaceAssignment`); an **existing**
  * place is deliberately not editable here — the ingredient master-data sheet is

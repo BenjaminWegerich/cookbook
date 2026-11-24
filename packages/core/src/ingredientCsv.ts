@@ -11,8 +11,9 @@
  *   storage place and their reorder point. `Precision` is one of the five
  *   stored levels (`very low` … `very high`); it is the mandatory ingredient
  *   level of the display preference (docs/recipe_scaling_algorithm.md §4.1).
- *   `Storage Place` is optional and names one of the built-in places
- *   (docs/storage_places.csv, `STORAGE_PLACES`); empty = not sorted into the
+ *   `Storage Place` is optional and names one of the current kitchen places
+ *   (the Drive `lagerorte.csv`, `allStoragePlaces()`, seeded by
+ *   docs/storage_places.csv); empty = not sorted into the
  *   kitchen. An unknown place is rejected — the pantry page's order is only
  *   meaningful while every named place exists. The reorder point is
  *   the base-unit quantity definitely on stock directly after a shopping trip,
@@ -79,7 +80,7 @@ import {
 import { parseCsvRows } from './csv.js';
 import type { IngredientMappings } from './ingredientRegistry.js';
 import { parsePrecisionLevel, PRECISION_LEVELS, type PrecisionLevel } from './precision.js';
-import { STORAGE_PLACES } from './storagePlacesData.js';
+import { allStoragePlaces } from './storagePlacesRegistry.js';
 
 /** One ingredient-list row: the fixed base unit plus the ingredient's reorder point. */
 export interface IngredientListEntry {
@@ -108,7 +109,7 @@ export interface IngredientListEntry {
    */
   readonly precision: PrecisionLevel;
   /**
-   * Kitchen storage place of the ingredient, one of {@link STORAGE_PLACES}; or
+   * Kitchen storage place of the ingredient, one of {@link allStoragePlaces}; or
    * undefined when the ingredient is not sorted into the kitchen. The pantry
    * page files its rows by this place in walking order
    * (docs/storage_places.csv, src/pantrySort.ts).
@@ -271,18 +272,19 @@ function parsePrecisionCell(cell: string | undefined, ingredient: string): Preci
 
 /**
  * Parses the optional Storage Place cell: empty means "not sorted into the
- * kitchen", otherwise the value must be one of the built-in places
- * ({@link STORAGE_PLACES}). An unknown place fails loudly — the pantry order
+ * kitchen", otherwise the value must be one of the current kitchen places
+ * ({@link allStoragePlaces}). An unknown place fails loudly — the pantry order
  * would otherwise silently treat the ingredient as unsorted, hiding the typo.
  */
 function parseStoragePlaceCell(cell: string | undefined, ingredient: string): string | undefined {
   if (cell === undefined || cell === '') {
     return undefined;
   }
-  if (!STORAGE_PLACES.includes(cell)) {
+  const places = allStoragePlaces();
+  if (!places.includes(cell)) {
     throw new Error(
       `Zutaten-Liste: unbekannter Lagerort "${cell}" für "${ingredient}" ` +
-        `(erlaubt: ${STORAGE_PLACES.join(', ')}).`,
+        `(erlaubt: ${places.join(', ')}).`,
     );
   }
   return cell;

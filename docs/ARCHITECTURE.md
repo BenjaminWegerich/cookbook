@@ -137,19 +137,23 @@
   ingredient recipe's master row stays untouched. Deleting a draft removes its JSON file and
   its photo. The format is specified in
   [storage_format.md](storage_format.md) §11.
-- Ingredient master data lives in two CSV files in the `Stammdaten` subfolder — `zutaten.csv`
-  (ingredient list: name + base unit + reorder point + the optional Singular/Plural display
-  forms) and `zutaten-umrechnungen.csv` (AU mappings, each with the per-ingredient
-  shopping flag), in the canonical formats of
-  docs/ingredients.csv + docs/ingredient_unit_mappings.csv: the app loads both into the core
-  ingredient registry at startup, and they are authoritative once they exist — the repo CSVs
-  are the built-in seed used on first run. New ingredients are created from the recipe
-  editor's quantity sheet or the „Zutaten“ screen („Neue Zutat anlegen“), through the shared
-  `MasterDataSheet`: it collects name, base unit, display forms, reorder point, AU mappings
-  (including the purchase unit), precision and the shopping stop/synonyms, appends to both
-  ingredient files and creates/updates the item row. The split keeps ingredient-level fields
-  (name, base unit, reorder point, display forms) in one row per ingredient, separate from
-  the AU mappings.
+- Ingredient master data lives in three CSV files in the `Stammdaten` subfolder —
+  `lagerorte.csv` (the kitchen storage places, one `Place` per row in walking order),
+  `zutaten.csv` (ingredient list: name + base unit + reorder point + the optional
+  Singular/Plural display forms + the optional storage place) and `zutaten-umrechnungen.csv`
+  (AU mappings, each with the per-ingredient shopping flag), in the canonical formats of
+  docs/storage_places.csv + docs/ingredients.csv + docs/ingredient_unit_mappings.csv: the app
+  loads all three at startup, and they are authoritative once they exist — the repo CSVs are
+  the built-in seed used on first run. `lagerorte.csv` is created on the first load (the zones
+  have no in-app editor); `zutaten.csv` and its mappings are created on the first user
+  addition. Every non-empty `Storage Place` cell of `zutaten.csv` must name a place from
+  `lagerorte.csv` — the pantry page files its rows in that file's order. New ingredients are
+  created from the recipe editor's quantity sheet or the „Zutaten“ screen („Neue Zutat
+  anlegen“), through the shared `MasterDataSheet`: it collects name, base unit, display forms,
+  reorder point, AU mappings (including the purchase unit), precision and the shopping
+  locations/synonyms, appends to both ingredient files and creates/updates the item rows. The split
+  keeps ingredient-level fields (name, base unit, reorder point, display forms) in one row per
+  ingredient, separate from the AU mappings.
 - Where an item is bought is a separate master-data set in the same `Stammdaten` subfolder —
   `einkaufsweg.csv` (the route: store + section per row, in walking order),
   `einkaufs-artikel.csv` (the item table: item → store + section — the identity of everything

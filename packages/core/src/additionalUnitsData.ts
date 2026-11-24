@@ -41,7 +41,7 @@ export interface IngredientEntry {
   readonly reorderPoint: number;
   /** Mandatory ingredient-level precision: how exact vs practical the quantities of this ingredient are displayed (docs/recipe_scaling_algorithm.md §4.1). */
   readonly precision: PrecisionLevel;
-  /** Kitchen storage place (one of STORAGE_PLACES, docs/storage_places.csv): the order the pantry page files its rows in. Absent = the ingredient is not sorted into the kitchen. */
+  /** Kitchen storage place (one of `allStoragePlaces()`, docs/storage_places.csv / Drive `lagerorte.csv`): the order the pantry page files its rows in. Absent = the ingredient is not sorted into the kitchen. */
   readonly storagePlace?: string;
   /** Singular display form of the name (count 1 or a unit fraction such as ½), e.g. "Karotte"; absent = the name is invariant and serves for every count (Zucker, Milch). Present exactly when `plural` is. */
   readonly singular?: string;

@@ -15,9 +15,10 @@
  * which sections they show: an ingredient carries the display forms, the base
  * unit, the additional-unit mappings, the precision, the reorder point and the
  * optional kitchen „Lagerort“ in addition to the shopping data. The Lagerort
- * sits directly above „Einkauf“ and names one of the built-in places
- * (docs/storage_places.csv); the pantry pages file their rows by it and enter a
- * missing one inline, while this sheet is where an existing one is corrected.
+ * sits directly above „Einkauf“ and names one of the kitchen places
+ * (`lagerorte.csv` in Drive, seeded by docs/storage_places.csv); the pantry
+ * pages file their rows by it and enter a missing one inline, while this sheet
+ * is where an existing one is corrected.
  *
  * A third, narrower variant edits the ingredient row of an **ingredient
  * recipe** (a sub-recipe): it shows the same ingredient fields but no
@@ -51,6 +52,7 @@ import { useRef, useState } from 'react';
 import {
   allShoppingItems,
   allShoppingSynonyms,
+  allStoragePlaces,
   formatDecimal,
   masterIngredientNames,
   mappingsFor,
@@ -58,7 +60,6 @@ import {
   shoppingSections,
   shoppingStores,
   shoppingVariantsFor,
-  STORAGE_PLACES,
   validateShoppingVariant,
   type IngredientEntry,
   type IngredientMapping,
@@ -241,8 +242,9 @@ function MasterDataSheet({
   const [precision, setPrecision] = useState<PrecisionLevel>(entry?.precision ?? 'medium');
   /**
    * The chosen kitchen storage place, or null for "not sorted". The list is the
-   * built-in walking order (docs/storage_places.csv); no place editor exists in
-   * the app, so a chip only assigns, never renames or reorders a zone.
+   * current walking order (the Drive `lagerorte.csv`, seeded by
+   * docs/storage_places.csv); no place editor exists in the app, so a chip only
+   * assigns, never renames or reorders a zone.
    */
   const [storagePlace, setStoragePlace] = useState<string | null>(entry?.storagePlace ?? null);
   /** The chosen store — level 1 of the shopping route; null = nothing picked. */
@@ -890,7 +892,7 @@ function MasterDataSheet({
               Lagerort<span className="optional-mark">optional</span>
             </span>
             <div className="store-chips" role="group" aria-label="Lagerort">
-              {STORAGE_PLACES.map((candidate) => (
+              {allStoragePlaces().map((candidate) => (
                 <button
                   key={candidate}
                   type="button"

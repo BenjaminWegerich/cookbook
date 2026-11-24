@@ -623,7 +623,7 @@ function render(units, schemes, ingredientList, mappings) {
   );
   lines.push('  readonly precision: PrecisionLevel;');
   lines.push(
-    '  /** Kitchen storage place (one of STORAGE_PLACES, docs/storage_places.csv): the order the pantry page files its rows in. Absent = the ingredient is not sorted into the kitchen. */',
+    '  /** Kitchen storage place (one of `allStoragePlaces()`, docs/storage_places.csv / Drive `lagerorte.csv`): the order the pantry page files its rows in. Absent = the ingredient is not sorted into the kitchen. */',
   );
   lines.push('  readonly storagePlace?: string;');
   lines.push(

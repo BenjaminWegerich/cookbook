@@ -28,11 +28,17 @@
  * A missing file pair is not an error (the built-in seed keeps the app fully
  * functional); a corrupt or inconsistent pair throws with a German message and
  * the registry keeps its previous state (the built-in seed).
+ *
+ * Loading the pair starts by loading the kitchen storage-place list
+ * (`lagerorte.csv`, see ./storagePlacesMasterData): the list's `Storage Place`
+ * cells are validated against it, so the zones must be known before the
+ * ingredient file is parsed.
  */
 
 import {
   allIngredientMappings,
   isPrecisionLevel,
+  isStoragePlace,
   mergeIngredientMasterData,
   parseIngredientListCsv,
   parseIngredientMappingsCsv,
@@ -40,7 +46,6 @@ import {
   serializeIngredientMappingsCsv,
   setIngredientMappings,
   splitIngredientMasterData,
-  STORAGE_PLACES,
   type IngredientEntry,
   type IngredientMapping,
   type IngredientMappings,
@@ -54,6 +59,7 @@ import {
   type DriveFile,
 } from './driveClient';
 import { ensureCookbookArea, listCookbookFolder, type CookbookFolder } from './cookbookFolder';
+import { loadStoragePlacesMasterData } from './storagePlacesMasterData';
 
 /** File name of the ingredient list in the Stammdaten folder (user-visible). */
 const LIST_FILE_NAME = 'zutaten.csv';
@@ -85,6 +91,9 @@ let writtenSinceLoad = false;
  */
 export async function loadIngredientMasterData(token: string): Promise<void> {
   writtenSinceLoad = false;
+  // The list of allowed kitchen zones first: zutaten.csv is validated against
+  // it, so a zone the user added in the spreadsheet must already be known.
+  await loadStoragePlacesMasterData(token);
   const folder = await listCookbookFolder(token);
   const listFile = folder.data.files.find((entry) => entry.name === LIST_FILE_NAME);
   const mappingsFile = folder.data.files.find((entry) => entry.name === MAPPINGS_FILE_NAME);
@@ -303,7 +312,7 @@ export interface IngredientMasterEntryInput {
   /** Base-unit quantity on stock after a shopping trip: 0, a positive value, or Infinity. */
   reorderPoint: number;
   /**
-   * Kitchen storage place (one of STORAGE_PLACES), or null when the ingredient
+   * Kitchen storage place (one of `allStoragePlaces()`), or null when the ingredient
    * is not sorted into the kitchen. The pantry page files its rows by this place
    * (docs/storage_places.csv, src/pantrySort.ts).
    */
@@ -380,10 +389,10 @@ export async function updateIngredientMasterData(
   if (!isPrecisionLevel(update.precision)) {
     throw new Error('Zutaten-Stammdaten: Die Genauigkeit muss eine der fünf Stufen sein.');
   }
-  // The storage place is one of the built-in kitchen zones; a stale form value
-  // (a zone that no longer exists) fails loudly instead of writing an
-  // unreachable cell.
-  if (update.storagePlace !== null && !STORAGE_PLACES.includes(update.storagePlace)) {
+  // The storage place is one of the current kitchen zones (the Drive list when
+  // it exists); a stale form value (a zone that no longer exists) fails loudly
+  // instead of writing an unreachable cell.
+  if (update.storagePlace !== null && !isStoragePlace(update.storagePlace)) {
     throw new Error(
       `Zutaten-Stammdaten: unbekannter Lagerort "${update.storagePlace}" für „${name}“.`,
     );
@@ -438,7 +447,7 @@ export async function updateIngredientMasterData(
  *
  * @param token the Drive access token
  * @param name the canonical ingredient name (the entry's key)
- * @param storagePlace one of STORAGE_PLACES, or null to clear the assignment
+ * @param storagePlace one of `allStoragePlaces()`, or null to clear the assignment
  * @returns the place the entry had before this write, for the caller's undo
  * @throws {Error} when the place is unknown, the ingredient is not registered,
  *   or Drive rejects the write
@@ -448,7 +457,7 @@ export async function updateIngredientStoragePlace(
   name: string,
   storagePlace: string | null,
 ): Promise<{ previous: string | null }> {
-  if (storagePlace !== null && !STORAGE_PLACES.includes(storagePlace)) {
+  if (storagePlace !== null && !isStoragePlace(storagePlace)) {
     throw new Error(`Zutaten-Stammdaten: unbekannter Lagerort "${storagePlace}" für „${name}“.`);
   }
 

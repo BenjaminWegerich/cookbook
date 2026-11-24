@@ -17,7 +17,7 @@
  * UI language is German (docs/CODING_CONVENTIONS.md).
  */
 
-import { STORAGE_PLACES } from '@cookbook/core';
+import { allStoragePlaces } from '@cookbook/core';
 
 import { VisibilityOffIcon } from './icons';
 
@@ -59,7 +59,7 @@ function StoragePlacePicker({
       <span className="field-label">Lagerort</span>
       <div className="pantry-place-row">
         <div className="store-chips" role="group" aria-label={`Lagerort für ${ingredient}`}>
-          {STORAGE_PLACES.map((place) => (
+          {allStoragePlaces().map((place) => (
             <button
               key={place}
               type="button"
