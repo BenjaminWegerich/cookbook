@@ -132,12 +132,14 @@
   margin: 0;
 }
 
-/* The "Link" value of an unrecognized meal-plan entry: the domain the entry's
-   link points at, as the one real anchor in the app (nothing else links out of
-   a sheet). It carries the accent colour and an underline, so it is readable as
-   a link at a glance — the browser's default link colours are cold and outside
-   the warm palette (docs/CODING_CONVENTIONS.md). The weight comes from
-   `.overview-meta dd` like every other value in the row. */
+/* The "Quelle" value: the recipe's own source link (original recipe or
+   inspiration), a plain caption/value row. It carries the accent colour and an
+   underline, so it is readable as a link at a glance — the browser's default
+   link colours are cold and outside the warm palette
+   (docs/CODING_CONVENTIONS.md). The weight comes from `.overview-meta dd` like
+   every other value in the row. An unrecognized entry's own link is not this
+   anchor any more: it is the clickable badge of the same row
+   (.recipe-badge-link in styles/recipe-list.css). */
 .overview-link {
   color: var(--color-accent);
   text-decoration: underline;

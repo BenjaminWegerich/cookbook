@@ -14,7 +14,8 @@
 > integration has started: its gateway (`apps/keep-gateway/`) reads both Keep lists over a
 > thin HTTP boundary, and the web app shows the meal plan as the first of the recipe list's two
 > captioned sections („Essensplan“ over „Restliche Sammlung“, entry recognition, the
-> danger „Unbekannt“ badge at the end of an unrecognized card's title) and writes a planned
+> badge at the end of an unrecognized card's title — the danger „Unbekannt“ cloche, or the
+> globe „Link“ marker when the entry carries a link) and writes a planned
 > dish back, linking it at the recipe's HTML export
 > behind the caller's Google sign-in, degrading to "Keep off" when the gateway is unreachable. That export link is served by a
 > small Apps Script web app (`apps/export-host/`), because a Drive viewer renders the stored
@@ -136,8 +137,8 @@
   contain states `Rezepte/` deliberately rejects (no title, no servings, a row-only step,
   a duplicate title). A draft's optional photo lives in `Bilder/<draft-id>.jpg` / `.png`.
   `listDrafts` merges drafts into the home screen, where they lead „Restliche Sammlung“
-  with the „Entwurf“ badge. The editor reads a draft through `readDraft`; „Speichern“
-  validates it, creates the canonical recipe (including master-data registration and the
+  with the „Entwurf“ badge at the end of their title line. The editor reads a draft through
+  `readDraft`; „Speichern“ validates it, creates the canonical recipe (including master-data registration and the
   export), renames the photo and deletes the draft. Drafts are excluded from meal-plan
   recognition, scaling, shopping, sub-recipe links and the §7.2 collection validation.
   A canonical recipe can be demoted again through `demoteRecipeToDraft` (`draftStorage.ts`):
@@ -380,10 +381,11 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
 - **Cards.** Recognized entries use the known card format; a card shows a photo only when the
   recipe has one and is text-only otherwise (its title may then run to six lines instead of
   three). An unrecognized entry renders as a text-only card too. Its title is not line-clamped:
-  the danger „Unbekannt“ badge ends it — on the title's last line while it still fits there,
-  otherwise on a line of its own (the serving cloche of `RoomServiceIcon`, so the state reads as
-  "a dish, not known yet" and not as a failure). The card shows the title without export link,
-  stated size and free-text note — the shape a known card has —
+  a symbol-only badge ends it — on the title's last line while it still fits there, otherwise
+  on a line of its own. An entry that carries a link shows the globe of `GlobeIcon` in the
+  accent „Link“ fill; one without a link keeps the danger „Unbekannt“ cloche of
+  `RoomServiceIcon` ("a dish, not known yet", not a failure). The card shows the title without
+  export link, stated size and free-text note — the shape a known card has —
   and is tappable: the recipe overview is its destination, where the entry can be replaced by
   an existing recipe or by a new one (manual or AI) or dropped from the plan with „Abhaken“.
 - **Recipe overview.** A card opens the overview sheet in one of three forms. A recipe that is
@@ -392,11 +394,12 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
   „Umplanen“; the hero carries no „Eingeplant“ badge, since the „Geplant“ value and „Umplanen“
   already state the plan, and a planned recipe only ever appears in the „Essensplan“ section
   („Restliche Sammlung“ leaves it out). An unrecognized entry has no hero at all; its
-  caption/value row leads with the danger „Unbekannt“ badge and then shows the parts its line
-  carries: the parsed title, the free-text note as a line of its own under the
-  title (in its written parentheses, in the description's typography), the stated size as the
-  „Geplant“ caption/value item exactly like a known planned recipe, and the link's domain
-  behind a „Link“ caption right after it, opened in a new tab. It then offers the replace/drop
+  caption/value row leads with the danger „Unbekannt“ badge — or, when the entry carries a
+  link, with the clickable accent „Link“ badge (the globe plus the link's domain as its text,
+  opened in a new tab) — and then shows the parts its line carries: the parsed title, the
+  free-text note as a line of its own under the title (in its written parentheses, in the
+  description's typography) and the stated size as the „Geplant“ caption/value item exactly
+  like a known planned recipe. It then offers the replace/drop
   destination described above. „Einplanen“ writes the dish to the meal plan;
   „Umplanen“ opens the same overlay in a replan mode that pre-selects the plan's stated size
   and replaces the entry with „Übernehmen“ — which, answered on the unchanged size, writes

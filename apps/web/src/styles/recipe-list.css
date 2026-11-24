@@ -455,10 +455,10 @@
 /* The title text: at most three lines, then an ellipsis. `min-width: 0` lets
    the text shrink below its longest word and `overflow-wrap: anywhere` breaks a
    long unbreakable word (a URL in a title, in practice) instead of widening the
-   card. The one exception is the unrecognized meal-plan title, which flows
-   inline so its badge can share the line (`.recipe-card-title--badge-inline`):
-   a line clamp needs a block-level box, and a block box would put the badge on
-   a line of its own. */
+   card. The exception is a card that carries a badge — a draft or an
+   unrecognized meal-plan entry: its title flows inline so the badge can share
+   the line (`.recipe-card-title--badge-inline`), because a line clamp needs a
+   block-level box, and a block box would put the badge on a line of its own. */
 .recipe-card-title-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -485,11 +485,15 @@
 /* Card badges: small all-caps state markers, one look for every instance (the
    editor's ingredient tags use the same recipe). A badge is plain content
    inside its card or row and never a hitbox of its own — the whole card is the
-   single tap target. An unrecognized meal-plan card carries its „Unbekannt"
-   badge in the title's flow (see `.recipe-card-title--badge-inline` below); the
-   badge itself also leads the recipe overview's caption/value row and sits
+   single tap target. The list cards carry their badge in the title's flow (a
+   draft's „Entwurf", an unrecognized plan entry's „Unbekannt" or, when the entry
+   has a link, its „Link" globe; see `.recipe-card-title--badge-inline` below);
+   the badge itself also leads the
+   recipe overview's caption/value row and sits
    inline after an entry's text in the shopping-list selection
-   (styles/shopping-list-select.css). */
+   (styles/shopping-list-select.css). The recipe list's cards are the one
+   exception: they drop the label and show the symbol alone in a rounded square
+   the height of one text line (`.recipe-badge--card` below). */
 .recipe-badge {
   display: inline-flex;
   align-items: center;
@@ -514,45 +518,77 @@
   color: currentColor;
 }
 
+/* Card variant: a rounded square, same fill and 14 px symbol as the text badge
+   but without its label (decided with the user). The square takes the text's
+   own height (--leading-sm, 18 px) so a card's badge reads as exactly as tall
+   as a line of its title, and --radius-sm keeps the text badge's corner. The
+   symbol is centred in the square; with no label, the text badge's asymmetric
+   end padding would be wrong. The state word survives as the badge's
+   accessible name. The recipe overview and the shopping-list selection keep the
+   full text badge. */
+.recipe-badge--card {
+  justify-content: center;
+  width: var(--leading-sm);
+  height: var(--leading-sm);
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
 /* "Unbekannt" (meal plan): the entry does not name a recipe of
    the collection, so nothing here can be scaled or cooked from. */
 .recipe-badge-unknown {
   background: var(--color-danger);
 }
 
-/* "Entwurf": a saved, unfinished recipe. It belongs to the title block, not to
-   the media and not to a trailing badge column (decided with the user): the
-   wrapper sits under the title text at the title block's 6 px step. */
-.recipe-card-badge {
-  display: block;
-  margin-block-start: var(--space-2);
+/* "Link" (meal plan): an unrecognized entry's own link, in the accent that is
+   the app's link colour. The card shows the globe alone in the square card
+   variant; the overview wraps the same look in an <a>, adds the link in its
+   short display form (the domain) as the badge's text, and makes it the
+   control that opens the link — the one badge in the app that is a control of
+   its own. The globe, not the chain link: the chain is the „Rezept" tag's
+   symbol, i.e. the sub-recipe relationship (decided with the user). Unlike
+   every other badge the overview's text is data, not a state word, so it keeps
+   the domain's normal case instead of the badges' caps; underlined on hover and
+   keyboard focus, so it reads as something that opens. The underline offset
+   matches the overview's plain link (.overview-link). */
+.recipe-badge-link {
+  background: var(--color-accent);
+  text-transform: none;
+  text-decoration: none;
+  text-underline-offset: 2px; /* ladder value */
 }
 
-/* The „Unbekannt" badge of an unrecognized meal-plan entry is not a block of its
-   own: it follows the title text like a final word (decided with the user), so
-   a short title carries it on the same line and only a title whose last line has
-   no room left pushes it down. That needs the title text to flow inline, which
-   is also why this one card's title no longer clamps to lines with an ellipsis:
-   a clamp needs a block-level box, and a block box would leave the badge no line
-   to sit on. The gap between text and badge is the en space the markup renders
-   (TITLE_BADGE_GAP in RecipeList.tsx), and it is deliberately not a margin: a
-   margin would indent the badge when it starts a line of its own. The stacked
-   badge's 6 px step does not apply here. */
+a.recipe-badge-link:hover,
+a.recipe-badge-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* The card's badge wrapper. Every card badge — a draft's „Entwurf", an
+   unrecognized plan entry's „Unbekannt" or its „Link" globe — follows the title
+   text like a final
+   word (decided with the user), so a short title carries the badge on the same
+   line and only a title whose last line has no room left pushes it down. The
+   wrapper is a box of its own inside that line, so it has to say where it sits
+   on it: `middle` centres the badge on the title's x-height (decided with the
+   user, who found the default alignment sitting too high). `inline-flex`, not
+   `inline-block`: an inline-block would take the title's 24 px line-height as a
+   strut and hand `middle` a 24 px box, which would push the badge down by the
+   difference; as a flex container the wrapper is exactly as tall as the badge.
+   The gap between text and badge is the en space the markup renders
+   (TITLE_BADGE_GAP in RecipeList.tsx), deliberately not a margin: a margin
+   would indent the badge when it starts a line of its own. */
+.recipe-card-badge {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+/* Inline badge flow needs the title text to flow inline too, which is also why
+   a card with a badge no longer clamps its title to lines with an ellipsis: a
+   clamp needs a block-level box, and a block box would leave the badge no line
+   to sit on. Only cards with a badge carry the modifier, so a title without one
+   keeps its clamp. */
 .recipe-card-title--badge-inline .recipe-card-title-text {
   display: inline;
-}
-
-/* The badge is a box of its own inside the title's line, so it has to say where
-   it sits on that line: `middle` centres the pill on the title's x-height
-   (decided with the user, who found the default alignment sitting too high).
-   `inline-flex`, not `inline-block`: an inline-block would take the title's
-   24 px line-height as a strut and hand `middle` a 24 px box, which would push
-   the pill down by the difference; as a flex container the wrapper is exactly
-   as tall as the pill. */
-.recipe-card-title--badge-inline .recipe-card-badge {
-  display: inline-flex;
-  margin-block-start: 0;
-  vertical-align: middle;
 }
 
 .recipe-badge-draft {

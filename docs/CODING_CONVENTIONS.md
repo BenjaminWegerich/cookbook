@@ -97,18 +97,25 @@
   implicit default, only the exception is named.
 - **Inline badges lead with a symbol:** every inline badge — the small marker that
   labels a value's state, i.e. the ingredient tags (`Neu`, `Rezept`, `Referenz`)
-  and the meal-plan `Unbekannt` badge — carries a symbol in front of its text, so a
-  badge is readable at a glance and never plain coloured text. The symbol comes from
-  the shared icon set (`components/icons.tsx`) and follows the badge's meaning, not
+  and the meal-plan `Unbekannt` and `Link` badges — carries a symbol, so a badge is
+  readable at a glance and never plain coloured text. The symbol comes from the
+  shared icon set (`components/icons.tsx`) and follows the badge's meaning, not
   its colour: `Neu` = "new releases" (the name is not in the master data yet),
   `Rezept` = "link" (opens the ingredient's own recipe), `Referenz` = outline
-  "star" (mirrors the star toggle). A badge's own controls follow the same rule as
-  any other icon (an icon-only control like the reference tag's × never replaces
-  the badge's leading symbol). Badges keep one shared style and the text stays a
-  short noun in source case — the all caps are a CSS effect, as with `.field-label`.
-  Trailing row badges sit in the row's right-aligned badge column, at least one En
-  space from the text before them; a name-suggestion chip marks an ingredient recipe
-  with the muted link symbol only, not a text badge.
+  "star" (mirrors the star toggle), `Unbekannt` = "room service" (a dish the app
+  cannot place), `Link` = "globe" (a meal-plan line's own link; the chain link is
+  reserved for `Rezept`, i.e. the sub-recipe relationship). A badge's own controls
+  follow the same rule as any other icon (an icon-only control like the reference
+  tag's × never replaces the badge's leading symbol). Badges keep one shared style
+  and the text stays a short noun in source case — the all caps are a CSS effect, as
+  with `.field-label`. The recipe-list cards are the exception: they drop the label
+  and keep the symbol in a rounded square the height of one title line, with the
+  state word as its `aria-label`. The recipe overview keeps the visible label; its
+  `Link` badge is the control that opens the link, and its text is the link's domain
+  in the address's normal case rather than the badges' caps. Trailing row badges sit
+  in the row's right-aligned badge column, at least one En space from the text
+  before them; a name-suggestion chip marks an ingredient recipe with the muted link
+  symbol only, not a text badge.
 - **Field captions are all caps:** form labels above inputs/controls (`.field-label`) are
   displayed in all caps via `text-transform: uppercase` in the CSS. Keep the markup and
   stored strings in normal German case (`"Titel"`, not `"TITEL"`) — the caps are purely

@@ -10,6 +10,7 @@ import type { KeepStatus } from '../keep/useKeep';
 import {
   CheckCircleIcon,
   CloseIcon,
+  GlobeIcon,
   ListPlusIcon,
   PencilIcon,
   RoomServiceIcon,
@@ -36,14 +37,15 @@ const MEALPLAN_CAPTION_ID = 'recipe-section-mealplan';
 const COLLECTION_CAPTION_ID = 'recipe-section-collection';
 
 /**
- * The gap between an unrecognized entry's title and its „Unbekannt" badge, as
- * an en space (U+2002, half an em). It is deliberately wider than a word space
- * (decided with the user, who wanted more air between the two) and still counts
- * as word spacing — the same separator the AI field hint uses (AiCreateSheet).
- * A margin could not do this job: the badge may start a line of its own when the
- * title's last line is full, and an inline margin would then indent it from the
- * title's edge; an en space is not collapsible, so it simply stays at the end of
- * the broken line. The escape keeps the source readable.
+ * The gap between a card's title and the badge that follows it (an unrecognized
+ * plan entry's „Unbekannt", a draft's „Entwurf"), as an en space (U+2002, half
+ * an em). It is deliberately wider than a word space (decided with the user, who
+ * wanted more air between the two) and still counts as word spacing — the same
+ * separator the AI field hint uses (AiCreateSheet). A margin could not do this
+ * job: the badge may start a line of its own when the title's last line is full,
+ * and an inline margin would then indent it from the title's edge; an en space
+ * is not collapsible, so it simply stays at the end of the broken line. The
+ * escape keeps the source readable.
  */
 const TITLE_BADGE_GAP = '\u2002';
 
@@ -207,10 +209,13 @@ interface RecipeListProps {
  *   text is a recipe title, plus an optional fitting size suffix) renders in
  *   the known card format; every other entry renders as a text-only card with
  *   the entry's title (the export link, a stated size and a free-text note are
- *   left out — the overview behind the card shows them) and the danger
- *   "Unbekannt" badge at the end of that title, on the same line when it still
- *   fits there and on a line of its own when it does not (decided with the
- *   user). A card shows a photo only when the recipe
+ *   left out — the overview behind the card shows them) and a badge at the end of
+ *   that title, on the same line when it still fits there and on a line of its
+ *   own when it does not (decided with the user): the globe Link marker when the
+ *   entry carries a link, the danger "Unbekannt" cloche when it does not
+ *   (decided with the user); on the cards the badge is symbol only — the symbol
+ *   alone in the badge — while the overview keeps the full word (decided with
+ *   the user). A card shows a photo only when the recipe
  *   has one; without a photo it is text-only and its title may run to more lines
  *   (decided with the user). Tapping either card opens the overview: the
  *   recognized one with its stated size and "Umplanen", the unrecognized one as
@@ -224,9 +229,10 @@ interface RecipeListProps {
  *   dishes, then the ingredient recipes, each group in a random order that is
  *   stable for the page but differs on every reload (decided with the user): a
  *   draft is unfinished work to resume, a dish is what the user cooks, a base is
- *   what they use in one. A draft card carries its „Entwurf“
- *   badge directly below the title and the same whole-card tap target as a
- *   recipe; it is never planned and never cookable.
+ *   what they use in one. A draft card carries its „Entwurf“ badge at the end of
+ *   its title line — symbol only on the card (decided with the user), like the
+ *   "Unbekannt" badge, with the same en-space gap — and the same whole-card tap
+ *   target as a recipe; it is never planned and never cookable.
  *
  * Each caption carries its counter ("Essensplan 5 Einträge, davon 2 unbekannt",
  * "Restliche Sammlung 8 Rezepte", "Einkaufsliste 4 Einträge, davon 1
@@ -516,12 +522,15 @@ function RecipeList({
             );
           }
           // Unrecognized: no recipe stands behind the entry, so the card carries
-          // no media at all — the title alone states the entry. The danger
-          // "Unbekannt" badge follows the title as a word does (decided with the
-          // user): it shares the title's last line while it still fits there
-          // and only drops to a line of its own when it does not. The serving
-          // cloche of RoomServiceIcon before the label keeps the meaning "a
-          // dish, not known yet" without claiming a photo area. The title is
+          // no media at all — the title alone states the entry. A badge follows
+          // the title as a word does (decided with the user): it shares the
+          // title's last line while it still fits there and only drops to a line
+          // of its own when it does not. Which badge depends on the link
+          // (decided with the user): an entry that carries one is marked by the
+          // globe Link marker, because its link is the fact that leads
+          // somewhere, while an entry without one keeps the danger "Unbekannt"
+          // cloche. Both are symbol only on the cards, and either way the word
+          // survives as the badge's accessible name. The title is
           // the entry without its export URL, its stated size and its free-text
           // note — exactly the shape a known recipe's card has — and the
           // overview behind the card shows those recognized parts (size, note,
@@ -535,10 +544,30 @@ function RecipeList({
                   <span className="recipe-card-title-text">{card.title}</span>
                   {TITLE_BADGE_GAP}
                   <span className="recipe-card-badge">
-                    <span className="recipe-badge recipe-badge-unknown">
-                      <RoomServiceIcon className="recipe-badge-icon" optical={20} />
-                      <span>Unbekannt</span>
-                    </span>
+                    {/* Symbol only (decided with the user): an entry with a
+                        link carries the globe Link marker in place of the
+                        „Unbekannt" cloche, because its link is the one fact
+                        about it that leads somewhere; an entry without a link
+                        keeps the cloche. Either way the state word stays the
+                        badge's accessible name, and the whole card remains the
+                        tap target (the overview behind it opens the link). */}
+                    {card.link !== null ? (
+                      <span
+                        className="recipe-badge recipe-badge-link recipe-badge--card"
+                        role="img"
+                        aria-label="Link"
+                      >
+                        <GlobeIcon className="recipe-badge-icon" optical={20} />
+                      </span>
+                    ) : (
+                      <span
+                        className="recipe-badge recipe-badge-unknown recipe-badge--card"
+                        role="img"
+                        aria-label="Unbekannt"
+                      >
+                        <RoomServiceIcon className="recipe-badge-icon" optical={20} />
+                      </span>
+                    )}
                   </span>
                 </span>
               </button>
@@ -571,15 +600,30 @@ function RecipeList({
           <li key={recipe.fileId}>
             <button type="button" className="recipe-card" onClick={() => onOpenRecipe(recipe)}>
               <RecipeThumb recipe={recipe} token={token} />
-              <span className="recipe-card-title">
+              <span
+                className={`recipe-card-title${
+                  recipe.status === 'draft' ? ' recipe-card-title--badge-inline' : ''
+                }`}
+              >
                 <span className="recipe-card-title-text">{recipe.title}</span>
                 {recipe.status === 'draft' && (
-                  <span className="recipe-card-badge">
-                    <span className="recipe-badge recipe-badge-draft">
-                      <PencilIcon className="recipe-badge-icon" optical={20} />
-                      <span>Entwurf</span>
+                  <>
+                    {/* The same en space as on an unrecognized plan entry: one
+                        non-collapsible gap between title and badge, so a badge
+                        that breaks to the next line starts unindented. */}
+                    {TITLE_BADGE_GAP}
+                    <span className="recipe-card-badge">
+                      {/* Symbol only, like the "Unbekannt" card badge: the pencil
+                          carries the state, the word stays its accessible name. */}
+                      <span
+                        className="recipe-badge recipe-badge-draft recipe-badge--card"
+                        role="img"
+                        aria-label="Entwurf"
+                      >
+                        <PencilIcon className="recipe-badge-icon" optical={20} />
+                      </span>
                     </span>
-                  </span>
+                  </>
                 )}
               </span>
             </button>

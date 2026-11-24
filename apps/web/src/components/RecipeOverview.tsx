@@ -34,13 +34,15 @@
  *    hero image at all** (decided with the user; the list card's "Unbekannt"
  *    badge is enough, and this sheet is about the entry's text and its actions). Its
  *    body shows the title without the export link, the stated size and a
- *    trailing free-text note, then the parts the parser recognized: the danger
- *    "Unbekannt" badge (RoomServiceIcon before the label) as the first item of the
- *    caption/value row, the free-text note as a line of its own under the title
- *    (in its written parentheses), the stated size as the "Geplant"
- *    caption/value item exactly like a known planned
- *    recipe, and the entry's link as the domain behind a "Link" caption right
- *    after it. It carries exactly one
+ *    trailing free-text note, then the parts the parser recognized: the
+ *    free-text note as a line of its own under the title (in its written
+ *    parentheses) and the stated size as the "Geplant" caption/value item
+ *    exactly like a known planned recipe. The entry's own link leads the row as
+ *    a clickable badge, carrying the link in its short display form (the
+ *    domain) as its text. The danger "Unbekannt" badge (RoomServiceIcon before
+ *    the label) leads that row whenever the entry has no link; an entry that
+ *    has one is marked by its link badge alone in that place (decided with the
+ *    user). It carries exactly one
  *    constructive action, "Eintrag ersetzen" (accent fill, growing), which
  *    opens a menu with "Bestehendes Rezept auswählen", "Rezept manuell
  *    schreiben" and "Rezept mit KI schreiben"; next to it "Abhaken"
@@ -157,6 +159,7 @@ import {
   CalendarEditIcon,
   CheckBoxIcon,
   ContentCopyIcon,
+  GlobeIcon,
   MenuBookIcon,
   MoreVertIcon,
   PencilIcon,
@@ -171,8 +174,8 @@ import ReplaceRecipeSheet from './ReplaceRecipeSheet';
 import RecipeThumb from './RecipeThumb';
 
 /**
- * The domain an entry's link points at, as the unrecognized variant's "Link"
- * value shows it ("tinyurl.com", "chefkoch.de"). The host is taken from the URL
+ * The domain an entry's link points at, as the unrecognized variant's link
+ * badge shows it ("tinyurl.com", "chefkoch.de"). The host is taken from the URL
  * and a leading "www." is dropped, because it is decoration and not part of the
  * domain name. A link the browser cannot parse (it never should — the parser
  * only accepts http(s) URLs) falls back to the whole link, so the row is never
@@ -851,7 +854,7 @@ function RecipeOverview({
         : null;
   const plannedText = plannedShown !== null ? formatPlannedAmount(plannedShown) : null;
   /**
-   * The unrecognized entry's link, and the domain the "Link" value shows for it,
+   * The unrecognized entry's link, and the domain its badge shows as its text,
    * or null. Only this variant names a link: a recipe card's link is the meal
    * plan's business (the "Kochen" action), while an unrecognized entry has
    * nothing to cook, so the line's own link is the one fact about it that can be
@@ -869,11 +872,13 @@ function RecipeOverview({
   const sourceDomain = sourceHref !== null ? displayLinkDomain(sourceHref) : null;
   /**
    * Whether the caption/value row has anything to show. An unrecognized entry
-   * always has its "Unbekannt" badge in that row (decided with the user: the
-   * sheet names the state itself instead of leaving it to its differing
-   * actions), so the row exists even for a bare "Kürbissuppe" line; a recipe or
-   * draft shows the row when it has a plan size, a time or a source. The draft
-   * badge sits under the title instead, not in this row.
+   * always has a badge in that row: its danger "Unbekannt" marker, or — when it
+   * carries a link — the clickable link badge that takes the marker's place
+   * (decided with the user: the sheet names the state itself instead of leaving
+   * it to its differing actions, and a linked entry is marked by its link). So
+   * the row exists even for a bare "Kürbissuppe" line; a recipe or draft shows
+   * the row when it has a plan size, a time or a source. The draft badge sits
+   * under the title instead, not in this row.
    */
   const hasMeta =
     target.kind === 'unknown' ||
@@ -958,23 +963,27 @@ function RecipeOverview({
               fact should be read before the recipe's own timing. Arbeitszeit and
               Gesamtzeit follow as the recipe's lookup values after the
               description introduced the dish. An unrecognized entry leads the
-              same row with its "Unbekannt" badge and then names the two facts
-              its line carries: the size it states ("Geplant", exactly like a
-              known planned recipe) and, right after it, the domain of its link
-              behind the caption "Link". The shared row gives all of them the
-              app's established caption/value look with no new visual language. */}
+              same row with its "Unbekannt" badge — or, when the entry carries a
+              link, with the clickable link badge that replaces the marker —
+              and then names the size it states ("Geplant", exactly like a
+              known planned recipe). The "Geplant" fact keeps the app's
+              established caption/value look; the link joins the badges, because
+              its own text is already what it names. */}
           {hasMeta && (
             <dl className="overview-meta">
               {/* The unrecognized entry's state marker leads the row (decided
-                  with the user): "Geplant" and "Link" name facts of the line,
-                  while the badge says what kind of line this is, so it is read
-                  first. Its own wrapper class, not the caption/value item's: a
-                  badge has no value text to sit on, so the wrapper centres it
-                  in the row's line box (see .overview-meta-badge). It is a div
-                  child of the dl like the caption/value items — a badge is a
-                  state, not a caption with a value — and the row's flex layout
-                  keeps it on that same line. */}
-              {target.kind === 'unknown' && (
+                  with the user) whenever the entry has no link; an entry that
+                  has one is marked by the link badge alone, which therefore
+                  takes its place at the row's start. "Geplant" names a fact of
+                  the line, while the badge says what kind of line this is, so
+                  the badge is read first. Its own wrapper class, not the
+                  caption/value item's: a badge has no value text to sit on, so
+                  the wrapper centres it in the row's line box (see
+                  .overview-meta-badge), which the link badge below shares. Both
+                  are div children of the dl like the caption/value items — a
+                  badge is a marker or a control, not a caption with a value —
+                  and the row's flex layout keeps them on that same line. */}
+              {target.kind === 'unknown' && linkHref === null && (
                 <div className="overview-meta-badge">
                   <span className="recipe-badge recipe-badge-unknown">
                     <RoomServiceIcon className="recipe-badge-icon" optical={20} />
@@ -982,28 +991,30 @@ function RecipeOverview({
                   </span>
                 </div>
               )}
+              {linkHref !== null && linkDomain !== null && (
+                <div className="overview-meta-badge">
+                  {/* The entry's link is a control of its own (decided with the
+                      user), the one badge this sheet makes tappable: its text
+                      is the link in its short display form and the badge opens
+                      it. A new tab, like "Kochen": the Drive access token is
+                      memory-only, so navigating this tab away would demand a
+                      fresh Google sign-in on return. */}
+                  <a
+                    className="recipe-badge recipe-badge-link"
+                    href={linkHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Link öffnen: ${linkDomain}`}
+                  >
+                    <GlobeIcon className="recipe-badge-icon" optical={20} />
+                    <span>{linkDomain}</span>
+                  </a>
+                </div>
+              )}
               {plannedText !== null && (
                 <div className="overview-meta-item">
                   <dt>Geplant</dt>
                   <dd>{plannedText}</dd>
-                </div>
-              )}
-              {linkHref !== null && linkDomain !== null && (
-                <div className="overview-meta-item">
-                  <dt>Link</dt>
-                  <dd>
-                    {/* A new tab, like "Kochen": the Drive access token is
-                        memory-only, so navigating this tab away would demand a
-                        fresh Google sign-in on return. */}
-                    <a
-                      className="overview-link"
-                      href={linkHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {linkDomain}
-                    </a>
-                  </dd>
                 </div>
               )}
               {prepTime !== null && (

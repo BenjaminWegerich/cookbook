@@ -842,9 +842,13 @@ so media and title read as one column inside one frame.
 18px/10px rung: `--radius-lg` (18px) on the card, `--space-4` (10px) padding, and the media
 tile takes `--radius-md` (10px).
 
-**A saved draft marks itself under its title.** The „Entwurf" badge sits directly below the
-card title, left-aligned, at `--space-2`; it never overlays the media area. The title and the
-badge read as one title block, and the whole card stays one tap target.
+**A card badge follows its title.** The „Entwurf" badge of a saved draft and the „Unbekannt"
+or „Link" badge of an unrecognized meal-plan entry sit on the title's last line, after one En
+space, and move to a line of their own only when the last line is full; the whole card stays
+one tap target. On the card the badge is symbol only — a rounded square the height of one
+title line (`--radius-sm`, `--leading-sm`), in the badge's fill — and the state word lives in
+its accessible name (§5.7, §8). The recipe overview keeps the visible label. *decided with the
+user*
 
 **A list is rows inside one card, not a card per row.** Rows share the container's surface and
 are separated by a hairline divider (the first row carries none). A row's text column is
@@ -858,11 +862,11 @@ section's counter is right-aligned in the caption row, at least one En space aft
 and carries no parentheses (`Essensplan 5 Einträge, davon 2 unbekannt`).
 
 **Drafts lead „Restliche Sammlung".** A saved draft is a card of the collection, marked with
-its „Entwurf" badge under the title; drafts come first, then the finished dishes, then the
-ingredient recipes. Within each group the cards are shuffled once per page load, so the order
-differs on every reload while the three groups stay apart. The section's counter names them
-(`8 Rezepte, davon 2 Entwürfe`). A draft is never planned and never cookable, so it stays in
-this section and never appears in „Essensplan".
+its „Entwurf" badge at the end of its title line; drafts come first, then the finished dishes,
+then the ingredient recipes. Within each group the cards are shuffled once per page load, so
+the order differs on every reload while the three groups stay apart. The section's counter
+names them (`8 Rezepte, davon 2 Entwürfe`). A draft is never planned and never cookable, so it
+stays in this section and never appears in „Essensplan".
 
 **A collection-level action that is used only rarely sits below the last card.** It is one
 outlined button, left-aligned with the card grid, `--space-7` above it; it is not a caption
@@ -875,9 +879,9 @@ such action. *decided with the user*
   only thing that may carry its own target.
 - A card title clamps to three lines and is cut with an ellipsis; it is never pushed to a fourth
   line or set in a smaller size to fit. Without a media area the title may use up to six lines,
-  so a text-only card can carry a longer name. The unrecognized meal-plan title is the one
-  exception: it flows in full, because a clamped block would push its „Unbekannt" badge onto a
-  line of its own (§5.7).
+  so a text-only card can carry a longer name. A title that carries a badge is the exception:
+  it flows in full, because a clamped block would push the badge onto a line of its own
+  (§5.7).
 - A row holds one line of primary text and, where needed, one quieter line (`--text-sm`,
   muted) beneath it.
 - An ingredient arrangement's parenthesized note is muted and italic. Every list, chip and
@@ -887,8 +891,8 @@ such action. *decided with the user*
   there the note is the row's quiet right edge (see the cooking-view paragraph below).
 - Trailing badges (`Neu`, `Rezept`, `Referenz`, `Unbekannt`) sit in a right-aligned column of
   their own at the row's end, at least one En space from the text before them; a multi-line
-  text never pushes a badge into its last line. The draft badge is the exception: it belongs
-  to the title block and sits directly below the title, not in a trailing column. A badge
+  text never pushes a badge into its last line. The draft and meal-plan card badges are the
+  exception: they belong to the card title and follow it, not to a trailing column. A badge
   inside a content-sized chip gives way to its symbol — the recipe suggestion chip shows only
   the muted link symbol. The quantity sheet's preview repeats the `Rezept` badge as a button
   that opens the named recipe.
@@ -1011,10 +1015,12 @@ photo, a reading row or a form field (§4.7).
 
 *Applies to: web app.*
 
-**A badge is a small all-caps state marker that leads with a symbol.** Look: `--radius-sm`,
+**A badge is a small state marker that leads with a symbol.** Look: `--radius-sm`,
 `--text-sm` weight 600, `--color-on-accent` label, one 14px symbol (`--icon-sm`) before the
 text, and a fill that carries meaning. Labels are written in normal German case in the source
-(„Neu"); the caps are a CSS effect.
+(„Neu"); the caps are a CSS effect. On the recipe-list cards the badge drops its label and
+keeps only the symbol, in a rounded square the height of one title line (18px); the state word
+then lives in the badge's `aria-label` (§8). *decided with the user*
 
 | Badge | Symbol | Fill | Meaning |
 | --- | --- | --- | --- |
@@ -1022,26 +1028,38 @@ text, and a fill that carries meaning. Labels are written in normal German case 
 | „Rezept" | link | accent | the ingredient has a recipe of its own; the badge itself opens it |
 | „Referenz" | outline star | olive | mirrors the star toggle; its × clears the role |
 | „Unbekannt" | room service | danger | a meal-plan line the app cannot recognise |
+| „Link" | globe | accent | a meal-plan line carries a link; on the card the symbol alone, in the overview the badge is the link itself |
 | „Entwurf" | pencil | ochre | a saved, unfinished recipe; it is not cookable, planable or shareable |
 
 **Rules**
 
-- A badge always leads with a symbol; it is never plain coloured text.
-- The symbol follows the badge's meaning, not its colour (§4.1).
+- A badge always leads with a symbol; it is never plain coloured text. The recipe-list card's
+  symbol-only variant keeps the symbol and moves the word into the accessible name.
+- The symbol follows the badge's meaning, not its colour (§4.1). The globe means a link the
+  user can follow; the chain link is reserved for the „Rezept" tag, i.e. the sub-recipe
+  relationship.
 - A badge is content first, but it may be the control itself: „Rezept" opens the sub-recipe,
-  and „Referenz" carries a × that clears the role. Where a badge is a control, only the badge
-  (or its ×) is the target — never the whole row around it.
+  „Referenz" carries a × that clears the role, and the overview's „Link" badge opens the
+  entry's link. Where a badge is a control, only the badge (or its ×) is the target — never
+  the whole row around it.
 - A control inside a badge gets its own hit area, extended beyond the glyph when the symbol is
   small.
 - A badge's label is a short noun or a state word, never a sentence.
 - A state that persists is a badge; a state that just happened is a notice (§5.9).
 - A badge's wording matches the action that caused it and the action that undoes it.
-- The „Entwurf" badge belongs to the title block: it sits directly below the title in the
-  list card and in the recipe overview, never over the media and never in the meta row.
+- The „Entwurf" badge belongs to the title block: it follows the title on its last line in
+  the list card and sits directly below the title in the recipe overview, never over the media
+  and never in the meta row.
 - The „Unbekannt" badge belongs to the title block on its meal-plan card: it follows the title
   as its final word, sharing the title's last line while it fits there and moving to a line of
   its own when the last line is full. In the recipe overview it leads the caption/value row
-  instead.
+  instead. An entry that carries a link shows the „Link" badge in its place, on the card and in
+  the overview. *decided with the user*
+- The „Link" badge marks a meal-plan line that carries a link. On the card it is symbol-only,
+  like the other card badges. In the recipe overview it is the control itself: the globe plus
+  the link in its short display form (the domain) on an accent fill, opening the link in a new
+  tab. Its text is data, not a state word, so it keeps the domain's normal case instead of the
+  badges' caps and is underlined on hover and keyboard focus. *decided with the user*
 
 *Applies to: cooking view.*
 
@@ -1072,9 +1090,10 @@ broken image.
 **The overview sheet shows a media area only for a recipe with a photo.** A recognized recipe
 without a photo starts its body at the sheet's top padding, like an unrecognized entry.
 
-**An unrecognised meal-plan line carries the „Unbekannt" badge at the end of its title**
-(§5.7): it sits on the title's last line while it still fits there, otherwise on a line of its
-own; its card is text-only, like any card without a photo.
+**An unrecognised meal-plan line carries its badge at the end of its title** (§5.7): the
+„Link" globe when the entry has a link, the „Unbekannt" cloche otherwise. It sits on the
+title's last line while it still fits there, otherwise on a line of its own; its card is
+text-only, like any card without a photo.
 
 **Sizes.** Card media: the full card width, 4:3. Overview hero: the full sheet content width,
 4:3. Editor preview: 160 × 120px (4:3).
@@ -1614,7 +1633,9 @@ There is no English UI and no locale switch.
 - Button labels are sentence case: normal German prose, capital first letter, nouns keep their
   capitals. No Title Case, no all-lowercase, no ALL CAPS in the source string.
 - Field captions and data badges display in ALL CAPS, but only by CSS (`text-transform`); the
-  stored string stays in normal German case, so a screen reader announces the plain word.
+  stored string stays in normal German case, so a screen reader announces the plain word. The
+  overview's „Link" badge is the exception: its text is the link's domain, so it keeps the
+  address's own case.
 
 **Actions name what they do.**
 
