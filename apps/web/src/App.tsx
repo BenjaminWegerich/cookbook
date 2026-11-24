@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  analyzeShoppingList,
+  allShoppingMarketRanks,
+  allShoppingStops,
   mappingsFor,
   mealPlanEntriesForTitle,
   mealPlanEntryLabel,
   mealPlanEntryText,
   mealPlanEntryTextWithShortLink,
+  shoppingMarketRanksForRoute,
   shoppingSortOrder,
-  shoppingStopFor,
   withPlanSize,
   type PlannedAmount,
   type Recipe,
+  type ShoppingSortLine,
   type ShoppingStop,
 } from '@cookbook/core';
 
@@ -1983,28 +1985,26 @@ function App() {
   );
 
   /**
-   * Performs the shopping-list sort: the sort page hands over its decisions (per
-   * unresolved line a confirmed similar item, a new item with a stop, or a
-   * placement at the top or the bottom), and this callback does the writes the
-   * sort needs — the new master-data rows, then the reorder — before it closes
-   * the flow back to the home screen.
+   * Performs the shopping-list sort: the flow hands over its step-1 decisions
+   * (per unresolved line a confirmed similar item, a new item with one or more
+   * locations, or an ignore), the step-2 market selection and the resolved lines
+   * to order. This callback does the writes the sort needs — the new master-data
+   * rows, then the reorder — before it closes the flow back to the home screen.
    *
    * Two kinds of decision write master data: a confirmed candidate appends a
    * **synonym** row (variant → item, docs/shopping_item_identity.md §4), a chosen
-   * stop appends or corrects an **item** row under the name in the page's
-   * „Artikel“ field. A stop whose „Artikel“ name differs from the line's own name
-   * also appends that line name as a **synonym** of the new item, so a renamed
-   * line is recognized on the next run. All rows are persisted before the
-   * reorder.
+   * location list appends or corrects the item's rows under the name in the
+   * page's „Artikel“ field. A location list whose „Artikel“ name differs from the
+   * line's own name also appends that line name as a **synonym** of the new item,
+   * so a renamed line is recognized on the next run. An ignore writes nothing.
+   * All rows are persisted before the reorder.
    *
-   * The target order is derived from the *pre-persist* analysis plus the
-   * decisions: core's `shoppingSortOrder` places the lines parked at the top
-   * first, the lines with an item in walking order, the lines parked at the
-   * bottom after them and the checked-off ones very last. A synonym decision
-   * resolves to its item's stop, so it sorts like the item itself. Deriving from
-   * the pre-persist analysis keeps a parked line that shares a name with a
-   * just-assigned one distinct — the decision is keyed by the exact line text,
-   * never by the item name the persist step writes.
+   * The target order is derived from the resolved lines as they were before the
+   * persist (so a new item's locations travel with its line) and the selected
+   * markets: core's `shoppingSortOrder` chooses each line's best-ranked selected
+   * location, places assigned lines in walking order, then the lines without a
+   * selected market or ignored, then the checked-off ones. A synonym decision
+   * resolves to its item's locations, so it sorts like the item itself.
    *
    * The gateway applies the order and answers the sorted list; its identity is
    * kept as the "sortiert" marker, so the button reads "sortiert"
@@ -2016,7 +2016,11 @@ function App() {
    * data, not a list write to take back.
    */
   const sortShoppingList = useCallback(
-    async (resolutions: ReadonlyMap<string, SortResolution>): Promise<void> => {
+    async (
+      resolutions: ReadonlyMap<string, SortResolution>,
+      selectedMarkets: readonly string[],
+      lines: readonly ShoppingSortLine[],
+    ): Promise<void> => {
       const activeToken = token;
       if (activeToken === null) {
         throw new Error(
@@ -2024,25 +2028,20 @@ function App() {
         );
       }
 
-      // The snapshot the page was opened with, in Keep's display order.
-      const analyzed = analyzeShoppingList(
-        sortItems.map((item) => ({ text: item.text, checked: item.checked })),
-      );
-
-      // Persist the decisions that write master data (a placement writes
-      // nothing): new item rows, confirmed synonyms, and the synonym a renamed
-      // stop assignment adds for the line's own name.
-      const newItems: { item: string; stop: ShoppingStop }[] = [];
+      // Persist the decisions that write master data (an ignore writes nothing):
+      // new item location rows, confirmed synonyms, and the synonym a renamed
+      // location assignment adds for the line's own name.
+      const newItems: { item: string; stops: readonly ShoppingStop[] }[] = [];
       const newSynonyms: { variant: string; item: string }[] = [];
       for (const resolution of resolutions.values()) {
-        if (resolution === 'top' || resolution === 'bottom') continue;
+        if (resolution === 'ignored') continue;
         if (resolution.kind === 'synonym') {
           newSynonyms.push({ variant: resolution.variant, item: resolution.item });
         } else {
-          newItems.push({ item: resolution.name, stop: resolution.stop });
+          newItems.push({ item: resolution.name, stops: resolution.stops });
           if (resolution.variant !== undefined) {
-            // The route belongs to the corrected item name; the line's own name
-            // becomes a synonym of it, so the next run resolves the line.
+            // The locations belong to the corrected item name; the line's own
+            // name becomes a synonym of it, so the next run resolves the line.
             newSynonyms.push({ variant: resolution.variant, item: resolution.name });
           }
         }
@@ -2063,17 +2062,15 @@ function App() {
         await appendShoppingSynonyms(activeToken, newSynonyms, folder);
       }
 
-      // The target order, derived before the persist so a parked line keeps its
-      // decision even when it shares a name with a just-assigned one. A synonym
-      // decision sorts at its item's stop — the item row it names already exists.
-      const order = shoppingSortOrder(analyzed, (text) => {
-        const resolution = resolutions.get(text);
-        if (resolution === undefined) return 'top';
-        if (resolution === 'top' || resolution === 'bottom') return resolution;
-        return resolution.kind === 'item'
-          ? resolution.stop
-          : (shoppingStopFor(resolution.item) ?? 'top');
-      });
+      // The target order is derived from the resolved lines (before the persist,
+      // so a new item's decision travels with its line) and the chosen markets.
+      // The market rank decides where an item is bought; the route stop decides
+      // its position in the list.
+      const order = shoppingSortOrder(
+        lines,
+        selectedMarkets,
+        shoppingMarketRanksForRoute(allShoppingStops(), allShoppingMarketRanks()),
+      );
 
       let sorted: KeepChecklist;
       try {
@@ -2086,13 +2083,12 @@ function App() {
       setSortItems([]);
       setNav(null);
       // One snackbar for both kinds of master-data write, naming only what was
-      // actually written (a sort that only parks lines says nothing extra).
+      // actually written (a sort that only ignores lines says nothing extra).
       const written: string[] = [];
-      if (newItems.length > 0) {
+      const locationCount = newItems.reduce((sum, entry) => sum + entry.stops.length, 0);
+      if (locationCount > 0) {
         written.push(
-          `${newItems.length} ${
-            newItems.length === 1 ? 'Einkaufsort' : 'Einkaufsorte'
-          } gespeichert`,
+          `${locationCount} ${locationCount === 1 ? 'Einkaufsort' : 'Einkaufsorte'} gespeichert`,
         );
       }
       if (newSynonyms.length > 0) {
@@ -2107,7 +2103,7 @@ function App() {
             : 'Einkaufsliste sortiert.',
       });
     },
-    [token, sortItems, sortShopping, setNav, showSnackbar],
+    [token, sortShopping, setNav, showSnackbar],
   );
 
   /**

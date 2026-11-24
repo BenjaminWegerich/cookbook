@@ -17,7 +17,7 @@
  *   is no separate store order and no global section vocabulary: a section
  *   belongs to exactly one store, and the same section name may exist in
  *   several stores (the pair is the key);
- * - the **items** (`Item;Store;Section`, one row per item): the identity of
+ * - the **items** (`Item;Store;Section`, one row per item and market): the identity of
  *   everything that can be bought, and the **single place a route is kept**.
  *   Its name set is **independent of the ingredient list**: it carries the
  *   recipe ingredients that are bought on a route and items that are not
@@ -68,11 +68,15 @@ export type ShoppingRoute = readonly ShoppingStop[];
 
 /**
  * The item table: the identity of everything buyable, keyed by item name, with
- * the route of each item. The name set is independent of the ingredient list
- * (see the module comment); an item without an entry simply has no place in the
- * route. The record's key order carries no meaning.
+ * the **locations** of each item (one stop per market). An item may be available
+ * at several markets, but it may name at most one section per market — two
+ * sections inside the same market would make the item ambiguous for the trip
+ * selection. The name set is independent of the ingredient list (see the module
+ * comment); an item without an entry simply has no place in the route. The
+ * record's key order carries no meaning, and neither does the order of an item's
+ * locations.
  */
-export type ShoppingItems = Readonly<Record<string, ShoppingStop>>;
+export type ShoppingItems = Readonly<Record<string, readonly ShoppingStop[]>>;
 
 /**
  * The synonym table: variant text → item name. A variant resolves to exactly
@@ -169,25 +173,31 @@ export function serializeShoppingRouteCsv(route: ShoppingRoute): string {
 }
 
 /**
- * Parses the item CSV (`Item;Store;Section`) into name → stop — the identity of
- * everything buyable. The `route` is the cross-file reference this validation is
- * about: every stop an item names must exist in the route — a typo fails loudly
- * at load, like a mapping for an unknown ingredient in the ingredient master
- * data. The item name itself is deliberately NOT checked against the ingredient
- * list: the name set is independent of it (see the module comment), which is
- * exactly why an item row is the identity and an ingredient row is only a view
- * (docs/shopping_item_identity.md §1).
+ * Parses the item CSV (`Item;Store;Section`) into name → location list — the
+ * identity of everything buyable. An item may repeat once per market; the pair
+ * `(Item, Store)` is the key, so a second row for the same item and store is a
+ * loud error (an item has at most one section per market). The `route` is the
+ * cross-file reference this validation is about: every stop an item names must
+ * exist in the route — a typo fails loudly at load, like a mapping for an unknown
+ * ingredient. The item name itself is deliberately NOT checked against the
+ * ingredient list: the name set is independent of it (see the module comment),
+ * which is exactly why an item row is the identity and an ingredient row is only
+ * a view (docs/shopping_item_identity.md §1).
  *
  * Throws on malformed input (empty file, unexpected header, wrong column count,
- * an empty cell, a duplicated name — case-folded, an unknown stop); the returned
- * record preserves the file order, which carries no meaning.
+ * an empty cell, a second row for the same item/store, a case-only different
+ * spelling of one item, an unknown stop); the returned record preserves the file
+ * order of first appearances, which carries no meaning.
  */
 export function parseShoppingItemsCsv(text: string, route: ShoppingRoute): ShoppingItems {
   const { rows } = parseCsvRows(text, [ITEMS_HEADER]);
   const knownStops = new Set(route.map(stopKey));
-  const items: Record<string, ShoppingStop> = {};
+  const items: Record<string, ShoppingStop[]> = {};
+  const routeIndex = new Map(route.map((stop, index) => [stopKey(stop), index]));
   /** Folded name → the name that claimed it, to reject case-only duplicates. */
   const claimed = new Map<string, string>();
+  /** Folded item + store → the stop that claimed it, to reject two sections. */
+  const claimedLocations = new Set<string>();
   for (const row of rows) {
     const [item, store, section] = row;
     if (
@@ -202,14 +212,11 @@ export function parseShoppingItemsCsv(text: string, route: ShoppingRoute): Shopp
         `Einkaufsartikel: leerer Artikel, Store oder Section in Zeile "${row.join(';')}".`,
       );
     }
-    if (items[item] !== undefined) {
-      throw new Error(`Einkaufsartikel: doppelter Artikel "${item}".`);
-    }
-    // Case-folded uniqueness: two rows that fold to the same key would make
-    // every line that names one of them ambiguous (see shoppingNameKey).
+    // Case-folded uniqueness of the item spelling: "Karotten" and "karotten"
+    // must not become two identities (see shoppingNameKey).
     const key = shoppingNameKey(item);
     const clash = claimed.get(key);
-    if (clash !== undefined) {
+    if (clash !== undefined && clash !== item) {
       throw new Error(
         `Einkaufsartikel: "${item}" und "${clash}" unterscheiden sich nur in Groß-/Kleinschreibung.`,
       );
@@ -220,18 +227,43 @@ export function parseShoppingItemsCsv(text: string, route: ShoppingRoute): Shopp
         `Einkaufsartikel: Einkaufsort "${store}; ${section}" für "${item}" steht nicht im Einkaufsweg.`,
       );
     }
+    // The pair (item, store) is the key: an item can be bought at several
+    // markets, but never in two sections of the same market.
+    const locationKey = `${key}\u0000${store}`;
+    if (claimedLocations.has(locationKey)) {
+      throw new Error(
+        `Einkaufsartikel: "${item}" hat bereits einen Bereich in "${store}" — ein Artikel kann pro Markt nur einen Bereich haben.`,
+      );
+    }
+    claimedLocations.add(locationKey);
     claimed.set(key, item);
-    items[item] = stop;
+    const existing = items[item];
+    if (existing === undefined) {
+      items[item] = [stop];
+    } else {
+      existing.push(stop);
+    }
+  }
+  // The location list is a set: its order carries no meaning, so the parser
+  // canonicalizes it to the route's walking order. A hand-sorted spreadsheet
+  // and the same rows in any other order therefore parse identically.
+  for (const stops of Object.values(items)) {
+    stops.sort(
+      (left, right) =>
+        (routeIndex.get(stopKey(left)) ?? Number.MAX_SAFE_INTEGER) -
+        (routeIndex.get(stopKey(right)) ?? Number.MAX_SAFE_INTEGER),
+    );
   }
   return items;
 }
 
 /**
  * Serializes the item table back to the canonical CSV (`Item;Store;Section`),
- * one row per item, in the record's own key order — the file's row order carries
- * no meaning, so the serializer keeps whatever order it is given (the parsed
- * file order, plus appended items at the end) instead of sorting, which leaves
- * hand-sorted spreadsheets untouched. The output round-trips through
+ * one row per location, in the record's own key order and each item's location
+ * order. The file's row order carries no meaning; the parser canonicalizes each
+ * item's locations to route order on load, while the serializer writes the
+ * arrays it is given so a caller can append a new location without reordering
+ * the item's existing rows. The output round-trips through
  * parseShoppingItemsCsv; it ends with a newline and uses LF line endings.
  *
  * The `route` argument is the cross-file reference the text is validated
@@ -240,13 +272,12 @@ export function parseShoppingItemsCsv(text: string, route: ShoppingRoute): Shopp
  * see csv.ts): a caller writing to Drive must parse the produced text first, as
  * the route serializer documents.
  */
-export function serializeShoppingItemsCsv(
-  items: ShoppingItems,
-  route: ShoppingRoute,
-): string {
+export function serializeShoppingItemsCsv(items: ShoppingItems, route: ShoppingRoute): string {
   const lines = [ITEMS_HEADER];
-  for (const [item, stop] of Object.entries(items)) {
-    lines.push(`${item};${stop.store};${stop.section}`);
+  for (const [item, stops] of Object.entries(items)) {
+    for (const stop of stops) {
+      lines.push(`${item};${stop.store};${stop.section}`);
+    }
   }
   const text = `${lines.join('\n')}\n`;
   // Round trip through the parser: the serializer must never produce text that
@@ -267,10 +298,7 @@ export function serializeShoppingItemsCsv(
  * case-folded); the returned record preserves the file order, which carries no
  * meaning.
  */
-export function parseShoppingSynonymsCsv(
-  text: string,
-  items: ShoppingItems,
-): ShoppingSynonyms {
+export function parseShoppingSynonymsCsv(text: string, items: ShoppingItems): ShoppingSynonyms {
   const { rows } = parseCsvRows(text, [SYNONYMS_HEADER]);
   const itemKeys = new Set(Object.keys(items).map(shoppingNameKey));
   const synonyms: Record<string, string> = {};
@@ -279,9 +307,7 @@ export function parseShoppingSynonymsCsv(
   for (const row of rows) {
     const [variant, item] = row;
     if (variant === undefined || variant === '' || item === undefined || item === '') {
-      throw new Error(
-        `Einkaufs-Synonyme: leerer Variant oder Item in Zeile "${row.join(';')}".`,
-      );
+      throw new Error(`Einkaufs-Synonyme: leerer Variant oder Item in Zeile "${row.join(';')}".`);
     }
     if (items[item] === undefined) {
       throw new Error(

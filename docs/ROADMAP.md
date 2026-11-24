@@ -125,8 +125,9 @@ screen, which return to the entry's overview). The shopping flow is built as wel
 Zutaten-Rezepte“ decides how much of each linked Zutaten-Rezept is made, the stock step „Teil 2:
 Zutaten“ sets each bottom-level ingredient's Vorrat, and the difference goes to
 „Einkaufsliste“). The aisle sort is built as well („Einkaufsliste sortieren“ resolves an
-unassigned item to an existing item as a synonym, assigns it a stop, or parks it at the top or
-the bottom of the list, then reorders the list).
+unassigned item to an existing item as a synonym, assigns it one or more locations, or ignores
+it for this run; „Einkaufsweg wählen“ then picks the trip's markets, and the gateway reorders
+the list).
 
 One non-obvious rule came out of that spike and must not be lost: **the master token has to be
 minted from the cloud.** A token minted on the home machine is refused by Google's account-auth
@@ -155,18 +156,26 @@ not where it is used.
       cooked), then the stock step („Teil 2: Zutaten“) prefills each bottom-level ingredient's
       stock with `min(need, reorder point)`, and the difference is rounded up to whole shopping
       units and written with `POST /keep/shopping` (undo via „Rückgängig“).
-- [x] Sort the shopping list by category/aisle (built on the shopping-route master data,
-      storage_format.md §10): „Einkaufsliste sortieren“ lists the unchecked entries that name no
-      item, each of which is resolved to an existing item (saved as a synonym), assigned a store
-      + section (like „Neue Zutat anlegen“), or parked at the top or the bottom of the list
-      (neither parking answer writes master data; both are asked about again on the next run);
-      the gateway applies the derived order and verifies it.
+- [x] Sort the shopping list by category/aisle and trip markets (built on the shopping-route
+      master data, storage_format.md §10): „Einkaufsliste sortieren“ lists the unchecked entries
+      that name no item, each of which is resolved to an existing item (saved as a synonym),
+      assigned one or more locations (one per market, at most one section per market), or
+      ignored for this run (no master data, end of the list, asked again next time). The new
+      second step „Einkaufsweg wählen“ preselects the trip's markets from the Drive market
+      ranks (`einkaufs-maerkte.csv`): mandatory markets, the smallest coverage set, then every market that would take
+      over more than 10 items; the user can toggle markets and sees the live consequences. The
+      gateway applies the derived order — assigned lines in walking order, then uncovered and
+      ignored lines, then checked-off ones — and verifies it.
 - [x] Give the shopping list an item identity of its own (design in
       [shopping_item_identity.md](shopping_item_identity.md)): the assignment file
-      is replaced by `einkaufs-artikel.csv` (`Item;Store;Section` — the identity of
-      everything buyable and the only place a route is kept) plus
+      is replaced by `einkaufs-artikel.csv` (`Item;Store;Section`, one row per
+      location — the identity of everything buyable and the only place locations
+      are kept; at most one section per market) plus
       `einkaufs-synonyme.csv` (`Variant;Item` — „Möhren“ → „Karotten“); `zutaten.csv`
-      keeps the ingredient master data without a route. Matching moved to read time:
+      keeps the ingredient master data without a route. The trip recommendation
+      lives in `shoppingMarketRecommendation.ts`; the ranks are the Drive file
+      `einkaufs-maerkte.csv`, seeded by `docs/shopping_markets.csv` and loaded into
+      `shoppingRouteRegistry.ts`. Matching moved to read time:
       normalize, undo the app's own line shape — its unit vocabulary derived from
       the mappings that flag a unit as a shopping unit plus the formatter's base-unit
       tokens, never a hand-kept copy — then require the name field to be *exactly*
@@ -174,10 +183,10 @@ not where it is used.
       stays unresolved instead of sorting as „Blaubeeren“. A line with no hit is
       offered similar item names (simple containment on the item names, no fuzzy
       engine); confirming one appends a synonym row. The sort page's „Artikel“
-      field is editable for the new-item path, and a stop under a changed name
-      writes the item row plus the line's own name as its synonym. The page lists
-      only unresolved lines and does not display an already-resolved line's silent
-      resolution.
+      field is editable for the new-item path, and a location list under a changed
+      name writes the item rows plus the line's own name as its synonym. The page
+      lists only unresolved lines and does not display an already-resolved line's
+      silent resolution.
       Migration reads `einkaufs-zuordnung.csv` once, writes
       `einkaufs-artikel.csv` + the empty `einkaufs-synonyme.csv`, then deletes the
       old file. Out of scope: an automatic similarity ("fuzzy") merge, and any
@@ -208,20 +217,23 @@ below is building, not investigating: the frontend and the actual features.
    text and return to the entry's overview.
 3. **Shopping master data** — the prerequisite for aisle sorting: the route file
    (`einkaufsweg.csv`, `Store;Section`, walking order), the item table
-   (`einkaufs-artikel.csv`, `Item;Store;Section`, covering ingredients and
-   non-ingredients) and the synonym table (`einkaufs-synonyme.csv`,
-   `Variant;Item`). Format in [storage_format.md](storage_format.md) §10, identity
+   (`einkaufs-artikel.csv`, `Item;Store;Section`, one row per location, covering
+   ingredients and non-ingredients), the synonym table (`einkaufs-synonyme.csv`,
+   `Variant;Item`) and the market-rank table (`einkaufs-maerkte.csv`, `Store;Rank`,
+   1 = best). Format in [storage_format.md](storage_format.md) §10, identity
    model in [shopping_item_identity.md](shopping_item_identity.md). The data is
    built and editable: the seed CSVs, the codecs and serializers in
    `packages/core/src/shoppingRouteCsv.ts`, the runtime registry
    (`shoppingRouteRegistry.ts`), the read-time resolution
    (`packages/core/src/shoppingSort.ts`) and the Drive set
    (`apps/web/src/drive/shoppingRouteMasterData.ts`, including the migration from
-   `einkaufs-zuordnung.csv`); the create sheet asks for the stop in the „Einkauf“
-   field (store chips + section search), and the „Einkaufsartikel“ screen creates
-   and edits item rows and their synonyms through the same shared sheet. The aisle
-   sort and its entry point for items that are not ingredients are built on this
-   data (see the `[x]` sort task above and the `[x]` item-identity task).
+   `einkaufs-zuordnung.csv`); the create sheet asks for the locations in the
+   „Einkauf“ field (store chips + section chips, one location per market), and the
+   „Einkaufsartikel“ screen creates and edits item rows, their locations and their
+   synonyms through the same shared sheet. The aisle
+   sort, the trip-market step and its entry point for items that are not
+   ingredients are built on this data (see the `[x]` sort task above and the `[x]`
+   item-identity task).
 4. **Implement the Keep actions**: the meal-plan write is done ([x] — „Zum Essensplan
    hinzufügen“ writes the entry with its chosen size and links it at the recipe's HTML export
    (the size is a query parameter on the export host), replacing the entries recognized as the

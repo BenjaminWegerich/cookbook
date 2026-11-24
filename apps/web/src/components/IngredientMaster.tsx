@@ -21,7 +21,7 @@
  *
  * „Neue Zutat anlegen“ above the list opens the same sheet with the name and base
  * unit editable. When the chosen name already exists as a shopping item, the
- * sheet pre-fills the item's stop and synonyms; a changed one is written to that
+ * sheet pre-fills the item's locations and synonyms; a changed one is written to that
  * item instead of creating a second route.
  *
  * Search matches the canonical name and both display forms, so a user can find
@@ -301,7 +301,7 @@ function IngredientMaster({
     reorderPoint: number,
     entries: ReadonlyArray<IngredientMapping>,
     precision: IngredientMasterEntryInput['precision'],
-    stop: ShoppingStop | null,
+    stops: readonly ShoppingStop[],
     variants: readonly string[],
   ): Promise<void> => {
     if (savingRef.current) return;
@@ -312,11 +312,11 @@ function IngredientMaster({
     let previousItem: ShoppingItemState | null = null;
     let createdItem = false;
     try {
-      if (stop !== null) {
-        const item = itemKey === undefined ? undefined : allShoppingItems()[itemKey];
+      if (stops.length > 0) {
+        const item = itemKey === undefined ? [] : allShoppingItems()[itemKey]!;
         const itemVariants = itemKey === undefined ? [] : shoppingVariantsFor(itemKey);
-        if (item === undefined || !isShoppingUnchanged(item, itemVariants, stop, variants)) {
-          const result = await writeShoppingChange(token, name, itemKey, stop, variants);
+        if (itemKey === undefined || !isShoppingUnchanged(item, itemVariants, stops, variants)) {
+          const result = await writeShoppingChange(token, name, itemKey, stops, variants);
           previousItem = result.previous;
           createdItem = result.created;
         }
@@ -449,8 +449,8 @@ function IngredientMaster({
           subRecipeUnits={subRecipes}
           saving={saving}
           error={createError}
-          onSave={(name, bu, reorderPoint, entries, precision, stop, variants) =>
-            void createEntry(name, bu, reorderPoint, entries, precision, stop, variants)
+          onSave={(name, bu, reorderPoint, entries, precision, stops, variants) =>
+            void createEntry(name, bu, reorderPoint, entries, precision, stops, variants)
           }
           onEdited={() => setCreateError(null)}
           onClose={() => {

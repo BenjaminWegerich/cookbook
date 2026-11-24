@@ -1902,3 +1902,33 @@
   line-height: var(--leading-md);
   font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 }
+
+/* The shopping location list of the shared master-data sheet (one row per
+   market). The store-keyed list is what enforces "at most one section per
+   market"; each row keeps its remove action beside the location text. */
+.shopping-location-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shopping-location-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.shopping-location-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}

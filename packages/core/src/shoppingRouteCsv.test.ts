@@ -1,6 +1,6 @@
 /**
  * Tests for the shopping master data (docs/storage_format.md §10,
- * docs/shopping_item_identity.md) — the three CSV codecs, their identity rules,
+ * docs/shopping_item_identity.md) — the route/item/synonym CSV codecs, their identity rules,
  * and the consistency of the repository's seed files in `docs/`, which are the
  * built-in data used on first run.
  */
@@ -23,9 +23,11 @@ import {
 } from './shoppingRouteCsv.js';
 import {
   SEED_SHOPPING_ITEMS,
+  SEED_SHOPPING_MARKET_RANKS,
   SEED_SHOPPING_ROUTE,
   SEED_SHOPPING_SYNONYMS,
 } from './shoppingRouteData.js';
+import { parseShoppingMarketRanksCsv } from './shoppingMarketRanksCsv.js';
 
 /** Repository `docs/` folder, resolved from this file's location. */
 const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../docs');
@@ -52,16 +54,20 @@ const ROUTE: ShoppingRoute = [
 const ITEMS_TEXT = [
   'Item;Store;Section',
   'Karotten;Lidl;Obst und Gemüse',
+  'Karotten;REWE;Obst und Gemüse',
   'Joghurt;Lidl;Molkerei',
   'TK-Blaubeeren;REWE;TK-Obst',
   'Klopapier;dm;Drogerie',
 ].join('\n');
 
 const ITEMS: ShoppingItems = {
-  Karotten: { store: 'Lidl', section: 'Obst und Gemüse' },
-  Joghurt: { store: 'Lidl', section: 'Molkerei' },
-  'TK-Blaubeeren': { store: 'REWE', section: 'TK-Obst' },
-  Klopapier: { store: 'dm', section: 'Drogerie' },
+  Karotten: [
+    { store: 'Lidl', section: 'Obst und Gemüse' },
+    { store: 'REWE', section: 'Obst und Gemüse' },
+  ],
+  Joghurt: [{ store: 'Lidl', section: 'Molkerei' }],
+  'TK-Blaubeeren': [{ store: 'REWE', section: 'TK-Obst' }],
+  Klopapier: [{ store: 'dm', section: 'Drogerie' }],
 };
 
 /** The canonical synonym table (docs format) as a fixture. */
@@ -153,7 +159,7 @@ describe('serializeShoppingRouteCsv', () => {
 });
 
 describe('parseShoppingItemsCsv', () => {
-  it('parses the canonical format into a name → stop lookup', () => {
+  it('parses the canonical format into a name → location-list lookup', () => {
     expect(parseShoppingItemsCsv(ITEMS_TEXT, ROUTE)).toEqual(ITEMS);
   });
 
@@ -162,6 +168,7 @@ describe('parseShoppingItemsCsv', () => {
       'Item;Store;Section',
       'Klopapier;dm;Drogerie',
       'TK-Blaubeeren;REWE;TK-Obst',
+      'Karotten;REWE;Obst und Gemüse',
       'Karotten;Lidl;Obst und Gemüse',
       'Joghurt;Lidl;Molkerei',
     ].join('\n');
@@ -173,10 +180,9 @@ describe('parseShoppingItemsCsv', () => {
     // they cannot live in the ingredient master data — this file is their only
     // home, and it is deliberately not checked against the ingredient list.
     const text = `${ITEMS_TEXT}\nSeife;dm;Drogerie`;
-    expect(parseShoppingItemsCsv(text, ROUTE).Seife).toEqual({
-      store: 'dm',
-      section: 'Drogerie',
-    });
+    expect(parseShoppingItemsCsv(text, ROUTE).Seife).toEqual([
+      { store: 'dm', section: 'Drogerie' },
+    ]);
   });
 
   it('allows several items in the same stop', () => {
@@ -210,10 +216,12 @@ describe('parseShoppingItemsCsv', () => {
     ).toThrow(/leerer Artikel, Store oder Section/);
   });
 
-  it('throws on a duplicated item', () => {
-    expect(() => parseShoppingItemsCsv(`${ITEMS_TEXT}\nKlopapier;Lidl;Molkerei`, ROUTE)).toThrow(
-      /doppelter Artikel "Klopapier"/,
-    );
+  it('throws when an item names a second section in the same market', () => {
+    // Several locations are allowed, but only one per market: two sections in
+    // one store would make the item ambiguous for the trip selection.
+    expect(() =>
+      parseShoppingItemsCsv(`${ITEMS_TEXT}\nJoghurt;Lidl;Obst und Gemüse`, ROUTE),
+    ).toThrow(/hat bereits einen Bereich in "Lidl"/);
   });
 
   it('throws when an item names a stop that is not in the route', () => {
@@ -235,7 +243,7 @@ describe('parseShoppingItemsCsv', () => {
 });
 
 describe('serializeShoppingItemsCsv', () => {
-  it('writes the canonical format with the stop of every item', () => {
+  it('writes one row per location', () => {
     expect(serializeShoppingItemsCsv(ITEMS, ROUTE)).toBe(`${ITEMS_TEXT}\n`);
   });
 
@@ -248,12 +256,16 @@ describe('serializeShoppingItemsCsv', () => {
     // A hand-sorted spreadsheet must survive a write unchanged: the item file's
     // row order carries no meaning, so the serializer never imposes one.
     const reversed: ShoppingItems = Object.fromEntries(Object.entries(ITEMS).reverse());
-    const rows = serializeShoppingItemsCsv(reversed, ROUTE).split('\n').slice(1, 3);
-    expect(rows).toEqual(['Klopapier;dm;Drogerie', 'TK-Blaubeeren;REWE;TK-Obst']);
+    const rows = serializeShoppingItemsCsv(reversed, ROUTE).split('\n').slice(1, 4);
+    expect(rows).toEqual([
+      'Klopapier;dm;Drogerie',
+      'TK-Blaubeeren;REWE;TK-Obst',
+      'Joghurt;Lidl;Molkerei',
+    ]);
   });
 
   it('fails loudly when an item names a stop outside the route', () => {
-    const broken: ShoppingItems = { Seife: { store: 'dm', section: 'Haushalt' } };
+    const broken: ShoppingItems = { Seife: [{ store: 'dm', section: 'Haushalt' }] };
     expect(() => serializeShoppingItemsCsv(broken, ROUTE)).toThrow(/steht nicht im Einkaufsweg/);
   });
 });
@@ -364,9 +376,16 @@ describe('shopping master-data seed files (docs/)', () => {
     expect(() => parseShoppingSynonymsCsv(readSeed('shopping_synonyms.csv'), items)).not.toThrow();
   });
 
+  it('parses the market-rank seed against the route seed', () => {
+    const route = parseShoppingRouteCsv(readSeed('shopping_route.csv'));
+    expect(() =>
+      parseShoppingMarketRanksCsv(readSeed('shopping_markets.csv'), route),
+    ).not.toThrow();
+  });
+
   it('matches the generated seed module the runtime starts from', () => {
     // The compiled seed (shoppingRouteData.ts) is what the app ships; it is
-    // generated from these three CSVs. This test is the drift guard between the
+    // generated from these CSVs. This test is the drift guard between the
     // authoritative repository files and the module — re-run
     // `npm run generate:shopping-route` when it fails.
     expect(SEED_SHOPPING_ROUTE).toEqual(parseShoppingRouteCsv(readSeed('shopping_route.csv')));
@@ -375,6 +394,9 @@ describe('shopping master-data seed files (docs/)', () => {
     );
     expect(SEED_SHOPPING_SYNONYMS).toEqual(
       parseShoppingSynonymsCsv(readSeed('shopping_synonyms.csv'), SEED_SHOPPING_ITEMS),
+    );
+    expect(SEED_SHOPPING_MARKET_RANKS).toEqual(
+      parseShoppingMarketRanksCsv(readSeed('shopping_markets.csv'), SEED_SHOPPING_ROUTE),
     );
   });
 });

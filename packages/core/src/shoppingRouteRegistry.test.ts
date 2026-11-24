@@ -10,15 +10,17 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ShoppingItems, ShoppingRoute, ShoppingSynonyms } from './shoppingRouteCsv.js';
 import {
   allShoppingItems,
+  allShoppingMarketRanks,
   allShoppingStops,
   allShoppingSynonyms,
   resetShoppingRoute,
   setShoppingItems,
+  setShoppingMarketRanks,
   setShoppingRoute,
   setShoppingSynonyms,
   shoppingItemNames,
   shoppingSections,
-  shoppingStopFor,
+  shoppingStopsFor,
   shoppingStores,
   shoppingVariantsFor,
 } from './shoppingRouteRegistry.js';
@@ -35,8 +37,8 @@ const ROUTE: ShoppingRoute = [
 
 /** The item fixture: one ingredient, one non-ingredient item. */
 const ITEMS: ShoppingItems = {
-  Joghurt: { store: 'Lidl', section: 'Molkerei' },
-  Klopapier: { store: 'REWE', section: 'Obst und Gemüse' },
+  Joghurt: [{ store: 'Lidl', section: 'Molkerei' }],
+  Klopapier: [{ store: 'REWE', section: 'Obst und Gemüse' }],
 };
 
 /** The synonym fixture: one variant per item. */
@@ -50,9 +52,17 @@ afterEach(() => {
 });
 
 describe('shopping-route registry', () => {
+  it('exposes the seed market ranks and restores them on reset', () => {
+    const seedRanks = allShoppingMarketRanks();
+    expect(seedRanks.Lidl).toBe(1);
+    setShoppingMarketRanks({ Rewe: 1 });
+    expect(allShoppingMarketRanks()).toEqual({ Rewe: 1 });
+    resetShoppingRoute();
+    expect(allShoppingMarketRanks()).toEqual(seedRanks);
+  });
   it('starts from the generated seed', () => {
     expect(allShoppingStops().length).toBeGreaterThan(1);
-    expect(shoppingStopFor('Karotten')).toBeDefined();
+    expect(shoppingStopsFor('Karotten')).toBeDefined();
   });
 
   it('stores a replaced route, item table and synonym table', () => {
@@ -75,16 +85,16 @@ describe('shopping-route registry', () => {
     expect(allShoppingStops()).toEqual(seedRoute);
     expect(allShoppingItems()).toEqual(seedItems);
     expect(allShoppingSynonyms()).toEqual(seedSynonyms);
-    expect(shoppingStopFor('Karotten')).toBeDefined();
+    expect(shoppingStopsFor('Karotten')).toBeDefined();
   });
 
   it('looks an item up by its exact name', () => {
     setShoppingItems(ITEMS);
-    expect(shoppingStopFor('Joghurt')).toEqual({ store: 'Lidl', section: 'Molkerei' });
+    expect(shoppingStopsFor('Joghurt')).toEqual([{ store: 'Lidl', section: 'Molkerei' }]);
     // The lookup itself is exact: folding happens in the line matching
     // (shoppingSort.ts), where a differently cased line is folded onto the name.
-    expect(shoppingStopFor('joghurt')).toBeUndefined();
-    expect(shoppingStopFor('Seife')).toBeUndefined();
+    expect(shoppingStopsFor('joghurt')).toBeUndefined();
+    expect(shoppingStopsFor('Seife')).toBeUndefined();
   });
 });
 
@@ -127,7 +137,7 @@ describe('shoppingSections', () => {
 
 describe('shoppingItemNames', () => {
   it('lists every item once, alphabetically by German collation', () => {
-    setShoppingItems({ Zwiebeln: ROUTE[0]!, Äpfel: ROUTE[0]!, Mehl: ROUTE[0]! });
+    setShoppingItems({ Zwiebeln: [ROUTE[0]!], Äpfel: [ROUTE[0]!], Mehl: [ROUTE[0]!] });
     // Umlauts sort with their base letter in German collation (ä before m),
     // which is what a reference list expects.
     expect(shoppingItemNames()).toEqual(['Äpfel', 'Mehl', 'Zwiebeln']);

@@ -2,15 +2,15 @@
  * Shopping-list sort screen — component styles.
  *
  * The full-screen page behind "Einkaufsliste sortieren"
- * (components/ShoppingSortSelect.tsx): one row per unchecked shopping-list line
- * that names no item. An unfolded row carries the editable „Artikel“ field, the
- * similar-item chips (the shared .suggestions row), the „Markt“ store chips +
- * „Bereich“ section chips and the two quiet placement answers ("Oben
- * einsortieren" / "Unten einsortieren") beside the store chips. As soon as the
- * line is decided it folds to one muted, small summary line; tapping that line
- * unfolds the row again. All pixel values come from the
- * design ladder (docs/CODING_CONVENTIONS.md); colors and sizes reference the
- * tokens in styles/tokens.css.
+ * (components/ShoppingSortSelect.tsx): step 1 lists one row per unchecked
+ * shopping-list line that names no item. An unfolded row carries the editable
+ * „Artikel“ field, the similar-item chips (the shared .suggestions row), the
+ * chosen locations, the „Markt“ store chips + „Bereich“ section chips and one
+ * quiet „Ignorieren“ answer beside the store chips. As soon as the line is
+ * decided it folds to one muted, small summary line; tapping that line unfolds
+ * the row again. Step 2 lists the trip markets and their live item counts. All
+ * pixel values come from the design ladder (docs/CODING_CONVENTIONS.md); colors
+ * and sizes reference the tokens in styles/tokens.css.
  */
 
 .sort-select {
@@ -51,7 +51,7 @@
 }
 
 /* One unfolded line: its text, the „Artikel“ field, the similar-item chips,
-   the stop fields and the placement answers. */
+   the location editor and the ignore action. */
 .sort-entry {
   display: grid;
   gap: var(--space-3);
@@ -82,9 +82,9 @@
   text-align: start;
 }
 
-/* The „Markt“ store chips and the quiet placement answers share one wrapping
-   row: the exceptions sit beside the store choices, not below the whole picker.
-   The gap is the established chip-row gap. */
+/* The „Markt“ store chips and the quiet ignore action share one wrapping row:
+   the exception sits beside the store choices, not below the whole picker. The
+   gap is the established chip-row gap. */
 .sort-market-row {
   display: flex;
   flex-wrap: wrap;
@@ -92,8 +92,8 @@
   gap: var(--space-4);
 }
 
-/* The two placement answers stay one group, so they wrap together instead of
-   splitting across two lines (the store chips may wrap above them). */
+/* The ignore answer keeps its own group so it wraps as one control beside the
+   store chips. */
 .sort-parking {
   display: flex;
   flex-wrap: wrap;
@@ -101,24 +101,24 @@
   gap: var(--space-4);
 }
 
-/* A placement answer wears the dashed clear-chip shape of „Entfernen“ (leading
-   symbol + label): the store chips are values of the stop, while this is the
-   row's exception answer. The shared chip ring gives it the thumb-reach target,
-   so no extra height or padding is needed. */
+/* The ignore answer wears the dashed clear-chip shape of „Entfernen“ (leading
+   symbol + label): the store chips are values of the location list, while this
+   is the row's exception answer. The shared chip ring gives it the thumb-reach
+   target, so no extra height or padding is needed. */
 .sort-parking-action {
   justify-self: start;
 }
 
-/* Parked (visible only after unfolding a folded row): the label already says
+/* Ignored (visible only after unfolding a folded row): the label already says
    the state; the accent colour borrows the established active colour without
    turning the action back into a filled chip. */
 .sort-parking-action[aria-pressed='true'] {
   color: var(--color-accent);
 }
 
-/* A decided entry's note in place of the stop fields (parked, or a known item
-   that becomes a synonym): quiet, so it explains the decision without competing
-   with it. */
+/* A decided entry's note in place of the location editor (ignored, or a known
+   item that becomes a synonym): quiet, so it explains the decision without
+   competing with it. */
 .sort-note {
   margin: 0;
   color: var(--color-ink-muted);
@@ -177,4 +177,165 @@
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   text-align: end;
+}
+
+/* ---- Step 1: the location list ------------------------------------------ */
+
+/* The chosen locations of one line: one row per market, with a remove action.
+   A store-keyed list is what shows the "one section per market" rule. */
+.sort-location-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sort-location-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.sort-location-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+/* ---- Step 2: market selection -------------------------------------------- */
+
+/* The market rows are one paper surface, like the item list above. */
+.market-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.market-list li + li {
+  border-block-start: 1px solid var(--color-line);
+}
+
+/* The whole row is the toggle. The rank sits left, the market and its counts in
+   the middle, the live item count right. */
+.market-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: start;
+}
+
+.market-row--selected {
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+}
+
+.market-rank {
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 1px solid var(--color-line);
+  border-radius: 100px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.market-row--selected .market-rank {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.market-body {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.market-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.market-name {
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: 600;
+}
+
+.market-tag {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: 100px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.market-tag--active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.market-meta {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.market-count {
+  min-width: var(--space-8);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: 600;
+  text-align: end;
+}
+
+/* The live summary: a quiet panel that carries the consequence of the current
+   selection, not another list. */
+.market-summary {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.market-summary-line,
+.market-summary-detail {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.market-summary-detail {
+  color: var(--color-ink-muted);
+}
+
+.market-restore {
+  justify-self: start;
 }

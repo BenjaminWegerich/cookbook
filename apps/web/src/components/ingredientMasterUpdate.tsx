@@ -51,8 +51,8 @@ import { UndoIcon } from './icons';
 export interface IngredientMasterSheetUpdate {
   /** The ingredient's own editable fields. */
   readonly update: IngredientMasterEntryInput;
-  /** The chosen shopping stop, or null for an ingredient that is not bought. */
-  readonly stop: ShoppingStop | null;
+  /** The chosen shopping locations, empty for an ingredient that is not bought. */
+  readonly stops: readonly ShoppingStop[];
   /** The item's complete synonym list. */
   readonly variants: readonly string[];
 }
@@ -98,19 +98,21 @@ export function findItemKey(name: string): string | undefined {
 }
 
 /**
- * True when the shopping stop and synonym set equal the item as the registry
+ * True when the shopping location set and synonym set equal the item as the registry
  * holds it. The synonym order carries no meaning, so set equality counts.
  */
 export function isShoppingUnchanged(
-  stop: ShoppingStop | null,
+  stops: readonly ShoppingStop[],
   variants: readonly string[],
-  nextStop: ShoppingStop | null,
+  nextStops: readonly ShoppingStop[],
   nextVariants: readonly string[],
 ): boolean {
-  if (stop === null || nextStop === null) {
-    return stop === null && nextStop === null && nextVariants.length === 0;
+  if (stops.length !== nextStops.length) return false;
+  if (!stops.every((stop) => nextStops.some(
+    (candidate) => candidate.store === stop.store && candidate.section === stop.section,
+  ))) {
+    return false;
   }
-  if (stop.store !== nextStop.store || stop.section !== nextStop.section) return false;
   if (variants.length !== nextVariants.length) return false;
   return variants.every((variant) => nextVariants.includes(variant));
 }
@@ -124,40 +126,40 @@ function reasonOf(err: unknown): string {
  * Writes one shopping change and returns the previous state for the undo.
  *
  * Three cases, keyed by what the form says and what the registry holds:
- * - the item row exists and the form names a stop → update the row;
- * - the item row exists and the form names no stop → delete the row (an
+ * - the item rows exist and the form names locations → replace them;
+ * - the item rows exist and the form names no location → delete the rows (an
  *   ingredient without a row is simply not bought, docs/storage_format.md §10);
- *   the previous state is returned so „Rückgängig“ can put the row and its
- *   synonyms back. The form clears the synonyms together with the stop, so
- *   `variants` is empty here;
- * - no row exists → create one when the form names a stop, otherwise nothing
- *   is bought and there is nothing to write.
+ *   the previous state is returned so „Rückgängig“ can put the rows and their
+ *   synonyms back. The form clears the synonyms together with the last
+ *   location, so `variants` is empty here;
+ * - no row exists → create the rows when the form names locations, otherwise
+ *   nothing is bought and there is nothing to write.
  */
 export async function writeShoppingChange(
   token: string,
   name: string,
   itemKey: string | undefined,
-  stop: ShoppingStop | null,
+  stops: readonly ShoppingStop[],
   variants: readonly string[],
 ): Promise<{ previous: ShoppingItemState | null; created: boolean }> {
   if (itemKey !== undefined) {
-    if (stop === null) {
+    if (stops.length === 0) {
       if (variants.length > 0) {
         throw new Error('Ohne Einkaufsort lassen sich keine Synonyme speichern.');
       }
       const { previous } = await deleteShoppingItem(token, itemKey);
       return { previous, created: false };
     }
-    const { previous } = await saveShoppingItem(token, itemKey, stop, variants);
+    const { previous } = await saveShoppingItem(token, itemKey, stops, variants);
     return { previous, created: false };
   }
-  if (stop === null) {
+  if (stops.length === 0) {
     if (variants.length > 0) {
       throw new Error('Ohne Einkaufsort lassen sich keine Synonyme speichern.');
     }
     return { previous: null, created: false };
   }
-  await createShoppingItem(token, name, stop, variants);
+  await createShoppingItem(token, name, stops, variants);
   return { previous: null, created: true };
 }
 
@@ -237,13 +239,13 @@ export async function updateIngredientMasterAndShopping(
     throw new Error(`Die Zutat „${name}“ steht nicht in den Stammdaten.`);
   }
   const itemKey = findItemKey(name);
-  const currentStop = itemKey === undefined ? null : allShoppingItems()[itemKey]!;
+  const currentStops = itemKey === undefined ? [] : allShoppingItems()[itemKey]!;
   const currentVariants = itemKey === undefined ? [] : shoppingVariantsFor(itemKey);
   const ingredientChanged = !isIngredientUnchanged(current, input.update);
   const shoppingChanged = !isShoppingUnchanged(
-    currentStop,
+    currentStops,
     currentVariants,
-    input.stop,
+    input.stops,
     input.variants,
   );
 
@@ -258,7 +260,7 @@ export async function updateIngredientMasterAndShopping(
       previousIngredient = result.previous;
     }
     if (shoppingChanged) {
-      const result = await writeShoppingChange(token, name, itemKey, input.stop, input.variants);
+      const result = await writeShoppingChange(token, name, itemKey, input.stops, input.variants);
       previousItem = result.previous;
       createdItem = result.created;
     }

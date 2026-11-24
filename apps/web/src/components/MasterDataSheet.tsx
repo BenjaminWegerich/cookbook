@@ -5,8 +5,8 @@
  * - „Stammdaten bearbeiten“ — the ingredient's fields except name and base unit
  *   (both are the entry's identity and shown disabled);
  * - „Neue Zutat anlegen“ — the same sheet with the name and base unit editable;
- * - „Einkaufsartikel verwalten“ — only the name, the shopping stop and the
- *   synonyms of an existing item;
+ * - „Einkaufsartikel verwalten“ — only the name, the shopping locations and
+ *   the synonyms of an existing item;
  * - „Einkaufsartikel anlegen“ — the same item form with an editable name.
  *
  * The shared component is the reason the four flows cannot drift: the name
@@ -27,7 +27,7 @@
  * automatically when the recipe is saved; this sheet only edits it.
  *
  * Creating an ingredient whose name already exists as a shopping item adopts
- * that item's stop and synonyms when the name field is left (or on open, when
+ * that item's locations and synonyms when the name field is left (or on open, when
  * the create flow already carries a name). The user's resulting Einkauf/
  * Synonyme values are handed to the parent, which writes them to the item row —
  * creating an ingredient never silently forks a second route for the same name.
@@ -38,7 +38,7 @@
  * is required, because the pair is the key and a section belongs to exactly one
  * store. The „× Entfernen“ chip beside the store chips clears the pick; it also
  * clears the synonyms, because a synonym can only live on an item row, and the
- * save then deletes the row — its notice's „Rückgängig“ restores stop and
+ * save then deletes the rows — its notice's „Rückgängig“ restores locations and
  * synonyms.
  *
  * A duplicate name is reported **under the name field** as soon as the field is
@@ -111,7 +111,7 @@ export interface IngredientSheetResult {
 export interface ShoppingItemSheetResult {
   readonly kind: 'item';
   readonly name: string;
-  readonly stop: ShoppingStop;
+  readonly stops: readonly ShoppingStop[];
   readonly variants: readonly string[];
 }
 
@@ -160,13 +160,13 @@ const BASE_UNITS = ['g', 'ml'] as const;
 /** One existing shopping item found by a name, with its stored spelling. */
 interface FoundItem {
   readonly name: string;
-  readonly stop: ShoppingStop;
+  readonly stops: readonly ShoppingStop[];
   readonly variants: readonly string[];
 }
 
 /**
  * Finds the shopping item a typed name points at, case-folded like the item
- * matching itself. Returns the stored spelling so a save can update the row the
+ * matching itself. Returns the stored spelling so a save can update the item the
  * user already has instead of creating a case-variant duplicate.
  */
 function findItem(name: string): FoundItem | null {
@@ -178,7 +178,7 @@ function findItem(name: string): FoundItem | null {
   if (stored === undefined) return null;
   return {
     name: stored,
-    stop: allShoppingItems()[stored]!,
+    stops: allShoppingItems()[stored]!,
     variants: shoppingVariantsFor(stored),
   };
 }
@@ -247,17 +247,21 @@ function MasterDataSheet({
    * assigns, never renames or reorders a zone.
    */
   const [storagePlace, setStoragePlace] = useState<string | null>(entry?.storagePlace ?? null);
-  /** The chosen store — level 1 of the shopping route; null = nothing picked. */
-  const [store, setStore] = useState<string | null>(initialItem?.stop.store ?? null);
-  /** The chosen section — level 2 of the route ('' while none is picked). */
-  const [section, setSection] = useState(initialItem?.stop.section ?? '');
+  /**
+   * The item's complete desired location list: one entry per market, at most one
+   * section per market. An ingredient may leave it empty (not bought); an item
+   * form requires at least one.
+   */
+  const [stops, setStops] = useState<readonly ShoppingStop[]>(initialItem?.stops ?? []);
+  /** The market whose section chips are currently shown; null = none picked. */
+  const [activeStore, setActiveStore] = useState<string | null>(null);
   /** The complete desired synonym list of the item. */
   const [variants, setVariants] = useState<readonly string[]>(initialItem?.variants ?? []);
   /** The text of the „Synonym“ field, still waiting to be added. */
   const [variantQuery, setVariantQuery] = useState('');
   /**
    * True once the user touched the shopping fields themselves. A name blur then
-   * no longer adopts another item's stop/synonyms over their edits.
+   * no longer adopts another item's locations/synonyms over their edits.
    */
   const [shoppingTouched, setShoppingTouched] = useState(false);
   /** The name field's own message (mandatory or duplicate). */
@@ -336,22 +340,17 @@ function MasterDataSheet({
   })();
 
   const stores = shoppingStores();
-  const sections = store === null ? [] : shoppingSections(store);
+  const sections = activeStore === null ? [] : shoppingSections(activeStore);
+  /** The section already stored for the active market, if any. */
+  const activeSection = stops.find((stop) => stop.store === activeStore)?.section ?? '';
 
   /**
-   * The stop the picker currently names, or null while it is incomplete. The
-   * section must be one of this store's sections — the pair is the key, so a
-   * stale stored section is not a valid stop.
-   */
-  const chosenStop: ShoppingStop | null =
-    store !== null && sections.includes(section) ? { store, section } : null;
-
-  /**
-   * Whether this form needs a stop. An item always does (its row is the route).
-   * An ingredient is optional: it may stay unbought, and clearing an existing
-   * row is a sanctioned change (the write deletes the row). Synonyms are the one
-   * exception — they exist only on an item row, so the stop is required while
-   * the form carries any. A sub-recipe has no shopping fields at all.
+   * Whether this form needs at least one location. An item always does (its
+   * rows are the route). An ingredient is optional: it may stay unbought, and
+   * clearing an existing item is a sanctioned change (the write deletes the
+   * rows). Synonyms are the one exception — they exist only on an item row, so
+   * at least one location is required while the form carries any. A sub-recipe
+   * has no shopping fields at all.
    */
   const stopRequired = !shoppingHidden && (!ingredientMode || variants.length > 0);
 
@@ -366,14 +365,20 @@ function MasterDataSheet({
         ? 'Ohne Einkaufsweg lässt sich kein Einkaufsartikel für die Synonyme anlegen.'
         : null;
     }
-    if (store === null) {
-      return stopRequired ? 'Bitte einen Markt auswählen.' : null;
+    if (stopRequired && stops.length === 0) {
+      return activeStore !== null
+        ? `Bitte einen Bereich für „${activeStore}“ auswählen.`
+        : 'Bitte mindestens einen Markt auswählen.';
     }
-    if (section === '') {
-      return `Bitte einen Bereich für „${store}“ auswählen.`;
-    }
-    if (!sections.includes(section)) {
-      return `„${section}“ steht nicht im Einkaufsweg für „${store}“ — bitte einen der angebotenen Bereiche wählen.`;
+    const seen = new Set<string>();
+    for (const stop of stops) {
+      if (seen.has(stop.store)) {
+        return `Für „${stop.store}“ ist bereits ein Bereich hinterlegt — ein Artikel kann pro Markt nur einen Bereich haben.`;
+      }
+      seen.add(stop.store);
+      if (!shoppingSections(stop.store).includes(stop.section)) {
+        return `„${stop.section}“ steht nicht im Einkaufsweg für „${stop.store}“ — bitte einen der angebotenen Bereiche wählen.`;
+      }
     }
     return null;
   })();
@@ -400,15 +405,15 @@ function MasterDataSheet({
   };
 
   /**
-   * Adopts the stop and synonyms of an existing shopping item into the create
+   * Adopts the locations and synonyms of an existing shopping item into the create
    * form. Runs when the name field is left (and is already applied on open for
    * a create flow that carries a name), and only while the user has not edited
    * the shopping fields themselves.
    */
   const adoptItemForName = (nextName: string): void => {
     const match = findItem(nextName);
-    setStore(match?.stop.store ?? null);
-    setSection(match?.stop.section ?? '');
+    setStops(match?.stops ?? []);
+    setActiveStore(null);
     setVariants(match?.variants ?? []);
     setVariantError(null);
   };
@@ -426,29 +431,58 @@ function MasterDataSheet({
     }
   };
 
-  /** Picks a store. A section belongs to exactly one store, so it is cleared. */
+  /**
+   * Picks the market whose section chips are shown. This is only the picker's
+   * active market — the location list itself is unchanged until a section is
+   * chosen, so switching between markets never drops an existing location.
+   */
   const chooseStore = (next: string): void => {
-    setStore(next);
-    setSection('');
-    markShoppingEdited();
-  };
-
-  /** Picks a section chip (level 2 of the route). */
-  const chooseSection = (next: string): void => {
-    setSection(next);
+    setActiveStore(next);
     markShoppingEdited();
   };
 
   /**
-   * Drops the whole shopping stop — the „× Entfernen“ chip's action. A section
-   * needs its store, so it goes with it. The synonyms go too: a variant only
-   * exists on an item row, and this form is now describing an ingredient that is
-   * not bought. The save deletes the row, and its notice restores stop and
-   * synonyms with one „Rückgängig“.
+   * Picks a section for the active market. A market already in the list has its
+   * section **updated**; a new market is **appended**. The store-keyed map is
+   * what enforces "at most one section per market" in the form.
    */
-  const removeStop = (): void => {
-    setStore(null);
-    setSection('');
+  const chooseSection = (next: string): void => {
+    if (activeStore === null) return;
+    const store = activeStore;
+    setStops((current) => {
+      const index = current.findIndex((stop) => stop.store === store);
+      if (index === -1) return [...current, { store, section: next }];
+      const updated = [...current];
+      updated[index] = { store, section: next };
+      return updated;
+    });
+    markShoppingEdited();
+  };
+
+  /**
+   * Removes one location. Removing the last location also clears the synonyms:
+   * a variant only exists on an item row, and this form is then describing an
+   * ingredient that is not bought. The save deletes the row, and its notice
+   * restores locations and synonyms with one „Rückgängig“.
+   */
+  const removeStop = (store: string): void => {
+    const remaining = stops.filter((stop) => stop.store !== store);
+    setStops(remaining);
+    if (activeStore === store) setActiveStore(null);
+    // The ingredient form's last location means "not bought", and a synonym
+    // cannot live without an item row; the item form may keep its synonyms while
+    // the user adds another location (its save stays blocked until then).
+    if (remaining.length === 0 && ingredientMode) {
+      setVariants([]);
+      setVariantError(null);
+    }
+    markShoppingEdited();
+  };
+
+  /** Drops the whole shopping route (the optional ingredient form's clear action). */
+  const removeAllStops = (): void => {
+    setStops([]);
+    setActiveStore(null);
     setVariants([]);
     setVariantError(null);
     markShoppingEdited();
@@ -553,10 +587,9 @@ function MasterDataSheet({
     setAttempted(false);
 
     if (!ingredientMode) {
-      // `stopError` is null and the item form always requires a stop, so the
-      // picker names a valid pair here.
-      if (chosenStop === null) return;
-      onSave({ kind: 'item', name: trimmedName, stop: chosenStop, variants });
+      // `stopError` is null and the item form always requires at least one
+      // location, so the list is valid here.
+      onSave({ kind: 'item', name: trimmedName, stops, variants });
       return;
     }
 
@@ -571,7 +604,7 @@ function MasterDataSheet({
       entries,
       precision,
       storagePlace: creating ? null : storagePlace,
-      stop: chosenStop,
+      stops,
       variants,
     });
   };
@@ -956,30 +989,55 @@ function MasterDataSheet({
                 </p>
               ) : (
                 <>
+                  <p className="field-hint">Orte</p>
+                  {stops.length === 0 ? (
+                    <p className="field-hint">Noch keine Einkaufsorte.</p>
+                  ) : (
+                    <ul className="shopping-location-list">
+                      {stops.map((stop) => (
+                        <li key={stop.store}>
+                          <span className="shopping-location-text">
+                            {stop.store} &gt; {stop.section}
+                          </span>
+                          <button
+                            type="button"
+                            className="chip chip-clear"
+                            onClick={() => removeStop(stop.store)}
+                            aria-label={`Einkaufsort „${stop.store} > ${stop.section}“ entfernen`}
+                            disabled={busy !== null}
+                          >
+                            <CloseIcon className="chip-icon" optical={20} />
+                            <span>Entfernen</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
                   <p className="field-hint">Markt</p>
                   <div className="store-chips" role="group" aria-label="Markt">
                     {stores.map((candidate) => (
                       <button
                         key={candidate}
                         type="button"
-                        className={store === candidate ? 'chip chip-active' : 'chip'}
-                        aria-pressed={store === candidate}
+                        className={activeStore === candidate ? 'chip chip-active' : 'chip'}
+                        aria-pressed={activeStore === candidate}
                         onClick={() => chooseStore(candidate)}
                         disabled={busy !== null}
                       >
                         {candidate}
                       </button>
                     ))}
-                    {/* The way back to "not bought": the chip row has no empty
-                    slot, so the ingredient form needs its own clear action
-                    (the same dashed clear chip as the optional fields in the
-                    quantity sheet). The item form omits it — its row is the
-                    route and a missing store would be a dead end. */}
-                    {ingredientMode && store !== null && (
+                    {/* The way back to "not bought": the ingredient form may
+                    clear the whole route (and with it the synonyms, which
+                    cannot live without an item row). The item form omits it —
+                    its rows are the route and an empty list would be a dead
+                    end. */}
+                    {ingredientMode && stops.length > 0 && (
                       <button
                         type="button"
                         className="chip chip-clear"
-                        onClick={removeStop}
+                        onClick={removeAllStops}
                         title="Einkauf entfernen"
                         disabled={busy !== null}
                       >
@@ -989,19 +1047,23 @@ function MasterDataSheet({
                     )}
                   </div>
 
-                  {/* The section chips follow the store: without a store there is
-                  no option to offer, and a section belongs to exactly one
-                  store. */}
-                  {store !== null && (
+                  {/* The section chips follow the active market; choosing one
+                  adds the market or updates its section. A market already in
+                  the list shows its stored section as the active chip. */}
+                  {activeStore !== null && (
                     <>
                       <p className="field-hint">Bereich</p>
-                      <div className="store-chips" role="group" aria-label={`Bereich in ${store}`}>
+                      <div
+                        className="store-chips"
+                        role="group"
+                        aria-label={`Bereich in ${activeStore}`}
+                      >
                         {sections.map((candidate) => (
                           <button
                             key={candidate}
                             type="button"
-                            className={candidate === section ? 'chip chip-active' : 'chip'}
-                            aria-pressed={candidate === section}
+                            className={candidate === activeSection ? 'chip chip-active' : 'chip'}
+                            aria-pressed={candidate === activeSection}
                             onClick={() => chooseSection(candidate)}
                             disabled={busy !== null}
                           >
@@ -1011,6 +1073,7 @@ function MasterDataSheet({
                       </div>
                     </>
                   )}
+                  <p className="field-hint">Ein Artikel kann pro Markt nur einen Bereich haben.</p>
                 </>
               )}
 

@@ -8,7 +8,7 @@
  *
  * The create flow's name usually arrives from the recipe editor's ingredient
  * sheet. When that name already exists as a shopping item, the shared sheet
- * pre-fills the item's stop and synonyms; a change in those fields is handed to
+ * pre-fills the item's locations and synonyms; a change in those fields is handed to
  * the parent, which updates the existing item instead of creating a second one.
  *
  * UI language is German (docs/CODING_CONVENTIONS.md).
@@ -29,15 +29,15 @@ interface NewIngredientSheetProps {
   /** Drive error of the last save attempt (German, from the storage layer). */
   error: string | null;
   /** Called with the master data to create; `reorderPoint` is the value as
-   *  entered (stored without optimization) and `stop` is the chosen shopping
-   *  stop, or null when the user left the optional „Einkauf“ field empty. */
+   *  entered (stored without optimization) and `stops` are the chosen shopping
+   *  locations, empty when the user left the optional „Einkauf“ field empty. */
   onSave: (
     name: string,
     bu: string,
     reorderPoint: number,
     entries: readonly NewIngredientEntry[],
     precision: PrecisionLevel,
-    stop: ShoppingStop | null,
+    stops: readonly ShoppingStop[],
     variants: readonly string[],
   ) => void;
   /** Called when the user edits any form field — the parent forgets the
@@ -85,7 +85,7 @@ function NewIngredientSheet({
           result.reorderPoint,
           result.entries,
           result.precision,
-          result.stop,
+          result.stops,
           result.variants,
         );
       }}

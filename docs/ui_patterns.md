@@ -341,6 +341,8 @@ top left. Never mind → „Abbrechen" next to the commit.*
 | „Vorräte auswählen — Teil 2: Zutaten" | place (flow step) | „Zurück" (asks) |
 | „Zutaten" | place (scroll key `ingredients`) | „Zurück" |
 | „Einkaufsartikel" | place (scroll key `shoppingPlaces`) | „Zurück" |
+| „Einkaufsliste sortieren" | place (flow step 1) | „Zurück" (asks) |
+| „Einkaufsweg wählen" | place (flow step 2) | „Zurück" (back to step 1) |
 | Recipe overview, create menu | browsing layer over the list | none — the scrim / close button leaves it, there is no pending decision |
 | „Zum Essensplan hinzufügen" / „Übernehmen" | change (sheet) | „Abbrechen" |
 | „Eintrag ersetzen" | change (sheet) | „Abbrechen" |

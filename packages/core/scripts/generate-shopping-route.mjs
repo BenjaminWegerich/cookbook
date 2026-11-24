@@ -4,20 +4,21 @@
  *   - docs/shopping_route.csv     (the route: Store;Section, row order = walking order)
  *   - docs/shopping_items.csv     (the item table: Item;Store;Section)
  *   - docs/shopping_synonyms.csv  (the synonym table: Variant;Item)
+ *   - docs/shopping_markets.csv   (the market ranks: Store;Rank, 1 = best)
  *
- * The three files are the seed of the user's authoritative Drive master data
- * (einkaufsweg.csv + einkaufs-artikel.csv + einkaufs-synonyme.csv, apps/web/src/
- * drive/shoppingRouteMasterData.ts) and, like docs/ingredients.csv, they are
- * compiled into a TypeScript module so the framework-free core package and its
- * consumers never parse CSV at runtime (same pattern as
- * generate-additional-data.mjs and generate-ladder.mjs).
+ * The four files are the seed of the user's authoritative Drive master data
+ * (einkaufsweg.csv + einkaufs-artikel.csv + einkaufs-synonyme.csv +
+ * einkaufs-maerkte.csv, apps/web/src/drive/shoppingRouteMasterData.ts) and, like
+ * docs/ingredients.csv, they are compiled into a TypeScript module so the
+ * framework-free core package and its consumers never parse CSV at runtime (same
+ * pattern as generate-additional-data.mjs and generate-ladder.mjs).
  *
  * This generator is also the cross-file drift guard (docs/storage_format.md
- * §10): it refuses to emit anything when a row has an empty cell, when a stop or
- * an item name is duplicated, when an item names a stop the route does not
- * contain, when a variant names an unknown item, or when a variant would shadow
- * an item name — the same invariants the runtime parsers enforce, so the
- * committed seed can never describe an inconsistent set of files.
+ * §10): it refuses to emit anything when a row has an empty cell, when a stop is
+ * duplicated, when an item names the same market twice, when an item names a
+ * stop the route does not contain, when a variant names an unknown item, or when
+ * a variant would shadow an item name — the same invariants the runtime parsers
+ * enforce, so the committed seed can never describe an inconsistent set of files.
  *
  * The generated module inlines the CSV cell text verbatim (no escaping): the
  * route, item and variant names are user data without quotes, semicolons or line
@@ -37,6 +38,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const ROUTE_CSV = resolve(ROOT, 'docs/shopping_route.csv');
 const ITEMS_CSV = resolve(ROOT, 'docs/shopping_items.csv');
 const SYNONYMS_CSV = resolve(ROOT, 'docs/shopping_synonyms.csv');
+const RANKS_CSV = resolve(ROOT, 'docs/shopping_markets.csv');
 const OUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../src/shoppingRouteData.ts');
 
 /** Exact header of the route file (docs/shopping_route.csv). */
@@ -47,6 +49,9 @@ const ITEMS_HEADER = 'Item;Store;Section';
 
 /** Exact header of the synonym file (docs/shopping_synonyms.csv). */
 const SYNONYMS_HEADER = 'Variant;Item';
+
+/** Exact header of the market-rank file (docs/shopping_markets.csv). */
+const RANKS_HEADER = 'Store;Rank';
 
 /**
  * The comparison key of a name, mirroring core's `shoppingNameKey`
@@ -135,8 +140,10 @@ function buildItems(route) {
   }
   const knownStops = new Set(route.map((stop) => `${stop.store}\u0000${stop.section}`));
   const items = [];
-  const seenItems = new Set();
+  /** Folded item name → its stored spelling (case-only variants are rejected). */
   const claimed = new Map();
+  /** Folded item name + store → the row that claimed the pair. */
+  const claimedLocations = new Map();
   rows.forEach((row, index) => {
     const [item, store, section] = row;
     if (item === '' || store === '' || section === '') {
@@ -144,12 +151,9 @@ function buildItems(route) {
         `${ITEMS_CSV}: empty item, store or section in row ${index + 2}: ${row.join(';')}`,
       );
     }
-    if (seenItems.has(item)) {
-      throw new Error(`${ITEMS_CSV}: duplicate item '${item}' in row ${index + 2}`);
-    }
     const key = nameKey(item);
     const clash = claimed.get(key);
-    if (clash !== undefined) {
+    if (clash !== undefined && clash !== item) {
       throw new Error(
         `${ITEMS_CSV}: '${item}' and '${clash}' (row ${index + 2}) differ only in letter case`,
       );
@@ -160,7 +164,14 @@ function buildItems(route) {
           `is not in ${ROUTE_CSV}`,
       );
     }
-    seenItems.add(item);
+    const locationKey = `${key}\u0000${store}`;
+    if (claimedLocations.has(locationKey)) {
+      throw new Error(
+        `${ITEMS_CSV}: '${item}' has two sections in '${store}' (row ${index + 2}) — ` +
+          'an item can have at most one section per market',
+      );
+    }
+    claimedLocations.set(locationKey, item);
     claimed.set(key, item);
     items.push({ item, store, section });
   });
@@ -212,12 +223,58 @@ function buildSynonyms(items) {
   return synonyms;
 }
 
+/**
+ * Reads the market-rank file and validates it against the route: every store
+ * must exist, ranks are positive integers and unique. A store missing from the
+ * file is allowed (the runtime appends it after the explicit ranks in route
+ * order), but the seed lists all personal stores.
+ */
+function buildRanks(route) {
+  const { header, rows } = parseCsv(RANKS_CSV);
+  if (header.join(';') !== RANKS_HEADER) {
+    throw new Error(`${RANKS_CSV}: unexpected header ${JSON.stringify(header)}`);
+  }
+  const routeStores = new Set(route.map((stop) => stop.store));
+  const ranks = [];
+  const seenStores = new Set();
+  const seenRanks = new Map();
+  rows.forEach((row, index) => {
+    const [store, rankText] = row;
+    if (store === '' || rankText === '') {
+      throw new Error(`${RANKS_CSV}: empty store or rank in row ${index + 2}: ${row.join(';')}`);
+    }
+    if (seenStores.has(store)) {
+      throw new Error(`${RANKS_CSV}: duplicate store '${store}' in row ${index + 2}`);
+    }
+    if (!routeStores.has(store)) {
+      throw new Error(`${RANKS_CSV}: store '${store}' (row ${index + 2}) is not in ${ROUTE_CSV}`);
+    }
+    const rank = Number(rankText);
+    if (!Number.isInteger(rank) || rank < 1) {
+      throw new Error(
+        `${RANKS_CSV}: rank '${rankText}' of '${store}' (row ${index + 2}) is not a positive integer`,
+      );
+    }
+    const clash = seenRanks.get(rank);
+    if (clash !== undefined) {
+      throw new Error(
+        `${RANKS_CSV}: '${store}' and '${clash}' (row ${index + 2}) share rank ${rank}`,
+      );
+    }
+    seenStores.add(store);
+    seenRanks.set(rank, store);
+    ranks.push({ store, rank });
+  });
+  return ranks;
+}
+
 /** Renders the generated TypeScript module. */
-function render(route, items, synonyms) {
+function render(route, items, synonyms, ranks) {
   const lines = [];
   lines.push('/**');
-  lines.push(' * AUTO-GENERATED from docs/shopping_route.csv, docs/shopping_items.csv and');
-  lines.push(' * docs/shopping_synonyms.csv by scripts/generate-shopping-route.mjs.');
+  lines.push(' * AUTO-GENERATED from docs/shopping_route.csv, docs/shopping_items.csv,');
+  lines.push(' * docs/shopping_synonyms.csv and docs/shopping_markets.csv by');
+  lines.push(' * scripts/generate-shopping-route.mjs.');
   lines.push(
     " * Do not edit by hand — re-run 'npm run generate:shopping-route' (packages/core) after a CSV change.",
   );
@@ -225,6 +282,7 @@ function render(route, items, synonyms) {
   lines.push('');
   lines.push(
     "import type { ShoppingItems, ShoppingRoute, ShoppingSynonyms } from './shoppingRouteCsv.js';",
+    "import type { ShoppingMarketRanks } from './shoppingMarketRanksCsv.js';",
   );
   lines.push('');
   lines.push(
@@ -239,14 +297,39 @@ function render(route, items, synonyms) {
   lines.push('];');
   lines.push('');
   lines.push(
-    '/** The seed item table: item name → stop (docs/shopping_items.csv); the name set is independent of the ingredient list. */',
+    '/** The seed item table: item name → locations (docs/shopping_items.csv); the name set is independent of the ingredient list. */',
   );
   lines.push('export const SEED_SHOPPING_ITEMS: ShoppingItems = {');
+  /** Group the location rows by item, preserving the first-appearance order. */
+  const groupedItems = [];
+  const byItem = new Map();
   for (const entry of items) {
-    lines.push(
-      `  ${JSON.stringify(entry.item)}: { store: ${JSON.stringify(entry.store)}, ` +
-        `section: ${JSON.stringify(entry.section)} },`,
+    let group = byItem.get(entry.item);
+    if (group === undefined) {
+      group = { item: entry.item, stops: [] };
+      byItem.set(entry.item, group);
+      groupedItems.push(group);
+    }
+    group.stops.push({ store: entry.store, section: entry.section });
+  }
+  const routeIndex = new Map(
+    route.map((stop, index) => [`${stop.store}\u0000${stop.section}`, index]),
+  );
+  for (const group of groupedItems) {
+    // The location list is a set; canonicalize it to the route order, matching
+    // the runtime parser. A hand-sorted spreadsheet then still round-trips.
+    group.stops.sort(
+      (left, right) =>
+        (routeIndex.get(`${left.store}\u0000${left.section}`) ?? Number.MAX_SAFE_INTEGER) -
+        (routeIndex.get(`${right.store}\u0000${right.section}`) ?? Number.MAX_SAFE_INTEGER),
     );
+    const stops = group.stops
+      .map(
+        (stop) =>
+          `{ store: ${JSON.stringify(stop.store)}, section: ${JSON.stringify(stop.section)} }`,
+      )
+      .join(', ');
+    lines.push(`  ${JSON.stringify(group.item)}: [${stops}],`);
   }
   lines.push('};');
   lines.push('');
@@ -259,13 +342,23 @@ function render(route, items, synonyms) {
   }
   lines.push('};');
   lines.push('');
+  lines.push(
+    '/** The seed market ranks: store → preference rank (docs/shopping_markets.csv); 1 = best. */',
+  );
+  lines.push('export const SEED_SHOPPING_MARKET_RANKS: ShoppingMarketRanks = {');
+  for (const entry of ranks) {
+    lines.push(`  ${JSON.stringify(entry.store)}: ${entry.rank},`);
+  }
+  lines.push('};');
+  lines.push('');
   return lines.join('\n');
 }
 
 const route = buildRoute();
 const items = buildItems(route);
 const synonyms = buildSynonyms(items);
-let output = render(route, items, synonyms);
+const ranks = buildRanks(route);
+let output = render(route, items, synonyms, ranks);
 try {
   // Format with Prettier (root devDependency, used by `npm run format`) so the
   // committed generated module is prettier-clean and regeneration is
@@ -280,5 +373,5 @@ try {
 }
 writeFileSync(OUT_PATH, output, 'utf8');
 console.log(
-  `Wrote ${route.length} stop(s), ${items.length} item(s) and ${synonyms.length} synonym(s) to ${OUT_PATH}`,
+  `Wrote ${route.length} stop(s), ${items.length} item location row(s), ${synonyms.length} synonym(s) and ${ranks.length} market rank(s) to ${OUT_PATH}`,
 );

@@ -85,14 +85,23 @@
   by the app; they remain exported and tested until the cleanup task in
   [ROADMAP.md](ROADMAP.md) removes them.
 - Shopping master data (see [storage_format.md](storage_format.md) §10 and
-  [shopping_item_identity.md](shopping_item_identity.md)): the three CSV codecs and their
-  serializers (`packages/core/src/shoppingRouteCsv.ts`), the runtime registry holding the
-  current route, item table and synonym table plus the store/section lists the ingredient
-  sheet's pickers are built from (`packages/core/src/shoppingRouteRegistry.ts`), the compiled
-  seed (`packages/core/src/shoppingRouteData.ts`, generated from `docs/shopping_route.csv` +
-  `docs/shopping_items.csv` + `docs/shopping_synonyms.csv` via
-  `npm run generate:shopping-route`), and the read-time resolution of a Keep line to an item
-  (`packages/core/src/shoppingSort.ts`: name field, exact item/variant match, suggestions).
+  [shopping_item_identity.md](shopping_item_identity.md)): the four CSV codecs and their
+  serializers (`packages/core/src/shoppingRouteCsv.ts` for route, items and synonyms;
+  `packages/core/src/shoppingMarketRanksCsv.ts` for the ranks), the runtime registry holding
+  the current route, item table, synonym table and explicit market ranks plus the
+  store/section lists the ingredient sheet's pickers are built from
+  (`packages/core/src/shoppingRouteRegistry.ts`), the compiled seed
+  (`packages/core/src/shoppingRouteData.ts`, generated from `docs/shopping_route.csv` +
+  `docs/shopping_items.csv` + `docs/shopping_synonyms.csv` + `docs/shopping_markets.csv` via
+  `npm run generate:shopping-route`), the effective-rank fallback
+  (`packages/core/src/shoppingMarketRanks.ts`), the read-time resolution of a Keep line to an
+  item (`packages/core/src/shoppingSort.ts`: name field, exact item/variant match,
+  suggestions), and the trip-market recommendation and allocation
+  (`packages/core/src/shoppingMarketRecommendation.ts`: mandatory/coverage/priority
+  preselection, live assignment stats). The item table stores one row per location
+  (`Item;Store;Section`, at most one section per item and market); the parser groups the rows
+  into name → location list. The rank file (`Store;Rank`) is the fourth user-data file; it is
+  loaded into the registry and written with the effective ranks on every master-data write.
 - The multi-level sub-recipe plan (`packages/core/src/subRecipePlan.ts`): which Zutaten-Rezepte
   a bundle of dishes reaches (only `ingredient_recipe` titles are links, at any depth), their
   topological order, and per sub-recipe the requirement (the exact sum over all parents), the
@@ -156,24 +165,27 @@
   ingredient, separate from the AU mappings.
 - Where an item is bought is a separate master-data set in the same `Stammdaten` subfolder —
   `einkaufsweg.csv` (the route: store + section per row, in walking order),
-  `einkaufs-artikel.csv` (the item table: item → store + section — the identity of everything
-  buyable and the only place a route is kept) and `einkaufs-synonyme.csv` (the synonym table:
-  variant text → item), in the canonical formats of docs/shopping_route.csv +
-  docs/shopping_items.csv + docs/shopping_synonyms.csv (see
-  [storage_format.md](storage_format.md) §10 and
+  `einkaufs-artikel.csv` (the item table: one row per item and market, so an item can carry
+  several locations — the identity of everything buyable and the only place locations are
+  kept) and `einkaufs-synonyme.csv` (the synonym table: variant text → item), in the canonical
+  formats of docs/shopping_route.csv + docs/shopping_items.csv + docs/shopping_synonyms.csv
+  (see [storage_format.md](storage_format.md) §10 and
   [shopping_item_identity.md](shopping_item_identity.md)). The item table's name set is
   **independent of the ingredient list**, so items that are not recipe ingredients at all have
   their place there too, while `zutaten.csv` keeps the ingredient master data without a route.
   The create sheet („Neue Zutat anlegen“) asks for the
-  stop in an optional „Einkauf“ field while it collects the other master-data fields — the
-  store as chips, the section as a searchable list of that store's sections — and writes the
-  item row before the ingredient row when a stop is given: a row without an ingredient is valid
-  (the name set is independent of the ingredient list), and an ingredient without its row is
-  valid too (it is then simply never bought). Picking a store requires its section; the
-  „Einkaufsartikel“ form keeps the stop required. The „Einkaufsartikel“ screen
-  (`apps/web/src/components/ShoppingPlaces.tsx`) creates and edits item rows and their
-  synonym lists directly through the same shared sheet; a duplicate item name is rejected
-  case-folded.
+  locations in an optional „Einkauf“ field while it collects the other master-data fields —
+  one row per market, the store as chips, the section as a searchable list of that store's
+  sections — and writes the item rows before the ingredient row when at least one location is
+  given: a row without an ingredient is valid (the name set is independent of the ingredient
+  list), and an ingredient without its rows is valid too (it is then simply never bought).
+  Picking a store requires its section; the „Einkaufsartikel“ form keeps at least one location
+  required. The „Einkaufsartikel“ screen
+  (`apps/web/src/components/ShoppingPlaces.tsx`) creates and edits item rows, their location
+  lists and their synonym lists directly through the same shared sheet; a duplicate item name
+  is rejected case-folded. The market ranks live in the Drive file
+  `einkaufs-maerkte.csv`, are loaded into the registry and have no in-app editor; a store
+  missing from them ranks after the explicitly ranked stores in route order.
 - **Master-data writes read before they write.** Every append, edit, rename and sort
   assignment first reads the authoritative file content from Drive and only then writes
   the set, so a spreadsheet edit made meanwhile is not overwritten. A save that writes
@@ -191,9 +203,17 @@
   (`packages/core/src/shoppingSort.ts`, [shopping_item_identity.md](shopping_item_identity.md)):
   the line's decoration is undone to a name field, that field must equal an item name (or a
   variant) exactly, and an unresolved line is offered similar item names on the sort page —
-  confirming one appends a synonym row. Assigning a stop under a new or changed name appends
-  the item row (with its route) and, when the name was changed, the line's own name as a
-  synonym of it. No sort run normalizes the master data or changes a Keep text.
+  confirming one appends a synonym row. Assigning locations under a new or changed name
+  appends the item row set (one row per chosen market, at most one section per market) and,
+  when the name was changed, the line's own name as a synonym of it. No sort run normalizes
+  the master data or changes a Keep text.
+- The trip recommendation and allocation are pure functions in
+  `packages/core/src/shoppingMarketRecommendation.ts` (docs/shopping_item_identity.md §7):
+  distinct relevant items, mandatory markets, a minimum coverage set, then the >10 priority
+  markets in rank order. `shoppingSortOrder` in `shoppingSort.ts` consumes the selected
+  markets and the resolved lines; it picks each line's location at the best-ranked **selected**
+  market and orders the list by the chosen stop's route index. The app never sorts in the
+  client directly on Keep's data — the gateway applies the derived order.
 
 ### HTML share export
 
@@ -318,11 +338,12 @@
   frontend entirely — a static public bundle cannot keep a secret, and no browser can obtain a
   master token in the first place.
 - Sorting is applied server-side, never in the client: the core derives the target order from
-  the shopping master data (docs/storage_format.md §10, docs/shopping_item_identity.md —
-  lines parked at the top first, then the lines with an item in walking order, then the lines
-  parked at the bottom, then the checked-off ones), and the gateway only applies it
-  (`KeepClient.sort_shopping_lines`: fresh sort ids above every item, the same non-destructive
-  technique and verification as the writes, not `List.sort_items`).
+  the shopping master data and the chosen trip markets (docs/storage_format.md §10,
+  docs/shopping_item_identity.md §7–§8 — assigned lines in the walking order of their chosen
+  stops, then the lines without a selected market or ignored, then the checked-off ones), and
+  the gateway only applies it (`KeepClient.sort_shopping_lines`: fresh sort ids above every
+  item, the same non-destructive technique and verification as the writes, not
+  `List.sort_items`).
 
 #### Frontend integration (meal plan)
 

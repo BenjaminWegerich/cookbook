@@ -12,7 +12,7 @@
  * A row carries the article name only — the same one-line row as „Zutaten
  * verwalten“ (decided with the user). Tapping a row opens the shared
  * `MasterDataSheet` in its item-edit mode („Einkaufsartikel verwalten“), which
- * owns the two things this screen edits — the stop and the item's synonyms.
+ * owns the two things this screen edits — the locations and the item's synonyms.
  * The route itself (stores and sections) is not edited here; the sheet picks
  * from it. Creating a row uses the same sheet with an editable name.
  *
@@ -71,9 +71,12 @@ interface ShoppingPlacesProps {
   ref?: Ref<ShoppingPlacesHandle>;
 }
 
-/** True when both stops name the same store and section. */
-function sameStop(left: ShoppingStop, right: ShoppingStop): boolean {
-  return left.store === right.store && left.section === right.section;
+/** True when two location lists name the same stores and sections. */
+function sameStops(left: readonly ShoppingStop[], right: readonly ShoppingStop[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((stop) =>
+    right.some((candidate) => candidate.store === stop.store && candidate.section === stop.section),
+  );
 }
 
 /**
@@ -84,11 +87,11 @@ function sameStop(left: ShoppingStop, right: ShoppingStop): boolean {
  * the identical file.
  */
 function isUnchanged(
-  stop: ShoppingStop,
+  stops: readonly ShoppingStop[],
   variants: readonly string[],
   update: ShoppingItemUpdate,
 ): boolean {
-  if (!sameStop(stop, update.stop)) return false;
+  if (!sameStops(stops, update.stops)) return false;
   if (variants.length !== update.variants.length) return false;
   return variants.every((variant) => update.variants.includes(variant));
 }
@@ -204,7 +207,7 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
   });
 
   /** The item behind the open sheet, or undefined if the registry changed. */
-  const editingStop = editingName === null ? undefined : items[editingName];
+  const editingStops = editingName === null ? undefined : items[editingName];
 
   /** Opens one item's sheet with a clean error state. */
   const openEntry = (name: string): void => {
@@ -222,18 +225,18 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
   };
 
   /**
-   * Persists the sheet's validated stop and synonym list and reports the
+   * Persists the sheet's validated location list and synonyms and reports the
    * outcome. On success the sheet closes and the app-root notice offers the
    * previous state back; on failure the sheet stays open with the German reason.
    */
   const saveEntry = async (update: ShoppingItemUpdate): Promise<void> => {
     if (editingName === null || savingRef.current) return;
     const name = editingName;
-    const stop = items[name];
+    const stops = items[name];
     const variants = shoppingVariantsFor(name);
     // No value changed: the enabled „Speichern“ is a no-op that closes the sheet
     // without a write and without a notice (§5.1).
-    if (stop !== undefined && isUnchanged(stop, variants, update)) {
+    if (stops !== undefined && isUnchanged(stops, variants, update)) {
       setEditingName(null);
       setSaveError(null);
       return;
@@ -242,7 +245,7 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
     setSaving('save');
     setSaveError(null);
     try {
-      const { previous } = await saveShoppingItem(token, name, update.stop, update.variants);
+      const { previous } = await saveShoppingItem(token, name, update.stops, update.variants);
       setEditingName(null);
       setRevision((current) => current + 1);
       showSnackbar({
@@ -276,7 +279,7 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
    */
   const createEntry = async (
     name: string,
-    stop: ShoppingStop,
+    stops: readonly ShoppingStop[],
     variants: readonly string[],
   ): Promise<void> => {
     if (savingRef.current) return;
@@ -284,7 +287,7 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
     setSaving('save');
     setCreateError(null);
     try {
-      await createShoppingItem(token, name, stop, variants);
+      await createShoppingItem(token, name, stops, variants);
       setCreating(false);
       setRevision((current) => current + 1);
       showSnackbar({
@@ -416,7 +419,7 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
           {names.map((name) => (
             <li key={name}>
               {/* Exactly the „Zutaten“ row: the canonical name is the row's only
-                  text. The stop is edited behind it, so repeating it here would
+                  text. The locations are edited behind it, so repeating them here would
                   turn the reference list into a data table (DESIGN §5.12). */}
               <button type="button" className="ingredient-row" onClick={() => openEntry(name)}>
                 {name}
@@ -426,7 +429,7 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
         </ul>
       )}
 
-      {editingName !== null && editingStop !== undefined && (
+      {editingName !== null && editingStops !== undefined && (
         <EditShoppingItemSheet
           key={editingName}
           name={editingName}
@@ -453,7 +456,7 @@ function ShoppingPlaces({ token, onClose, showSnackbar, ref }: ShoppingPlacesPro
           error={createError}
           onSave={(result) => {
             if (result.kind !== 'item') return;
-            void createEntry(result.name, result.stop, result.variants);
+            void createEntry(result.name, result.stops, result.variants);
           }}
           onEdited={() => setCreateError(null)}
           onClose={() => {

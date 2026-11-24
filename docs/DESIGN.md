@@ -1265,7 +1265,7 @@ match is the bare „—". *decided with the user*
 
 **„Stammdaten bearbeiten" is a change.** The shared `MasterDataSheet` edits the optional
 Singular/Plural pair (§5.3), the reorder point (§5.3, the create sheet's picker), the AU
-mappings, the ingredient-level precision, the shopping stop („Einkauf", §5.13) and the item's
+mappings, the ingredient-level precision, the shopping locations („Einkauf", §5.13) and the item's
 synonyms. The canonical name and the base unit are the entry's identity: the name is a
 disabled field under the „Name" caption, the base unit a disabled g/ml toggle. A save without
 a change closes the sheet without a write or a notice (§5.1); a successful save reports
@@ -1286,10 +1286,10 @@ mapping; it is saved per mapping, not on the unit, so the same unit can buy carr
 count garlic cloves. *decided with the user*
 
 **The ingredient's „Einkauf" is optional.** An ingredient may stay unbought; while a store is
-picked, the store chips carry a dashed „× Entfernen" chip that clears the stop and — because a
+picked, the location list carries a dashed „× Entfernen" chip that clears all locations and — because a
 synonym only lives on an item row — its synonyms. The save deletes the row and „Rückgängig"
-restores both. Picking a store requires its section; the item form keeps the stop required,
-because its row is the route. *decided with the user*
+restores both. Picking a store requires its section; the item form keeps at least one
+location required, because its rows are the route. *decided with the user*
 
 **The recipe row offers the master data.** In the recipe editor's quantity sheet, a selected
 master ingredient shows an outlined „Stammdaten bearbeiten" action under the name field (the
@@ -1306,15 +1306,70 @@ survive the round trip. *decided with the user*
 **The item table is a place over the list.** „Einkaufsartikel verwalten" opens
 `ShoppingPlaces` with a sticky stacked header (§5.5: „Zurück", `h1` „Einkaufsartikel"), one
 search field, one create action and one rows list (§5.4). A row carries the item name only;
-the stop and the synonyms are edited in the sheet behind it. Search matches the item name and
-its synonyms, so „Möhren" finds „Karotten"; no match is the bare „—". The screen refreshes
-the shopping set from Drive when it opens.
+the locations and the synonyms are edited in the sheet behind it. Search matches the item
+name and its synonyms, so „Möhren" finds „Karotten"; no match is the bare „—". The screen
+refreshes the shopping set from Drive when it opens.
 
 **„Einkaufsartikel verwalten" is a change.** The shared sheet shows the name (disabled), the
-„Einkauf" field (Markt/Bereich) and the synonyms. „Einkaufsartikel löschen" removes the row
-and its synonyms and the notice offers „Rückgängig" (§5.9, §6.5). „Einkaufsartikel anlegen"
-uses the same sheet with an editable name; a duplicate item name is reported under the name
-field as soon as the field is left. *decided with the user*
+„Einkauf" field and the synonyms. The „Einkauf" field is a **location list**, one entry per
+market (`Markt > Bereich`), because an item can be available at several markets but at most
+once per market. The store chips select the market being edited; the section chips add it (or
+update its section when the market is already listed); each location has a remove action.
+A store whose section was changed is updated in place, never duplicated. „Einkaufsartikel
+löschen" removes all rows and synonyms and the notice offers „Rückgängig" (§5.9, §6.5).
+„Einkaufsartikel anlegen" uses the same sheet with an editable name; a duplicate item name is
+reported under the name field as soon as the field is left. *decided with the user*
+
+*Cooking view: not applicable.*
+
+### 5.14 Shopping-list sort and trip market selection
+
+*Applies to: web app.*
+
+**The sort is a two-step flow, not one page.** „Liste sortieren" on the home screen opens
+`ShoppingSortSelect` in its article step; the forward action is „Weiter" and opens the second
+step „Einkaufsweg wählen" (the same component's market step). The final action on the second step is
+„Liste sortieren" — the only action that writes. Both steps share one unsaved work state:
+the header's „Zurück" from the market step returns to the article step with its decisions
+intact; leaving the flow from the article step asks the discard question (§6.2). The market
+step shows an empty state when no market can supply a relevant item; with no unresolved line
+the article step shows its empty state and its „Weiter" opens the market step directly. *decided with the user*
+
+**Step 1 — articles.** Only unchecked lines that name no item are listed. A row carries the
+„Artikel" field, the similar-item chips, the location editor, and one „Ignorieren" action.
+The location editor is a list of `Markt > Bereich` entries plus the store chips and the
+section chips of the selected store. Choosing a section for a market already in the list
+updates that location; a second section for the same market is impossible. The row does not
+fold when the first location is chosen — it stays open so further locations can be added —
+and folds when focus leaves the row or the user taps the title. A new item requires at least
+one location; a text that names an existing item hides the location editor and becomes a
+synonym. „Ignorieren" is per run: no write, end of the list, asked again next time. It
+replaces the former „Oben einsortieren" / „Unten einsortieren" pair. *decided with the user*
+
+**Step 2 — markets.** The page lists the markets that can supply at least one relevant item,
+ordered by the market rank from `einkaufs-maerkte.csv` (1 = best; maintained in Drive,
+not in the app). The recommendation of
+[shopping_item_identity.md](shopping_item_identity.md) §7 is preselected: mandatory markets,
+the smallest coverage set, then every market that would take over more than 10 items. Each
+row is a full-width toggle carrying the rank, the market name, a quiet tag („Pflicht",
+„Empfohlen", „Gewählt", „Ausweichmarkt") and the number of items it takes over. Markets outside the
+recommendation stay visible as fallbacks and show how many items they would take over if
+selected; they are not preselected because they clear neither coverage nor the 10-item
+threshold. *decided with the user*
+
+**The live summary is the point of the screen.** Above the forward action it reports
+„X von Y Artikeln versorgt", the uncovered items by name (up to three, then „und N weitere"),
+how many items would be bought at a worse-ranked market, and how many lines were ignored.
+Deselecting a mandatory market warns with the items that lose their only market. A
+„Empfehlung wiederherstellen" action resets a changed selection. The forward action stays
+available when the selection leaves items uncovered — the user may deliberately leave them at
+the end — but is disabled with no market selected while relevant items exist. *decided with
+the user*
+
+**The list order is the walking order.** The chosen market decides where an item is bought;
+the route decides where it appears. Assigned lines come first in route order, then the
+unmapped lines in Keep order, then the checked-off lines. The market rank never reorders the
+list. *decided with the user*
 
 *Cooking view: not applicable.*
 
@@ -1673,6 +1728,8 @@ The cooking view (`.html`) has its own inventory, written below.
 | „Vorräte auswählen — Teil 2: Zutaten" | `setNav('pantry')`, `PantrySelect` | place (flow step) | „Zurück" (asks) |
 | „Zutaten" | `setNav('ingredients')`, `IngredientMaster` | place | „Zurück" |
 | „Einkaufsartikel" | `setNav('shoppingPlaces')`, `ShoppingPlaces` | place | „Zurück" |
+| „Einkaufsliste sortieren" | `sortOpen`, `ShoppingSortSelect` step 1 | place (flow step) | „Zurück" (asks) |
+| „Einkaufsweg wählen" | `ShoppingSortSelect` step 2 | place (flow step) | „Zurück" (back to articles) |
 | „Zum Essensplan hinzufügen" / „Übernehmen" | `MealPlanSheet` | change | „Abbrechen" |
 | „Eintrag ersetzen" | `ReplaceRecipeSheet` | change | „Abbrechen" |
 | „Zutat bearbeiten" / „Zutat zur Liste hinzufügen" / „Zutat oder Menge zum Text hinzufügen" / „Menge im Text bearbeiten" | `IngredientSheet` | change | „Abbrechen" |
@@ -1725,6 +1782,7 @@ that file.
 | §5.10 FAB and create menu | `apps/web/src/App.tsx`, `apps/web/src/styles/recipe-list.css` |
 | §5.12 Ingredient master data | `apps/web/src/components/IngredientMaster.tsx`, `apps/web/src/components/MasterDataSheet.tsx`, `apps/web/src/components/ingredientMasterUpdate.tsx`, `apps/web/src/components/EditIngredientSheet.tsx`, `apps/web/src/components/NewIngredientSheet.tsx`, `apps/web/src/components/ManageIngredientsButton.tsx`, `apps/web/src/styles/ingredient-master.css` |
 | §5.13 Shopping master data | `apps/web/src/components/ShoppingPlaces.tsx`, `apps/web/src/components/MasterDataSheet.tsx`, `apps/web/src/components/EditShoppingItemSheet.tsx`, `apps/web/src/components/ManageShoppingPlacesButton.tsx`, `apps/web/src/drive/shoppingRouteMasterData.ts`, `apps/web/src/styles/shopping-places.css` |
+| §5.14 Shopping-list sort and trip markets | `apps/web/src/components/ShoppingSortSelect.tsx`, `apps/web/src/App.tsx`, `apps/web/src/styles/shopping-sort-select.css`, `packages/core/src/shoppingMarketRecommendation.ts`, `packages/core/src/shoppingMarketRanks.ts`, `packages/core/src/shoppingMarketRanksCsv.ts`, `packages/core/src/shoppingRouteRegistry.ts`, `apps/web/src/drive/shoppingRouteMasterData.ts`, `packages/core/src/shoppingSort.ts` |
 | §6 Patterns | `apps/web/src/App.tsx` (navigation, flows), `apps/web/src/hooks/useLeaveGuard.ts`, `apps/web/src/components/LeaveConfirmSheet.tsx` |
 | §7 Language | the component strings (source of truth); the rules bind every component above |
 | §8 Accessibility | the components above (`aria-*`, `role`, `alt` live in the markup) |

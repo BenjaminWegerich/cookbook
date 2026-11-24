@@ -2,29 +2,33 @@
  * Drive persistence for the shopping master data (docs/storage_format.md §10,
  * docs/shopping_item_identity.md).
  *
- * The user's authoritative shopping master data lives in three CSV files inside
+ * The user's authoritative shopping master data lives in four CSV files inside
  * the `Stammdaten` subfolder of the Cookbook folder:
  * - `einkaufsweg.csv` — the route: one row per stop (`Store;Section`); the row
  *   order is the order the shops are visited and the sections are walked;
- * - `einkaufs-artikel.csv` — the item table: one row per item
+ * - `einkaufs-artikel.csv` — the item table: one row per item and market
  *   (`Item;Store;Section`), the identity of everything buyable and the only
- *   place a route is kept; the row order carries no meaning;
+ *   place locations are kept; the row order carries no meaning;
  * - `einkaufs-synonyme.csv` — the synonym table: one row per variant
  *   (`Variant;Item`), the meaning of a variant text; the row order carries no
- *   meaning.
+ *   meaning;
+ * - `einkaufs-maerkte.csv` — the market ranks: one row per store
+ *   (`Store;Rank`), `1` = best; the row order carries no meaning.
  *
  * The formats mirror the repo seeds (docs/shopping_route.csv +
- * docs/shopping_items.csv + docs/shopping_synonyms.csv, see shoppingRouteCsv.ts).
- * At startup the app loads all three into the core runtime registry
- * (shoppingRouteRegistry.ts) — the Drive files win over the built-in seed once
- * they exist. The route and the item table are created together on the first
- * shopping assignment the user enters; the synonym file is created with them
- * (empty) and grows with every confirmed suggestion.
+ * docs/shopping_items.csv + docs/shopping_synonyms.csv +
+ * docs/shopping_markets.csv, see shoppingRouteCsv.ts and
+ * shoppingMarketRanksCsv.ts). At startup the app loads all four into the core
+ * runtime registry (shoppingRouteRegistry.ts) — the Drive files win over the
+ * built-in seed once they exist. The route, item table and rank file are created
+ * together on the first shopping assignment the user enters; the synonym file is
+ * created with them (empty) and grows with every confirmed suggestion.
  *
  * A missing route or item file is not an error (the built-in seed keeps the app
  * fully functional); a missing synonym file is the normal state before the first
- * confirmed suggestion (an empty table). A corrupt or inconsistent file throws
- * with a German message and the registry keeps its previous state.
+ * confirmed suggestion (an empty table); a missing rank file keeps the seed
+ * ranks active. A corrupt or inconsistent file throws with a German message and
+ * the registry keeps its previous state.
  *
  * Migration (docs/shopping_item_identity.md): the item table was called
  * `einkaufs-zuordnung.csv` before the item identity existed. That file is read
@@ -36,20 +40,27 @@
 
 import {
   allShoppingItems,
+  allShoppingMarketRanks,
   allShoppingStops,
   allShoppingSynonyms,
   parseShoppingItemsCsv,
+  parseShoppingMarketRanksCsv,
   parseShoppingRouteCsv,
   parseShoppingSynonymsCsv,
+  SEED_SHOPPING_MARKET_RANKS,
   serializeShoppingItemsCsv,
+  serializeShoppingMarketRanksCsv,
   serializeShoppingRouteCsv,
   serializeShoppingSynonymsCsv,
   setShoppingItems,
+  setShoppingMarketRanks,
   setShoppingRoute,
   setShoppingSynonyms,
+  shoppingMarketRanksForRoute,
   shoppingNameKey,
   validateShoppingVariant,
   type ShoppingItems,
+  type ShoppingMarketRanks,
   type ShoppingRoute,
   type ShoppingStop,
   type ShoppingSynonyms,
@@ -71,6 +82,8 @@ const ROUTE_FILE_NAME = 'einkaufsweg.csv';
 const ITEMS_FILE_NAME = 'einkaufs-artikel.csv';
 /** File name of the synonym table in the Stammdaten folder (user-visible). */
 const SYNONYMS_FILE_NAME = 'einkaufs-synonyme.csv';
+/** File name of the market-rank table in the Stammdaten folder (user-visible). */
+const RANKS_FILE_NAME = 'einkaufs-maerkte.csv';
 /**
  * The item table's pre-identity file name (user-visible). It is read once by
  * the migration above and then deleted; nothing writes it any more.
@@ -92,6 +105,7 @@ interface MasterDataFiles {
   readonly route: DriveFile | undefined;
   readonly items: DriveFile | undefined;
   readonly synonyms: DriveFile | undefined;
+  readonly ranks: DriveFile | undefined;
   readonly legacyItems: DriveFile | undefined;
 }
 
@@ -103,6 +117,7 @@ function findMasterDataFiles(files: readonly DriveFile[]): MasterDataFiles {
     route: byName(ROUTE_FILE_NAME),
     items: byName(ITEMS_FILE_NAME),
     synonyms: byName(SYNONYMS_FILE_NAME),
+    ranks: byName(RANKS_FILE_NAME),
     legacyItems: byName(LEGACY_ITEMS_FILE_NAME),
   };
 }
@@ -128,17 +143,18 @@ export async function loadShoppingRouteMasterData(token: string): Promise<void> 
       return;
     }
   }
-  const { route, items, synonyms } = dataFiles;
+  const { route, items, synonyms, ranks } = dataFiles;
   // The route and the item table are the master data as a set: with only one of
   // the two present, they are treated as not yet created and the seed stays
   // active (the next write re-creates the set from the seed).
   if (route === undefined || items === undefined) {
     return;
   }
-  const [routeText, itemsText, synonymsText] = await Promise.all([
+  const [routeText, itemsText, synonymsText, ranksText] = await Promise.all([
     getFileContent(token, route.id),
     getFileContent(token, items.id),
     synonyms === undefined ? Promise.resolve('') : getFileContent(token, synonyms.id),
+    ranks === undefined ? Promise.resolve('') : getFileContent(token, ranks.id),
   ]);
   // A write landed while this load was in flight — keep its registry state
   // instead of reverting to the (older) file content read above.
@@ -151,9 +167,16 @@ export async function loadShoppingRouteMasterData(token: string): Promise<void> 
   // suggestion; it is an empty table, not an error.
   const parsedSynonyms =
     synonyms === undefined ? {} : parseShoppingSynonymsCsv(synonymsText, parsedItems);
+  // A missing rank file keeps the seed ranks active; an existing one is
+  // authoritative. Stores it omits still get a deterministic fallback rank.
+  const parsedRanks =
+    ranks === undefined
+      ? SEED_SHOPPING_MARKET_RANKS
+      : parseShoppingMarketRanksCsv(ranksText, parsedRoute);
   setShoppingRoute(parsedRoute);
   setShoppingItems(parsedItems);
   setShoppingSynonyms(parsedSynonyms);
+  setShoppingMarketRanks(parsedRanks);
 }
 
 /**
@@ -230,14 +253,21 @@ async function migrateLegacyItemsFile(
   return true;
 }
 
+/** A mutable deep-enough copy of the item table (each location list is fresh). */
+function cloneItems(items: ShoppingItems): Record<string, ShoppingStop[]> {
+  return Object.fromEntries(Object.entries(items).map(([name, stops]) => [name, [...stops]]));
+}
+
 /** The master data as the write paths build on it, plus the file ids to update. */
 interface CurrentMasterData {
   readonly route: ShoppingRoute;
   readonly items: ShoppingItems;
   readonly synonyms: ShoppingSynonyms;
+  readonly marketRanks: ShoppingMarketRanks;
   readonly routeFileId: string | undefined;
   readonly itemsFileId: string | undefined;
   readonly synonymsFileId: string | undefined;
+  readonly marketRanksFileId: string | undefined;
 }
 
 /**
@@ -247,9 +277,9 @@ interface CurrentMasterData {
  * the seed, intentionally superseding any edits in the surviving file, because
  * the set is the unit of master data.
  *
- * The three contents are fetched at once (the reads are independent; only the
- * parsing below is ordered, because items and synonyms are validated against the
- * route). All reads complete before the caller writes anything.
+ * The four contents are fetched at once (the reads are independent; only the
+ * parsing below is ordered, because items, synonyms and ranks are validated
+ * against the route). All reads complete before the caller writes anything.
  *
  * A partial set keeps the ids of the files that do exist: the set is still
  * re-created from the registry, but a surviving file is overwritten in place
@@ -267,29 +297,39 @@ async function readCurrentMasterData(
       route: allShoppingStops(),
       items: allShoppingItems(),
       synonyms: allShoppingSynonyms(),
+      marketRanks: allShoppingMarketRanks(),
       routeFileId: files.route?.id,
       itemsFileId: files.items?.id,
       synonymsFileId: files.synonyms?.id,
+      marketRanksFileId: files.ranks?.id,
     };
   }
-  const [routeText, itemsText, synonymsText] = await Promise.all([
+  const [routeText, itemsText, synonymsText, ranksText] = await Promise.all([
     getFileContent(token, files.route.id),
     getFileContent(token, files.items.id),
     // A missing synonym file is the normal state before the first confirmed
     // suggestion: it reads as the empty table below, without a request.
     files.synonyms === undefined ? Promise.resolve('') : getFileContent(token, files.synonyms.id),
+    // A missing rank file keeps the seed ranks active.
+    files.ranks === undefined ? Promise.resolve('') : getFileContent(token, files.ranks.id),
   ]);
   const route = parseShoppingRouteCsv(routeText);
   const items = parseShoppingItemsCsv(itemsText, route);
   const synonyms =
     files.synonyms === undefined ? {} : parseShoppingSynonymsCsv(synonymsText, items);
+  const marketRanks =
+    files.ranks === undefined
+      ? SEED_SHOPPING_MARKET_RANKS
+      : parseShoppingMarketRanksCsv(ranksText, route);
   return {
     route,
     items,
     synonyms,
+    marketRanks,
     routeFileId: files.route.id,
     itemsFileId: files.items.id,
     synonymsFileId: files.synonyms?.id,
+    marketRanksFileId: files.ranks?.id,
   };
 }
 
@@ -322,12 +362,19 @@ async function writeMasterDataFile(
 
 /**
  * Writes the whole master-data set to Drive in one cycle: the route, the item
- * table and the synonym table. All three serializers round-trip their own output
- * through the parsers before returning it (shoppingRouteCsv.ts), so text the
- * loader would reject can never reach Drive. The three files are independent, so
- * the uploads run together; every read finished before the first upload started,
- * which keeps the read-before-write guarantee. The registry is published only
- * after every write succeeded, and marked as newer than any in-flight load.
+ * table, the synonym table and the market ranks. The serializers round-trip their
+ * own output through the parsers before returning it (shoppingRouteCsv.ts,
+ * shoppingMarketRanksCsv.ts), so text the loader would reject can never reach
+ * Drive. The four files are independent, so the uploads run together; every read
+ * finished before the first upload started, which keeps the read-before-write
+ * guarantee. The registry is published only after every write succeeded, and
+ * marked as newer than any in-flight load.
+ *
+ * The rank file is written with the **effective** ranks of every route store:
+ * explicit ranks keep their value, and a store the source table omitted gets its
+ * fallback rank written explicitly. The first item write therefore creates
+ * `einkaufs-maerkte.csv`, giving the user a real file to edit later even though
+ * the app has no rank editor.
  */
 async function writeMasterData(
   token: string,
@@ -339,6 +386,10 @@ async function writeMasterData(
   const routeContent = serializeShoppingRouteCsv(current.route);
   const itemsContent = serializeShoppingItemsCsv(items, current.route);
   const synonymsContent = serializeShoppingSynonymsCsv(synonyms, items);
+  const effectiveRanks = Object.fromEntries(
+    shoppingMarketRanksForRoute(current.route, current.marketRanks),
+  );
+  const ranksContent = serializeShoppingMarketRanksCsv(effectiveRanks, current.route);
 
   await Promise.all([
     writeMasterDataFile(token, folderId, ROUTE_FILE_NAME, current.routeFileId, routeContent),
@@ -350,10 +401,12 @@ async function writeMasterData(
       current.synonymsFileId,
       synonymsContent,
     ),
+    writeMasterDataFile(token, folderId, RANKS_FILE_NAME, current.marketRanksFileId, ranksContent),
   ]);
   writtenSinceLoad = true;
   setShoppingItems(items);
   setShoppingSynonyms(synonyms);
+  setShoppingMarketRanks(effectiveRanks);
 }
 
 /**
@@ -361,20 +414,20 @@ async function writeMasterData(
  * one read/write cycle — the batch form of `appendShoppingItem`, used by the
  * shopping-list sort when it assigns several items at once.
  *
- * The stop must be one of the route's stops (a section belongs to exactly one
- * store) — the round-trip check in the writer enforces it, so a stop the route
- * does not contain never reaches a file. An item that already has a row is
- * overwritten: the file holds exactly one stop per item, and the item's name is
- * its key, so the stop of a name that the user had already prepared in the
- * spreadsheet is corrected rather than rejected (`zutaten.csv` rejects a
- * duplicate ingredient instead, where the name is the identity of a whole
- * master-data entry). The key is case-folded, like the matching: a name that
- * differs from an existing item only in letter case updates that row instead of
- * adding a second one, which the loader would reject as ambiguous.
+ * The stops must be route stops (a section belongs to exactly one store) — the
+ * round-trip check in the writer enforces it, so a stop the route does not
+ * contain never reaches a file. An item can carry several locations; an entry
+ * updates the section of a store already present and appends missing stores, so
+ * a row prepared in the spreadsheet is corrected rather than rejected
+ * (`zutaten.csv` rejects a duplicate ingredient instead, where the name is the
+ * identity of a whole master-data entry). The item key is case-folded, like the
+ * matching: a name that differs from an existing item only in letter case
+ * updates that item instead of adding a second one, which the loader would
+ * reject as ambiguous.
  */
 export async function appendShoppingItems(
   token: string,
-  entries: ReadonlyArray<{ item: string; stop: ShoppingStop }>,
+  entries: ReadonlyArray<{ item: string; stops: readonly ShoppingStop[] }>,
   /** Folder snapshot of the caller's save; resolved here when omitted. */
   folder?: CookbookFolder,
 ): Promise<void> {
@@ -383,30 +436,45 @@ export async function appendShoppingItems(
 
   // Build on a mutable record, then freeze into the registry's read-only shape
   // (the item table's `Readonly<Record<...>>` only permits reading).
-  const mutable: Record<string, ShoppingStop> = { ...current.items };
+  const mutable: Record<string, ShoppingStop[]> = Object.fromEntries(
+    Object.entries(current.items).map(([name, stops]) => [name, [...stops]]),
+  );
   /** The existing spelling of each folded key, so a case-variant corrects it. */
   const existingByKey = new Map(Object.keys(mutable).map((name) => [shoppingNameKey(name), name]));
-  for (const { item, stop } of entries) {
+  for (const { item, stops } of entries) {
+    if (stops.length === 0) {
+      throw new Error(`Einkaufsartikel: „${item}“ braucht mindestens einen Einkaufsort.`);
+    }
     const key = shoppingNameKey(item);
     const existing = existingByKey.get(key);
     if (existing === undefined) {
       existingByKey.set(key, item);
     }
-    mutable[existing ?? item] = stop;
+    const targetName = existing ?? item;
+    const target = mutable[targetName] ?? [];
+    for (const stop of stops) {
+      const index = target.findIndex((location) => location.store === stop.store);
+      if (index === -1) {
+        target.push(stop);
+      } else {
+        target[index] = stop;
+      }
+    }
+    mutable[targetName] = target;
   }
   const dataFolderId = await ensureCookbookArea(token, 'data', resolved);
   await writeMasterData(token, dataFolderId, current, mutable, current.synonyms);
 }
 
 /**
- * Records where a new item is bought and writes the master-data set to Drive —
+ * Records locations for a new item and writes the master-data set to Drive —
  * the single-entry form of `appendShoppingItems` (the new-ingredient sheet's
  * „Einkauf“ field).
  *
  * @param token the Google Drive access token
  * @param item the item name (exact — recipe ingredient or, like Klopapier or
  *   Blumen, an item that is no ingredient at all)
- * @param stop the store and section the item is bought at
+ * @param stops the stores and sections the item is bought at
  * @param folder the folder snapshot of the caller's save, or omitted to resolve
  *   the folder here (the new-ingredient flow passes the snapshot it shares with
  *   the ingredient write, so the folder is listed once per save)
@@ -414,20 +482,21 @@ export async function appendShoppingItems(
 export async function appendShoppingItem(
   token: string,
   item: string,
-  stop: ShoppingStop,
+  stops: readonly ShoppingStop[],
   folder?: CookbookFolder,
 ): Promise<void> {
-  await appendShoppingItems(token, [{ item, stop }], folder);
+  await appendShoppingItems(token, [{ item, stops }], folder);
 }
 
 /**
- * Creates one item row **and** its initial synonyms in one write — the form
- * behind the „Einkaufsartikel“ screen's create action.
+ * Creates one item and its initial synonyms in one write — the form behind the
+ * „Einkaufsartikel“ screen's create action. The item may carry several
+ * locations (one per market).
  *
  * A create is not an upsert: the item table keys on the name, so a name that is
  * already taken (case-folded, like the matching) is refused instead of silently
- * overwriting the existing row and its route. The form validates the same rule
- * live; this check is the defence in depth for a race with another tab.
+ * overwriting the existing rows and their route. The form validates the same
+ * rule live; this check is the defence in depth for a race with another tab.
  *
  * Every variant is validated against the item table the write is about to
  * create, so a variant that shadows an item name or another item's synonym
@@ -437,9 +506,12 @@ export async function appendShoppingItem(
 export async function createShoppingItem(
   token: string,
   item: string,
-  stop: ShoppingStop,
+  stops: readonly ShoppingStop[],
   variants: readonly string[],
 ): Promise<void> {
+  if (stops.length === 0) {
+    throw new Error('Einkaufsartikel: mindestens ein Einkaufsort ist erforderlich.');
+  }
   const folder = await listCookbookFolder(token);
   const current = await readCurrentMasterData(token, folder);
   const key = shoppingNameKey(item);
@@ -452,7 +524,8 @@ export async function createShoppingItem(
 
   // Build the target tables from the current content, validating each variant
   // against the table state it would be written into.
-  const items: Record<string, ShoppingStop> = { ...current.items, [item]: stop };
+  const items = cloneItems(current.items);
+  items[item] = [...stops];
   const synonyms: Record<string, string> = { ...current.synonyms };
   for (const variant of variants) {
     const check = validateShoppingVariant(variant, item, items, synonyms);
@@ -515,13 +588,13 @@ export async function appendShoppingSynonyms(
 }
 
 /**
- * The state of one item row as the shopping master-data screen edits it: the
- * stop the item is bought at and the variants that name it. It is also the undo
- * snapshot of a write, so a save and a delete return the same shape.
+ * The state of one item as the shopping master-data screen edits it: the
+ * locations the item is bought at and the variants that name it. It is also the
+ * undo snapshot of a write, so a save and a delete return the same shape.
  */
 export interface ShoppingItemState {
-  /** The item's stop (store + section) as it was before the write. */
-  readonly stop: ShoppingStop;
+  /** The item's locations (store + section, at most one per market) before the write. */
+  readonly stops: readonly ShoppingStop[];
   /** The item's own variants, in the synonym file's order, before the write. */
   readonly variants: readonly string[];
 }
@@ -571,43 +644,47 @@ function replaceItemVariants(
  * (a spreadsheet edit, another tab) and the next save has nothing to build on.
  */
 function requireItemState(current: CurrentMasterData, item: string): ShoppingItemState {
-  const stop = current.items[item];
-  if (stop === undefined) {
+  const stops = current.items[item];
+  if (stops === undefined) {
     throw new Error(`Einkaufsartikel: „${item}“ steht nicht in den Einkaufsdaten.`);
   }
-  return { stop, variants: variantsForItem(current.synonyms, item) };
+  return { stops: [...stops], variants: variantsForItem(current.synonyms, item) };
 }
 
 /**
- * Saves one item's stop and its complete synonym list, and writes the
- * master-data set to Drive in one read/write cycle — the write of the „Artikel“
- * sheet.
+ * Saves one item's complete location list and its complete synonym list, and
+ * writes the master-data set to Drive in one read/write cycle — the write of the
+ * „Artikel“ sheet.
  *
- * `variants` is the complete desired set for this item: the sheet's list after
- * the user added and removed chips. Every other item's rows and synonyms stay
- * untouched. The route itself is not edited here, but it is written together
- * with the other two files because the three are one set: creating the set for
- * the first time must not leave an item table whose stops no route file
- * describes (the next load would then fall back to the seed and hide the
- * write).
+ * `stops` is the complete desired location list for this item: one entry per
+ * market, at most one section per market. `variants` is the complete desired
+ * synonym set. Every other item's rows and synonyms stay untouched. The route
+ * itself is not edited here, but it is written together with the other two files
+ * because the files are one set: creating the set for the first time must not
+ * leave an item table whose stops no route file describes (the next load would
+ * then fall back to the seed and hide the write).
  *
  * Returns the previous state for the snackbar's „Rückgängig“ (§6.5).
  *
  * @param token the Google Drive access token
- * @param item the canonical item name (the row's key, not editable)
- * @param stop the new stop; it must be one of the route's stops
+ * @param item the canonical item name (the rows' key, not editable)
+ * @param stops the new location list; every stop must be one of the route's stops
  * @param variants the item's complete synonym list, in display order
  */
 export async function saveShoppingItem(
   token: string,
   item: string,
-  stop: ShoppingStop,
+  stops: readonly ShoppingStop[],
   variants: readonly string[],
 ): Promise<{ readonly previous: ShoppingItemState }> {
+  if (stops.length === 0) {
+    throw new Error('Einkaufsartikel: mindestens ein Einkaufsort ist erforderlich.');
+  }
   const folder = await listCookbookFolder(token);
   const current = await readCurrentMasterData(token, folder);
   const previous = requireItemState(current, item);
-  const items: Record<string, ShoppingStop> = { ...current.items, [item]: stop };
+  const items = cloneItems(current.items);
+  items[item] = [...stops];
   const synonyms = replaceItemVariants(current.synonyms, item, variants);
   const dataFolderId = await ensureCookbookArea(token, 'data', folder);
   await writeMasterData(token, dataFolderId, current, items, synonyms);
@@ -632,7 +709,7 @@ export async function deleteShoppingItem(
   const folder = await listCookbookFolder(token);
   const current = await readCurrentMasterData(token, folder);
   const previous = requireItemState(current, item);
-  const items: Record<string, ShoppingStop> = { ...current.items };
+  const items = cloneItems(current.items);
   delete items[item];
   const synonyms = replaceItemVariants(current.synonyms, item, []);
   const dataFolderId = await ensureCookbookArea(token, 'data', folder);
@@ -646,7 +723,7 @@ export async function deleteShoppingItem(
  * it is missing, which is the only place the app creates an item row for an
  * existing name; the screen itself edits existing rows only.
  *
- * @param state the row's stop and its complete variant list as the notice
+ * @param state the row's locations and its complete variant list as the notice
  *   captured them when the changed write ran
  */
 export async function restoreShoppingItem(
@@ -656,7 +733,8 @@ export async function restoreShoppingItem(
 ): Promise<void> {
   const folder = await listCookbookFolder(token);
   const current = await readCurrentMasterData(token, folder);
-  const items: Record<string, ShoppingStop> = { ...current.items, [item]: state.stop };
+  const items = cloneItems(current.items);
+  items[item] = [...state.stops];
   const synonyms = replaceItemVariants(current.synonyms, item, state.variants);
   const dataFolderId = await ensureCookbookArea(token, 'data', folder);
   await writeMasterData(token, dataFolderId, current, items, synonyms);

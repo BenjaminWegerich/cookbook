@@ -4,13 +4,14 @@
  * while the app runs (docs/storage_format.md §10, docs/shopping_item_identity.md).
  *
  * The built-in seed (SEED_SHOPPING_ROUTE / SEED_SHOPPING_ITEMS /
- * SEED_SHOPPING_SYNONYMS, generated from docs/shopping_route.csv +
- * docs/shopping_items.csv + docs/shopping_synonyms.csv) is the default. The web
- * app loads the user's authoritative master data (einkaufsweg.csv +
- * einkaufs-artikel.csv + einkaufs-synonyme.csv in the Drive Cookbook folder's
- * `Stammdaten` subfolder) at startup and replaces all three with
- * setShoppingRoute / setShoppingItems /
- * setShoppingSynonyms — the Drive files win once they exist. Until then, and
+ * SEED_SHOPPING_SYNONYMS / SEED_SHOPPING_MARKET_RANKS, generated from
+ * docs/shopping_route.csv + docs/shopping_items.csv +
+ * docs/shopping_synonyms.csv + docs/shopping_markets.csv) is the default. The
+ * web app loads the user's authoritative master data (einkaufsweg.csv +
+ * einkaufs-artikel.csv + einkaufs-synonyme.csv + einkaufs-maerkte.csv in the
+ * Drive Cookbook folder's `Stammdaten` subfolder) at startup and replaces all
+ * four with setShoppingRoute / setShoppingItems / setShoppingSynonyms /
+ * setShoppingMarketRanks — the Drive files win once they exist. Until then, and
  * whenever the files are missing or unreadable, the seed keeps the app fully
  * functional (the pickers in the new-ingredient sheet, and the aisle sort).
  *
@@ -21,6 +22,7 @@
 
 import {
   SEED_SHOPPING_ITEMS,
+  SEED_SHOPPING_MARKET_RANKS,
   SEED_SHOPPING_ROUTE,
   SEED_SHOPPING_SYNONYMS,
 } from './shoppingRouteData.js';
@@ -30,6 +32,7 @@ import type {
   ShoppingStop,
   ShoppingSynonyms,
 } from './shoppingRouteCsv.js';
+import type { ShoppingMarketRanks } from './shoppingMarketRanksCsv.js';
 
 /** The current route; starts as the built-in seed. */
 let route: ShoppingRoute = SEED_SHOPPING_ROUTE;
@@ -39,6 +42,9 @@ let items: ShoppingItems = SEED_SHOPPING_ITEMS;
 
 /** The current synonym table; starts as the built-in seed. */
 let synonyms: ShoppingSynonyms = SEED_SHOPPING_SYNONYMS;
+
+/** The current explicit market-rank table; starts as the built-in seed. */
+let marketRanks: ShoppingMarketRanks = SEED_SHOPPING_MARKET_RANKS;
 
 /**
  * Replaces the whole route (used by the web app when the user's Drive master
@@ -67,6 +73,16 @@ export function setShoppingSynonyms(next: ShoppingSynonyms): void {
 }
 
 /**
+ * Replaces the explicit market-rank table (the Drive `einkaufs-maerkte.csv`,
+ * loaded together with the route). A missing rank file leaves the seed active;
+ * the recommendation derives the effective ranks and the fallback for stores
+ * the file does not mention (shoppingMarketRanks.ts).
+ */
+export function setShoppingMarketRanks(next: ShoppingMarketRanks): void {
+  marketRanks = next;
+}
+
+/**
  * The current route in walking order. Read-only: callers must never mutate the
  * returned array (the registry treats it as immutable).
  */
@@ -92,11 +108,21 @@ export function allShoppingSynonyms(): ShoppingSynonyms {
 }
 
 /**
- * The stop one item is bought at, or undefined when the item has no place in
- * the route (not an error — where such an item ends up is the sort's decision,
- * docs/storage_format.md §10).
+ * The current explicit market ranks — the seed plus anything loaded from Drive.
+ * Read-only like `allShoppingItems`; callers must not mutate the returned record.
  */
-export function shoppingStopFor(item: string): ShoppingStop | undefined {
+export function allShoppingMarketRanks(): ShoppingMarketRanks {
+  return marketRanks;
+}
+
+/**
+ * The locations one item is bought at, or undefined when the item has no place
+ * in the route (not an error — where such an item ends up is the sort's
+ * decision, docs/storage_format.md §10). The returned array is read-only: the
+ * registry treats it as immutable. An item with several entries names several
+ * markets, at most one section each.
+ */
+export function shoppingStopsFor(item: string): readonly ShoppingStop[] | undefined {
   return items[item];
 }
 
@@ -157,4 +183,5 @@ export function resetShoppingRoute(): void {
   route = SEED_SHOPPING_ROUTE;
   items = SEED_SHOPPING_ITEMS;
   synonyms = SEED_SHOPPING_SYNONYMS;
+  marketRanks = SEED_SHOPPING_MARKET_RANKS;
 }

@@ -22,8 +22,8 @@ import MasterDataSheet from './MasterDataSheet';
 
 /** The fields one save hands to the parent: the complete desired item state. */
 export interface ShoppingItemUpdate {
-  /** The chosen stop (store + section). */
-  readonly stop: ShoppingStop;
+  /** The chosen locations (one stop per market). */
+  readonly stops: readonly ShoppingStop[];
   /** The item's complete synonym list, in display order. */
   readonly variants: readonly string[];
 }
@@ -71,7 +71,7 @@ function EditShoppingItemSheet({
       error={error}
       onSave={(result) => {
         if (result.kind !== 'item') return;
-        onSave({ stop: result.stop, variants: result.variants });
+        onSave({ stops: result.stops, variants: result.variants });
       }}
       onDelete={onDelete}
       onEdited={onEdited}

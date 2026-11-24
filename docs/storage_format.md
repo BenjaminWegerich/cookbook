@@ -518,10 +518,10 @@ spreadsheet edits. The canonical delimiter is `;`; a file exported comma-separat
 delimiter, quoted cells are honoured — and the next write restores the semicolon form.
 The files are user data like the recipes themselves — the repo CSVs are only the seed.
 
-## 10. Shopping Route, Item Table and Synonym Table
+## 10. Shopping Route, Item Table, Synonym Table and Market Ranks
 
 The order in which shopping-list items are bought — and therefore the order in which they
-appear in the Google Keep „Einkaufsliste“ — comes from three master-data files in the
+appear in the Google Keep „Einkaufsliste“ — comes from four master-data files in the
 `Stammdaten` subfolder. A **stop** is the pair `(Store, Section)`: level 1 is the store, level 2
 the section inside it.
 
@@ -536,6 +536,7 @@ the section inside it.
     einkaufs-artikel.csv      (the identity of everything buyable; row order irrelevant)
     Item;Store;Section
     Karotten;Lidl;Obst und Gemüse
+    Karotten;REWE;Obst und Gemüse
     Joghurt;Lidl;Molkerei
     TK-Blaubeeren;REWE;TK-Obst
     Klopapier;dm;Drogerie
@@ -545,46 +546,77 @@ the section inside it.
     Möhren;Karotten
     Zewa;Klopapier
 
+    einkaufs-maerkte.csv      (the preference rank; 1 = best; row order irrelevant)
+    Store;Rank
+    Lidl;1
+    Rewe;2
+    dm;3
+
 The route's row order is the only ordering in this data: it is the order the shops are
 visited and the sections are walked. There is no separate store order, and a section belongs
 to exactly one store; the same section name may exist in several stores, the pair is the key.
 
-The **item table** maps an item name to exactly one stop — it is the identity of everything
-that can be bought and the **only place a route is kept**, so "the same item with two
-conflicting routes" cannot exist. Its name set is **independent of the ingredient list**: it
-carries the recipe ingredients that are bought on a route and items that are not ingredients
-at all, which have no base unit and no reorder point and therefore cannot live in
-zutaten.csv. An item without a row here is not an error — it is simply never bought; an
-ingredient without an item row is valid for exactly that reason (Wasser), and the item row is
-what makes something buyable. The **synonym table** states meaning instead: a variant text
-resolves to exactly one item and carries no route of its own. `zutaten.csv` (§9) keeps the
-ingredient master data and, like the item table, carries no route; it is a *view* of those
-items that happen to be ingredients.
+The **item table** maps an item name to one or more stops — it is the identity of everything
+that can be bought and the **only place a route is kept**. An item may name several stores,
+because the same product is often available at more than one market; it may name **at most
+one section per store**, because two sections inside one market would make the item ambiguous
+for the trip selection. The pair `(Item, Store)` is therefore the key of a location row, and
+the item name may repeat once per store. "The same item with two conflicting routes" cannot
+exist: a second row for the same item and store is rejected. The row order carries no meaning;
+the locations of one item are a set.
 
-Validation: a stop is unique in the route and both cells are non-empty; an item name is
-unique in the item table; every `(Store, Section)` an item names must exist in the route — a
-typo fails loudly at load, like a mapping for an unknown ingredient. In the synonym table a
-variant is unique, every `Item` it names must exist, and a variant equal to an item name is
-rejected — a canonical item name must never be shadowed by a synonym. All name uniqueness
-checks compare case-folded (docs/shopping_item_identity.md §2/§5). The route parses into an
-ordered list, the item table into a name→stop lookup and the synonym table into a
-variant→item lookup. All three files follow §9's common CSV rules (one header row,
-semicolons, CRLF and one trailing empty cell tolerated, leading BOM stripped) and are user
-data like the ingredient files: the repo CSVs (docs/shopping_route.csv +
-docs/shopping_items.csv + docs/shopping_synonyms.csv) are the seed, the Drive files are
-authoritative once they exist.
+Its name set is **independent of the ingredient list**: it carries the recipe ingredients that
+are bought on a route and items that are not ingredients at all, which have no base unit and
+no reorder point and therefore cannot live in zutaten.csv. An item without a row here is not
+an error — it is simply never bought; an ingredient without an item row is valid for exactly
+that reason (Wasser), and the item row is what makes something buyable. The **synonym table**
+states meaning instead: a variant text resolves to exactly one item and carries no locations
+of its own. `zutaten.csv` (§9) keeps the ingredient master data and, like the item table,
+carries no route; it is a *view* of those items that happen to be ingredients.
+
+Validation: a stop is unique in the route and both cells are non-empty; every `(Item, Store)`
+pair is unique, so an item has at most one section per market; all rows of one item use the
+same spelling (case-folded, like the matching); every `(Store, Section)` an item names must
+exist in the route — a typo fails loudly at load, like a mapping for an unknown ingredient. In
+the synonym table a variant is unique, every `Item` it names must exist, and a variant equal
+to an item name is rejected — a canonical item name must never be shadowed by a synonym. All
+name uniqueness checks compare case-folded (docs/shopping_item_identity.md §2/§5). The route
+parses into an ordered list, the item table into a name→location-list lookup and the synonym
+table into a variant→item lookup. All four files follow §9's common CSV rules (one header
+row, semicolons, CRLF and one trailing empty cell tolerated, leading BOM stripped) and are
+user data like the ingredient files: the repo CSVs (docs/shopping_route.csv +
+docs/shopping_items.csv + docs/shopping_synonyms.csv + docs/shopping_markets.csv) are the
+seed, the Drive files are authoritative once they exist.
+
+**Market preference ranks are the fourth user-data file.** The upcoming trip's
+recommendation needs to know which market is preferred independently of the item. The
+explicit order lives in `einkaufs-maerkte.csv` (`Store;Rank`, `1` = best), seeded by
+`docs/shopping_markets.csv`. There is no in-app editor; the file is edited directly in the
+`Stammdaten` folder like the other master data. A store missing from it ranks after the
+explicitly ranked stores in route order, so a custom route never fails to load. Every rank
+must be a positive integer and unique; every store must exist in the route. The
+recommendation's priority threshold (`> 10` items) remains a named constant in
+`shoppingMarketRanks.ts`. The rank decides **where an item is bought**; the route order
+decides **in which order the list is walked**. The file is created together with the other
+shopping master data on the first assignment, written with the **effective** ranks of every
+route store (explicit ranks plus fallbacks), so the user has a complete file to edit.
 
 The files are created on the first shopping assignment the user enters (the „Einkauf“ field
 of „Neue Zutat anlegen“ or „Einkaufsartikel anlegen“), seeded with the built-in repo data, and
 are authoritative once they exist (the synonym file empty at first and growing with every
-confirmed suggestion or renamed assignment). That field picks the store as chips and the section
+confirmed suggestion or renamed assignment; the rank file written with the effective ranks). That field picks the store as chips and the section
 from a searchable list of that store's sections, so a section can never be paired with the wrong
 store. The „Einkaufsartikel anlegen“ form rejects a name that already has a row (case-folded); the
 sort/assignment path still updates a row the user prepared in the spreadsheet — the name is
-the key, and the file holds exactly one stop per item. The
+the key, and an item's location list may grow one row per additional market. The
 item table was called `einkaufs-zuordnung.csv` before the item identity existed; the app reads
 that file once, writes its rows unchanged into `einkaufs-artikel.csv`, creates the synonym
 file next to it and deletes the old file afterwards.
+
+The „Einkauf“ field of both sheets edits a **location list**, not one stop: the chosen stores
+are listed one row each (`Markt > Bereich`), a store already in the list is updated when its
+section is changed, and removing the last location clears the item's route. An item row
+therefore needs at least one location; an ingredient may have none and is then not bought.
 
 Deliberately not in this data: how a Keep line is matched to an item name (that is read-time
 work, docs/shopping_item_identity.md §2), where unassigned items are placed, and Keep's sort

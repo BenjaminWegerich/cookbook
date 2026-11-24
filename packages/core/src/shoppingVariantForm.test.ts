@@ -12,8 +12,8 @@ import { validateShoppingVariant } from './shoppingVariantForm.js';
 
 /** The item table fixture: a canonical ingredient and a non-ingredient. */
 const ITEMS: ShoppingItems = {
-  Karotten: { store: 'Lidl', section: 'Obst und Gemüse' },
-  Klopapier: { store: 'dm', section: 'Drogerie' },
+  Karotten: [{ store: 'Lidl', section: 'Obst und Gemüse' }],
+  Klopapier: [{ store: 'dm', section: 'Drogerie' }],
 };
 
 /** The synonym fixture: a variant of Karotten and one of Klopapier. */

@@ -35,15 +35,18 @@ const ROUTE: ShoppingRoute = [
 
 /** Item table covering the app's ingredient lines, non-ingredients and look-alikes. */
 const ITEMS: ShoppingItems = {
-  Joghurt: { store: 'Lidl', section: 'Molkerei' },
-  Butter: { store: 'Lidl', section: 'Molkerei' },
-  Mehl: { store: 'Lidl', section: 'Trockensortiment' },
-  Karotten: { store: 'REWE', section: 'Obst und Gemüse' },
-  Klopapier: { store: 'REWE', section: 'Obst und Gemüse' },
-  Petersilie: { store: 'REWE', section: 'Obst und Gemüse' },
-  Blaubeeren: { store: 'REWE', section: 'Obst und Gemüse' },
-  'TK-Blaubeeren': { store: 'REWE', section: 'Obst und Gemüse' },
-  'Weiße Bohnen': { store: 'REWE', section: 'Obst und Gemüse' },
+  Joghurt: [{ store: 'Lidl', section: 'Molkerei' }],
+  Butter: [{ store: 'Lidl', section: 'Molkerei' }],
+  Mehl: [{ store: 'Lidl', section: 'Trockensortiment' }],
+  Karotten: [
+    { store: 'REWE', section: 'Obst und Gemüse' },
+    { store: 'Lidl', section: 'Trockensortiment' },
+  ],
+  Klopapier: [{ store: 'REWE', section: 'Obst und Gemüse' }],
+  Petersilie: [{ store: 'REWE', section: 'Obst und Gemüse' }],
+  Blaubeeren: [{ store: 'REWE', section: 'Obst und Gemüse' }],
+  'TK-Blaubeeren': [{ store: 'REWE', section: 'Obst und Gemüse' }],
+  'Weiße Bohnen': [{ store: 'REWE', section: 'Obst und Gemüse' }],
 };
 
 /** Two synonyms: one plain, one whose item is a non-ingredient. */
@@ -222,71 +225,105 @@ describe('the built-in seed (no fixture)', () => {
 });
 
 describe('shoppingSortOrder', () => {
-  it('orders parked top, assigned by route, parked bottom, checked — stable', () => {
+  /** Lidl is preferred over REWE; both are selected in the base scenario. */
+  const RANKS = new Map([
+    ['Lidl', 1],
+    ['REWE', 2],
+  ]);
+
+  it('orders assigned lines by route, then no-market lines, then checked — stable', () => {
     setShoppingRoute(ROUTE);
     setShoppingItems(ITEMS);
 
     // Keep's own order is deliberately not the route order.
     const lines: ShoppingSortLine[] = [
-      { text: 'Wandfarbe', checked: false, item: null }, // parked top
+      { text: 'Wandfarbe', checked: false, item: null, ignored: true },
       { text: '2 Becher Joghurt (800 g)', checked: false, item: 'Joghurt' }, // Lidl/Molkerei
-      { text: '6 Stück Karotten (500 g)', checked: false, item: 'Karotten' }, // REWE/Obst
+      { text: '6 Stück Karotten (500 g)', checked: false, item: 'Karotten' }, // Lidl/Trocken (rank 1)
       { text: '1 Packung Mehl (1 kg)', checked: false, item: 'Mehl' }, // Lidl/Trocken
       { text: 'Klopapier', checked: true, item: 'Klopapier' }, // checked
-      { text: '1 Handvoll Petersilie', checked: false, item: null }, // resolved to a stop
-      { text: 'Blumen', checked: false, item: null }, // parked bottom
+      { text: 'Blumen', checked: false, item: null, ignored: true },
     ];
 
-    const order = shoppingSortOrder(lines, (text) => {
-      if (text === 'Wandfarbe') return 'top';
-      if (text === 'Blumen') return 'bottom';
-      return { store: 'Lidl', section: 'Trockensortiment' };
-    });
+    const order = shoppingSortOrder(lines, ['Lidl', 'REWE'], RANKS);
 
     expect(order).toEqual([
-      'Wandfarbe', // parked top
       '2 Becher Joghurt (800 g)', // Lidl/Molkerei
-      '1 Packung Mehl (1 kg)', // Lidl/Trockensortiment (before the resolved one, stable)
-      '1 Handvoll Petersilie', // Lidl/Trockensortiment (resolved)
-      '6 Stück Karotten (500 g)', // REWE/Obst und Gemüse
-      'Blumen', // parked bottom, above the checked-off lines
+      '6 Stück Karotten (500 g)', // Lidl/Trockensortiment (Lidl rank 1)
+      '1 Packung Mehl (1 kg)', // Lidl/Trockensortiment, Keep order after Karotten
+      'Wandfarbe', // no market, Keep order
+      'Blumen', // no market, Keep order
       'Klopapier', // checked, very bottom
     ]);
   });
 
-  it('keeps lines parked at the top in Keep’s own order', () => {
+  it('allocates a multi-location item to the best-ranked selected market', () => {
     setShoppingRoute(ROUTE);
     setShoppingItems(ITEMS);
     const lines: ShoppingSortLine[] = [
-      { text: 'Wandfarbe', checked: false, item: null },
-      { text: 'Blumen', checked: false, item: null },
-      { text: '2 Becher Joghurt (800 g)', checked: false, item: 'Joghurt' },
+      { text: '6 Stück Karotten (500 g)', checked: false, item: 'Karotten' },
+      { text: '850 g Butter', checked: false, item: 'Butter' },
     ];
-    const order = shoppingSortOrder(lines, () => 'top');
-    expect(order).toEqual(['Wandfarbe', 'Blumen', '2 Becher Joghurt (800 g)']);
+    // Both selected: Karotten goes to Lidl (rank 1), before REWE; Butter stays
+    // at Lidl/Molkerei and leads the list.
+    expect(shoppingSortOrder(lines, ['Lidl', 'REWE'], RANKS)).toEqual([
+      '850 g Butter',
+      '6 Stück Karotten (500 g)',
+    ]);
+    // Only REWE: Karotten is bought at REWE; Butter has no selected market and
+    // follows after the assigned line, even though it was first in Keep.
+    expect(shoppingSortOrder(lines, ['REWE'], RANKS)).toEqual([
+      '6 Stück Karotten (500 g)',
+      '850 g Butter',
+    ]);
+    expect(shoppingSortOrder(lines, ['Lidl'], RANKS)).toEqual([
+      '850 g Butter',
+      '6 Stück Karotten (500 g)',
+    ]);
   });
 
-  it('keeps lines parked at the bottom in Keep’s own order', () => {
+  it('uses explicit locations for a new item decided on the sort page', () => {
     setShoppingRoute(ROUTE);
     setShoppingItems(ITEMS);
     const lines: ShoppingSortLine[] = [
-      { text: 'Wandfarbe', checked: false, item: null },
-      { text: 'Blumen', checked: false, item: null },
-      { text: '2 Becher Joghurt (800 g)', checked: false, item: 'Joghurt' },
+      {
+        text: 'Tofu',
+        checked: false,
+        item: 'Tofu',
+        locations: [{ store: 'Lidl', section: 'Molkerei' }],
+      },
+      { text: 'Klopapier', checked: true, item: 'Klopapier' },
     ];
-    const order = shoppingSortOrder(lines, () => 'bottom');
-    expect(order).toEqual(['2 Becher Joghurt (800 g)', 'Wandfarbe', 'Blumen']);
+    expect(shoppingSortOrder(lines, ['Lidl'], RANKS)).toEqual(['Tofu', 'Klopapier']);
   });
 
-  it('places a bottom line above the checked-off block, never below it', () => {
+  it('places a line without a selected location above the checked-off block', () => {
     setShoppingRoute(ROUTE);
     setShoppingItems(ITEMS);
     const lines: ShoppingSortLine[] = [
       { text: '2 Becher Joghurt (800 g)', checked: false, item: 'Joghurt' },
       { text: 'Klopapier', checked: true, item: 'Klopapier' },
-      { text: 'Blumen', checked: false, item: null },
+      { text: 'Blumen', checked: false, item: null, ignored: true },
     ];
-    const order = shoppingSortOrder(lines, () => 'bottom');
-    expect(order).toEqual(['2 Becher Joghurt (800 g)', 'Blumen', 'Klopapier']);
+    expect(shoppingSortOrder(lines, ['Lidl'], RANKS)).toEqual([
+      '2 Becher Joghurt (800 g)',
+      'Blumen',
+      'Klopapier',
+    ]);
+  });
+
+  it('keeps no-market lines in Keep’s own order', () => {
+    setShoppingRoute(ROUTE);
+    setShoppingItems(ITEMS);
+    const lines: ShoppingSortLine[] = [
+      { text: 'Wandfarbe', checked: false, item: null, ignored: true },
+      { text: 'Blumen', checked: false, item: null, ignored: true },
+      { text: '2 Becher Joghurt (800 g)', checked: false, item: 'Joghurt' },
+    ];
+    expect(shoppingSortOrder(lines, ['Lidl'], RANKS)).toEqual([
+      '2 Becher Joghurt (800 g)',
+      'Wandfarbe',
+      'Blumen',
+    ]);
   });
 });

@@ -1,10 +1,12 @@
 /**
- * AUTO-GENERATED from docs/shopping_route.csv, docs/shopping_items.csv and
- * docs/shopping_synonyms.csv by scripts/generate-shopping-route.mjs.
+ * AUTO-GENERATED from docs/shopping_route.csv, docs/shopping_items.csv,
+ * docs/shopping_synonyms.csv and docs/shopping_markets.csv by
+ * scripts/generate-shopping-route.mjs.
  * Do not edit by hand — re-run 'npm run generate:shopping-route' (packages/core) after a CSV change.
  */
 
 import type { ShoppingItems, ShoppingRoute, ShoppingSynonyms } from './shoppingRouteCsv.js';
+import type { ShoppingMarketRanks } from './shoppingMarketRanksCsv.js';
 
 /** The seed route: the stops in the order the shops are visited and the sections are walked (docs/shopping_route.csv). */
 export const SEED_SHOPPING_ROUTE: ShoppingRoute = [
@@ -108,37 +110,40 @@ export const SEED_SHOPPING_ROUTE: ShoppingRoute = [
   { store: 'Rewe', section: 'TK: Convenience & vegan' },
 ];
 
-/** The seed item table: item name → stop (docs/shopping_items.csv); the name set is independent of the ingredient list. */
+/** The seed item table: item name → locations (docs/shopping_items.csv); the name set is independent of the ingredient list. */
 export const SEED_SHOPPING_ITEMS: ShoppingItems = {
-  'rote Zwiebeln': { store: 'Lidl', section: 'Kartoffeln usw.' },
-  Karotten: { store: 'Lidl', section: 'Gemüse' },
-  'frische Petersilie': { store: 'Lidl', section: 'Gemüse' },
-  'Dijon-Senf': { store: 'Rewe', section: 'Saucen' },
-  Kräuter: { store: 'Lidl', section: 'Gemüse' },
-  Äpfel: { store: 'Lidl', section: 'Obst' },
-  Butter: { store: 'Rewe', section: 'Kühlung: Rest' },
-  Nektarinen: { store: 'Lidl', section: 'Obst' },
-  Gurke: { store: 'Lidl', section: 'Gemüse' },
-  Knoblauch: { store: 'Lidl', section: 'Kartoffeln usw.' },
-  Müsli: { store: 'Rewe', section: 'Müsli' },
-  Ananassaft: { store: 'Lidl', section: 'Getränke' },
-  Maistortillas: { store: 'Rewe', section: 'International' },
-  'frisches Koriandergrün': { store: 'Lidl', section: 'Gemüse' },
-  Zitronensaft: { store: 'dm', section: 'Lebensmittel' },
-  Orangensaft: { store: 'Lidl', section: 'Getränke' },
-  Vanilleeis: { store: 'Rewe', section: 'TK: Eis & -würfel' },
-  Pflaumen: { store: 'Lidl', section: 'Obst' },
-  Kirschtomaten: { store: 'Lidl', section: 'Gemüse' },
-  Bananen: { store: 'Lidl', section: 'Obst' },
-  Kokosöl: { store: 'Lidl', section: 'Essig & Öl' },
-  Pitabrote: { store: 'Lidl', section: 'Gebäck' },
-  Erdbeermarmelade: { store: 'Lidl', section: 'Aufstrich' },
-  Erdbeeren: { store: 'Lidl', section: 'Obst' },
-  'Agar Agar': { store: 'Rewe', section: 'Backen' },
-  Skyr: { store: 'Rewe', section: 'Kühlung: vegan' },
-  Sahnefest: { store: 'Lidl', section: 'Backen' },
-  Vanillezucker: { store: 'Lidl', section: 'Backen' },
-  'gehackte Pistazien': { store: 'Rewe', section: 'Backen' },
+  'rote Zwiebeln': [{ store: 'Lidl', section: 'Kartoffeln usw.' }],
+  Karotten: [
+    { store: 'Lidl', section: 'Gemüse' },
+    { store: 'Rewe', section: 'Gemüse' },
+  ],
+  'frische Petersilie': [{ store: 'Lidl', section: 'Gemüse' }],
+  'Dijon-Senf': [{ store: 'Rewe', section: 'Saucen' }],
+  Kräuter: [{ store: 'Lidl', section: 'Gemüse' }],
+  Äpfel: [{ store: 'Lidl', section: 'Obst' }],
+  Butter: [{ store: 'Rewe', section: 'Kühlung: Rest' }],
+  Nektarinen: [{ store: 'Lidl', section: 'Obst' }],
+  Gurke: [{ store: 'Lidl', section: 'Gemüse' }],
+  Knoblauch: [{ store: 'Lidl', section: 'Kartoffeln usw.' }],
+  Müsli: [{ store: 'Rewe', section: 'Müsli' }],
+  Ananassaft: [{ store: 'Lidl', section: 'Getränke' }],
+  Maistortillas: [{ store: 'Rewe', section: 'International' }],
+  'frisches Koriandergrün': [{ store: 'Lidl', section: 'Gemüse' }],
+  Zitronensaft: [{ store: 'dm', section: 'Lebensmittel' }],
+  Orangensaft: [{ store: 'Lidl', section: 'Getränke' }],
+  Vanilleeis: [{ store: 'Rewe', section: 'TK: Eis & -würfel' }],
+  Pflaumen: [{ store: 'Lidl', section: 'Obst' }],
+  Kirschtomaten: [{ store: 'Lidl', section: 'Gemüse' }],
+  Bananen: [{ store: 'Lidl', section: 'Obst' }],
+  Kokosöl: [{ store: 'Lidl', section: 'Essig & Öl' }],
+  Pitabrote: [{ store: 'Lidl', section: 'Gebäck' }],
+  Erdbeermarmelade: [{ store: 'Lidl', section: 'Aufstrich' }],
+  Erdbeeren: [{ store: 'Lidl', section: 'Obst' }],
+  'Agar Agar': [{ store: 'Rewe', section: 'Backen' }],
+  Skyr: [{ store: 'Rewe', section: 'Kühlung: vegan' }],
+  Sahnefest: [{ store: 'Lidl', section: 'Backen' }],
+  Vanillezucker: [{ store: 'Lidl', section: 'Backen' }],
+  'gehackte Pistazien': [{ store: 'Rewe', section: 'Backen' }],
 };
 
 /** The seed synonym table: variant text → item name (docs/shopping_synonyms.csv). */
@@ -149,4 +154,11 @@ export const SEED_SHOPPING_SYNONYMS: ShoppingSynonyms = {
   Banane: 'Bananen',
   Pitas: 'Pitabrote',
   Sahnesteif: 'Sahnefest',
+};
+
+/** The seed market ranks: store → preference rank (docs/shopping_markets.csv); 1 = best. */
+export const SEED_SHOPPING_MARKET_RANKS: ShoppingMarketRanks = {
+  Lidl: 1,
+  Rewe: 2,
+  dm: 3,
 };

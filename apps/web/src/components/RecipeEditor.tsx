@@ -2639,12 +2639,12 @@ function RecipeEditor({
    * and is then simply never bought. A failed shopping write therefore stops the
    * flow before anything is created (the error names the cause, and the name is
    * still free for a retry). When the name already exists as a shopping item, its
-   * row is updated with the form's stop and synonyms instead of creating a
-   * second route.
+   * locations are updated with the form's location list and synonyms instead of
+   * creating a second route.
    *
-   * `stop` is null when the user left the field empty or while the shopping route
-   * holds no stops at all — decided with the user: the ingredient is then created
-   * without a shopping stop.
+   * `stops` is empty when the user left the field empty or while the shopping
+   * route holds no stops at all — decided with the user: the ingredient is then
+   * created without a shopping location.
    *
    * The folder is resolved and listed once and handed to the ingredient write;
    * the shopping write resolves its own snapshot because it may create the
@@ -2657,24 +2657,24 @@ function RecipeEditor({
     reorderPoint: number,
     entries: readonly NewIngredientEntry[],
     precision: PrecisionLevel,
-    stop: ShoppingStop | null,
+    stops: readonly ShoppingStop[],
     variants: readonly string[],
   ): Promise<void> => {
     setCreateSaving(true);
     setCreateError(null);
     try {
       const folder = await listCookbookFolder(token);
-      if (stop !== null) {
+      if (stops.length > 0) {
         // The name may already exist as a shopping item (the create sheet
-        // pre-fills its stop/synonyms in that case), and its stored spelling may
-        // differ in case. Update that row instead of creating a second one.
+        // pre-fills its locations/synonyms in that case), and its stored spelling
+        // may differ in case. Update that item instead of creating a second one.
         const itemKey = Object.keys(allShoppingItems()).find(
           (candidate) => shoppingNameKey(candidate) === shoppingNameKey(name),
         );
         if (itemKey !== undefined) {
-          await saveShoppingItem(token, itemKey, stop, variants);
+          await saveShoppingItem(token, itemKey, stops, variants);
         } else {
-          await createShoppingItem(token, name, stop, variants);
+          await createShoppingItem(token, name, stops, variants);
         }
       } else if (variants.length > 0) {
         throw new Error('Ohne Einkaufsort lassen sich keine Synonyme speichern.');
@@ -4289,8 +4289,8 @@ function RecipeEditor({
           subRecipeUnits={subRecipeUnits}
           saving={createSaving}
           error={createError}
-          onSave={(name, bu, reorderPoint, entries, precision, stop, variants) =>
-            void handleCreateIngredient(name, bu, reorderPoint, entries, precision, stop, variants)
+          onSave={(name, bu, reorderPoint, entries, precision, stops, variants) =>
+            void handleCreateIngredient(name, bu, reorderPoint, entries, precision, stops, variants)
           }
           onEdited={() => setCreateError(null)}
           onClose={handleCreateClose}

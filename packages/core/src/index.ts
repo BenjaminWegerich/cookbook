@@ -23,6 +23,10 @@
  * - the shopping list's item identity at read time — deriving a line's name
  *   field, resolving it to an item (or a variant) and suggesting similar item
  *   names — implemented (docs/shopping_item_identity.md, src/shoppingSort.ts)
+ * - the trip-market recommendation and allocation — mandatory/coverage/priority
+ *   preselection, Drive market ranks and per-selection assignment — implemented
+ *   (docs/shopping_item_identity.md §7, src/shoppingMarketRanks.ts +
+ *   src/shoppingMarketRecommendation.ts)
  * - recipe format parsing and validation — implemented
  *   (docs/storage_format.md, src/recipe/parse.ts + src/recipe/validate.ts)
  */
@@ -65,6 +69,9 @@ export * from './shoppingRouteCsv.js';
 export * from './shoppingSort.js';
 export * from './shoppingRouteData.js';
 export * from './shoppingRouteRegistry.js';
+export * from './shoppingMarketRanks.js';
+export * from './shoppingMarketRanksCsv.js';
+export * from './shoppingMarketRecommendation.js';
 export * from './shoppingVariantForm.js';
 export * from './subRecipePlan.js';
 

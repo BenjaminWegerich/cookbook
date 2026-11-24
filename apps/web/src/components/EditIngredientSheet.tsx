@@ -76,7 +76,7 @@ function EditIngredientSheet({
             entries: result.entries,
             precision: result.precision,
           },
-          stop: result.stop,
+          stops: result.stops,
           variants: result.variants,
         });
       }}

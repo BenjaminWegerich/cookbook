@@ -25,10 +25,11 @@
  *    similar item names, and the sort page asks the user (confirming a candidate
  *    appends a synonym, so the same variant is never asked twice).
  *
- * `shoppingSortOrder` then places the lines: the ones parked at the top first in
- * Keep's order, then the assigned ones in walking order (stable within one
- * stop), then the ones parked at the bottom in Keep's order, then the
- * checked-off ones last.
+ * `shoppingSortOrder` then places the lines: the chosen stops are ordered by the
+ * route's walking order (stable within one stop), the lines without a selected
+ * market or ignored follow in Keep's order, and the checked-off ones come last.
+ * The market **rank** decides where an item is bought; the **route** decides
+ * where it appears in the list.
  *
  * Everything here is pure and framework-free; it reads the runtime registries
  * (item/route/synonym) so the user's own Drive master data decides both the
@@ -42,7 +43,7 @@ import {
   allShoppingItems,
   allShoppingStops,
   allShoppingSynonyms,
-  shoppingStopFor,
+  shoppingStopsFor,
 } from './shoppingRouteRegistry.js';
 import { shoppingNameKey } from './shoppingRouteCsv.js';
 import type { ShoppingStop } from './shoppingRouteCsv.js';
@@ -61,16 +62,20 @@ export interface ShoppingSortLine {
   readonly checked: boolean;
   /** The item name the line resolved to, or null when it resolved to none. */
   readonly item: string | null;
+  /**
+   * Locations decided for a **new** item on the sort page (no registry row yet).
+   * Absent for a known item, whose locations are read from the registry. The
+   * final order derivation runs before the new rows are persisted, so the
+   * decision has to travel with the line.
+   */
+  readonly locations?: readonly ShoppingStop[];
+  /**
+   * True when the user ignored the line for this run. Ignored lines are not
+   * allocated to a market; they go to the end group and are asked about again
+   * next time.
+   */
+  readonly ignored?: boolean;
 }
-
-/**
- * How an unmatched line is resolved by the sort flow: a chosen stop, or one of
- * the two **placement** answers — `'top'` parks the line above every
- * route-sorted line, `'bottom'` parks it at the end of the not-yet-bought lines
- * (before the checked-off ones). A placement writes no master data; the line is
- * asked about again on the next run.
- */
-export type UnmatchedResolution = ShoppingStop | 'top' | 'bottom';
 
 /**
  * The quantity part of a line the app writes: digits, the German decimal comma,
@@ -258,22 +263,29 @@ function stopKey(stop: ShoppingStop): string {
 }
 
 /**
- * The target order of the whole list (top first): the lines parked at the top
- * first in Keep's own order, then assigned lines in walking order (stable within
- * one stop), then the lines parked at the bottom in Keep's own order, then the
- * checked-off lines last in Keep's own order. `resolveUnmatched` answers only
- * for lines whose item is null: a chosen stop, or 'top' / 'bottom'.
+ * The target order of the whole list (top first): the lines assigned to a
+ * selected market in the route's walking order (stable within one stop), then
+ * the lines with no selected market or ignored in Keep's own order, then the
+ * checked-off lines last in Keep's own order.
+ *
+ * `selectedMarkets` is the trip's market selection; `ranks` is the effective
+ * market preference (`shoppingStoreRanks`). An item's chosen location is its
+ * location at the best-ranked selected market; the stop's route index then
+ * decides the position. A line with an explicit `locations` array (a new item
+ * decided on the sort page, before its rows are persisted) uses that array;
+ * otherwise a known item's locations come from the registry.
  */
 export function shoppingSortOrder(
   lines: readonly ShoppingSortLine[],
-  resolveUnmatched: (text: string) => UnmatchedResolution,
+  selectedMarkets: readonly string[],
+  ranks: ReadonlyMap<string, number>,
 ): readonly string[] {
   const route = allShoppingStops();
   const indexByStop = new Map(route.map((stop, index) => [stopKey(stop), index]));
+  const selected = new Set(selectedMarkets);
 
-  const parkedTop: string[] = [];
   const assigned: { text: string; index: number }[] = [];
-  const parkedBottom: string[] = [];
+  const noMarket: string[] = [];
   const checked: string[] = [];
 
   for (const line of lines) {
@@ -281,28 +293,39 @@ export function shoppingSortOrder(
       checked.push(line.text);
       continue;
     }
-    let stop: ShoppingStop | undefined =
-      line.item !== null ? shoppingStopFor(line.item) : undefined;
-    if (stop === undefined) {
-      const decision = resolveUnmatched(line.text);
-      if (decision === 'top') {
-        parkedTop.push(line.text);
-        continue;
-      }
-      if (decision === 'bottom') {
-        parkedBottom.push(line.text);
-        continue;
-      }
-      stop = decision;
+    if (line.ignored === true) {
+      noMarket.push(line.text);
+      continue;
     }
-    // A stop the route does not contain (cannot happen through the app's picker,
-    // but a hand-edited item table is read back through the parser, which guards
-    // it) sorts after every known stop instead of throwing.
-    assigned.push({ text: line.text, index: indexByStop.get(stopKey(stop)) ?? -1 });
+    const locations =
+      line.locations !== undefined
+        ? line.locations
+        : line.item !== null
+          ? (shoppingStopsFor(line.item) ?? [])
+          : [];
+    let chosen: ShoppingStop | null = null;
+    for (const stop of locations) {
+      if (!selected.has(stop.store)) continue;
+      if (chosen === null) {
+        chosen = stop;
+        continue;
+      }
+      const stopRank = ranks.get(stop.store) ?? Number.MAX_SAFE_INTEGER;
+      const chosenRank = ranks.get(chosen.store) ?? Number.MAX_SAFE_INTEGER;
+      if (stopRank < chosenRank) chosen = stop;
+    }
+    if (chosen === null) {
+      noMarket.push(line.text);
+      continue;
+    }
+    // A stop the route does not contain cannot happen through the app's picker;
+    // a hand-edited item table is read back through the parser, which guards it.
+    // It sorts after every known stop instead of throwing.
+    assigned.push({ text: line.text, index: indexByStop.get(stopKey(chosen)) ?? -1 });
   }
 
   // Array.prototype.sort is stable, so lines within one stop keep Keep's order.
   assigned.sort((a, b) => a.index - b.index);
 
-  return [...parkedTop, ...assigned.map((entry) => entry.text), ...parkedBottom, ...checked];
+  return [...assigned.map((entry) => entry.text), ...noMarket, ...checked];
 }
