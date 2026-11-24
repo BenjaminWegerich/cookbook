@@ -393,8 +393,15 @@ model as the recipe paths (see `packages/core/src/shoppingList.ts` and
   fixed and at most one additional unit is added; the same unit everywhere sums
   the counts exactly, a total never repeats a single dish's count, and an exact
   unit only shows a count that restates the total;
-- only the amount to **buy** is rounded up: to whole shopping units when the
-  ingredient has one, otherwise to whole grams/millilitres;
+- only the amount to **buy** is rounded up, and only to whole packages of an
+  **exact** shopping unit; an approximate unit keeps the missing base amount,
+  because its count is a reading of that amount (the number scheme's value), not
+  a second purchase;
+- every amount on the pantry sheet — the need, each stock chip, the "kaufen"
+  side and the written line — goes through the same scheme-aware display
+  (`pantryReading`), so one amount carries one count and an approximate unit's
+  count stays within its number scheme (the aggregate's shared-unit sum, which
+  the need line itself names, is the one supplied exception);
 - an exact shopping unit offers the package thresholds as stock suggestions; an
   approximate unit or no unit offers clean **BQ table** values instead of old
   ladder rungs;

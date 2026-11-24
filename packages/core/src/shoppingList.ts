@@ -532,11 +532,13 @@ export function shoppingRow(need: ShoppingNeed, stock: number): ShoppingRow {
 }
 
 /**
- * The bought amount of one row for a chosen Vorrat, rounded **up** to whole
- * shopping units (or to whole grams/millilitres without one) — the same
- * arithmetic `shoppingRow` applies, returned as a bare number instead of a
- * written line. This is the "kaufen" amount the pantry sheet starts on when the
- * Vorrat changes; a typed amount overrides it without rounding.
+ * The bought amount of one row for a chosen Vorrat: for an **exact** shopping
+ * unit the missing amount rounded up to a whole number of packages (the count
+ * is the purchase); for an **approximate** unit the missing base amount itself
+ * (its count is only a reading, so it must not round the purchase); without a
+ * unit, whole grams/millilitres. This is the "kaufen" amount the pantry sheet
+ * starts on when the Vorrat changes; a typed amount overrides it without
+ * rounding.
  */
 export function buyAmount(need: ShoppingNeed, stock: number): number {
   const clamped = Math.min(need.needed, Math.max(0, roundThousandths(stock)));
@@ -759,10 +761,9 @@ export function needText(need: ShoppingNeed): string {
  *
  * The pantry sheet labels the chip that completes the need with this count, so
  * the stock chip and the need line cannot disagree: three dishes whose master
- * lines each read "1 Aubergine (333 g)" need "3 Auberginen (1 kg)", while a
- * plain nearest-quarter re-reading of the 1 kg says "2¾". The purchase side
- * rounds up from the amount (`renderPantryLine`), so the same 3 goes on the
- * list.
+ * lines each read "1 Aubergine (333 g)" need "3 Auberginen (1 kg)". The
+ * "kaufen" side and the written line read the amount with the same display
+ * (`pantryReading` / `renderPantryLine`), so the same count goes on the list.
  */
 export function needAq(need: ShoppingNeed): number | null {
   if (need.contributions === undefined || need.contributions.length === 0) {

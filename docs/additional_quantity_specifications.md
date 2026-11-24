@@ -234,11 +234,21 @@ the user), so an exact unit never changes what is stored.
   ingredient may be flagged `Shopping Unit = yes`. This is the only remaining
   “preference” between units, and it is a property of the ingredient–unit pair
   (§3.1), not of the unit.
-- The shopping list uses the purchase unit and rounds *up* to whole packages; it
-  does not use the optimizer's display AQ. The shopping code is migrated to the
-  new quantity model (see [quantity_scaling.md](quantity_scaling.md) §9): exact
-  targets and sums, no ladder rung rounding, and BQ-based stock suggestions
-  without an exact unit.
+- The shopping list uses the purchase unit. An **exact** purchase unit rounds
+  the amount *up* to whole packages and names that whole-package count, even
+  above the scheme's range (a list must name the 12 packs of flour it takes). An
+  **approximate** purchase unit keeps the missing base amount and shows the count
+  the same optimizer reads for that amount under the unit's number scheme: the
+  count is a reading of the amount (7 × 15 g ≈ 100 g), not a second, rounded
+  purchase, so the scheme bounds it ("53 Stück" for 800 g of cherry
+  tomatoes is not a reading the tables allow; the line stays "800 g"). The one
+  supplied exception is the need line's own count when all dishes share one unit:
+  its exact sum may sit above the scheme (two dishes that each read "20 Stück"
+  need "40 Stück"), and the chip at the need's amount takes that count rather than
+  re-reading the amount. The need line, the stock chips, the "kaufen" side and
+  the written list otherwise share one reading per amount; the shopping code
+  follows [quantity_scaling.md](quantity_scaling.md) §9 (exact targets and sums,
+  no ladder rung rounding, BQ-based stock suggestions without an exact unit).
 
 ## 8. Consequences and rules
 

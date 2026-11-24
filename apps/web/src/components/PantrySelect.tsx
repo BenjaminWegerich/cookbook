@@ -55,21 +55,22 @@
  *    the amount to buy behind a shopping-cart symbol — the amount in the
  *    ingredient's shopping unit while the unit can honestly name it (the number
  *    scheme allows the count, and an exact unit's count restates the amount),
- *    otherwise in the plain base form (core's `pantryReading`; an approximate
- *    unit's count is rounded **up** to whole pieces, because the amount is a
- *    purchase — the same rule the Keep line follows);
+ *    otherwise in the plain base form (core's `pantryReading`). Both sides derive
+ *    their count from the same reading, so one amount carries one count: an
+ *    approximate unit's count is a reading ("7 Stück (100 g)"), never a
+ *    rounded-up purchase, and a count above an approximate unit's number scheme
+ *    is not shown at all (800 g of cherry tomatoes stay "800 g");
  * 2. the *stock chips*: one row of the stock values where the bought amount
  *    changes — the package thresholds for an exact shopping unit, clean BQ
  *    values otherwise (core's `suggestedStocks`) — labelled with both units
  *    (core's `renderPantryChip`), led by a shelf symbol and shown in increasing
  *    order. The chip that covers the whole need carries a leading check and
  *    reads olive; its count is the need line's own count (core's `needAq`), so
- *    a 1 kg need of aubergines reads "3 Auberginen" here and not the nearest
- *    quarter "2¾" of a plain re-reading. Only as many
- *    chips as fit on one row are shown; the rest hide behind the "andere" chip,
- *    which opens the keyboard on the Vorrat's base-quantity field. A typed
- *    value that is no suggestion then shows as an additional chip with an edit
- *    symbol (components/StockChips);
+ *    the chip that completes the need can never disagree with the need line
+ *    above it. Only as many chips as fit on one row are shown; the rest hide
+ *    behind the "andere" chip, which opens the keyboard on the Vorrat's
+ *    base-quantity field. A typed value that is no suggestion then shows as an
+ *    additional chip with an edit symbol (components/StockChips);
  * 3. the *storage-place picker*: the quiet „Lagerort“ caption, the place chips
  *    and the „Ignorieren“ action. It exists only while the ingredient has no
  *    place; an ingredient that is already sorted shows no picker at all.
@@ -78,9 +79,10 @@
  * grams/millilitres): each opens a keyboard, written as plain text rather than
  * a box. A typed amount must not be negative and is never rounded; the base
  * quantity is always typed in g / ml, the count in the shopping unit (converted
- * by its factor). Changing the Vorrat recomputes the "kaufen" default (rounded
- * up); changing the "kaufen" amount back-computes the Vorrat and keeps the
- * typed amount exactly.
+ * by its factor). Changing the Vorrat recomputes the "kaufen" default (to whole
+ * packages for an exact shopping unit, to the missing base amount otherwise);
+ * changing the "kaufen" amount back-computes the Vorrat and keeps the typed
+ * amount exactly.
  *
  * **Rows fold and unfold** (decided with the user): an ingredient whose
  * pre-filled Vorrat already covers the need starts folded to its first line,
@@ -246,6 +248,23 @@ function customStockOf(need: ShoppingNeed, typed: number | undefined): number | 
     return null;
   }
   return suggestedStocks(need).includes(stock) ? null : stock;
+}
+
+/**
+ * The count the need line names for this row, as `pantryReading` options, when
+ * the row's amount **is** the need (stock 0, or a typed buy equal to it); an
+ * empty options object otherwise. The cart, the stock chip at the need and the
+ * written line all use it, so one amount carries the need line's own count. The
+ * aggregate's shared-unit sum may name a count above the number scheme (several
+ * dishes that each read "20 Stück" need "40 Stück"), which the per-amount
+ * optimizer must not re-invent — so this is the one place the count is supplied.
+ */
+function needCountOptions(need: ShoppingNeed, buy: number): { aq?: number } {
+  const count = needAq(need);
+  if (count === null || buy !== roundThousandths(need.needed)) {
+    return {};
+  }
+  return { aq: count };
 }
 
 /**
@@ -635,7 +654,12 @@ function PantrySelect({
     setBusy(true);
     setWriteError(null);
     const lines = toBuy.map((entry) =>
-      renderPantryLine(entry.need.ingredient, entry.buy, entry.need.baseUnit),
+      renderPantryLine(
+        entry.need.ingredient,
+        entry.buy,
+        entry.need.baseUnit,
+        needCountOptions(entry.need, entry.buy),
+      ),
     );
     try {
       await onWrite(lines, inputs.recipes);
@@ -649,16 +673,19 @@ function PantrySelect({
    *  chips below (only while the row is unfolded). */
   function renderRow(entry: PantryEntry): ReactNode {
     const { need, stock, buy } = entry;
-    // The purchase reading rounds an approximate unit's count up to whole
-    // pieces — the same count the Keep line carries (`renderPantryLine`).
-    const kaufen = pantryReading(need.ingredient, buy, need.baseUnit, { roundUp: true });
     // The count the need line itself names (`needText`), used for the chip that
-    // completes the need: the aggregate reads "3 Auberginen (1 kg)", so the chip
-    // at 1 kg must not re-read the grams as "2¾".
+    // completes the need: the chip at the need's amount must read like the need
+    // line above it.
     const needCount = needAq(need);
     const needed = roundThousandths(need.needed);
     const chipCountOf = (value: number) =>
       value === needed && needCount !== null ? { aq: needCount } : undefined;
+    // The purchase side reads the buy amount exactly like the stock chips and
+    // the Keep line do (`renderPantryLine`): one amount, one count, one unit. At
+    // stock 0 the buy amount *is* the need, so it takes the need line's own count
+    // (the aggregate's sum may name a count the per-amount optimizer would not
+    // invent by itself); a smaller buy amount is read on its own.
+    const kaufen = pantryReading(need.ingredient, buy, need.baseUnit, needCountOptions(need, buy));
     const key = rowKey(need.ingredient, need.baseUnit);
     const place = storagePlaceOf(need.ingredient);
     const ignored = places.ignored.has(need.ingredient);

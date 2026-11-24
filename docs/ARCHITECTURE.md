@@ -464,7 +464,9 @@ Decided with the user; implemented in `apps/web/src/keep/` and the recipe list.
 - **Adding ingredients is one write, and its undo takes back one instance per line.** The bottom
   level of the pantry flow („Vorräte auswählen — Teil 2: Zutaten“) builds the lines from the meal
   plan's recipes, already rounded up to
-  whole shopping units, and `POST /keep/shopping` puts them at the top of „Einkaufsliste“; the
+  whole packages where the ingredient has an exact shopping unit (an approximate unit keeps the
+  missing amount and reads its count from the same optimizer), and `POST /keep/shopping` puts them
+  at the top of „Einkaufsliste“; the
   snackbar's „Rückgängig“ sends those same lines as `remove`. Because the same line may be on the
   list twice, `remove` takes off *one* instance per named text instead of every match — otherwise
   the undo would delete a line the user had put there themselves (decided with the user). The

@@ -211,17 +211,32 @@ describe('arrangement notes', () => {
     expect(renderPantryChip('Zucker', 200, 'g')).toBe(`200${NB}g`);
   });
 
-  it('rounds a purchase count up, never down', () => {
-    // 1 kg of aubergines is 2,857 pieces: the purchase names 3 pieces, the
-    // bracket the amount either way. A nearest reading would offer "2¾", which
-    // is fewer than three pieces. The Keep line keeps the ingredient form.
+  it('reads one amount with one count, on the sheet and in the written line', () => {
+    // 1 kg of aubergines: the optimizer's reading is 3 pieces, and the sheet and
+    // the Keep line must name the same count — no "3 to buy, 2¾ on stock".
+    expect(renderPantryChip('Auberginen', 1000, 'g')).toBe(`3${NB}Stück (1${NB}kg)`);
     expect(renderPantryLine('Auberginen', 1000, 'g')).toBe(`3${NB}Auberginen (1${NB}kg)`);
-    // The sheet's name-less readings show the unit: the stock stays the nearest
-    // quarter (a lower-bound reading), "2¾ Stück (1 kg)".
-    expect(renderPantryChip('Auberginen', 1000, 'g')).toBe(`2${NB}¾${NB}Stück (1${NB}kg)`);
     // A count the caller already knows (the aggregate need's) wins when the
     // unit's scheme allows it and an exact unit would still restate the amount.
     expect(renderPantryChip('Auberginen', 1000, 'g', { aq: 3 })).toBe(`3${NB}Stück (1${NB}kg)`);
+    // 800 g of cherry tomatoes are 53,3 pieces: no scheme allows a count above
+    // 30, so both sides stay in the base form instead of inventing "53"/"54
+    // Stück" for the same amount.
+    expect(renderPantryChip('Kirschtomaten', 800, 'g')).toBe(`800${NB}g`);
+    expect(renderPantryLine('Kirschtomaten', 800, 'g')).toBe(`800${NB}g Kirschtomaten`);
+    // A count the scheme does allow is the same on both sides (7 × 15 g ≈ 100 g).
+    expect(renderPantryChip('Kirschtomaten', 100, 'g')).toBe(`7${NB}Stück (100${NB}g)`);
+    expect(renderPantryLine('Kirschtomaten', 100, 'g')).toBe(`7${NB}Kirschtomaten (100${NB}g)`);
+    // The aggregate's shared-unit sum is an exact sum and may legitimately sit
+    // above the scheme (two dishes that each read "20 Stück" need "40 Stück"):
+    // the chip that completes that need takes the line's count, it does not
+    // re-read the amount on its own.
+    expect(renderPantryChip('Kirschtomaten', 600, 'g', { aq: 40 })).toBe(
+      `40${NB}Stück (600${NB}g)`,
+    );
+    // An exact shopping unit keeps its whole package count above the scheme's
+    // range: the list has to name the 12 packs it takes.
+    expect(renderPantryLine('Mehl', 12000, 'g')).toBe(`12${NB}Packungen Mehl (12${NB}kg)`);
   });
 
   it('keeps the ingredient form of a BE-first arrangement in its bracket', () => {

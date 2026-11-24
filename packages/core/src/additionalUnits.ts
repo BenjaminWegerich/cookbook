@@ -18,8 +18,9 @@
  * keep showing the stored/scaled base quantity.
  *
  * The AQ values live in the generated `quantityData.ts` (docs/AQs.csv). The
- * legacy `aqLadder.ts` is kept only for the shopping/pantry helpers until their
- * migration; the recipe display uses the optimizer directly.
+ * recipe display and the pantry's approximate readings use the optimizer
+ * directly; `aqLadder.ts` still backs the nearest-value helpers of the plain
+ * display paths until their cleanup.
  *
  * Naming: identifiers use the spec's abbreviations for the domain terms — aq
  * (additional quantity), au (additional unit), bq (base quantity), bu (base
@@ -1011,125 +1012,65 @@ export function renderUnitCount(
 }
 
 /**
- * How a pantry reading may deviate from the plain re-reading of its amount
- * (see `pantryReading`):
+ * How a pantry reading may deviate from the optimizer's plain reading of its
+ * amount (see `pantryReading`):
  *
  * - `aq` — a count the caller already knows for exactly this amount: the
- *   aggregate need's count (`aggregateNeedCount`). It wins when the unit's
- *   scheme allows it (and an exact unit still restates the amount), so the chip
- *   that completes the need reads like the need line.
- * - `roundUp` — a **purchase**: the count is rounded up to the next whole piece,
- *   never down (the shopping list's "whole shopping units" rule,
- *   `shoppingRow` in ../shoppingList). Exact units are already bought in whole
- *   packs; a typed amount that is no pack count keeps the base form.
+ *   aggregate need's count (`aggregateNeedCount`). It wins (an exact unit must
+ *   still restate the amount), so the chip that completes the need reads like
+ *   the need line.
  */
 export interface PantryReadOptions {
   readonly aq?: number;
-  readonly roundUp?: boolean;
+}
+
+/** The counts a unit's number scheme allows, ascending (empty for unknown data). */
+function schemeCounts(au: AdditionalUnit): number[] {
+  return (NUMBER_SCHEMES[au.numberScheme] ?? EMPTY_SCHEME).map((notation) => aqToNumber(notation));
 }
 
 /**
- * The count a pantry reading shows for one amount (components/PantrySelect —
- * the "auf Vorrat" and "kaufen" readings), or null when the amount has to be
- * read in the plain base unit ("700 g").
+ * True when `count` is a count the master data honestly allows for the amount
+ * `bq` in this unit:
  *
- * The pantry sheet is no exception to the display rules (§4, §6.1): a count is
- * only shown when the unit's **number scheme** allows it, and an **exact** unit
- * must restate the amount it names (`count × factor = amount`). A 700 g stock
- * of a 1000 g `Packung (unteilbar)` therefore reads "700 g", never
- * "¾ Packung (700 g)", and a 500 g stock of that pack reads "500 g" instead of
- * the scheme-forbidden "½ Packung" — half of an unteilbar pack is not a
- * countable pack. The old nearest-AQ reading produced exactly such lines
- * ("⅚ Becher (400 g)" for a 500 g Becher: forbidden by the halves scheme *and*
- * ⅚ × 500 g ≠ 400 g).
- *
- * - **Exact unit**: the nearest AQ value, but only when the scheme allows it
- *   and the count restates the amount. The count is a whole or scheme-allowed
- *   number of packs, because that is what a shelf or an order really holds.
- * - **Approximate unit**: the count is only a *reading* of the amount (a carrot
- *   has no fixed weight), so the amount in the bracket stays authoritative. The
- *   count is the nearest count the scheme allows, ties toward the larger like
- *   the display formatters, and only inside the optimizer's factor-2 band — a
- *   count the amount cannot plausibly carry is no reading of it, and the base
- *   form stands.
- * - **Above the scheme's range** a plain whole count is still real ("40
- *   Stück") and stays allowed, exactly like the stock count field reads it
- *   (`stockCountText` in ../shoppingList): the scheme bounds what a *recipe*
- *   line may say, not how many packs a shop sells.
- *
- * `options` (see `PantryReadOptions`) lets the caller supply the count it
- * already knows — the aggregate need's reading — or ask for a **purchase**
- * count, which is rounded up to whole pieces and never down.
+ * - an **approximate** unit's count is only a reading of the amount, so it must
+ *   be a value the unit's **number scheme** names — no scheme allows a count
+ *   above 30, and a scheme's table may have gaps (there is no 24-piece rung), so
+ *   neither an above-range "53 Stück" nor an off-table whole count is a reading
+ *   the master data backs (docs/quantity_scaling.md §4);
+ * - an **exact** unit names physical packages, so its whole package counts are
+ *   real even above the scheme's range (a shopping list genuinely takes 12 packs
+ *   of flour where a *recipe* line may say at most 10), and a fractional count is
+ *   honest only when the scheme names it. Either way the count must restate the
+ *   amount (`count × factor = bq`).
  */
-function pantryCount(
-  au: AdditionalUnit,
-  factor: number,
-  bq: number,
-  options: PantryReadOptions = {},
-): number | null {
-  const raw = bq / factor;
-  if (!(raw > 0) || !Number.isFinite(raw)) {
-    return null;
-  }
-  const counts = (NUMBER_SCHEMES[au.numberScheme] ?? EMPTY_SCHEME).map((notation) =>
-    aqToNumber(notation),
-  );
+function honestPantryCount(au: AdditionalUnit, factor: number, bq: number, count: number): boolean {
+  const counts = schemeCounts(au);
   if (counts.length === 0) {
-    return null;
+    return false;
   }
   const largest = counts[counts.length - 1]!;
-  // A count is honest when the scheme names it, or when it is a whole count
-  // above the scheme's range (a shelf or an order really holds 12 packs).
-  const allowed = (count: number): boolean =>
-    counts.includes(count) || (Number.isInteger(count) && count > largest);
-  if (options.aq !== undefined && options.aq > 0) {
-    // The caller's own count (the aggregate need's reading) wins when it is
-    // honest for this unit and amount.
-    if (
-      allowed(options.aq) &&
-      (!au.exact || Math.abs(options.aq * factor - bq) <= AMOUNT_EPSILON)
-    ) {
-      return options.aq;
-    }
+  const aboveScheme = au.exact && Number.isInteger(count) && count > largest;
+  if (!counts.includes(count) && !aboveScheme) {
+    return false;
   }
-  if (options.roundUp && !au.exact) {
-    // A purchase: every whole piece that covers the amount, like the shopping
-    // list's own rounding (`shoppingRow` in ../shoppingList).
-    const whole = Math.ceil(raw);
-    return allowed(whole) ? whole : null;
+  return !au.exact || Math.abs(count * factor - bq) <= AMOUNT_EPSILON;
+}
+
+/**
+ * The count an **exact** shopping unit shows for `bq`: the scheme-allowed
+ * package count that restates the amount exactly (a ½ Becher for 250 g), or a
+ * whole package count above the scheme's range (12 packs of flour). Null when
+ * the amount is no countable package amount, so the base form stands ("700 g" —
+ * never "¾ Packung (700 g)").
+ */
+function exactPantryCount(au: AdditionalUnit, factor: number, bq: number): number | null {
+  const raw = bq / factor;
+  const value = raw > AQ_MAX ? Math.round(raw) : roundToAQValue(raw);
+  if (value === null) {
+    return null;
   }
-  if (au.exact) {
-    const value = raw > AQ_MAX ? Math.round(raw) : roundToAQValue(raw);
-    if (value === null) {
-      return null;
-    }
-    // The bracket shows the amount itself (see `pantryReading`), so the count
-    // must restate it — no "¾ Packung (700 g)".
-    if (Math.abs(value * factor - bq) > AMOUNT_EPSILON) {
-      return null;
-    }
-    return allowed(value) ? value : null;
-  }
-  // Approximate unit: nearest scheme-allowed count, ties toward the larger.
-  if (raw >= largest) {
-    const whole = Math.round(raw);
-    return Math.abs(whole * factor - bq) <= bq ? whole : null;
-  }
-  let best: number | null = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (const count of counts) {
-    // Factor-2 band, like the optimizer's approximate BQ/AQ pair (§6): a count
-    // the amount cannot plausibly carry is not a reading of it.
-    if (Math.abs(count * factor - bq) > bq) {
-      continue;
-    }
-    const distance = Math.abs(count - raw);
-    if (distance < bestDistance || (distance === bestDistance && (best === null || count > best))) {
-      best = count;
-      bestDistance = distance;
-    }
-  }
-  return best;
+  return honestPantryCount(au, factor, bq, value) ? value : null;
 }
 
 /**
@@ -1138,36 +1079,50 @@ function pantryCount(
  * linked numeric readings — the additional quantity (the count) and the base
  * quantity (the grams / millilitres) — or in the plain base form (`au` and `aq`
  * null). Used for both the "auf Vorrat" (stock) and "kaufen" (buy) amounts,
- * which share the same scheme-aware reading.
+ * which share the same reading.
  */
 export interface PantryReading {
   /** The shopping unit the amount is counted in, or null (the base form). */
   readonly au: AdditionalUnit | null;
   /** Conversion factor (family base unit per one AU); 1 without an AU. */
   readonly factor: number;
-  /** The count for display (`pantryCount`), or null when the amount has to be read in the base unit. */
+  /** The count for display, or null when the amount has to be read in the base unit. */
   readonly aq: number | null;
   /** The base quantity in the family unit (g / ml) — the editable value. */
   readonly bq: number;
 }
 
 /**
- * The pantry sheet's reading of one base quantity (the "auf Vorrat" stock or
- * the "kaufen" amount, components/PantrySelect): the amount in the ingredient's
- * **shopping unit** while that unit can honestly name it, and the plain base
- * form otherwise ("700 g").
+ * The pantry sheet's reading of one base quantity (the "auf Vorrat" stock, the
+ * "kaufen" amount, a stock chip and the written line,
+ * components/PantrySelect): the amount in the ingredient's **shopping unit**
+ * while that unit can honestly name it, and the plain base form otherwise
+ * ("700 g").
  *
- * The count goes through the same display rules as every recipe line (§4,
- * §6.1) — the scheme must allow it and an exact unit must restate the amount
- * (see `pantryCount`). Unlike a recipe line (§6.3), the shown base quantity is
- * the amount itself: the two tappable readings are linked by the factor, and
- * the grams/millilitres are what the sheet edits, so an exact unit must not
- * overrule a typed amount. `au` is null exactly when no honest count exists;
- * the caller then renders the base form.
+ * One amount has **one** reading, so the row's need, its stock chips, its
+ * "kaufen" side and the written list can never disagree about the count:
  *
- * `options` carries what the sheet knows beyond the amount (see
- * `PantryReadOptions`): the aggregate need's count for the chip that completes
- * the need, and the "purchase" rounding for the amount to buy.
+ * - an **exact** unit (a 500 g Becher, a 1000 g pack) shows a package count
+ *   only when it restates the amount exactly; a partial amount stays in grams
+ *   (700 g, never "¾ Packung (700 g)"), and a whole pack count above the
+ *   scheme's range is a real purchase count (12 packs);
+ * - an **approximate** unit (a cherry tomato has no fixed weight) is read by
+ *   the same optimizer that reads a recipe row: the amount is the fixed BQ,
+ *   the unit's number scheme and the ingredient's precision decide whether a
+ *   count is shown and which one. A count above the scheme's range is therefore
+ *   never invented ("53 Stück" for 800 g of cherry tomatoes is not a reading
+ *   the tables allow; the line stays "800 g"), and the count is a reading of
+ *   the amount, not a rounded-up purchase ("3 Auberginen (1 kg)" is the
+ *   optimizer's choice, not the arithmetic's).
+ *
+ * Unlike a recipe line (§6.3), the shown base quantity is always the amount
+ * itself: the two tappable readings are linked by the factor, and the
+ * grams/millilitres are what the sheet edits, so an exact unit must not overrule
+ * a typed amount. `au` is null exactly when no honest count exists; the caller
+ * then renders the base form.
+ *
+ * `options` (see `PantryReadOptions`) lets the caller supply the count it
+ * already knows — the aggregate need's reading.
  */
 export function pantryReading(
   ingredient: string,
@@ -1175,20 +1130,49 @@ export function pantryReading(
   bu: string,
   options: PantryReadOptions = {},
 ): PantryReading {
-  const target = shoppingUnitFor(mappingsFor(ingredient), bu);
-  if (target === null) {
-    return { au: null, factor: 1, aq: null, bq };
+  const base: PantryReading = { au: null, factor: 1, aq: null, bq };
+  if (!(bq > 0) || !Number.isFinite(bq)) {
+    return base;
   }
-  const aq = pantryCount(target.au, target.factor, bq, options);
-  if (aq === null) {
-    return { au: null, factor: 1, aq: null, bq };
+  const entry = mappingsFor(ingredient);
+  const target = shoppingUnitFor(entry, bu);
+  if (entry === undefined || target === null) {
+    return base;
   }
-  return {
-    au: target.au,
-    factor: target.factor,
-    aq,
-    bq,
-  };
+  // A count the caller already knows (the aggregate need's reading) wins; the
+  // chip that completes the need then reads exactly like the need line. An
+  // approximate unit's supplied count is that line's reading and may sit outside
+  // the scheme by design (several dishes that each read "20 Stück" need "40
+  // Stück" as their exact shared-unit sum). An exact unit must still restate the
+  // amount, or the chip would contradict its own bracket ("2 Becher (700 g)").
+  if (options.aq !== undefined && options.aq > 0 && Number.isFinite(options.aq)) {
+    if (!target.au.exact || Math.abs(options.aq * target.factor - bq) <= AMOUNT_EPSILON) {
+      return { au: target.au, factor: target.factor, aq: options.aq, bq };
+    }
+  }
+  if (target.au.exact) {
+    const aq = exactPantryCount(target.au, target.factor, bq);
+    return aq === null ? base : { au: target.au, factor: target.factor, aq, bq };
+  }
+  // Approximate unit: ask the optimizer, with the amount as the fixed BQ and
+  // only the shopping unit allowed (the sheet always names the unit the
+  // ingredient is bought in). It applies the number scheme and the precision
+  // exactly like the recipe and need displays do.
+  try {
+    const shoppingEntry = {
+      ...entry,
+      entries: entry.entries.filter((mapping) => mapping.au === target.au.name),
+    };
+    const result = optimizeAggregateQuantity(bq, [{ quantity: bq }], shoppingEntry, bu);
+    if (result.aq === undefined) {
+      return base;
+    }
+    return { au: result.aq.au, factor: result.aq.factor, aq: result.aq.value, bq };
+  } catch {
+    // Hand-edited master data must not take the sheet down; the base form is
+    // always readable.
+    return base;
+  }
 }
 
 /**
@@ -1276,10 +1260,11 @@ export function renderPantryAmount(
  * a chip names the amount it stands for on its own ("1 Becher (400 g)",
  * "½ Becher (250 g)", "700 g"). A count the number scheme forbids and an exact
  * count that would contradict its bracket are never shown; the base form names
- * the amount then. It is the same reading as `renderPantryAmount`, except that
- * an empty stock reads just "0" — never "0 Becher (0 g)". The options pass
- * through to `pantryReading` (the aggregate need's count for the chip that
- * completes the need).
+ * the amount then. The one exception is a count passed in `options`: that is the
+ * need line's own reading (the aggregate's shared-unit sum may sit above the
+ * scheme by design), and the chip must not contradict the line above it. It is
+ * the same reading as `renderPantryAmount`, except that an empty stock reads
+ * just "0" — never "0 Becher (0 g)".
  */
 export function renderPantryChip(
   ingredient: string,
@@ -1322,13 +1307,20 @@ export function renderPantryChipDisplay(
  * sheet prints the unit ("3 Stück (1 kg)") because its row already names the
  * ingredient, while the list names it here ("3 Auberginen (1 kg)").
  *
- * The amount is always the **purchase**, so an approximate unit's count is
- * rounded **up** to whole pieces (`PantryReadOptions.roundUp`): buying "2¾
- * Auberginen" for a need of "3 Auberginen" would under-offer the count, while
- * three pieces cover the summed grams. The bracket keeps the amount the sheet
- * computed (the sum's or the typed one), as an approximate unit's amount stays
- * authoritative.
+ * The count is the **same reading** the sheet's "kaufen" side shows
+ * (`pantryReading`): the optimizer names it when the unit's number scheme and
+ * the amount's accuracy allow it, and the base form stands otherwise. The
+ * bracket keeps the amount the sheet computed (the sum's or the typed one), as
+ * an approximate unit's amount stays authoritative — the count is a reading of
+ * that amount, never a second, rounded purchase. `options` passes the count the
+ * sheet already knows for this amount (the need's reading) through, so a line
+ * written at the need's amount cannot disagree with the need line.
  */
-export function renderPantryLine(ingredient: string, bq: number, bu: string): string {
-  return renderPantryText(ingredient, pantryReading(ingredient, bq, bu, { roundUp: true }), bu);
+export function renderPantryLine(
+  ingredient: string,
+  bq: number,
+  bu: string,
+  options: PantryReadOptions = {},
+): string {
+  return renderPantryText(ingredient, pantryReading(ingredient, bq, bu, options), bu);
 }
