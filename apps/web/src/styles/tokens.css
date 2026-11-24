@@ -23,7 +23,12 @@
   --color-line: #e6dbc8; /* hairlines / dividers */
   --color-accent: #ad5632; /* primary clay/terracotta */
   --color-olive: #63723f; /* secondary "herb" accent */
-  --color-danger: #a63b2c; /* delete / errors */
+  /* Danger is deliberately a near-black brick, not a second clay: a red of the
+     accent's lightness sits only ~11° of hue and 0.05 of lightness away from
+     --color-accent (OKLab ΔE 0.06), so a destructive button and a primary one
+     read as the same colour. Dropping the lightness to 0.38 keeps the hue warm
+     but pushes the gap to ΔE 0.17 — the two never trade places at a glance. */
+  --color-danger: #7a1a17; /* delete / errors */
   --color-ochre: #96632b; /* unfinished saved draft (badge, quiet save) */
   --color-on-accent: #fffcf6; /* text on accent surfaces */
 

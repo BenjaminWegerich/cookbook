@@ -85,7 +85,7 @@ components reference tokens, never a raw value.
 | `--color-line` | `#e6dbc8` | hairlines, dividers, borders |
 | `--color-accent` | `#ad5632` | clay: primary action, active state, selection |
 | `--color-olive` | `#63723f` | herb: secondary accent — selected and secondary states, success tone |
-| `--color-danger` | `#a63b2c` | destructive actions and errors |
+| `--color-danger` | `#7a1a17` | destructive actions and errors |
 | `--color-ochre` | `#96632b` | the unfinished state: the draft badge and its save action |
 | `--color-on-accent` | `#fffcf6` | text on accent surfaces |
 
@@ -98,6 +98,10 @@ components reference tokens, never a raw value.
   reserved for success.
 - Ochre is the one unfinished-state colour. It is used only for a saved draft's badge and
   its secondary save action; a recipe that is not a draft never carries it.
+- Danger is a near-black brick, clearly darker than accent, so a destructive fill is never
+  mistaken for a primary one at a glance. It is not a second clay: a red at the accent's
+  lightness sits within 11° of hue and 0.05 of lightness of it, and the two become one
+  colour. *decided with the user*
 - Colour never carries a meaning alone: success is olive **plus** the check symbol, an error
   is danger plus its symbol or an explicit sentence.
 - Every accent surface takes `--color-on-accent` as its text colour.
