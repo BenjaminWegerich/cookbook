@@ -72,6 +72,17 @@ export interface UseKeepResult {
    */
   connect: () => Promise<void>;
   /**
+   * Reads both notes again and adopts the fresh state, resolving it. The caller uses this
+   * when it is about to act on the lists and the cached read may be stale — the sort flow
+   * does it before it opens, so its rows start from what Keep holds now.
+   *
+   * Unlike `retry`, it keeps the current visible status while the request runs: the lists
+   * on screen stay usable, and only the caller's own control shows the wait. A failure is
+   * mapped onto the connection status like a write and rethrown, so the caller can report
+   * the reason and decide not to open the dependent screen.
+   */
+  refresh: () => Promise<KeepState>;
+  /**
    * Puts a dish on the meal plan — the recipe overview's write action. `entry` is the
    * complete line to add, `replace` the exact texts of the entries the caller recognized as
    * the same recipe (it has the recipe's type and family unit, this hook does not).
@@ -343,11 +354,11 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
   }, []);
 
   /**
-   * Maps a failed `planMeal` / `undoMealPlan` onto the connection status, so both writes
-   * report the same failure the same way and the caller only has to show the thrown reason.
-   * Stable, so the write callbacks do not change identity with every render.
+   * Maps a failed Keep request onto the connection status, so every caller reports the same
+   * failure the same way and only has to show the thrown reason. Used by the writes and by
+   * `refresh`. Stable, so the callbacks below do not change identity with every render.
    */
-  const reportWriteFailure = useCallback((err: unknown): void => {
+  const reportKeepFailure = useCallback((err: unknown): void => {
     if (isRefusedSignIn(err)) {
       setStatus('needs-signin');
       setError(REFUSED_HINT);
@@ -364,9 +375,31 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
   }, []);
 
   /**
+   * Reads both notes now and adopts the result, without the status dance of `retry`.
+   *
+   * The home screen's sort entry calls this before it opens the sort page: the page
+   * snapshots the list for its lifetime, so it must snapshot what Keep holds at that
+   * moment, not what the last read (possibly hours ago) left in the hook. The current
+   * status stays untouched while the request runs — the list on screen stays usable —
+   * and a failure is mapped like a write, so a stale list is never silently sorted.
+   */
+  const refresh = useCallback(async (): Promise<KeepState> => {
+    try {
+      const loaded = await readStateSilently();
+      setState(loaded);
+      setStatus('ready');
+      setError(null);
+      return loaded;
+    } catch (err) {
+      reportKeepFailure(err);
+      throw err;
+    }
+  }, [reportKeepFailure]);
+
+  /**
    * Runs one meal-plan write and adopts the list the gateway answers. The two writes (the
    * plan action and its undo) differ only in which lines they add and remove, so they share
-   * this body; a failure is mapped onto the status by `reportWriteFailure` and rethrown.
+   * this body; a failure is mapped onto the status by `reportKeepFailure` and rethrown.
    */
   const runMealPlanWrite = useCallback(
     async (add: readonly string[], remove: readonly string[]): Promise<void> => {
@@ -377,11 +410,11 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
         setStatus('ready');
         setError(null);
       } catch (err) {
-        reportWriteFailure(err);
+        reportKeepFailure(err);
         throw err;
       }
     },
-    [reportWriteFailure],
+    [reportKeepFailure],
   );
 
   const planMeal = useCallback(
@@ -487,7 +520,7 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
   /**
    * Runs one check write and adopts the list the gateway answers. Both directions (tick off,
    * tick back on) share this body; a failure is mapped onto the status by
-   * `reportWriteFailure` and rethrown.
+   * `reportKeepFailure` and rethrown.
    */
   const runMealPlanCheck = useCallback(
     async (check: readonly string[], uncheck: readonly string[]): Promise<void> => {
@@ -500,11 +533,11 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
         setStatus('ready');
         setError(null);
       } catch (err) {
-        reportWriteFailure(err);
+        reportKeepFailure(err);
         throw err;
       }
     },
-    [reportWriteFailure],
+    [reportKeepFailure],
   );
 
   const checkMealPlan = useCallback(
@@ -537,7 +570,7 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
   /**
    * Runs one shopping-list write and adopts the list the gateway answers. The write and its
    * undo share this body (they differ only in which texts they add and remove); a failure is
-   * mapped onto the status by `reportWriteFailure` and rethrown.
+   * mapped onto the status by `reportKeepFailure` and rethrown.
    */
   const runShoppingWrite = useCallback(
     async (add: readonly string[], remove: readonly string[]): Promise<void> => {
@@ -554,12 +587,12 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
         // The sheet reports it next to its button; the "Essensplan" section must not
         // fall into its error state for it.
         if (!(err instanceof KeepClientError && err.code === 'not_implemented')) {
-          reportWriteFailure(err);
+          reportKeepFailure(err);
         }
         throw err;
       }
     },
-    [reportWriteFailure],
+    [reportKeepFailure],
   );
 
   const writeShopping = useCallback(
@@ -578,7 +611,7 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
 
   /**
    * Runs one shopping-list sort and adopts the list the gateway answers. The sort
-   * and the ordinary write share their failure mapping (`reportWriteFailure`), but
+   * and the ordinary write share their failure mapping (`reportKeepFailure`), but
    * the sort's success has no `remove`/`add` counterpart, so it uses its own body.
    * A 501 (`not_implemented`) is treated like the write: reported next to the
    * button, not as a connection failure.
@@ -603,12 +636,12 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
         // A 501 is not a connection problem (see runShoppingWrite): the gateway
         // answers, only this action does not exist there yet.
         if (!(err instanceof KeepClientError && err.code === 'not_implemented')) {
-          reportWriteFailure(err);
+          reportKeepFailure(err);
         }
         throw err;
       }
     },
-    [state, reportWriteFailure],
+    [state, reportKeepFailure],
   );
 
   return {
@@ -616,6 +649,7 @@ export function useKeep({ enabled }: UseKeepOptions): UseKeepResult {
     state,
     error,
     connect,
+    refresh,
     planMeal,
     shortenExportUrl,
     resolveShortLink,

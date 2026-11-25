@@ -1364,6 +1364,10 @@ intact; leaving the flow from the article step asks the discard question (§6.2)
 step shows an empty state when no market can supply a relevant item; with no unresolved line
 the article step shows its empty state and its „Weiter" opens the market step directly. *decided with the user*
 
+Opening the flow re-reads the shopping list from Keep first; the entry shows „Liste wird
+geladen …" while it waits. If the read fails, the page does not open and the home screen
+reports the reason, so the sort never starts from a stale snapshot.
+
 **Step 1 — articles.** Only unchecked lines that name no item are listed. A row carries the
 „Artikel" field, the similar-item chips, the location editor, and one „Ignorieren" action.
 The location editor is a list of `Markt > Bereich` entries plus the store chips and the

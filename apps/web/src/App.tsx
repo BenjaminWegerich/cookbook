@@ -493,6 +493,18 @@ function App() {
    */
   const [sortItems, setSortItems] = useState<KeepItem[]>([]);
   /**
+   * True while „Liste sortieren“ waits for the fresh Keep read before it opens
+   * the sort page. It only drives that button's busy state: the page opens with
+   * the list Keep holds now, so a stale snapshot can never become its rows.
+   */
+  const [sortOpening, setSortOpening] = useState(false);
+  /**
+   * Guards the sort entry against a second tap while the fresh read runs. A ref
+   * because the click handler starts the request immediately and the state above
+   * only reflects it after the next render.
+   */
+  const sortOpeningRef = useRef(false);
+  /**
    * The imperative handle of the sort page, so browser Back can arm its discard
    * question (the page's own „Zurück“ asks the same thing): the decisions made
    * there are unsaved until „Liste sortieren“ is pressed.
@@ -1485,17 +1497,51 @@ function App() {
   }, [setNav]);
 
   /**
-   * Opens the shopping-list sort page ("Einkaufsliste sortieren"). The page is a
-   * new instance every time it is opened (it unmounts when the flow leaves it),
-   * so its remembered scroll is dropped and it starts at the top — the same rule
-   * the pantry step follows. The shopping-list items are snapshotted here so the
-   * page's rows stay stable for its lifetime.
+   * The Keep hook's stable `refresh` reader, pulled out of the hook object so the
+   * sort callback depends on the function itself rather than the object that
+   * carries it (the object is new on every render).
+   */
+  const refreshKeep = keep.refresh;
+
+  /**
+   * Opens the shopping-list sort page ("Einkaufsliste sortieren").
+   *
+   * The page is a new instance every time it is opened (it unmounts when the
+   * flow leaves it), so its remembered scroll is dropped and it starts at the
+   * top — the same rule the pantry step follows. Its rows are a snapshot taken
+   * here and stay stable for the page's lifetime, the same reason the pantry
+   * step snapshots its cards.
+   *
+   * That snapshot is taken only after a fresh Keep read: the list may have
+   * changed in Keep since the hook's last read, and sorting a stale list would
+   * drop or misplace the lines added there. The button shows the wait
+   * (`sortOpening`); a failed read leaves the page closed and reports the
+   * reason, because sorting the last known list is exactly what must not happen.
    */
   const openShoppingSort = useCallback((): void => {
-    scrollMemory.forget('sort');
-    setSortItems([...(keep.state?.shopping.items ?? [])]);
-    setNav('sort');
-  }, [keep.state, setNav, scrollMemory]);
+    if (sortOpeningRef.current) return;
+    sortOpeningRef.current = true;
+    setSortOpening(true);
+    void (async () => {
+      try {
+        const fresh = await refreshKeep();
+        // The user may have navigated away while the read ran. Never pull them
+        // into the sort page from wherever they went in the meantime.
+        if (navRef.current !== null) return;
+        scrollMemory.forget('sort');
+        setSortItems([...fresh.shopping.items]);
+        setNav('sort');
+      } catch (err) {
+        showSnackbar({
+          tone: 'error',
+          text: `Die Einkaufsliste konnte nicht aus Keep geladen werden. ${keepErrorMessage(err)}`,
+        });
+      } finally {
+        sortOpeningRef.current = false;
+        setSortOpening(false);
+      }
+    })();
+  }, [refreshKeep, scrollMemory, setNav, showSnackbar]);
 
   /**
    * Opens step 1 of the pantry flow ("Vorräte auswählen — Teil 1: Zutaten-
@@ -2691,6 +2737,7 @@ function App() {
                 onSortShoppingList={openShoppingSort}
                 shoppingSortable={shoppingSortable}
                 shoppingSorted={shoppingSorted}
+                shoppingSortOpening={sortOpening}
                 shoppingItems={shoppingItems}
               />
               {/* The master data is edited rarely, so its two entries sit below

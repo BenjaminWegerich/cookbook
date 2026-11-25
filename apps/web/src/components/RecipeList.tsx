@@ -174,6 +174,12 @@ interface RecipeListProps {
    */
   shoppingSorted: boolean;
   /**
+   * True while App is re-reading the shopping list from Keep before it opens
+   * the sort page. The button shows that wait and cannot be tapped a second
+   * time; the list itself stays on screen.
+   */
+  shoppingSortOpening: boolean;
+  /**
    * The current shopping list's entries in Keep's display order, or null while
    * Keep is off, connecting, loading or failed. The "Einkaufsliste" caption
    * counts the list's own work (its unchecked lines and how many of them name no
@@ -302,6 +308,7 @@ function RecipeList({
   onSortShoppingList,
   shoppingSortable,
   shoppingSorted,
+  shoppingSortOpening,
   shoppingItems,
 }: RecipeListProps) {
   const [query, setQuery] = useState('');
@@ -722,22 +729,32 @@ function RecipeList({
                     acts on the shopping list, so
                     it appears whenever that list carries unchecked entries —
                     independently of whether the meal plan offers anything to
-                    write. After the sort ran, the same place reports the state: a
-                    check instead of the sort symbol and an unavailable button (a
-                    second sort is a no-op until the list changes again). */}
+                    write. Opening it re-reads the list from Keep first, so the
+                    button reports that wait („Liste wird geladen …") and stays
+                    unavailable until the read answers. After the sort ran, the
+                    same place reports the state: a check instead of the sort
+                    symbol and an unavailable button (a second sort is a no-op
+                    until the list changes again). */}
                 {shoppingSortable && (
                   <button
                     type="button"
                     className="outlined-button"
                     onClick={onSortShoppingList}
-                    disabled={shoppingSorted}
+                    disabled={shoppingSorted || shoppingSortOpening}
+                    aria-busy={shoppingSortOpening}
                   >
                     {shoppingSorted ? (
                       <CheckCircleIcon className="button-icon" optical={20} />
                     ) : (
                       <SortIcon className="button-icon" optical={20} />
                     )}
-                    <span>{shoppingSorted ? 'Liste sortiert' : 'Liste sortieren'}</span>
+                    <span>
+                      {shoppingSorted
+                        ? 'Liste sortiert'
+                        : shoppingSortOpening
+                          ? 'Liste wird geladen …'
+                          : 'Liste sortieren'}
+                    </span>
                   </button>
                 )}
               </div>
